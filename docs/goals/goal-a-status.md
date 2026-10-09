@@ -82,7 +82,8 @@ Each rule is documented at the top of its module and covered by a test.
   full geometry snapshots (kept in `~/rvp-reference/snapshots`), and
   write renders. Their screenshot comparison must stay below 2.5. They pass
   with a note when the skin is absent, as in CI.
-- `cargo xtask ci`: all checks pass locally.
+- `cargo xtask ci`: all checks pass locally. GitHub Actions run 37980067368
+  (commit 4f58b6a): Linux, Windows and `cargo deny` jobs pass.
 
 ## Renders (local only, `~/rvp-reference`)
 
