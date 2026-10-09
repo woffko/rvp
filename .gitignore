@@ -1,0 +1,5 @@
+/target
+# Third-party skins, captures and renders never belong in this repository.
+*.dsf
+/reference/
+/local/

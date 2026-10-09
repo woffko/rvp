@@ -1,0 +1,33 @@
+[workspace]
+resolver = "3"
+members = ["crates/skin", "crates/engine", "crates/app", "crates/platform", "xtask"]
+
+[workspace.package]
+version = "0.0.1"
+edition = "2024"
+rust-version = "1.98"
+license = "GPL-3.0-or-later"
+repository = "https://github.com/woffko/rvp"
+publish = false
+
+[workspace.dependencies]
+# Exact versions: dependency updates are deliberate, reviewed changes.
+png = "=0.18.1"
+swash = "=0.2.10"
+zip = { version = "=9.0.0", default-features = false, features = ["deflate-flate2"] }
+
+[workspace.lints.rust]
+unsafe_code = "forbid"
+unsafe_op_in_unsafe_fn = "deny"
+
+[workspace.lints.clippy]
+all = { level = "deny", priority = -1 }
+pedantic = { level = "deny", priority = -1 }
+
+[profile.dev.package."*"]
+# Image decoding in tests is slow without optimizations.
+opt-level = 2
+
+[profile.dev.package.rvp-skin]
+# Rendering and image comparison in tests.
+opt-level = 2
