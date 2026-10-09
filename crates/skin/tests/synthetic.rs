@@ -1,0 +1,356 @@
+//! End-to-end tests on a small synthetic skin that reproduces every quirk
+//! found in BlackSpace, with a generated atlas. No third-party files.
+
+use std::collections::BTreeSet;
+use std::path::PathBuf;
+
+use rvp_skin::hit::{Hit, hit_test};
+use rvp_skin::{
+    DataModel, Fonts, Image, Rect, Skin, SkinArchive, SliderValue, UiState, layout, paint,
+    rasterize,
+};
+
+/// Atlas colours: every sprite is a solid colour so renders can be checked
+/// pixel by pixel.
+const TITLE_LEFT: [u8; 4] = [200, 0, 0, 255];
+const TITLE_MIDDLE: [u8; 4] = [0, 200, 0, 255];
+const TITLE_RIGHT: [u8; 4] = [0, 0, 200, 255];
+const TITLE_INACTIVE: [u8; 4] = [90, 90, 90, 255];
+const BUTTON_STATES: [[u8; 4]; 4] = [
+    [10, 10, 10, 255],
+    [20, 20, 20, 255],
+    [30, 30, 30, 255],
+    [40, 40, 40, 255],
+];
+const SLIDER_BACK: [u8; 4] = [1, 100, 1, 255];
+const SLIDER_FILL: [u8; 4] = [2, 150, 2, 255];
+const SLIDER_DISABLED: [u8; 4] = [3, 50, 3, 255];
+const SLIDER_THUMB: [u8; 4] = [250, 250, 0, 255];
+const LABEL_COLOR: [u8; 4] = [123, 45, 67, 255];
+
+fn put(image: &mut Image, rect: Rect, color: [u8; 4]) {
+    for y in rect.y..rect.bottom() {
+        for x in rect.x..rect.right() {
+            let offset = image.offset(x, y).expect("inside atlas");
+            image.data_mut()[offset..offset + 4].copy_from_slice(&color);
+        }
+    }
+}
+
+/// 64x64 atlas; see the constants above for the sprite colours.
+fn atlas() -> Vec<u8> {
+    let mut image = Image::new(64, 64);
+    put(&mut image, Rect::new(0, 0, 4, 10), TITLE_LEFT);
+    put(&mut image, Rect::new(4, 0, 22, 10), TITLE_MIDDLE);
+    put(&mut image, Rect::new(26, 0, 4, 10), TITLE_RIGHT);
+    put(&mut image, Rect::new(30, 0, 30, 10), TITLE_INACTIVE);
+    for (state, color) in BUTTON_STATES.iter().enumerate() {
+        let x = i32::try_from(state).expect("small") * 8;
+        put(&mut image, Rect::new(x, 10, 8, 8), *color);
+    }
+    // PicLabel bitmap font: 22 cells of 2 pixels for '%' .. ':', each cell
+    // filled with grey level 10 * cell.
+    for cell in 0..22_u8 {
+        let x = i32::from(cell) * 2;
+        put(
+            &mut image,
+            Rect::new(x, 20, 2, 2),
+            [cell * 10, cell * 10, cell * 10, 255],
+        );
+    }
+    // MappingDB strip: three 4-pixel entries.
+    put(&mut image, Rect::new(0, 24, 4, 2), [70, 0, 0, 255]);
+    put(&mut image, Rect::new(4, 24, 4, 2), [0, 70, 0, 255]);
+    put(&mut image, Rect::new(8, 24, 4, 2), [0, 0, 70, 255]);
+    put(&mut image, Rect::new(0, 30, 10, 2), SLIDER_BACK);
+    put(&mut image, Rect::new(0, 32, 10, 2), SLIDER_FILL);
+    put(&mut image, Rect::new(0, 34, 10, 2), SLIDER_DISABLED);
+    put(&mut image, Rect::new(12, 30, 2, 4), SLIDER_THUMB);
+    put(&mut image, Rect::new(60, 60, 1, 1), LABEL_COLOR);
+    image.encode_png().expect("encode atlas")
+}
+
+/// The main skin file. Quirks covered: XML declaration, a line disabled by
+/// deleting `<`, a broken quote, an unquoted value, glued attributes, the
+/// `< >` tooltip separator, an include with a macro, `#if`/`#else`, docking
+/// order, negative coordinates and sizes, centring, `ConstSize`, paired
+/// commands, `State` pages and `VisParentMinWidth`.
+const VIDEO_SKIN: &str = "<?XML version='1.0' ?>
+<Skin Version='1.0'>
+<MainSkinArea Image='Atlas.png'>
+<Control>
+\t<Static Align='Top' Height='10' ImageLeft='0' ImageTop='0' ImageWidth='30' ImageHeight='10' LeftMargin='4' RightMargin='4' AltImageLeft='30' AltImageTop='0' IsTitleBar='1'>
+\t\t<Button Tooltip='Maximize< >Restore' CmdID='CMD_MAX_WINDOW' Left='-20' Top='1' Width='8' Height='8' ImageLeft='0' ImageTop='10' />
+\t\t<Button CmdID='CMD_RESTORE_WINDOW' Left='-20' Top='1' Width='8' Height='8' ImageLeft='0' ImageTop='10' />
+\t\t<Label CmdID='CMD_TITLE_MESSAGE' ColorX='60' ColorY='60' HoriAlignment='1' Left='2' Top='1' Width='-22' Height='8' FontSize='8' />
+\t</Static>
+\tStatic Align='Top' Height='50' ImageLeft='0' ImageTop='0' ImageWidth='30' ImageHeight='10' />
+\t<Static Align='Right' Width='1' ConstSize='25' Contain='CMD_PLAYLIST_TOGGLE' />
+\t<Static Align='Bottom' Height='12'>
+\t\t<Slider CmdID='CMD_TIMEBAR_CTRL' Left='2' Top='0' Width='-30' Height='4' ImageWidth='10' ImageHeight='2' ImageLeft='0' ImageTop='32' BackImageLeft='0' BackImageTop='30' AltImageLeft='0' AltImageTop='34' ThumbWidth='2' ThumbHeight='4' ThumbImageLeft='12' ThumbImageTop='30' />
+\t\t<Slider CmdID='CMD_VOLUME_CTRL' Left='-26' Top='0' Width='20' Height='4' ImageWidth='10' ImageHeight='2' ThumbHeight='4 ImageLeft='99' ImageTop='32' BackImageLeft='0' BackImageTop='30' />
+\t\t<PicLabel CmdID='CMD_CURRENTTIME_MESSAGE' Left='2' Top='6' Width='20' Height='2' ImageLeft='0' ImageTop='20' ImageWidth='44' ImageHeight='2' HoriAlignment='0' />
+\t\t<PicLabel CmdID='CMD_AUDIO_IN_NUM_CHANNEL_MESSAGE' Left='30' Top='6' Width='4' Height='2' ImageLeft='0' ImageTop='24' ImageWidth='4' ImageHeight='2'MappingDB='2,2.1;3,5.1' />
+\t\t<Button Tooltip='Play< >Open' CmdID='CMD_MEDIA_PLAY' AltCmdID=ID_OPEN_FILE Left='0' Top='2' Width='8' Height='8' ImageLeft='0' ImageTop='10' HoriCenter='1' />
+\t\t<Button CmdID='CMD_MEDIA_PAUSE' Left='0' Top='2' Width='8' Height='8' ImageLeft='0' ImageTop='10' HoriCenter='1' />
+\t\t<Button CmdID='ID_AUDIO_EQULIZER' DownFlag='1' Left='-12' Top='2' Width='8' Height='8' ImageLeft='0' ImageTop='10' />
+\t\t<Button CmdID='ID_WIDE_ONLY' Left='40' Top='2' Width='8' Height='8' ImageLeft='0' ImageTop='10' VisParentMinWidth='500' />
+\t\t<Static State='CMD_PAGE_CONTROL' PageIndex='4' Left='50' Top='2' Width='8' Height='8' />
+\t</Static>
+\t#include<Part.txt #KIND=Button>
+\t<Static Align='Client' Contain='CMD_VIDEO_WINDOW' />
+</Control>
+</MainSkinArea>
+#if<SkinName==VideoSkin>
+<Marker Value='video' />
+#else
+<Marker Value='other' />
+#endif
+</Skin>
+";
+
+/// Included with `#KIND=Button`; stored as UTF-16 LE with a byte order mark.
+const PART: &str = "<#KIND CmdID='ID_FROM_INCLUDE' Left='0' Top='0' Width='4' Height='4' />";
+
+fn utf16_with_bom(text: &str) -> Vec<u8> {
+    let mut bytes = vec![0xFF, 0xFE];
+    for unit in text.encode_utf16() {
+        bytes.extend_from_slice(&unit.to_le_bytes());
+    }
+    bytes
+}
+
+fn skin() -> Skin {
+    let archive = SkinArchive::from_files(
+        "Synthetic",
+        [
+            ("VideoSkin.xml", VIDEO_SKIN.as_bytes().to_vec()),
+            ("part.txt", utf16_with_bom(PART)),
+            ("atlas.png", atlas()),
+        ],
+    );
+    let skin = Skin::load(archive, "VideoSkin.xml").expect("load synthetic skin");
+    assert!(skin.warnings().is_empty(), "{:?}", skin.warnings());
+    skin
+}
+
+fn data() -> DataModel {
+    let mut data = DataModel::default();
+    data.set_text("CMD_CURRENTTIME_MESSAGE", "0:");
+    data.set_text("CMD_AUDIO_IN_NUM_CHANNEL_MESSAGE", "5.1");
+    data.sliders.insert(
+        "CMD_TIMEBAR_CTRL".to_owned(),
+        SliderValue {
+            value: 0.5,
+            enabled: true,
+        },
+    );
+    data
+}
+
+fn render(skin: &Skin, state: &UiState) -> Image {
+    let placed = layout(skin, "MainSkinArea", 100, 60, state).expect("layout");
+    let list = paint(skin, &placed, state, &data());
+    rasterize(&list, skin, &mut Fonts::new(Vec::new()))
+}
+
+fn snapshot_path(name: &str) -> PathBuf {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("tests/snapshots")
+        .join(name)
+}
+
+#[test]
+fn geometry_matches_snapshot() {
+    let skin = skin();
+    let placed = layout(&skin, "MainSkinArea", 100, 60, &UiState::default()).expect("layout");
+    let actual = placed.dump();
+    let path = snapshot_path("synthetic-100x60.txt");
+    if std::env::var_os("RVP_BLESS").is_some() {
+        std::fs::write(&path, &actual).expect("write snapshot");
+    }
+    let expected = std::fs::read_to_string(&path).expect("snapshot exists; run with RVP_BLESS=1");
+    assert_eq!(actual, expected);
+}
+
+#[test]
+fn docking_and_coordinates() {
+    let skin = skin();
+    let placed = layout(&skin, "MainSkinArea", 100, 60, &UiState::default()).expect("layout");
+    let rect = |command: &str| placed.find_command(command).expect(command).rect;
+    // Docked in document order: title on top, playlist on the right, then
+    // the bottom bar under the remaining width only.
+    assert_eq!(
+        placed.slot("CMD_PLAYLIST_TOGGLE"),
+        Some(Rect::new(75, 10, 25, 50))
+    );
+    assert_eq!(
+        placed.slot("CMD_VIDEO_WINDOW"),
+        Some(Rect::new(0, 10, 75, 38))
+    );
+    // Negative Left counts from the right edge; HoriCenter centres.
+    assert_eq!(rect("CMD_MAX_WINDOW"), Rect::new(80, 1, 8, 8));
+    assert_eq!(rect("CMD_MEDIA_PLAY"), Rect::new(33, 50, 8, 8));
+    // Width -30 ends 30 pixels before the parent's right edge.
+    assert_eq!(rect("CMD_TIMEBAR_CTRL"), Rect::new(2, 48, 43, 4));
+    // The disabled line added nothing and the include expanded its macro.
+    assert_eq!(rect("ID_FROM_INCLUDE"), Rect::new(0, 0, 4, 4));
+    assert_eq!(
+        skin.root()
+            .find("Marker")
+            .and_then(|m| m.attrs.get("Value")),
+        Some("video")
+    );
+}
+
+#[test]
+fn visibility_rules() {
+    let skin = skin();
+    let mut state = UiState::default();
+    let placed = layout(&skin, "MainSkinArea", 100, 60, &state).expect("layout");
+    let has = |placed: &rvp_skin::Layout<'_>, command: &str| placed.find_command(command).is_some();
+    assert!(has(&placed, "CMD_MAX_WINDOW") && !has(&placed, "CMD_RESTORE_WINDOW"));
+    assert!(has(&placed, "CMD_MEDIA_PLAY") && !has(&placed, "CMD_MEDIA_PAUSE"));
+    assert!(!has(&placed, "ID_WIDE_ONLY"), "parent is narrower than 500");
+    let pages = |placed: &rvp_skin::Layout<'_>| {
+        placed
+            .nodes
+            .iter()
+            .filter(|node| node.element.attrs.get("PageIndex") == Some("4"))
+            .count()
+    };
+    assert_eq!(pages(&placed), 0);
+    state.playing = true;
+    state.maximized = true;
+    state.current_page = 4;
+    state.playlist_attached = false;
+    let placed = layout(&skin, "MainSkinArea", 100, 60, &state).expect("layout");
+    assert!(has(&placed, "CMD_RESTORE_WINDOW") && !has(&placed, "CMD_MAX_WINDOW"));
+    assert!(has(&placed, "CMD_MEDIA_PAUSE") && !has(&placed, "CMD_MEDIA_PLAY"));
+    assert_eq!(pages(&placed), 1);
+    assert_eq!(placed.slot("CMD_PLAYLIST_TOGGLE"), None);
+    assert_eq!(
+        placed.slot("CMD_VIDEO_WINDOW"),
+        Some(Rect::new(0, 10, 100, 38))
+    );
+}
+
+#[test]
+fn broken_quote_drops_the_next_attribute() {
+    let skin = skin();
+    let placed = layout(&skin, "MainSkinArea", 100, 60, &UiState::default()).expect("layout");
+    let volume = placed.find_command("CMD_VOLUME_CTRL").expect("volume");
+    assert_eq!(volume.element.attrs.int("ThumbHeight"), Some(4));
+    assert_eq!(volume.element.attrs.get("ImageLeft"), None);
+    assert_eq!(volume.element.attrs.int("ImageTop"), Some(32));
+    let channels = placed
+        .find_command("CMD_AUDIO_IN_NUM_CHANNEL_MESSAGE")
+        .expect("channels");
+    assert_eq!(channels.element.attrs.get("MappingDB"), Some("2,2.1;3,5.1"));
+    let play = placed.find_command("CMD_MEDIA_PLAY").expect("play");
+    assert_eq!(play.element.attrs.get("AltCmdID"), Some("ID_OPEN_FILE"));
+}
+
+#[test]
+fn nine_slice_and_inactive_window() {
+    let skin = skin();
+    let mut state = UiState::default();
+    let image = render(&skin, &state);
+    assert_eq!(image.pixel(0, 5), TITLE_LEFT);
+    assert_eq!(image.pixel(3, 5), TITLE_LEFT);
+    assert_eq!(image.pixel(4, 5), TITLE_MIDDLE);
+    assert_eq!(image.pixel(50, 5), TITLE_MIDDLE);
+    assert_eq!(image.pixel(96, 5), TITLE_RIGHT);
+    assert_eq!(image.pixel(99, 5), TITLE_RIGHT);
+    state.window_active = false;
+    let image = render(&skin, &state);
+    assert_eq!(image.pixel(50, 5), TITLE_INACTIVE);
+}
+
+#[test]
+fn button_states() {
+    let skin = skin();
+    let mut state = UiState::default();
+    let placed = layout(&skin, "MainSkinArea", 100, 60, &state).expect("layout");
+    let play = placed
+        .find_command("CMD_MEDIA_PLAY")
+        .expect("play")
+        .element
+        .id;
+    assert_eq!(render(&skin, &state).pixel(35, 52), BUTTON_STATES[0]);
+    state.hover = Some(play);
+    assert_eq!(render(&skin, &state).pixel(35, 52), BUTTON_STATES[1]);
+    state.pressed = Some(play);
+    assert_eq!(render(&skin, &state).pixel(35, 52), BUTTON_STATES[2]);
+    // A DownFlag button shows the pressed state while its command is on.
+    let equalizer = Rect::new(63, 50, 8, 8);
+    assert_eq!(
+        render(&skin, &state).pixel(equalizer.x + 1, equalizer.y + 1),
+        BUTTON_STATES[0]
+    );
+    state.flags = BTreeSet::from(["ID_AUDIO_EQULIZER".to_owned()]);
+    assert_eq!(
+        render(&skin, &state).pixel(equalizer.x + 1, equalizer.y + 1),
+        BUTTON_STATES[2]
+    );
+}
+
+#[test]
+fn bitmap_labels_and_sliders() {
+    let skin = skin();
+    let image = render(&skin, &UiState::default());
+    // "0:" uses cells 11 and 21 of the bitmap font, 2 pixels each.
+    assert_eq!(image.pixel(2, 54), [110, 110, 110, 255]);
+    assert_eq!(image.pixel(4, 54), [210, 210, 210, 255]);
+    // MappingDB "5.1" is the third entry.
+    assert_eq!(image.pixel(30, 54), [0, 0, 70, 255]);
+    // Seek bar at 50%: fill on the left half, back image on the right,
+    // thumb in the middle.
+    assert_eq!(image.pixel(3, 49), SLIDER_FILL);
+    assert_eq!(image.pixel(40, 49), SLIDER_BACK);
+    assert_eq!(image.pixel(23, 49), SLIDER_THUMB);
+    // The volume slider lost ImageLeft, so its fill comes from x = 0.
+    let mut data = data();
+    data.sliders.insert(
+        "CMD_TIMEBAR_CTRL".to_owned(),
+        SliderValue {
+            value: 0.0,
+            enabled: false,
+        },
+    );
+    let state = UiState::default();
+    let placed = layout(&skin, "MainSkinArea", 100, 60, &state).expect("layout");
+    let image = rasterize(
+        &paint(&skin, &placed, &state, &data),
+        &skin,
+        &mut Fonts::new(Vec::new()),
+    );
+    assert_eq!(image.pixel(10, 49), SLIDER_DISABLED);
+}
+
+#[test]
+fn hit_testing() {
+    let skin = skin();
+    let placed = layout(&skin, "MainSkinArea", 100, 60, &UiState::default()).expect("layout");
+    match hit_test(&placed, 84, 4) {
+        Some(Hit::Control {
+            command, tooltip, ..
+        }) => {
+            assert_eq!(command, Some("CMD_MAX_WINDOW"));
+            assert_eq!(tooltip, Some("Maximize< >Restore"));
+        }
+        other => panic!("unexpected hit {other:?}"),
+    }
+    assert!(matches!(
+        hit_test(&placed, 50, 4),
+        Some(Hit::TitleBar { .. })
+    ));
+    assert!(matches!(
+        hit_test(&placed, 30, 30),
+        Some(Hit::Slot {
+            name: "CMD_VIDEO_WINDOW",
+            ..
+        })
+    ));
+    assert_eq!(hit_test(&placed, 200, 200), None);
+}

@@ -1,0 +1,17 @@
+[package]
+name = "rvp-skin"
+description = "Loads PotPlayer .dsf skins, lays them out and renders them headless."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[dependencies]
+png.workspace = true
+swash.workspace = true
+zip.workspace = true
+
+[lints]
+workspace = true
