@@ -150,9 +150,11 @@ Consequences of the dual boot:
   Python 3.12 and VapourSynth. RVP's libmpv must work with that runtime (S2).
 
 Video library: `V:` on Windows is the SMB share `\\nas\Media`. On Ubuntu it
-is mounted over CIFS at a fixed path (for example `/mnt/media`, through `fstab`,
-not a GVFS mount). The same files are then reachable from both systems, which
-`.dpl` import uses (`V:\` maps to the mount point). It also makes shared
+is mounted over CIFS at a fixed path (on the owner's Ubuntu boot today
+`/mnt/nas/Media`, not a GVFS mount). The same files are then reachable
+from both systems, which `.dpl` import uses through a configurable mapping of
+Windows drive letters to Linux paths (owner decision 2026-10-10; default
+`V:\` → `/mnt/media`, set to the real mount point in RVP's settings). It also makes shared
 playback state between the two systems possible (open question 2).
 
 ## 3. Key decisions
@@ -166,7 +168,7 @@ playback state between the two systems possible (open question 2).
 | D5 | Skin drawing: Rust builds a display list; it is painted with `QPainter` in a `QQuickPaintedItem` subclass implemented through `cxx-qt`. | Native text rendering (Qt can use the GDI font engine on Windows for a closer match); no custom GPU text stack. | S3, S4 |
 | D6 | Native menus and a native settings window, not skinned. | Matches what PotPlayer actually does. | Screenshots |
 | D7 | Linux packaging: AppImage and native packages. No Flatpak or Snap. | SVP cannot attach to sandboxed applications. | SVP wiki |
-| D8 | License GPL-3.0-or-later. | Confirmed by the owner. libmpv's default build is GPL; Qt is used under LGPL with dynamic linking. | Owner |
+| D8 | License GPL-3.0-or-later. The `rust` skill's no-GPL/LGPL rule is waived for libmpv and Qt (owner decision 2026-10-10); Rust crates stay under `cargo deny`'s permissive list. | Confirmed by the owner. libmpv's default build is GPL; Qt is used under LGPL with dynamic linking. | Owner |
 | D9 | Player state (playlists, positions, settings) in our own files, written atomically and often. | The resume requirement must survive crashes, not only clean exits; mpv's watch-later files are written only on quit. | M2, M3 |
 
 ## 4. Usability requirements
@@ -504,7 +506,7 @@ Goal E:
 
 Goal F:
 ```
-/goal Execute goal F of docs/PLAN.md (milestone M3, daily-use essentials) in ~/rvp after goal E. Deliver: the playlist panel from PlaylistSkinArea with albums as tabs, add, remove, reorder and undo, current, played and unplayable rows and the fps footer; automatic persistence and start-up restore of the last album, file and position; .dpl import with V:\ mapped to /mnt/media; single instance with /add, /insert, /current and /new; the normalizer with boost using the chain and parameters from S5, and volume above 100%; an input binding editor for keyboard and mouse (wheel, clicks, double click, middle and side buttons) with conflict detection and reset to defaults. If PLAN.md records the owner's yes to open question 2, also implement shared state across the dual boot as sketched there. Done when: tests and CI are green, resume survives the kill tests, the owner's .dpl files from %APPDATA%\PotPlayerMini64\Playlist import correctly (read-only), docs/goals/goal-f-status.md lists what the owner should try during the one-week trial, and everything is committed and pushed. Do not: modify the owner's PotPlayer playlists, make the repository public, tag or release. Stop on blockers or when an owner decision is needed.
+/goal Execute goal F of docs/PLAN.md (milestone M3, daily-use essentials) in ~/rvp after goal E. Deliver: the playlist panel from PlaylistSkinArea with albums as tabs, add, remove, reorder and undo, current, played and unplayable rows and the fps footer; automatic persistence and start-up restore of the last album, file and position; .dpl import with a configurable mapping of Windows drive letters to Linux paths (default V:\ to /mnt/media; the owner's mount is /mnt/nas/Media); single instance with /add, /insert, /current and /new; the normalizer with boost using the chain and parameters from S5, and volume above 100%; an input binding editor for keyboard and mouse (wheel, clicks, double click, middle and side buttons) with conflict detection and reset to defaults. If PLAN.md records the owner's yes to open question 2, also implement shared state across the dual boot as sketched there. Done when: tests and CI are green, resume survives the kill tests, the owner's .dpl files from %APPDATA%\PotPlayerMini64\Playlist import correctly (read-only), docs/goals/goal-f-status.md lists what the owner should try during the one-week trial, and everything is committed and pushed. Do not: modify the owner's PotPlayer playlists, make the repository public, tag or release. Stop on blockers or when an owner decision is needed.
 ```
 
 Goal G:

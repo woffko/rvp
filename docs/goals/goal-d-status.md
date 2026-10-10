@@ -120,6 +120,10 @@ presentation feedback.
 
 ## Open questions for the owner
 
+Decided on 2026-10-10, after this report: the license rule is waived for
+libmpv and Qt (PLAN.md D8), and `.dpl` import gets a configurable
+drive-letter mapping instead of a fixed `/mnt/media` (PLAN.md, goal F).
+
 1. **License rule (open since goal A).** Confirm that the `rust` skill's
    no-GPL/LGPL rule is waived for libmpv and Qt in this project before M2.
    Note also that mpv-build configures FFmpeg with `--enable-nonfree` and
