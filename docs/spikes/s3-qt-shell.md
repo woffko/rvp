@@ -39,8 +39,9 @@ and resize the frameless window on Windows and on GNOME Wayland.
   update callback calls `QQuickItem::update()` through a queued
   `QMetaObject::invokeMethod`.
 - `--log-pointer` and `--log-geometry` make the window log pointer positions,
-  its size and, when the menu opens, the window list; `S` shrinks it to
-  440x77. The kit's input check (`tools/linux-kit/input-check.py`) uses them.
+  its size and, when the menu opens, the window list; a middle click shrinks
+  it to 440x77. The kit's input check (`tools/linux-kit/input-check.py`) uses
+  them and injects only mouse input.
 
 The self-test resizes the window to 440x77, opens the menu, checks that the
 menu is a separate top-level window larger than the main window, calls the

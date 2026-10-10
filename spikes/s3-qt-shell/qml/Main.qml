@@ -105,12 +105,24 @@ Window {
         onPressed: Tools.log("start_system_resize=" + root.startSystemResize(Qt.RightEdge | Qt.BottomEdge))
     }
 
-    // Right click anywhere else opens the context menu.
+    // Right click anywhere else opens the context menu. With --log-pointer a
+    // middle click shrinks the window to the 440x77 of the menu test (the
+    // input check uses the mouse, never keys: keys would go to whichever
+    // window has focus, possibly the terminal that runs the check).
     MouseArea {
         anchors.fill: parent
         z: -1
-        acceptedButtons: Qt.RightButton
-        onPressed: menu.popup()
+        acceptedButtons: Qt.RightButton | Qt.MiddleButton
+        onPressed: (mouse) => {
+            if (mouse.button === Qt.MiddleButton) {
+                if (root.hasArg("--log-pointer")) {
+                    root.width = 440
+                    root.height = 77
+                }
+            } else {
+                menu.popup()
+            }
+        }
     }
 
     onWidthChanged: {
@@ -155,17 +167,6 @@ Window {
         id: menuLog
         interval: 400
         onTriggered: Tools.log("menu_windows=" + Tools.windowsJson())
-    }
-
-    // --log-pointer: the input check presses S to shrink the window to the
-    // 440x77 size of the menu test.
-    Shortcut {
-        sequence: "S"
-        enabled: root.hasArg("--log-pointer")
-        onActivated: {
-            root.width = 440
-            root.height = 77
-        }
     }
 
     Timer {

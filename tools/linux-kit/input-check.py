@@ -2,6 +2,8 @@
 """Checks the frameless S3 window with a real (injected) mouse: dragging the
 title bar moves it, dragging the corner grip resizes it, and a right click
 on the window shrunk to 440x77 opens a menu window larger than the window.
+Only mouse input is injected (it reaches the window under the pointer);
+keyboard input could reach the terminal that runs the check.
 
 Wayland clients cannot read their own position, so the check works through
 the pointer: the window logs the pointer position in its own coordinates,
@@ -24,8 +26,6 @@ POINTER = re.compile(r"pointer_local=(-?\d+),(-?\d+) size=(\d+)x(\d+)")
 DRAG = (80, 60)  # sign chosen towards the screen centre
 RESIZE = (-100, -80)  # the grip is dragged inwards, which always fits on screen
 MENU_SIZE = (440, 77)
-KEY_S = 31
-KEY_ESC = 1
 
 
 def ydotool(*args: str) -> None:
@@ -36,11 +36,6 @@ def move_to(x: int, y: int) -> None:
     """Absolute move in ydotool units (screen pixels divided by the scale)."""
     ydotool("mousemove", "--absolute", "-x", str(x), "-y", str(y))
     time.sleep(0.25)
-
-
-def key(code: int) -> None:
-    ydotool("key", f"{code}:1", f"{code}:0")
-    time.sleep(0.3)
 
 
 def log_lines(log_path: str) -> list[str]:
@@ -184,20 +179,20 @@ def check_resize(pointer: Pointer, origin, size) -> bool:
 
 
 def check_menu(pointer: Pointer, origin, size) -> bool:
-    # A left click in the video area gives the window keyboard focus.
+    # Only mouse input: it goes to the surface under the pointer. Keys would
+    # go to the focused window, which may be the terminal running this check.
+    # A middle click below the title area shrinks the window to 440x77.
     move_to(*pointer.units(origin[0] + size[0] / 2, origin[1] + size[1] / 2))
-    ydotool("click", "0xC0")
-    time.sleep(0.3)
-    key(KEY_S)
+    ydotool("click", "0xC2")  # middle button down and up
     if not wait_for(pointer.log_path, f"window_size={MENU_SIZE[0]}x{MENU_SIZE[1]}", 3):
-        print("input_check_menu=FAIL the window did not shrink to 440x77 (no keyboard focus?)")
+        print("input_check_menu=FAIL the window did not shrink to 440x77")
         return False
     time.sleep(0.5)
     move_to(*pointer.units(origin[0] + 200, origin[1] + 50))
     ydotool("click", "0xC1")  # right button down and up
     time.sleep(1.2)
     windows = menu_windows(pointer.log_path)
-    key(KEY_ESC)
+    # The menu stays open; terminating the program closes it.
     if windows is None:
         print("input_check_menu=FAIL the menu did not open")
         return False

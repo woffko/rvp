@@ -75,9 +75,9 @@ What appears on screen:
   test video for about 20 seconds and closes. (On Wayland the scripted menu
   is refused without real input; the input step checks the menu.)
 - `input`: the same window for about 30 seconds. The pointer scans the
-  screen to find it, drags its title bar and its bottom-right corner, clicks
-  it, presses `S` (the window shrinks to 440x77), right-clicks to open the
-  menu and presses `Esc`.
+  screen to find it, drags its title bar and its bottom-right corner,
+  middle-clicks it (the window shrinks to 440x77) and right-clicks to open
+  the menu; then the window closes. Only the mouse is used, no keys.
 - `s1`: start SVP 4 Manager first. A plain mpv window plays the video for
   60 seconds; SVP should pick it up and switch on interpolation.
 
