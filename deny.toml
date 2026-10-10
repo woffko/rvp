@@ -31,6 +31,13 @@ allow = [
     "Zlib",
 ]
 
+# The libmpv binding crates are LGPL-2.1 (D1 and D8 in docs/PLAN.md: the
+# no-GPL/LGPL rule is waived for libmpv; owner decision 2026-10-10).
+exceptions = [
+    { allow = ["LGPL-2.1"], crate = "libmpv2" },
+    { allow = ["LGPL-2.1"], crate = "libmpv2-sys" },
+]
+
 [bans]
 # png and zip pull two miniz_oxide versions through flate2; harmless.
 multiple-versions = "warn"

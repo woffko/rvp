@@ -32,8 +32,16 @@ each goal writes `docs/goals/goal-<letter>-status.md`.
 - Rust edition 2024, toolchain pinned in `rust-toolchain.toml`. `Cargo.lock`
   is committed. Dependencies use exact versions (`=x.y.z`) in the workspace
   manifest and need a reason to be added.
-- `unsafe` is forbidden workspace-wide. Clippy runs with `all` and `pedantic`
-  denied; a local `#[allow]` needs a comment that justifies it.
+- `unsafe` is forbidden in every crate except `shell/` (owner decision
+  2026-10-10): cxx-qt's generated bridge code needs it. There it is allowed
+  only on the cxx-qt bridge modules and at the few FFI points (such as the
+  `QPainter` pointer passed to `paint`), each with a `SAFETY:` comment.
+  Clippy runs with `all` and `pedantic` denied; a local `#[allow]` needs a
+  comment that justifies it.
+- `vendor/libmpv2` is libmpv2 6.0.0 with one fix (`vendor/libmpv2/RVP-PATCH.md`),
+  used through `[patch.crates-io]`. Building needs libmpv (`MPV_LIB_DIR` for
+  the linker and the loader path at run time) and, for `shell/`, Qt 6.10
+  (`QMAKE`).
 - Results must be deterministic: no hash-ordered containers where order is
   observable (use `BTreeMap`/`BTreeSet`).
 - `cargo xtask ci` must pass before every commit: fmt, clippy with warnings

@@ -161,14 +161,14 @@ playback state between the two systems possible (open question 2).
 
 | # | Decision | Reason | Verified by |
 |---|----------|--------|-------------|
-| D1 | Playback engine: libmpv on both systems, via the `libmpv2` crate. | SVP's main path on Linux is mpv IPC. The VLC path locks us to VLC 3.0 binary modules; libVLC 3 can embed video only into an X11 window or via CPU frame copies; Rust libVLC bindings are unmaintained. | S1, S2 |
+| D1 | Playback engine: libmpv on both systems, via the `libmpv2` crate (vendored with one event-handling fix, owner decision 2026-10-10; `vendor/libmpv2/RVP-PATCH.md`). | SVP's main path on Linux is mpv IPC. The VLC path locks us to VLC 3.0 binary modules; libVLC 3 can embed video only into an X11 window or via CPU frame copies; Rust libVLC bindings are unmaintained. | S1, S2 |
 | D2 | Skin engine: our own Rust crate that loads `.dsf` directly. | Redrawing a "similar" skin can never be identical. Loading the user's own files is the only route to 1:1. | S4 |
-| D3 | Shell: Qt 6 via `cxx-qt`, UI in QML. A small C++ shim is allowed for the mpv video item. | Native-looking menus and dialogs on both systems; cascading menus that extend beyond a small window (`xdg_popup` on Wayland); mature on Windows. Fallback: Qt Widgets with a thin C++ UI layer. | S3 |
+| D3 | Shell: Qt 6 via `cxx-qt`, UI in QML. A small C++ shim is allowed for the mpv video item. `unsafe` is allowed in `shell/` only, for the cxx-qt bridges and FFI points (owner decision 2026-10-10). | Native-looking menus and dialogs on both systems; cascading menus that extend beyond a small window (`xdg_popup` on Wayland); mature on Windows. Fallback: Qt Widgets with a thin C++ UI layer. | S3 |
 | D4 | Video output: OpenGL render API of libmpv inside Qt Quick (OpenGL scene graph backend) on both systems first. Optional later: mpv in a child window (`wid`) on Windows for native D3D11 output and HDR passthrough. | One code path; Wayland needs the render API. SVP needs copy-back decoding anyway, so zero-copy is not lost while SVP is active. | S3 |
 | D5 | Skin drawing: Rust builds a display list; it is painted with `QPainter` in a `QQuickPaintedItem` subclass implemented through `cxx-qt`. | Native text rendering (Qt can use the GDI font engine on Windows for a closer match); no custom GPU text stack. | S3, S4 |
 | D6 | Native menus and a native settings window, not skinned. | Matches what PotPlayer actually does. | Screenshots |
 | D7 | Linux packaging: AppImage and native packages. No Flatpak or Snap. | SVP cannot attach to sandboxed applications. | SVP wiki |
-| D8 | License GPL-3.0-or-later. The `rust` skill's no-GPL/LGPL rule is waived for libmpv and Qt (owner decision 2026-10-10); Rust crates stay under `cargo deny`'s permissive list. | Confirmed by the owner. libmpv's default build is GPL; Qt is used under LGPL with dynamic linking. | Owner |
+| D8 | License GPL-3.0-or-later. The `rust` skill's no-GPL/LGPL rule is waived for libmpv and Qt (owner decision 2026-10-10), including the LGPL-2.1 binding crates `libmpv2` and `libmpv2-sys`; other Rust crates stay under `cargo deny`'s permissive list. | Confirmed by the owner. libmpv's default build is GPL; Qt is used under LGPL with dynamic linking. | Owner |
 | D9 | Player state (playlists, positions, settings) in our own files, written atomically and often. | The resume requirement must survive crashes, not only clean exits; mpv's watch-later files are written only on quit. | M2, M3 |
 
 ## 4. Usability requirements

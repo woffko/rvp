@@ -1,8 +1,9 @@
 [workspace]
 resolver = "3"
 members = ["crates/skin", "crates/engine", "crates/app", "crates/platform", "xtask"]
-# Throwaway goal B spikes; their own workspace with relaxed lints.
-exclude = ["spikes"]
+# Throwaway goal B spikes (their own workspace with relaxed lints) and the
+# patched libmpv2 (used through [patch.crates-io] below).
+exclude = ["spikes", "vendor"]
 
 [workspace.package]
 version = "0.0.1"
@@ -14,9 +15,18 @@ publish = false
 
 [workspace.dependencies]
 # Exact versions: dependency updates are deliberate, reviewed changes.
+# libmpv binding (D1); LGPL-2.1, waived in D8. Patched, see [patch.crates-io].
+libmpv2 = { version = "=6.0.0", default-features = false, features = ["render"] }
 png = "=0.18.1"
+# Settings and the resume store are JSON files (D9).
+serde = { version = "=1.0.229", features = ["derive"] }
+serde_json = "=1.0.151"
 swash = "=0.2.10"
 zip = { version = "=9.0.0", default-features = false, features = ["deflate-flate2"] }
+
+[patch.crates-io]
+# One fix in the event conversion; see vendor/libmpv2/RVP-PATCH.md.
+libmpv2 = { path = "vendor/libmpv2" }
 
 [workspace.lints.rust]
 unsafe_code = "forbid"

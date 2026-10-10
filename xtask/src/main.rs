@@ -2,6 +2,9 @@
 //!
 //! `cargo xtask ci` runs the same checks as the GitHub Actions workflow:
 //! formatting, clippy with warnings denied, the test suite and `cargo deny`.
+//!
+//! The engine links libmpv: when `MPV_LIB_DIR` is set (a libmpv outside the
+//! system paths), it is also added to the loader path for the tests.
 
 use std::process::{Command, ExitCode};
 
@@ -30,8 +33,22 @@ fn main() -> ExitCode {
 
 fn run(program: &str, args: &[&str]) -> Result<(), String> {
     println!("+ {program} {}", args.join(" "));
-    let status = Command::new(program)
-        .args(args)
+    let mut command = Command::new(program);
+    command.args(args);
+    if let Some(dir) = std::env::var_os("MPV_LIB_DIR") {
+        let variable = if cfg!(windows) {
+            "PATH"
+        } else {
+            "LD_LIBRARY_PATH"
+        };
+        let mut paths = vec![std::path::PathBuf::from(dir)];
+        if let Some(existing) = std::env::var_os(variable) {
+            paths.extend(std::env::split_paths(&existing));
+        }
+        let joined = std::env::join_paths(paths).map_err(|error| error.to_string())?;
+        command.env(variable, joined);
+    }
+    let status = command
         .status()
         .map_err(|error| format!("cannot start {program}: {error}"))?;
     if status.success() {

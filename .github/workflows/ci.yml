@@ -24,6 +24,21 @@ jobs:
           rustup toolchain install
           rustup show active-toolchain
       - uses: Swatinem/rust-cache@v2
+      - name: libmpv (Linux)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libmpv-dev
+      - name: libmpv cache (Windows)
+        if: runner.os == 'Windows'
+        uses: actions/cache@v4
+        with:
+          path: ${{ runner.temp }}/libmpv/*.7z
+          key: libmpv-shinchiro-20261010
+      - name: libmpv (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: ./.github/scripts/windows-libmpv.ps1
       - name: rustfmt
         if: runner.os == 'Linux'
         run: cargo fmt --all -- --check
