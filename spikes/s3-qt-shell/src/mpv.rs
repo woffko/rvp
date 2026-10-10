@@ -6,7 +6,7 @@ use std::cell::RefCell;
 use std::ffi::c_void;
 use std::pin::Pin;
 use std::sync::{Mutex, OnceLock};
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 
 use cxx_qt::Threading;
 use cxx_qt_lib::QString;
@@ -32,10 +32,20 @@ pub mod qobject {
         #[qproperty(i32, frame_drop_count)]
         #[qproperty(i32, vo_delayed_frame_count)]
         #[qproperty(QString, hwdec_current)]
+        #[qproperty(i32, mistimed_frame_count)]
+        #[qproperty(i32, decoder_frame_drop_count)]
+        #[qproperty(f64, estimated_display_fps)]
+        #[qproperty(f64, vsync_jitter)]
+        #[qproperty(QString, current_vo)]
         type MpvController = super::MpvControllerRust;
 
         #[qinvokable]
         fn start(self: Pin<&mut Self>, source: &QString, hwdec: &QString);
+
+        /// mpv in a native child window (`wid`) with its own video output,
+        /// for comparison with the OpenGL item.
+        #[qinvokable]
+        fn start_wid(self: Pin<&mut Self>, source: &QString, hwdec: &QString, wid: i64);
 
         #[qinvokable]
         fn refresh(self: Pin<&mut Self>);
@@ -54,6 +64,11 @@ pub struct MpvControllerRust {
     frame_drop_count: i32,
     vo_delayed_frame_count: i32,
     hwdec_current: QString,
+    mistimed_frame_count: i32,
+    decoder_frame_drop_count: i32,
+    estimated_display_fps: f64,
+    vsync_jitter: f64,
+    current_vo: QString,
 }
 
 /// The player, leaked so the render thread can borrow it for the lifetime
@@ -63,6 +78,67 @@ static FRAMES: AtomicU64 = AtomicU64::new(0);
 /// `vo=libmpv` needs the render context before a file starts, so the first
 /// file is loaded only after the render thread created it.
 static PENDING: Mutex<Option<String>> = Mutex::new(None);
+/// Set in `wid` mode: mpv renders itself and the OpenGL item stays idle.
+static WID_MODE: AtomicBool = AtomicBool::new(false);
+
+/// Property values read by a worker thread. The Qt thread never calls a
+/// blocking mpv function: with `wid` on Windows, mpv's video thread sends
+/// window messages to the child window, which belongs to the Qt thread, so
+/// a Qt thread waiting on mpv could deadlock.
+#[derive(Clone, Default)]
+struct Snapshot {
+    frame_drop: i32,
+    vo_delayed: i32,
+    mistimed: i32,
+    decoder_drop: i32,
+    display_fps: f64,
+    vsync_jitter: f64,
+    vf_fps: f64,
+    time_pos: f64,
+    vo: String,
+    hwdec: String,
+}
+
+static SNAPSHOT: Mutex<Option<Snapshot>> = Mutex::new(None);
+
+fn read_snapshot(mpv: &Mpv) -> Snapshot {
+    let count = |name: &str| {
+        mpv.get_property::<i64>(name)
+            .ok()
+            .and_then(|value| i32::try_from(value).ok())
+            .unwrap_or(-1)
+    };
+    let float = |name: &str| mpv.get_property::<f64>(name).unwrap_or(-1.0);
+    let text = |name: &str| mpv.get_property::<String>(name).unwrap_or_default();
+    Snapshot {
+        frame_drop: count("frame-drop-count"),
+        vo_delayed: count("vo-delayed-frame-count"),
+        mistimed: count("mistimed-frame-count"),
+        decoder_drop: count("decoder-frame-drop-count"),
+        display_fps: float("estimated-display-fps"),
+        vsync_jitter: float("vsync-jitter"),
+        vf_fps: float("estimated-vf-fps"),
+        time_pos: float("time-pos"),
+        vo: text("current-vo"),
+        hwdec: text("hwdec-current"),
+    }
+}
+
+/// Loads `first` (in `wid` mode) and then keeps SNAPSHOT up to date.
+fn start_poller(mpv: &'static Mpv, first: Option<String>) {
+    std::thread::spawn(move || {
+        if let Some(source) = first {
+            let _ = mpv.command("loadfile", &[&source]);
+        }
+        loop {
+            let snapshot = read_snapshot(mpv);
+            if let Ok(mut slot) = SNAPSHOT.lock() {
+                *slot = Some(snapshot);
+            }
+            std::thread::sleep(std::time::Duration::from_millis(1000));
+        }
+    });
+}
 
 thread_local! {
     /// The render context lives on the scene graph render thread only.
@@ -70,7 +146,16 @@ thread_local! {
 }
 
 impl qobject::MpvController {
-    fn start(mut self: Pin<&mut Self>, source: &QString, hwdec: &QString) {
+    fn start(self: Pin<&mut Self>, source: &QString, hwdec: &QString) {
+        self.create(source, hwdec, None);
+    }
+
+    fn start_wid(self: Pin<&mut Self>, source: &QString, hwdec: &QString, wid: i64) {
+        WID_MODE.store(true, Ordering::Relaxed);
+        self.create(source, hwdec, Some(wid));
+    }
+
+    fn create(mut self: Pin<&mut Self>, source: &QString, hwdec: &QString, wid: Option<i64>) {
         let source = source.to_string();
         if let Some(mpv) = MPV.get() {
             let _ = mpv.command("loadfile", &[&source]);
@@ -79,7 +164,10 @@ impl qobject::MpvController {
         crate::ffi::bridge::rvp_set_c_numeric_locale();
         let hwdec = hwdec.to_string();
         let created = Mpv::with_initializer(|init| {
-            init.set_option("vo", "libmpv")?;
+            match wid {
+                Some(wid) => init.set_option("wid", wid)?,
+                None => init.set_option("vo", "libmpv")?,
+            }
             init.set_option("hwdec", hwdec.as_str())?;
             init.set_option("loop-file", "inf")?;
             init.set_option("keep-open", "yes")?;
@@ -107,34 +195,38 @@ impl qobject::MpvController {
         // not fire again. Properties are polled in refresh() instead.
         let mpv: &'static Mpv = Box::leak(Box::new(mpv));
         let _ = MPV.set(mpv);
-        if let Ok(mut pending) = PENDING.lock() {
-            *pending = Some(source);
+        if wid.is_some() {
+            // mpv owns its video output; nothing waits for a render context.
+            start_poller(mpv, Some(source));
+        } else {
+            if let Ok(mut pending) = PENDING.lock() {
+                *pending = Some(source);
+            }
+            start_poller(mpv, None);
+            crate::ffi::bridge::rvp_mpv_request_update();
         }
-        crate::ffi::bridge::rvp_mpv_request_update();
         self.as_mut().set_status(QString::from("starting"));
     }
 
     fn refresh(mut self: Pin<&mut Self>) {
         let frames = i32::try_from(FRAMES.load(Ordering::Relaxed)).unwrap_or(i32::MAX);
         self.as_mut().set_frames_rendered(frames);
-        if let Some(mpv) = MPV.get() {
-            let count = |name: &str| {
-                mpv.get_property::<i64>(name)
-                    .ok()
-                    .and_then(|value| i32::try_from(value).ok())
-                    .unwrap_or(-1)
-            };
-            self.as_mut().set_frame_drop_count(count("frame-drop-count"));
-            self.as_mut()
-                .set_vo_delayed_frame_count(count("vo-delayed-frame-count"));
-            let hwdec = mpv.get_property::<String>("hwdec-current").unwrap_or_default();
-            if let Ok(value) = mpv.get_property::<f64>("estimated-vf-fps") {
-                self.as_mut().set_estimated_vf_fps(value);
+        let snapshot = SNAPSHOT.lock().ok().and_then(|slot| slot.clone());
+        if let Some(snapshot) = snapshot {
+            self.as_mut().set_frame_drop_count(snapshot.frame_drop);
+            self.as_mut().set_vo_delayed_frame_count(snapshot.vo_delayed);
+            self.as_mut().set_mistimed_frame_count(snapshot.mistimed);
+            self.as_mut().set_decoder_frame_drop_count(snapshot.decoder_drop);
+            self.as_mut().set_estimated_display_fps(snapshot.display_fps);
+            self.as_mut().set_vsync_jitter(snapshot.vsync_jitter);
+            self.as_mut().set_current_vo(QString::from(&snapshot.vo));
+            self.as_mut().set_hwdec_current(QString::from(&snapshot.hwdec));
+            if snapshot.vf_fps >= 0.0 {
+                self.as_mut().set_estimated_vf_fps(snapshot.vf_fps);
             }
-            if let Ok(value) = mpv.get_property::<f64>("time-pos") {
-                self.as_mut().set_time_pos(value);
+            if snapshot.time_pos >= 0.0 {
+                self.as_mut().set_time_pos(snapshot.time_pos);
             }
-            self.as_mut().set_hwdec_current(QString::from(&hwdec));
         }
     }
 
@@ -167,6 +259,9 @@ fn get_proc_address(_context: &(), name: &str) -> *mut c_void {
 
 /// Creates the render context on the render thread, once mpv exists.
 pub fn init_gl() {
+    if WID_MODE.load(Ordering::Relaxed) {
+        return;
+    }
     let Some(mpv) = MPV.get() else {
         return;
     };

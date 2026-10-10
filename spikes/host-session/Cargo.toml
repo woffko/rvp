@@ -1,0 +1,25 @@
+[package]
+name = "host-session"
+description = "Goal C host-session helpers: R1 captures and S5 loopback recordings of PotPlayer"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+png = "=0.18.1"
+rvp-skin = { path = "../../crates/skin" }
+
+# Windows only: the tool drives PotPlayer through Win32 and records the
+# default output device with WASAPI loopback (cpal) into WAV files (hound).
+[target.'cfg(windows)'.dependencies]
+cpal = "=0.18.2"
+hound = "=3.5.1"
+windows-sys = { version = "=0.61.2", features = [
+    "Win32_Foundation",
+    "Win32_Graphics_Gdi",
+    "Win32_System_Diagnostics_ToolHelp",
+    "Win32_UI_HiDpi",
+    "Win32_UI_Input_KeyboardAndMouse",
+    "Win32_UI_WindowsAndMessaging",
+] }

@@ -35,6 +35,8 @@ public:
     Q_INVOKABLE QString environmentJson() const;
     Q_INVOKABLE int grabAll(const QString &directory, const QString &prefix) const;
     Q_INVOKABLE int renderOffscreen() const;
+    // A native child window of the main window, for mpv's `wid` output.
+    Q_INVOKABLE qint64 createChildWindow(int x, int y, int width, int height) const;
     Q_INVOKABLE void quit(int code) const;
 };
 

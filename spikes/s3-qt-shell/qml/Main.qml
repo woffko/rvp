@@ -23,6 +23,8 @@ Window {
     }
 
     readonly property bool selftest: hasArg("--selftest")
+    // --wid: mpv draws into a native child window instead of the OpenGL item.
+    readonly property bool widMode: hasArg("--wid")
     readonly property string outDir: argValue("--out", "s3-out")
     property int step: 0
     property int failures: 0
@@ -43,6 +45,7 @@ Window {
 
     MpvItem {
         id: video
+        visible: !root.widMode
         x: skin.video_rect.width > 0 ? skin.video_rect.x : 0
         y: skin.video_rect.width > 0 ? skin.video_rect.y : 0
         width: skin.video_rect.width > 0 ? skin.video_rect.width : root.width
@@ -142,7 +145,10 @@ Window {
         onTriggered: root.runStep()
     }
 
-    property bool pumpFrames: false
+    // True while the video plays. Offscreen grabs (for session 0, where
+    // windows are never exposed) only apply to the OpenGL item path.
+    property bool videoActive: false
+    readonly property bool pumpFrames: videoActive && !widMode
     property int offscreenRenders: 0
     Timer {
         interval: 40
@@ -159,7 +165,7 @@ Window {
     Timer {
         interval: 1000
         repeat: true
-        running: root.pumpFrames
+        running: root.videoActive
         onTriggered: {
             skin.update()
             controller.refresh()
@@ -224,9 +230,16 @@ Window {
             root.height = Number(argValue("--height", "540"))
         } else if (step === 5) {
             Tools.log("video_rect=" + skin.video_rect.x + "," + skin.video_rect.y + " " + skin.video_rect.width + "x" + skin.video_rect.height)
-            root.pumpFrames = true
-            controller.start(argValue("--video", "av://lavfi:testsrc2=size=1280x720:rate=24000/1001"),
-                             argValue("--hwdec", "no"))
+            root.videoActive = true
+            const source = argValue("--video", "av://lavfi:testsrc2=size=1280x720:rate=24000/1001")
+            if (widMode) {
+                const wid = Tools.createChildWindow(video.x, video.y, video.width, video.height)
+                Tools.log("video_output=wid " + wid)
+                controller.start_wid(source, argValue("--hwdec", "no"), wid)
+            } else {
+                Tools.log("video_output=opengl item")
+                controller.start(source, argValue("--hwdec", "no"))
+            }
             videoPhase.start()
         }
     }
@@ -241,16 +254,25 @@ Window {
         Tools.log("mpv_frames_rendered=" + controller.frames_rendered)
         Tools.log("mpv_frame_drop_count=" + controller.frame_drop_count)
         Tools.log("mpv_vo_delayed_frame_count=" + controller.vo_delayed_frame_count)
+        Tools.log("mpv_mistimed_frame_count=" + controller.mistimed_frame_count)
+        Tools.log("mpv_decoder_frame_drop_count=" + controller.decoder_frame_drop_count)
+        Tools.log("mpv_estimated_display_fps=" + controller.estimated_display_fps)
+        Tools.log("mpv_vsync_jitter=" + controller.vsync_jitter)
+        Tools.log("mpv_current_vo=" + controller.current_vo)
         Tools.log("skin_ops_painted=" + skin.ops_painted)
         Tools.log("offscreen_renders=" + root.offscreenRenders)
         check("wakeup_callback_reached_qt_thread", controller.events_on_qt_thread > 0)
         check("video_playing", controller.time_pos > 1, "time_pos " + controller.time_pos)
-        check("video_frames_rendered", controller.frames_rendered > 10)
+        if (!widMode)
+            check("video_frames_rendered", controller.frames_rendered > 10)
         check("skin_painted", skin.ops_painted > 50)
         if (gpuChecks) {
             const expected = controller.estimated_vf_fps * root.videoSeconds * 0.9
-            check("gpu_frames_kept_up", controller.frames_rendered >= expected,
-                  "rendered " + controller.frames_rendered + " expected >= " + Math.round(expected))
+            if (!widMode)
+                check("gpu_frames_kept_up", controller.frames_rendered >= expected,
+                      "rendered " + controller.frames_rendered + " expected >= " + Math.round(expected))
+            check("gpu_no_decoder_drops", controller.decoder_frame_drop_count === 0,
+                  "decoder drops " + controller.decoder_frame_drop_count)
             check("gpu_no_dropped_frames", controller.frame_drop_count === 0,
                   "drops " + controller.frame_drop_count)
         } else {

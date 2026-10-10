@@ -207,6 +207,24 @@ int SpikeTools::renderOffscreen() const
     return rendered;
 }
 
+qint64 SpikeTools::createChildWindow(int x, int y, int width, int height) const
+{
+    QWindow *parent = nullptr;
+    for (QWindow *window : QGuiApplication::topLevelWindows()) {
+        if (qobject_cast<QQuickWindow *>(window) != nullptr && window->isVisible()) {
+            parent = window;
+            break;
+        }
+    }
+    if (parent == nullptr) {
+        return 0;
+    }
+    auto *child = new QWindow(parent);
+    child->setGeometry(x, y, width, height);
+    child->show();
+    return static_cast<qint64>(child->winId());
+}
+
 void rvp_setup_graphics()
 {
     QQuickWindow::setGraphicsApi(QSGRendererInterface::OpenGL);
