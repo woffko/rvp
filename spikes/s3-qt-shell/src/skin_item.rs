@@ -6,11 +6,11 @@ use std::path::Path;
 use std::pin::Pin;
 
 use cxx_qt::CxxQtType;
-use cxx_qt_lib::{QImage, QRectF, QString};
+use cxx_qt_lib::{QImage, QRect, QRectF, QString};
 use rvp_skin::paint::{HAlign, Op, VAlign};
 use rvp_skin::{DataModel, DisplayList, Skin, UiState, layout, paint};
 
-use crate::ffi::bridge::{rvp_paint_fill, rvp_paint_image, rvp_paint_text};
+use crate::ffi::bridge::{rvp_paint_fill, rvp_paint_image, rvp_paint_text, rvp_paint_translate};
 
 #[cxx_qt::bridge]
 pub mod qobject {
@@ -19,6 +19,8 @@ pub mod qobject {
         type QString = cxx_qt_lib::QString;
         include!("cxx-qt-lib/qrectf.h");
         type QRectF = cxx_qt_lib::QRectF;
+        include!("cxx-qt-lib/qrect.h");
+        type QRect = cxx_qt_lib::QRect;
         include!("cxx-qt-lib/qpainter.h");
         type QPainter = cxx_qt_lib::QPainter;
     }
@@ -34,6 +36,10 @@ pub mod qobject {
         #[base = QQuickPaintedItem]
         #[qproperty(QString, skin_path)]
         #[qproperty(QRectF, video_rect)]
+        #[qproperty(QRectF, time_rect)]
+        /// When set, the item covers only this part of the window and
+        /// paints only the operations that touch it (a layer).
+        #[qproperty(QRectF, region)]
         #[qproperty(QString, status)]
         #[qproperty(i32, ops_painted)]
         type SkinItem = super::SkinItemRust;
@@ -48,8 +54,19 @@ pub mod qobject {
         #[qinvokable]
         fn relayout(self: Pin<&mut Self>, width: f64, height: f64);
 
+        /// Repaints only the current-time label, as a real player would
+        /// once per second.
+        #[qinvokable]
+        fn repaint_time(self: Pin<&mut Self>);
+
+        /// "calls N mean X ms max Y ms" for the paint() calls so far.
+        #[qinvokable]
+        fn paint_stats(self: &Self) -> QString;
+
+        /// `QQuickPaintedItem::update(rect)`; an empty rect repaints all.
         #[inherit]
-        fn update(self: Pin<&mut Self>);
+        #[cxx_name = "update"]
+        fn update_rect(self: Pin<&mut Self>, rect: &QRect);
     }
 
     // The generated default constructor passes a QObject* parent, which
@@ -75,7 +92,12 @@ impl cxx_qt::Constructor<()> for qobject::SkinItem {
 pub struct SkinItemRust {
     skin_path: QString,
     video_rect: QRectF,
+    time_rect: QRectF,
+    region: QRectF,
     status: QString,
+    paint_calls: u32,
+    paint_total: std::time::Duration,
+    paint_max: std::time::Duration,
     ops_painted: i32,
     skin: Option<Skin>,
     loaded_path: String,
@@ -112,12 +134,21 @@ impl qobject::SkinItem {
             let data = DataModel::sample();
             layout(skin, "MainSkinArea", w, h, &state).map(|placed| {
                 let video = placed.slot("CMD_VIDEO_WINDOW");
-                (paint(skin, &placed, &state, &data), video)
+                let time = placed.find_command("CMD_CURRENTTIME_MESSAGE").map(|node| node.rect);
+                (paint(skin, &placed, &state, &data), video, time)
             })
         });
         match result {
-            Some(Ok((list, video))) => {
+            Some(Ok((list, video, time))) => {
                 self.as_mut().rust_mut().list = Some(list);
+                if let Some(rect) = time {
+                    self.as_mut().set_time_rect(QRectF::new(
+                        f64::from(rect.x),
+                        f64::from(rect.y),
+                        f64::from(rect.w),
+                        f64::from(rect.h),
+                    ));
+                }
                 if let Some(rect) = video {
                     self.as_mut().set_video_rect(QRectF::new(
                         f64::from(rect.x),
@@ -133,7 +164,30 @@ impl qobject::SkinItem {
             }
             None => {}
         }
-        self.update();
+        self.update_rect(&QRect::default());
+    }
+
+    fn paint_stats(&self) -> QString {
+        let calls = self.paint_calls.max(1);
+        QString::from(&format!(
+            "calls {} mean {:.2} ms max {:.2} ms",
+            self.paint_calls,
+            self.paint_total.as_secs_f64() * 1000.0 / f64::from(calls),
+            self.paint_max.as_secs_f64() * 1000.0
+        ))
+    }
+
+    fn repaint_time(self: Pin<&mut Self>) {
+        let rect = self.time_rect();
+        // Window coordinates, far inside i32.
+        #[allow(clippy::cast_possible_truncation)]
+        let rect = QRect::new(
+            rect.x().floor() as i32,
+            rect.y().floor() as i32,
+            rect.width().ceil() as i32,
+            rect.height().ceil() as i32,
+        );
+        self.update_rect(&rect);
     }
 
     /// # Safety
@@ -144,13 +198,38 @@ impl qobject::SkinItem {
             return;
         };
         let mut painter = unsafe { Pin::new_unchecked(painter) };
+        let started = std::time::Instant::now();
         let mut rust = self.as_mut().rust_mut();
         let rust = rust.as_mut().get_mut();
         let (Some(skin), Some(list)) = (rust.skin.as_ref(), rust.list.as_ref()) else {
             return;
         };
+        // Layer mode: window coordinates shifted into the item, and only
+        // operations that touch the region.
+        #[allow(clippy::cast_possible_truncation)]
+        let region = (!rust.region.is_empty()).then(|| {
+            rvp_skin::Rect::new(
+                rust.region.x().floor() as i32,
+                rust.region.y().floor() as i32,
+                rust.region.width().ceil() as i32,
+                rust.region.height().ceil() as i32,
+            )
+        });
+        if let Some(region) = region {
+            rvp_paint_translate(painter.as_mut(), -region.x, -region.y);
+        }
         let mut painted = 0;
         for op in &list.ops {
+            if let Some(region) = region {
+                let bounds = match op {
+                    Op::Image { dst, clip, .. } => dst.intersect(clip),
+                    Op::Fill { rect, .. } => *rect,
+                    Op::Text(text) => text.rect.intersect(&text.clip),
+                };
+                if bounds.intersect(&region).is_empty() {
+                    continue;
+                }
+            }
             match op {
                 Op::Image {
                     atlas,
@@ -221,5 +300,9 @@ impl qobject::SkinItem {
             painted += 1;
         }
         rust.ops_painted = painted;
+        let elapsed = started.elapsed();
+        rust.paint_calls += 1;
+        rust.paint_total += elapsed;
+        rust.paint_max = rust.paint_max.max(elapsed);
     }
 }

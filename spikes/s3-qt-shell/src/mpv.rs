@@ -36,6 +36,7 @@ pub mod qobject {
         #[qproperty(i32, decoder_frame_drop_count)]
         #[qproperty(f64, estimated_display_fps)]
         #[qproperty(f64, vsync_jitter)]
+        #[qproperty(f64, display_fps)]
         #[qproperty(QString, current_vo)]
         type MpvController = super::MpvControllerRust;
 
@@ -68,6 +69,7 @@ pub struct MpvControllerRust {
     decoder_frame_drop_count: i32,
     estimated_display_fps: f64,
     vsync_jitter: f64,
+    display_fps: f64,
     current_vo: QString,
 }
 
@@ -91,8 +93,9 @@ struct Snapshot {
     vo_delayed: i32,
     mistimed: i32,
     decoder_drop: i32,
-    display_fps: f64,
+    estimated_display_fps: f64,
     vsync_jitter: f64,
+    display_fps: f64,
     vf_fps: f64,
     time_pos: f64,
     vo: String,
@@ -115,8 +118,9 @@ fn read_snapshot(mpv: &Mpv) -> Snapshot {
         vo_delayed: count("vo-delayed-frame-count"),
         mistimed: count("mistimed-frame-count"),
         decoder_drop: count("decoder-frame-drop-count"),
-        display_fps: float("estimated-display-fps"),
+        estimated_display_fps: float("estimated-display-fps"),
         vsync_jitter: float("vsync-jitter"),
+        display_fps: float("display-fps"),
         vf_fps: float("estimated-vf-fps"),
         time_pos: float("time-pos"),
         vo: text("current-vo"),
@@ -169,6 +173,12 @@ impl qobject::MpvController {
                 None => init.set_option("vo", "libmpv")?,
             }
             init.set_option("hwdec", hwdec.as_str())?;
+            // Extra options for experiments: RVP_MPV_OPTIONS="a=b,c=d".
+            for pair in std::env::var("RVP_MPV_OPTIONS").unwrap_or_default().split(',') {
+                if let Some((key, value)) = pair.split_once('=') {
+                    init.set_option(key.trim(), value.trim())?;
+                }
+            }
             init.set_option("loop-file", "inf")?;
             init.set_option("keep-open", "yes")?;
             init.set_option("terminal", "yes")?;
@@ -217,7 +227,8 @@ impl qobject::MpvController {
             self.as_mut().set_vo_delayed_frame_count(snapshot.vo_delayed);
             self.as_mut().set_mistimed_frame_count(snapshot.mistimed);
             self.as_mut().set_decoder_frame_drop_count(snapshot.decoder_drop);
-            self.as_mut().set_estimated_display_fps(snapshot.display_fps);
+            self.as_mut().set_estimated_display_fps(snapshot.estimated_display_fps);
+            self.as_mut().set_display_fps(snapshot.display_fps);
             self.as_mut().set_vsync_jitter(snapshot.vsync_jitter);
             self.as_mut().set_current_vo(QString::from(&snapshot.vo));
             self.as_mut().set_hwdec_current(QString::from(&snapshot.hwdec));

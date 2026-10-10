@@ -23,8 +23,22 @@ Window {
     }
 
     readonly property bool selftest: hasArg("--selftest")
+    // Outside the self-test, --width/--height set the initial size (the
+    // host input check starts at 440x77).
+    Component.onCompleted: {
+        if (!selftest && hasArg("--width")) {
+            width = Number(argValue("--width", "960"))
+            height = Number(argValue("--height", "540"))
+        }
+    }
     // --wid: mpv draws into a native child window instead of the OpenGL item.
     readonly property bool widMode: hasArg("--wid")
+    // --chrome full|partial|layered|synced|none: how the skin is repainted
+    // once per second during playback: the whole item, the time label's
+    // rectangle of the whole item, a separate small item that holds only
+    // the time label (the big item is left alone), that small item updated
+    // together with the next video frame, or not at all.
+    readonly property string chromeMode: argValue("--chrome", "full")
     readonly property string outDir: argValue("--out", "s3-out")
     property int step: 0
     property int failures: 0
@@ -43,6 +57,18 @@ Window {
         Component.onCompleted: relayout(width, height)
     }
 
+    // The time label as its own layer, for --chrome layered.
+    SkinItem {
+        id: timeLayer
+        visible: root.chromeMode === "layered" || root.chromeMode === "synced"
+        z: 1
+        skin_path: skin.skin_path
+        region: skin.time_rect
+        x: skin.time_rect.x
+        y: skin.time_rect.y
+        width: skin.time_rect.width
+        height: skin.time_rect.height
+    }
     MpvItem {
         id: video
         visible: !root.widMode
@@ -87,8 +113,12 @@ Window {
         onPressed: menu.popup()
     }
 
-    onWidthChanged: if (hasArg("--log-geometry")) Tools.log("window_size=" + width + "x" + height)
-    onHeightChanged: if (hasArg("--log-geometry")) Tools.log("window_size=" + width + "x" + height)
+    onWidthChanged: {
+        if (hasArg("--log-geometry")) Tools.log("window_size=" + width + "x" + height)
+    }
+    onHeightChanged: {
+        if (hasArg("--log-geometry")) Tools.log("window_size=" + width + "x" + height)
+    }
 
     Menu {
         id: menu
@@ -167,7 +197,14 @@ Window {
         repeat: true
         running: root.videoActive
         onTriggered: {
-            skin.update()
+            if (root.chromeMode === "full")
+                skin.update()
+            else if (root.chromeMode === "partial")
+                skin.repaint_time()
+            else if (root.chromeMode === "layered")
+                timeLayer.update()
+            else if (root.chromeMode === "synced")
+                Tools.updateWithNextFrame(timeLayer)
             controller.refresh()
         }
     }
@@ -231,13 +268,14 @@ Window {
         } else if (step === 5) {
             Tools.log("video_rect=" + skin.video_rect.x + "," + skin.video_rect.y + " " + skin.video_rect.width + "x" + skin.video_rect.height)
             root.videoActive = true
+            timeLayer.relayout(root.width, root.height)
             const source = argValue("--video", "av://lavfi:testsrc2=size=1280x720:rate=24000/1001")
             if (widMode) {
                 const wid = Tools.createChildWindow(video.x, video.y, video.width, video.height)
                 Tools.log("video_output=wid " + wid)
                 controller.start_wid(source, argValue("--hwdec", "no"), wid)
             } else {
-                Tools.log("video_output=opengl item")
+                Tools.log("video_output=opengl item chrome=" + chromeMode)
                 controller.start(source, argValue("--hwdec", "no"))
             }
             videoPhase.start()
@@ -258,6 +296,11 @@ Window {
         Tools.log("mpv_decoder_frame_drop_count=" + controller.decoder_frame_drop_count)
         Tools.log("mpv_estimated_display_fps=" + controller.estimated_display_fps)
         Tools.log("mpv_vsync_jitter=" + controller.vsync_jitter)
+        Tools.log("mpv_display_fps=" + controller.display_fps)
+        Tools.log("screen_refresh_hz=" + Tools.refreshRate())
+        Tools.log("skin_paint_stats=" + skin.paint_stats())
+        Tools.log("time_layer_paint_stats=" + timeLayer.paint_stats())
+        Tools.log("time_rect=" + skin.time_rect.x + "," + skin.time_rect.y + " " + skin.time_rect.width + "x" + skin.time_rect.height)
         Tools.log("mpv_current_vo=" + controller.current_vo)
         Tools.log("skin_ops_painted=" + skin.ops_painted)
         Tools.log("offscreen_renders=" + root.offscreenRenders)

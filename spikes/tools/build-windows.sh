@@ -26,5 +26,5 @@ python3 "$SPIKES/tools/deploy-windows.py" "$out/s3-qt-shell.exe" "$DEPS/qt/6.10.
     "$win/s3-bundle" "$win/mpv-dev/libmpv-2.dll" "$out/s1-svp-attach.exe" \
     "$runtime/msvcp140.dll" "$runtime/msvcp140_1.dll" "$runtime/msvcp140_2.dll" \
     "$runtime/vcruntime140.dll" "$runtime/vcruntime140_1.dll" "$runtime/concrt140.dll"
-cp "$out/host-session.exe" "$SPIKES/../tools/r1/potplayer-mouse.ps1" "$win/s3-bundle/"
+cp "$out/host-session.exe" "$win/s3-bundle/"
 echo "bundles: $win/s2-bundle $win/s3-bundle"

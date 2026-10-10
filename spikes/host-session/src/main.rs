@@ -1,18 +1,26 @@
 //! Goal C host-session helpers (Windows only).
 //!
 //! ```text
-//! host-session r1 --potplayer EXE --skin DSF --clip VIDEO --out DIR [--sizes 1280x720,...]
+//! host-session r1 --potplayer EXE --skin DSF --clip VIDEO --out DIR
+//!     [--sizes 1280x720,...] [--states idle,playing|none] [--menu yes|no] [--mouse-page yes|no]
 //! host-session s5 --potplayer EXE --out DIR --clip FILE:SECONDS [--clip FILE:SECONDS ...]
+//! host-session s3-input --s3 S3_EXE --skin DSF
 //! host-session record --out FILE.wav --seconds N
 //! host-session check
 //! ```
 //!
 //! `r1` starts PotPlayer, captures its window at each size (idle and
 //! playing; plain, hovering the play button and with it pressed), dumps the
-//! context menu, puts the window back where it was and closes PotPlayer.
-//! `s5` records the default output device (WASAPI loopback) while PotPlayer
-//! plays each clip. `record` only records; `check` reports DPI, monitors and
-//! whether PotPlayer runs, without changing anything.
+//! context menu, reads the mouse page of Preferences, puts the window back
+//! where it was and closes PotPlayer. `s5` records the default output device
+//! (WASAPI loopback) while PotPlayer plays each clip. `s3-input` drags the
+//! S3 spike's frameless window with the real mouse. `record` only records;
+//! `check` reports monitors, processes and the output device.
+//!
+//! Only mouse input is injected (it goes to the window under the cursor).
+//! Keyboard input would go to the foreground window, which can be the
+//! terminal running this tool, so menus, dialogs and commands are driven
+//! with window messages instead.
 
 #[cfg(windows)]
 mod win;

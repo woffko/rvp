@@ -7,6 +7,7 @@
 #pragma once
 
 #include <QtCore/QObject>
+#include <QtCore/QPointer>
 #include <QtCore/QString>
 #include <QtGui/QImage>
 #include <QtGui/QPainter>
@@ -22,7 +23,13 @@ public:
     ~MpvItem() override;
     Renderer *createRenderer() const override;
 
+    // Called (queued) when mpv has a new frame. Chrome items queued with
+    // SpikeTools::updateWithNextFrame are updated in the same event-loop
+    // pass, so Qt syncs and presents once instead of twice.
+    Q_INVOKABLE void frameUpdate();
+
     static MpvItem *instance;
+    static QList<QPointer<QQuickItem>> pendingChrome;
 };
 
 class SpikeTools : public QObject
@@ -37,6 +44,10 @@ public:
     Q_INVOKABLE int renderOffscreen() const;
     // A native child window of the main window, for mpv's `wid` output.
     Q_INVOKABLE qint64 createChildWindow(int x, int y, int width, int height) const;
+    // Updates `item` together with the next video frame instead of now.
+    Q_INVOKABLE void updateWithNextFrame(QQuickItem *item) const;
+    // Refresh rate of the screen that shows the main window.
+    Q_INVOKABLE double refreshRate() const;
     Q_INVOKABLE void quit(int code) const;
 };
 
@@ -50,6 +61,7 @@ void rvp_paint_image(QPainter &painter, const QImage &image, std::int32_t sx, st
                      std::int32_t sw, std::int32_t sh, std::int32_t dx, std::int32_t dy,
                      std::int32_t dw, std::int32_t dh, std::int32_t cx, std::int32_t cy,
                      std::int32_t cw, std::int32_t ch);
+void rvp_paint_translate(QPainter &painter, std::int32_t dx, std::int32_t dy);
 void rvp_paint_fill(QPainter &painter, std::int32_t x, std::int32_t y, std::int32_t w,
                     std::int32_t h, std::uint32_t rgba);
 void rvp_paint_text(QPainter &painter, rust::Str text, rust::Str trailing, rust::Str family,

@@ -32,6 +32,7 @@ pub mod bridge {
             cw: i32,
             ch: i32,
         );
+        fn rvp_paint_translate(painter: Pin<&mut QPainter>, dx: i32, dy: i32);
         fn rvp_paint_fill(painter: Pin<&mut QPainter>, x: i32, y: i32, w: i32, h: i32, rgba: u32);
         #[allow(clippy::too_many_arguments)]
         fn rvp_paint_text(

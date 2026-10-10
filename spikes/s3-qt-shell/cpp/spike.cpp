@@ -5,6 +5,7 @@
 #endif
 
 #include <clocale>
+#include <utility>
 #include <cstdio>
 #include <cstdlib>
 
@@ -85,6 +86,18 @@ private:
 } // namespace
 
 MpvItem *MpvItem::instance = nullptr;
+QList<QPointer<QQuickItem>> MpvItem::pendingChrome;
+
+void MpvItem::frameUpdate()
+{
+    update();
+    for (const QPointer<QQuickItem> &item : std::as_const(pendingChrome)) {
+        if (!item.isNull()) {
+            item->update();
+        }
+    }
+    pendingChrome.clear();
+}
 
 MpvItem::MpvItem(QQuickItem *parent)
     : QQuickFramebufferObject(parent)
@@ -207,6 +220,27 @@ int SpikeTools::renderOffscreen() const
     return rendered;
 }
 
+void SpikeTools::updateWithNextFrame(QQuickItem *item) const
+{
+    if (MpvItem::instance == nullptr) {
+        item->update();
+        return;
+    }
+    if (!MpvItem::pendingChrome.contains(item)) {
+        MpvItem::pendingChrome.append(item);
+    }
+}
+
+double SpikeTools::refreshRate() const
+{
+    for (QWindow *window : QGuiApplication::topLevelWindows()) {
+        if (qobject_cast<QQuickWindow *>(window) != nullptr && window->isVisible() && window->screen()) {
+            return window->screen()->refreshRate();
+        }
+    }
+    return -1.0;
+}
+
 qint64 SpikeTools::createChildWindow(int x, int y, int width, int height) const
 {
     QWindow *parent = nullptr;
@@ -256,7 +290,7 @@ std::size_t rvp_gl_get_proc_address(rust::Str name)
 void rvp_mpv_request_update()
 {
     if (MpvItem::instance != nullptr) {
-        QMetaObject::invokeMethod(MpvItem::instance, "update", Qt::QueuedConnection);
+        QMetaObject::invokeMethod(MpvItem::instance, "frameUpdate", Qt::QueuedConnection);
     }
 }
 
@@ -288,6 +322,11 @@ void rvp_paint_image(QPainter &painter, const QImage &image, std::int32_t sx, st
         }
     }
     painter.restore();
+}
+
+void rvp_paint_translate(QPainter &painter, std::int32_t dx, std::int32_t dy)
+{
+    painter.translate(dx, dy);
 }
 
 void rvp_paint_fill(QPainter &painter, std::int32_t x, std::int32_t y, std::int32_t w,

@@ -23,19 +23,24 @@ use windows_sys::Win32::System::Diagnostics::ToolHelp::{
 use windows_sys::Win32::UI::HiDpi::{
     DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2, GetDpiForWindow, SetProcessDpiAwarenessContext,
 };
+// Only mouse input is injected: it goes to the window under the cursor.
+// Keyboard input would go to the foreground window, which may be the
+// terminal that runs this tool; window messages are used instead.
 use windows_sys::Win32::UI::Input::KeyboardAndMouse::{
-    INPUT, INPUT_0, INPUT_KEYBOARD, INPUT_MOUSE, KEYBDINPUT, KEYEVENTF_KEYUP, MOUSEEVENTF_LEFTDOWN,
-    MOUSEEVENTF_LEFTUP, MOUSEEVENTF_RIGHTDOWN, MOUSEEVENTF_RIGHTUP, MOUSEINPUT, SendInput, VK_ESCAPE, VK_F5,
+    INPUT, INPUT_0, INPUT_MOUSE, MOUSEEVENTF_LEFTDOWN, MOUSEEVENTF_LEFTUP, MOUSEEVENTF_RIGHTDOWN,
+    MOUSEEVENTF_RIGHTUP, MOUSEINPUT, SendInput,
 };
 use windows_sys::Win32::UI::WindowsAndMessaging::{
-    EnumWindows, GetClassNameW, GetCursorPos, GetMenuItemCount, GetMenuItemInfoW, GetWindowPlacement,
+    EnumChildWindows, EnumWindows, GWL_STYLE, GetClassNameW, GetWindowLongW, SMTO_ABORTIFHUNG, SendMessageTimeoutW, GetCursorPos, GetMenuItemCount, GetMenuItemInfoW, GetWindowPlacement,
     GetWindowRect, GetWindowTextW, GetWindowThreadProcessId, HMENU, IsWindowVisible, MENUITEMINFOW,
     MFS_CHECKED, MFS_DISABLED, MFT_SEPARATOR, MIIM_FTYPE, MIIM_ID, MIIM_STATE, MIIM_STRING, MIIM_SUBMENU,
     MN_GETHMENU, PostMessageW, SWP_NOACTIVATE, SWP_NOZORDER, SendMessageW, SetCursorPos, SetWindowPlacement,
-    SetWindowPos, WINDOWPLACEMENT, WM_CLOSE,
+    SetWindowPos, WINDOWPLACEMENT, WM_CANCELMODE, WM_CLOSE, WM_COMMAND, WM_KEYDOWN, WM_KEYUP,
 };
 
 const POT_CLASS: &str = "PotPlayer64";
+/// PotPlayer's "Preferences..." command (menu item 101_0_23, F5).
+const CMD_PREFERENCES: usize = 10010;
 const POT_EXE: &str = "PotPlayerMini64.exe";
 
 struct Log {
@@ -210,29 +215,9 @@ fn mouse_flags(flags: u32) -> INPUT {
     }
 }
 
-fn key_input(vk: u16, up: bool) -> INPUT {
-    INPUT {
-        r#type: INPUT_KEYBOARD,
-        Anonymous: INPUT_0 {
-            ki: KEYBDINPUT {
-                wVk: vk,
-                wScan: 0,
-                dwFlags: if up { KEYEVENTF_KEYUP } else { 0 },
-                time: 0,
-                dwExtraInfo: 0,
-            },
-        },
-    }
-}
-
 fn move_to(x: i32, y: i32) {
     unsafe { SetCursorPos(x, y) };
     sleep_ms(60);
-}
-
-fn press_key(vk: u16) {
-    send(&[key_input(vk, false), key_input(vk, true)]);
-    sleep_ms(150);
 }
 
 fn cursor() -> (i32, i32) {
@@ -376,8 +361,8 @@ fn close_potplayer(mut pot: Pot, log: &mut Log) {
 fn dismiss_dialogs(pid: u32, main: HWND, log: &mut Log) {
     for hwnd in top_windows(None, Some(pid)) {
         if hwnd != main && class_name(hwnd) == "#32770" {
-            log.line(&format!("unexpected_dialog=\"{}\" (closed with Esc)", window_text(hwnd)));
-            press_key(VK_ESCAPE);
+            log.line(&format!("unexpected_dialog=\"{}\" (closed)", window_text(hwnd)));
+            unsafe { PostMessageW(hwnd, WM_CLOSE, 0, 0) };
         }
     }
 }
@@ -412,16 +397,16 @@ fn r1(options: &Options) -> Result<(), String> {
     let exe = options.path("--potplayer")?;
     let skin = options.path("--skin")?;
     let clip = options.path("--clip")?;
-    let mouse_script = options.get("--mouse-script").map(PathBuf::from);
+    let mouse_page = options.get("--mouse-page").unwrap_or("yes") == "yes";
+    let states: Vec<&str> =
+        options.get("--states").unwrap_or("idle,playing").split(',').filter(|s| !s.is_empty() && *s != "none").collect();
+    let menu = options.get("--menu").unwrap_or("yes") == "yes";
     let sizes = parse_sizes(options.get("--sizes").unwrap_or("1280x720,1920x1080,2560x1080"));
     let mut log = Log::open(&out)?;
     require_no_potplayer()?;
     let pot = start_potplayer(&exe, &[], &mut log)?;
-    let result = r1_session(&pot, &exe, &skin, &clip, &sizes, &out, &mut log)
-        .and_then(|()| match &mouse_script {
-            Some(script) => read_mouse_page(&pot, script, &out, &mut log),
-            None => Ok(()),
-        });
+    let result = r1_session(&pot, &exe, &skin, &clip, &sizes, &states, menu, &out, &mut log)
+        .and_then(|()| if mouse_page { read_mouse_page(&pot, &out, &mut log) } else { Ok(()) });
     if let Err(error) = &result {
         log.line(&format!("r1_error={error}"));
     }
@@ -435,6 +420,8 @@ fn r1_session(
     skin: &Path,
     clip: &Path,
     sizes: &[(i32, i32)],
+    states: &[&str],
+    menu: bool,
     out: &Path,
     log: &mut Log,
 ) -> Result<(), String> {
@@ -460,12 +447,14 @@ fn r1_session(
     let monitor = monitor_of(hwnd).rcMonitor;
     log.line(&format!("monitor={}", rect_text(&monitor)));
     let park = (monitor.right - 2, monitor.bottom - 2);
-    for state in ["idle", "playing"] {
+    for &state in states {
         if state == "playing" {
             let clip_text = clip.to_string_lossy().into_owned();
             let _ = Command::new(exe).args([clip_text.as_str(), "/current"]).spawn();
             log.line(&format!("opened={clip_text}"));
-            sleep_ms(4000);
+            // SVP attaches and PotPlayer resizes the window to the video;
+            // wait until that and SVP's on-screen message are over.
+            sleep_ms(12000);
             let instances = processes_named(POT_EXE);
             if instances.len() > 1 {
                 log.line(&format!("warning=the clip opened in another PotPlayer instance {instances:?}"));
@@ -479,7 +468,9 @@ fn r1_session(
             sleep_ms(1500);
             let rect = window_rect(hwnd);
             log.line(&format!("size={width}x{height} window={}", rect_text(&rect)));
-            let targets = crate::skin_targets(skin, width, height)?;
+            // PotPlayer may keep the video's aspect ratio while playing, so
+            // lay out at the size it actually took.
+            let targets = crate::skin_targets(skin, rect.right - rect.left, rect.bottom - rect.top)?;
             let name = |suffix: &str| out.join(format!("{state}-{width}x{height}{suffix}.png"));
             capture_to(log, &rect, &name(""));
             let play = (rect.left + targets.play.0, rect.top + targets.play.1);
@@ -499,7 +490,11 @@ fn r1_session(
             move_to(park.0, park.1);
         }
     }
-    // Context menu (playing state, last size): right click on the video.
+    if !menu {
+        restore(log);
+        return Ok(());
+    }
+    // Context menu (last state and size): right click on the video.
     let rect = window_rect(hwnd);
     let targets = crate::skin_targets(skin, rect.right - rect.left, rect.bottom - rect.top)?;
     move_to(rect.left + targets.video.0, rect.top + targets.video.1);
@@ -517,8 +512,19 @@ fn r1_session(
     } else {
         log.line("menu=FAIL no popup menu window");
     }
+    // WM_CANCELMODE ends the menu's modal loop in the owner window.
+    unsafe { PostMessageW(hwnd, WM_CANCELMODE, 0, 0) };
+    sleep_ms(500);
+    // Fallback: Esc posted to each menu window (a message to that window,
+    // not keyboard input, so it cannot reach another program).
     for _ in 0..4 {
-        press_key(VK_ESCAPE);
+        for menu_window in open_menus() {
+            unsafe {
+                PostMessageW(menu_window, WM_KEYDOWN, 0x1B, 0);
+                PostMessageW(menu_window, WM_KEYUP, 0x1B, 0);
+            }
+        }
+        sleep_ms(300);
     }
     log.line(&format!("menus_left_open={}", open_menus().len()));
     move_to(park.0, park.1);
@@ -527,12 +533,122 @@ fn r1_session(
     Ok(())
 }
 
-/// Opens Preferences (F5), lets the UI Automation script read the mouse
-/// page, captures it and closes the dialog without applying anything.
-fn read_mouse_page(pot: &Pot, script: &Path, out: &Path, log: &mut Log) -> Result<(), String> {
+// Common-control messages used on PotPlayer's Preferences dialog. Only
+// messages without pointers (tree items are opaque handles) or messages the
+// system marshals between processes (text into our own buffer) are sent, so
+// nothing is written into PotPlayer's memory.
+const WM_GETTEXT: u32 = 0x000D;
+const WM_GETTEXTLENGTH: u32 = 0x000E;
+const BM_GETCHECK: u32 = 0x00F0;
+const CB_GETCOUNT: u32 = 0x0146;
+const CB_GETCURSEL: u32 = 0x0147;
+const CB_GETLBTEXT: u32 = 0x0148;
+const CB_GETLBTEXTLEN: u32 = 0x0149;
+const TVM_EXPAND: u32 = 0x1102;
+const TVM_GETNEXTITEM: u32 = 0x110A;
+const TVM_SELECTITEM: u32 = 0x110B;
+const TVM_GETITEMSTATE: u32 = 0x1127;
+const TVGN_ROOT: usize = 0x0;
+const TVGN_NEXT: usize = 0x1;
+const TVGN_CHILD: usize = 0x4;
+const TVGN_CARET: usize = 0x9;
+const TVE_COLLAPSE: usize = 0x1;
+const TVIS_EXPANDED: isize = 0x20;
+/// Text that appears only on PotPlayer's mouse page.
+const MOUSE_PAGE_MARK: &str = "Left Button - Single Click";
+
+fn send_message(hwnd: HWND, message: u32, wparam: usize, lparam: isize) -> isize {
+    let mut result: usize = 0;
+    unsafe {
+        SendMessageTimeoutW(hwnd, message, wparam, lparam, SMTO_ABORTIFHUNG, 2000, &raw mut result);
+    }
+    result as isize
+}
+
+fn control_text(hwnd: HWND) -> String {
+    let length = send_message(hwnd, WM_GETTEXTLENGTH, 0, 0).max(0) as usize;
+    let mut buffer = vec![0u16; length + 1];
+    send_message(hwnd, WM_GETTEXT, buffer.len(), buffer.as_mut_ptr() as isize);
+    wide_to_string(&buffer)
+}
+
+unsafe extern "system" fn collect_child(hwnd: HWND, lparam: LPARAM) -> windows_sys::core::BOOL {
+    // SAFETY: lparam is the &mut Vec passed to EnumChildWindows below.
+    let list = unsafe { &mut *(lparam as *mut Vec<HWND>) };
+    list.push(hwnd);
+    1
+}
+
+/// All visible descendants of `parent`.
+fn visible_children(parent: HWND) -> Vec<HWND> {
+    let mut list: Vec<HWND> = Vec::new();
+    unsafe { EnumChildWindows(parent, Some(collect_child), (&raw mut list) as LPARAM) };
+    list.retain(|&hwnd| unsafe { IsWindowVisible(hwnd) } != 0);
+    list
+}
+
+fn page_shows(dialog: HWND, mark: &str) -> bool {
+    visible_children(dialog).into_iter().any(|hwnd| control_text(hwnd).contains(mark))
+}
+
+fn tree_items(tree: HWND, parent: Option<isize>) -> Vec<isize> {
+    let mut items = Vec::new();
+    let mut item = match parent {
+        None => send_message(tree, TVM_GETNEXTITEM, TVGN_ROOT, 0),
+        Some(parent) => send_message(tree, TVM_GETNEXTITEM, TVGN_CHILD, parent),
+    };
+    while item != 0 {
+        items.push(item);
+        item = send_message(tree, TVM_GETNEXTITEM, TVGN_NEXT, item);
+    }
+    items
+}
+
+fn read_combos(dialog: HWND) -> String {
+    let controls = visible_children(dialog);
+    let statics: Vec<(HWND, RECT)> = controls
+        .iter()
+        .filter(|&&hwnd| class_name(hwnd) == "Static")
+        .map(|&hwnd| (hwnd, window_rect(hwnd)))
+        .collect();
+    let mut out = String::from("label\tselected\tselected_index\tentries\n");
+    for &combo in controls.iter().filter(|&&hwnd| class_name(hwnd) == "ComboBox") {
+        let rect = window_rect(combo);
+        let label = statics
+            .iter()
+            .filter(|(_, r)| r.right <= rect.left + 2 && r.top < rect.bottom && r.bottom > rect.top)
+            .min_by_key(|(_, r)| rect.left - r.right)
+            .map(|(hwnd, _)| control_text(*hwnd))
+            .unwrap_or_default();
+        let count = send_message(combo, CB_GETCOUNT, 0, 0).max(0) as usize;
+        let selected = send_message(combo, CB_GETCURSEL, 0, 0);
+        let mut entries = Vec::new();
+        for index in 0..count {
+            let length = send_message(combo, CB_GETLBTEXTLEN, index, 0).max(0) as usize;
+            let mut buffer = vec![0u16; length + 1];
+            send_message(combo, CB_GETLBTEXT, index, buffer.as_mut_ptr() as isize);
+            entries.push(wide_to_string(&buffer));
+        }
+        let chosen = usize::try_from(selected).ok().and_then(|i| entries.get(i)).cloned().unwrap_or_default();
+        let _ = writeln!(out, "{label}\t{chosen}\t{selected}\t{}", entries.join(" | "));
+    }
+    for &button in controls.iter().filter(|&&hwnd| class_name(hwnd) == "Button") {
+        let style = unsafe { GetWindowLongW(button, GWL_STYLE) } & 0xF;
+        if matches!(style, 2 | 3 | 5 | 6) {
+            let state = send_message(button, BM_GETCHECK, 0, 0);
+            let _ = writeln!(out, "checkbox\t{}\t{state}", control_text(button));
+        }
+    }
+    out
+}
+
+/// Opens Preferences (its menu command), finds the mouse page in the page
+/// tree, reads its combo boxes and check boxes, captures it, puts the tree
+/// back as it was and closes the dialog without applying anything.
+fn read_mouse_page(pot: &Pot, out: &Path, log: &mut Log) -> Result<(), String> {
     let pid = pot.child.id();
     let before = top_windows(None, Some(pid));
-    press_key(VK_F5);
+    unsafe { PostMessageW(pot.hwnd, WM_COMMAND, CMD_PREFERENCES, 0) };
     let deadline = Instant::now() + Duration::from_secs(8);
     let mut dialog = None;
     while Instant::now() < deadline && dialog.is_none() {
@@ -543,25 +659,143 @@ fn read_mouse_page(pot: &Pot, script: &Path, out: &Path, log: &mut Log) -> Resul
     }
     let dialog = dialog.ok_or("the Preferences dialog did not open")?;
     log.line(&format!("preferences=\"{}\" {}", window_text(dialog), rect_text(&window_rect(dialog))));
-    let table = out.join("mouse-actions.tsv");
-    let status = Command::new("powershell.exe")
-        .args(["-NoProfile", "-ExecutionPolicy", "Bypass", "-File"])
-        .arg(script)
-        .args(["-Hwnd", &(dialog as isize).to_string(), "-Out"])
-        .arg(&table)
-        .status()
-        .map_err(|e| e.to_string())?;
-    log.line(&format!("mouse_script={status} table={}", table.display()));
-    capture_to(log, &window_rect(dialog), &out.join("preferences-mouse.png"));
+    sleep_ms(1500);
+    capture_to(log, &window_rect(dialog), &out.join("preferences-opened.png"));
+    let result = (|| {
+        let tree = visible_children(dialog)
+            .into_iter()
+            .find(|&hwnd| class_name(hwnd) == "SysTreeView32")
+            .ok_or("no page tree in the dialog")?;
+        let original = send_message(tree, TVM_GETNEXTITEM, TVGN_CARET, 0);
+        let roots = tree_items(tree, None);
+        let expanded_before: Vec<bool> = roots
+            .iter()
+            .map(|&root| send_message(tree, TVM_GETITEMSTATE, root as usize, TVIS_EXPANDED) & TVIS_EXPANDED != 0)
+            .collect();
+        let mut found = false;
+        'search: for &root in &roots {
+            for item in std::iter::once(root).chain(tree_items(tree, Some(root))) {
+                send_message(tree, TVM_SELECTITEM, TVGN_CARET, item);
+                sleep_ms(400);
+                if page_shows(dialog, MOUSE_PAGE_MARK) {
+                    found = true;
+                    break 'search;
+                }
+            }
+        }
+        if found {
+            let table = read_combos(dialog);
+            std::fs::write(out.join("mouse-actions.tsv"), &table).map_err(|e| e.to_string())?;
+            log.line(&format!("mouse_page=found rows={}", table.lines().count() - 1));
+            capture_to(log, &window_rect(dialog), &out.join("preferences-mouse.png"));
+        } else {
+            log.line("mouse_page=NOT FOUND");
+        }
+        send_message(tree, TVM_SELECTITEM, TVGN_CARET, original);
+        sleep_ms(400);
+        for (&root, &was_expanded) in roots.iter().zip(&expanded_before) {
+            let expanded = send_message(tree, TVM_GETITEMSTATE, root as usize, TVIS_EXPANDED) & TVIS_EXPANDED != 0;
+            if expanded && !was_expanded {
+                send_message(tree, TVM_EXPAND, TVE_COLLAPSE, root);
+            }
+        }
+        sleep_ms(300);
+        let now = send_message(tree, TVM_GETNEXTITEM, TVGN_CARET, 0);
+        log.line(&format!("page_restored={}", now == original));
+        capture_to(log, &window_rect(dialog), &out.join("preferences-restored.png"));
+        Ok::<(), String>(())
+    })();
     unsafe { PostMessageW(dialog, WM_CLOSE, 0, 0) };
     sleep_ms(800);
-    let still_open = top_windows(None, Some(pid)).contains(&dialog);
-    if still_open {
-        press_key(VK_ESCAPE);
-        sleep_ms(500);
-    }
     log.line(&format!("preferences_closed={}", !top_windows(None, Some(pid)).contains(&dialog)));
-    Ok(())
+    result
+}
+
+// --------------------------------------------------------------- s3-input
+
+/// Left-drags with the real mouse from `start` by `delta` (screen pixels).
+fn drag(start: (i32, i32), delta: (i32, i32)) {
+    move_to(start.0, start.1);
+    send(&[mouse_flags(MOUSEEVENTF_LEFTDOWN)]);
+    sleep_ms(150);
+    for step in 1..=10 {
+        move_to(start.0 + delta.0 * step / 10, start.1 + delta.1 * step / 10);
+        sleep_ms(30);
+    }
+    sleep_ms(200);
+    send(&[mouse_flags(MOUSEEVENTF_LEFTUP)]);
+    sleep_ms(600);
+}
+
+/// S3 on Windows with real input: the frameless window moves when its
+/// title area is dragged, resizes from its corner grip, and its context
+/// menu is a separate window larger than the window.
+fn s3_input(options: &Options) -> Result<(), String> {
+    let exe = options.path("--s3")?;
+    let skin = options.path("--skin")?;
+    let child = Command::new(&exe)
+        .args(["--skin", &skin.to_string_lossy(), "--width", "440", "--height", "77"])
+        .spawn()
+        .map_err(|e| format!("{}: {e}", exe.display()))?;
+    let pid = child.id();
+    let mut child = child;
+    let result = (|| {
+        let deadline = Instant::now() + Duration::from_secs(15);
+        let mut main = None;
+        while Instant::now() < deadline && main.is_none() {
+            sleep_ms(250);
+            main = top_windows(None, Some(pid)).into_iter().find(|&hwnd| window_text(hwnd) == "RVP spike S3");
+        }
+        let main = main.ok_or("the S3 window did not appear")?;
+        sleep_ms(1500);
+        let start = window_rect(main);
+        println!("window={}", rect_text(&start));
+        drag((start.left + 150, start.top + 12), (80, 60));
+        let moved = window_rect(main);
+        let (dx, dy) = (moved.left - start.left, moved.top - start.top);
+        let same_size = moved.right - moved.left == start.right - start.left;
+        println!(
+            "input_check_move={} moved={dx},{dy} expected=80,60 window={}",
+            if (dx, dy) == (80, 60) && same_size { "PASS" } else { "FAIL" },
+            rect_text(&moved)
+        );
+        drag((moved.right - 6, moved.bottom - 6), (100, 80));
+        let resized = window_rect(main);
+        let (dw, dh) = (
+            (resized.right - resized.left) - (moved.right - moved.left),
+            (resized.bottom - resized.top) - (moved.bottom - moved.top),
+        );
+        println!(
+            "input_check_resize={} grown={dw},{dh} expected=100,80 window={}",
+            if (dw - 100).abs() <= 2 && (dh - 80).abs() <= 2 { "PASS" } else { "FAIL" },
+            rect_text(&resized)
+        );
+        let before = top_windows(None, Some(pid));
+        move_to(resized.left + 200, resized.top + 50);
+        send(&[mouse_flags(MOUSEEVENTF_RIGHTDOWN), mouse_flags(MOUSEEVENTF_RIGHTUP)]);
+        sleep_ms(1200);
+        let menu = top_windows(None, Some(pid)).into_iter().find(|hwnd| !before.contains(hwnd));
+        match menu {
+            Some(menu) => {
+                let rect = window_rect(menu);
+                let main_height = resized.bottom - resized.top;
+                let ok = rect.bottom - rect.top > main_height;
+                println!(
+                    "input_check_menu={} menu={} class={} main_height={main_height}",
+                    if ok { "PASS" } else { "FAIL" },
+                    rect_text(&rect),
+                    class_name(menu)
+                );
+            }
+            None => println!("input_check_menu=FAIL no menu window"),
+        }
+        Ok::<(), String>(())
+    })();
+    // The spike has no clean shutdown path (see docs/spikes/s3-qt-shell.md).
+    let _ = child.kill();
+    let _ = child.wait();
+    move_to(0, 0);
+    result
 }
 
 // --------------------------------------------------------------------- s5
@@ -713,6 +947,7 @@ pub fn run(args: &[String]) -> Result<(), String> {
         "s5" => s5(&options),
         "record" => record(&options),
         "check" => check(),
+        "s3-input" => s3_input(&options),
         other => Err(format!("unknown command {other}")),
     }
 }

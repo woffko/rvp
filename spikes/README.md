@@ -9,7 +9,8 @@ are not held to its clippy rules. Results are in `docs/spikes/`.
 |-------|----------|
 | `s1-svp-attach` | Does SVP 4 Manager attach to a libmpv player that is not `mpv`? |
 | `s2-vapoursynth` | Does libmpv run PotPlayer's motion interpolation script with SVP's VapourSynth runtime? |
-| `s3-qt-shell` | cxx-qt + QML frameless window, a menu larger than the window, a Rust `QQuickPaintedItem` painting `rvp_skin`, an mpv OpenGL video item |
+| `s3-qt-shell` | cxx-qt + QML frameless window, a menu larger than the window, a Rust `QQuickPaintedItem` painting `rvp_skin`, an mpv OpenGL video item; `--wid` (mpv in a native child window) and `--chrome full\|partial\|layered\|synced\|none` for the goal C performance runs |
+| `host-session` | Windows-only goal C helper: R1 captures, context-menu and mouse-page dumps of PotPlayer, S5 loopback recordings, the S3 real-input check (`r1`, `s5`, `s3-input`, `record`, `check`). It injects only mouse input; keys would reach whatever window is in front |
 
 ## Building on Linux
 
