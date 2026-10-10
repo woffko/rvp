@@ -1,15 +1,15 @@
 # Goal B status: spikes S2 and S3, Windows build path, Linux test kit
 
-Date: 2026-10-10. Result: done except S2, whose pass condition is not met
-as written and needs an owner decision (open question 1). Further gaps are
-listed under "Not verified".
+Date: 2026-10-10. Result: done. S2's original pass condition ("runs
+unchanged") was not met; the owner then accepted a run-time wrapper
+(decision below). Further gaps are listed under "Not verified".
 
 ## Summary
 
 | Item | Result | Details |
 |------|--------|---------|
 | Windows build path | Decided: cross-build from WSL with cargo-xwin; native MSVC as fallback and later CI job | `docs/spikes/windows-build-path.md` |
-| S2 on the Windows VM | **Not met as written.** PotPlayer's script fails unchanged on SVP's VapourSynth R73 (`vs.get_core()` was removed). The unchanged file reaches 23.976 → 60.000 fps either through a generated wrapper or, passed directly to libmpv, with a 6-line `get_core` shim in the Python runtime. Owner decision needed | `docs/spikes/s2-vapoursynth.md` |
+| S2 on the Windows VM | **Not met as written.** PotPlayer's script fails unchanged on SVP's VapourSynth R73 (`vs.get_core()` was removed). The unchanged file reaches 23.976 → 60.000 fps either through a generated wrapper or, passed directly to libmpv, with a 6-line `get_core` shim in the Python runtime. Owner decision 2026-10-10: the run-time wrapper is accepted | `docs/spikes/s2-vapoursynth.md` |
 | S3 on the Windows VM | PASS (software OpenGL, session 0): frameless window, menu window 264x509 beyond a 440x77 window, Rust `QQuickPaintedItem` painting BlackSpace (138 operations), mpv video item, wakeup callback on the Qt thread | `docs/spikes/s3-qt-shell.md` |
 | S3 on the Ubuntu VM | PASS (GNOME 42 Wayland, llvmpipe): self-test plus a real-input check through ydotool. Move by the dragged distance, resize through the grip, a 200x388 menu popup window over a 440x77 window, BlackSpace painted with mpv video in its slot | `docs/spikes/s3-qt-shell.md`, `docs/test-runs/` |
 | Linux test kit | Runs end to end on the Ubuntu VM: check, deps, mpv, build, s3, input and report PASS; s2 and s1 SKIPPED (no SVP); GPU checks SKIPPED | `tools/linux-kit/` |
@@ -48,7 +48,9 @@ listed under "Not verified".
 ## Findings that change the plan
 
 1. **PotPlayer's `.vpy` scripts need `vs.get_core()`**, which current
-   VapourSynth (R73) lacks. How RVP provides it is open question 1.
+   VapourSynth (R73) lacks. Owner decision 2026-10-10: RVP hands libmpv a
+   generated wrapper that defines `get_core` and runs the unchanged file
+   (the spike's `write_compat_wrapper` is the template).
 2. **libmpv2 6.0.0's event loop is ambiguous**: `wait_event` returns `None`
    both for "no event" and for an unconvertible property change, which stalls
    a drain loop. RVP needs a small event wrapper or a patched binding (M2).
@@ -80,21 +82,17 @@ listed under "Not verified".
 
 ## Open questions for the owner
 
-1. **S2 pass condition.** "Runs unchanged" cannot be met with SVP's R73
-   runtime as shipped. Choose: (a) accept a run-time wrapper that executes the
-   unchanged file (recommended: nothing installed changes, works with SVP's
-   runtime on Linux); (b) accept a `get_core` shim in a runtime RVP ships
-   itself (the file goes to libmpv directly, but SVP's runtime cannot be
-   used); (c) keep the condition and require an older VapourSynth, which
-   contradicts SVP compatibility. Details in `docs/spikes/s2-vapoursynth.md`.
-2. **License rule (still open from goal A).** The `rust` skill forbids
+Decided on 2026-10-10: **S2 pass condition.** The owner accepted the
+run-time wrapper (option 1 in `docs/spikes/s2-vapoursynth.md`).
+
+1. **License rule (still open from goal A).** The `rust` skill forbids
    GPL/LGPL dependencies, but RVP is GPL-3.0-or-later (D8) and the spikes
    now link libmpv (GPL build) and Qt (LGPL, dynamic). The spikes went ahead
    on the approved plan; please confirm that the rule is waived for libmpv
    and Qt before M2 adds them to the main workspace.
-3. **Interactive Windows verification.** Either enable an interactive session
+2. **Interactive Windows verification.** Either enable an interactive session
    on the Windows test VM (for example autologon of a test user with the
    spike started from a scheduled task) or keep these checks in goal C on the
    host with permission each time.
-4. **clang 19+ in WSL.** Installing `clang-20 lld-20` needs `sudo` in WSL and
+3. **clang 19+ in WSL.** Installing `clang-20 lld-20` needs `sudo` in WSL and
    removes the STL version macro from the cross build. Not required now.

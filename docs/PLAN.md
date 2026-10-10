@@ -255,10 +255,10 @@ VapourSynth inside libmpv.
 - **S2. libmpv with VapourSynth on both systems.** Linux: our own build
   (`-Dvapoursynth=enabled -Dlibmpv=true`). Windows: prebuilt `libmpv-2.dll`.
   Find out where VapourSynth and Python come from (SVP's bundled runtime or a
-  separate install). Pass: PotPlayer's `motioninterpolation.vpy` runs unchanged.
-  Goal B result: not met as written. On VapourSynth R73 the unchanged file
-  runs only with `vs.get_core()` restored, by a wrapper or a runtime shim;
-  owner decision pending (`docs/spikes/s2-vapoursynth.md`).
+  separate install). Pass: PotPlayer's `motioninterpolation.vpy` runs unchanged
+  through a run-time wrapper that restores `vs.get_core()` (owner decision
+  2026-10-10, after goal B found that VapourSynth R73 removed it;
+  `docs/spikes/s2-vapoursynth.md`).
 - **S1. Does SVP accept a libmpv process?** Minimal Rust binary (libmpv2) with
   `input-ipc-server`, `hwdec=auto-copy`, `hr-seek-framedrop=no`. Run with SVP on
   the owner's Linux machine and on Windows. Pass: SVP attaches and

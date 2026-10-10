@@ -4,7 +4,7 @@ Question: does libmpv with VapourSynth run PotPlayer's
 `VapourSynth/motioninterpolation.vpy` unchanged, headless, with a VapourSynth
 and Python runtime compatible with SVP 4's?
 
-Answer: **not as written; owner decision needed.** With SVP's runtime as it
+Answer: **not as written; the owner accepted a run-time wrapper.** With SVP's runtime as it
 is (VapourSynth R73), the unchanged script fails on line 2: R73 removed
 `vs.get_core()`. The libmpv + VapourSynth + mvtools chain itself works. The
 unchanged file (SHA-256 identical to PotPlayer's) interpolates 23.976 fps to
@@ -84,10 +84,11 @@ the script initializes; it costs one black frame at the start.
 without a GPU, mvtools at 1280x720 keeps up with 83% of real time. Speed is
 for the owner's machine to measure (goal C and goal D).
 
-## Decision needed
+## Decision
 
 PLAN.md's pass condition ("runs unchanged" with an SVP-compatible runtime)
-cannot be met with VapourSynth R73 as shipped. Options:
+cannot be met with VapourSynth R73 as shipped. Options considered; the owner
+chose option 1 on 2026-10-10:
 
 1. **Wrapper at run time (recommended).** RVP hands libmpv a generated
    wrapper that defines `get_core` and executes the original file in the same
