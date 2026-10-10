@@ -1,6 +1,8 @@
 [workspace]
 resolver = "3"
 members = ["crates/skin", "crates/engine", "crates/app", "crates/platform", "xtask"]
+# Throwaway goal B spikes; their own workspace with relaxed lints.
+exclude = ["spikes"]
 
 [workspace.package]
 version = "0.0.1"

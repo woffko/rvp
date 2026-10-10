@@ -1,0 +1,12 @@
+# Throwaway spike programs for goal B. A separate workspace: the spikes use
+# FFI-heavy code (cxx-qt bridges, the libmpv render API) that the main
+# workspace's `unsafe_code = "forbid"` would reject.
+[workspace]
+resolver = "3"
+members = ["s1-svp-attach", "s2-vapoursynth", "s3-qt-shell"]
+
+[workspace.package]
+version = "0.0.0"
+edition = "2024"
+license = "GPL-3.0-or-later"
+publish = false

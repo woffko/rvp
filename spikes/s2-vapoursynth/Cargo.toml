@@ -1,0 +1,9 @@
+[package]
+name = "s2-vapoursynth"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+libmpv2 = "=6.0.0"
