@@ -347,7 +347,9 @@ step_s3() {
     local extra=() video
     video=$(test_video)
     if gpu_checks; then
-        extra+=(--gpu-checks --hwdec auto-copy --video-seconds 20 --width 1920 --height 1080)
+        # Chrome updates ride on video frames, the rule goal C established
+        # (docs/spikes/s3-qt-shell.md); the other modes drop frames at 60 Hz.
+        extra+=(--gpu-checks --chrome synced --hwdec auto-copy --video-seconds 20 --width 1920 --height 1080)
     else
         extra+=(--hwdec no --video-seconds 8)
     fi
