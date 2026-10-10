@@ -10,6 +10,7 @@
 #   deps    Python tools (meson, aqtinstall) and Qt in the kit directory
 #   mpv     build libmpv (mpv master, FFmpeg, libplacebo) with VapourSynth
 #           loaded at run time
+#   mvtools build the mvtools VapourSynth plugin that PotPlayer's script needs
 #   build   build the spikes
 #   s2      VapourSynth interpolation through libmpv
 #   s3      Qt shell self-test in the current graphical session
@@ -17,16 +18,20 @@
 #           ydotool and ydotoold running as root; optional)
 #   s1      SVP 4 Manager attaches to a libmpv player (start SVP first)
 #   report  write docs/test-runs/<date>-<host>.md from the logs
-#   all     check deps mpv build s2 s3 input s1 report
+#   all     check deps mpv mvtools build s2 s3 input s1 report
 #
 # environment:
 #   RVP_KIT_DIR     build and download directory (default ~/.cache/rvp-kit)
 #   RVP_LOG_DIR     logs (default $RVP_KIT_DIR/logs)
-#   RVP_VIDEO       test video for S1 and S3 (default: generated)
+#   RVP_VIDEO       test video for S3 (default: generated 4K60 or 1080p60)
+#   RVP_S1_VIDEO    film-rate test video for S1 (default: generated 23.976 fps)
 #   RVP_SKIN        .dsf skin for S3 (default: none, the shell paints nothing)
 #   RVP_VPY         motion interpolation script for S2
 #   VSSCRIPT_PATH   libvapoursynth-script.so to use (default: searched)
-#   RVP_VS_PLUGINS  extra VapourSynth plugins for S2, ':' separated
+#   RVP_VS_PLUGINS  extra VapourSynth plugins for S2, ':' separated (default:
+#                   the kit's mvtools)
+#   YDOTOOL_SOCKET  ydotoold's socket for the input check
+#                   (default /tmp/.ydotool_socket)
 #   RVP_GPU_CHECKS  1 or 0 to override GPU detection
 #   RVP_KIT_REBUILD 1 to rebuild libmpv even if this commit is already built
 set -u
@@ -38,6 +43,8 @@ LOG_DIR=${RVP_LOG_DIR:-$KIT_DIR/logs}
 QT_VERSION=6.10.3
 MPV_COMMIT=b2c255c13e
 VS_TAG=R73
+# The version in the Windows bundle (spikes/tools/windows-deps.sh).
+MVTOOLS_TAG=v24
 JOBS=$(nproc)
 mkdir -p "$KIT_DIR" "$LOG_DIR"
 RESULTS=$LOG_DIR/results.txt
@@ -78,14 +85,18 @@ gpu_checks() {
 qt_dir() { echo "$KIT_DIR/qt/$QT_VERSION/gcc_64"; }
 mpv_prefix() { echo "$KIT_DIR/mpv"; }
 
-# Packages needed to build libmpv and to run the Qt spike, by Debian name.
+# Packages needed to build libmpv and mvtools and to run the Qt spike, by
+# Debian name. Without libpipewire-0.3-dev mpv plays audio through the
+# PulseAudio API, whose coarse timing made it drop 4-5 video frames per second
+# at 60 fps on PipeWire systems (goal D); libffmpeg-nvenc-dev enables NVDEC.
 PACKAGES="build-essential git curl python3-venv python3-jinja2 pkg-config nasm cmake ninja-build \
 autoconf automake libtool \
 libass-dev libfreetype-dev libfribidi-dev libharfbuzz-dev libfontconfig-dev \
 libx11-dev libxext-dev libxinerama-dev libxrandr-dev libxss-dev libxv-dev libxpresent-dev \
 libxkbcommon-dev libwayland-dev wayland-protocols libegl-dev libgl-dev libgbm-dev libdrm-dev \
-libasound2-dev libpulse-dev libva-dev libvdpau-dev zlib1g-dev libssl-dev liblcms2-dev libjpeg-dev \
-libvulkan-dev glslang-dev libunwind-dev \
+libasound2-dev libpulse-dev libpipewire-0.3-dev libva-dev libvdpau-dev libffmpeg-nvenc-dev \
+zlib1g-dev libssl-dev liblcms2-dev libjpeg-dev \
+libvulkan-dev glslang-dev libunwind-dev libfftw3-dev \
 libxcb-cursor0 libxcb-icccm4 libxcb-image0 libxcb-keysyms1 libxcb-render-util0 libxcb-xinerama0 \
 libxcb-xkb1 libxkbcommon-x11-0 libopengl0 libwayland-cursor0 libwayland-egl1 \
 lsof mesa-utils ffmpeg"
@@ -146,8 +157,9 @@ step_deps() {
         "$KIT_DIR/venv/bin/pip" install -q --upgrade pip
         "$KIT_DIR/venv/bin/pip" install -q 'meson>=1.6' aqtinstall jinja2
         if [ ! -x "$(qt_dir)/bin/qmake" ]; then
-            "$KIT_DIR/venv/bin/aqt" install-qt linux desktop "$QT_VERSION" linux_gcc_64 \
-                --outputdir "$KIT_DIR/qt"
+            # aqt writes aqtinstall.log into the current directory.
+            (cd "$KIT_DIR" && "$KIT_DIR/venv/bin/aqt" install-qt linux desktop "$QT_VERSION" linux_gcc_64 \
+                --outputdir "$KIT_DIR/qt")
         fi
         "$(qt_dir)/bin/qmake" -query QT_VERSION
     } > "$log" 2>&1
@@ -234,6 +246,50 @@ step_mpv() {
     fi
 }
 
+mvtools_lib() { echo "$KIT_DIR/mvtools/build/libmvtools.so"; }
+
+# PotPlayer's motioninterpolation.vpy needs mvtools; neither SVP's runtime
+# nor Ubuntu ships it. mvtools v24 uses the VapourSynth API 3 headers, which
+# R73 still ships and loads.
+step_mvtools() {
+    local log=$LOG_DIR/mvtools.log dir=$KIT_DIR/mvtools
+    if [ -s "$(mvtools_lib)" ] && [ "$(cat "$dir/.kit-mvtools" 2> /dev/null)" = "$MVTOOLS_TAG" ]; then
+        record mvtools PASS "mvtools $MVTOOLS_TAG in $dir (already built)"
+        return 0
+    fi
+    {
+        export PATH=$KIT_DIR/venv/bin:$PATH
+        export GIT_TERMINAL_PROMPT=0
+        vs_headers > /dev/null
+        for header in VapourSynth.h VSHelper.h; do
+            [ -s "$KIT_DIR/vs-sdk/include/vapoursynth/$header" ] ||
+                curl -fsSL "https://raw.githubusercontent.com/vapoursynth/vapoursynth/$VS_TAG/include/$header" \
+                    -o "$KIT_DIR/vs-sdk/include/vapoursynth/$header"
+        done
+        mkdir -p "$dir/pkgconfig"
+        cat > "$dir/pkgconfig/vapoursynth.pc" << EOF
+prefix=$KIT_DIR/vs-sdk
+includedir=\${prefix}/include/vapoursynth
+Name: vapoursynth
+Description: VapourSynth headers for building plugins ($VS_TAG)
+Version: ${VS_TAG#R}
+Cflags: -I\${includedir}
+EOF
+        [ -d "$dir/src/.git" ] ||
+            git clone --depth 1 --branch "$MVTOOLS_TAG" https://github.com/dubhater/vapoursynth-mvtools "$dir/src"
+        rm -rf "$dir/build"
+        PKG_CONFIG_PATH=$dir/pkgconfig meson setup "$dir/build" "$dir/src" --buildtype=release &&
+            ninja -C "$dir/build"
+    } > "$log" 2>&1
+    if [ -s "$(mvtools_lib)" ]; then
+        echo "$MVTOOLS_TAG" > "$dir/.kit-mvtools"
+        record mvtools PASS "mvtools $MVTOOLS_TAG in $dir"
+    else
+        record mvtools FAIL "see $log"
+        return 1
+    fi
+}
+
 mpv_lib_dir() {
     local prefix
     prefix=$(mpv_prefix)
@@ -275,7 +331,9 @@ find_vsscript() {
         return
     fi
     local candidate
-    for candidate in /opt/svp/*/libvapoursynth-script.so* "$HOME"/.local/share/SVP4/*/libvapoursynth-script.so* \
+    # SVP 4 for Linux installs into ~/SVP4 by default (4.7.0.321).
+    for candidate in /opt/svp/*/libvapoursynth-script.so* "$HOME"/SVP4/mpv/libvapoursynth-script.so* \
+        "$HOME"/.local/share/SVP4/*/libvapoursynth-script.so* \
         /usr/local/lib/libvapoursynth-script.so* /usr/lib/x86_64-linux-gnu/libvapoursynth-script.so*; do
         [ -e "$candidate" ] && { echo "$candidate"; return; }
     done
@@ -308,6 +366,27 @@ test_video() {
     fi
 }
 
+# S1 needs a film-rate source for SVP to interpolate; the S3 clip is 60 fps
+# already. Same parameters as video-1080p23976-h264.mkv from
+# tools/test-clips/make-clips.sh, the clip goal C used on Windows.
+s1_video() {
+    if [ -n "${RVP_S1_VIDEO:-}" ]; then
+        echo "$RVP_S1_VIDEO"
+        return
+    fi
+    local clip=$KIT_DIR/test-1080p23976-h264.mkv
+    if [ ! -s "$clip" ] && command -v ffmpeg > /dev/null 2>&1; then
+        ffmpeg -nostdin -loglevel error -y -f lavfi -i testsrc2=size=1920x1080:rate=24000/1001 \
+            -f lavfi -i sine=frequency=440:sample_rate=48000,volume=0.03,aformat=channel_layouts=stereo \
+            -t 60 -c:v libx264 -preset medium -crf 18 -pix_fmt yuv420p -c:a flac "$clip" 2>> "$LOG_DIR/video.log"
+    fi
+    if [ -s "$clip" ]; then
+        echo "$clip"
+    else
+        echo "av://lavfi:testsrc2=size=1920x1080:rate=24000/1001"
+    fi
+}
+
 step_s2() {
     local log=$LOG_DIR/s2.log vsscript
     spike_env
@@ -320,21 +399,27 @@ step_s2() {
         record s2 SKIPPED "set RVP_VPY to motioninterpolation.vpy"
         return 0
     fi
-    local status=0
+    local plugins=${RVP_VS_PLUGINS:-}
+    [ -n "$plugins" ] || [ ! -s "$(mvtools_lib)" ] || plugins=$(mvtools_lib)
     : > "$log"
+    # The unchanged script is expected to fail on VapourSynth R73 (no
+    # vs.get_core); the result comes from the run with the wrapper.
+    # PYTHONDONTWRITEBYTECODE keeps bytecode out of SVP's installation.
     for mode in plain --compat; do
         echo "== $mode" >> "$log"
-        VSSCRIPT_PATH=$vsscript "$REPO/spikes/target/release/s2-vapoursynth" \
-            --script "$RVP_VPY" --seconds 15 $([ "$mode" = --compat ] && echo --compat) >> "$log" 2>&1 || status=1
+        VSSCRIPT_PATH=$vsscript RVP_VS_PLUGINS=$plugins PYTHONDONTWRITEBYTECODE=1 \
+            "$REPO/spikes/target/release/s2-vapoursynth" \
+            --script "$RVP_VPY" --seconds 15 $([ "$mode" = --compat ] && echo --compat) >> "$log" 2>&1
     done
-    local compat_result
+    local plain_result compat_result
+    plain_result=$(grep '^result=' "$log" | head -1)
     compat_result=$(grep '^result=' "$log" | tail -1)
     if [ "$compat_result" = "result=PASS" ]; then
-        record s2 PASS "$(grep -E '^(estimated_vf_fps_mean|realtime_ratio)=' "$log" | tail -2 | tr '\n' ' ')"
+        record s2 PASS "unchanged script ${plain_result#result=}; wrapper $(grep -E '^(estimated_vf_fps_mean|realtime_ratio)=' "$log" | tail -2 | tr '\n' ' ')"
     else
         record s2 FAIL "see $log"
+        return 1
     fi
-    return "$status"
 }
 
 step_s3() {
@@ -376,6 +461,14 @@ step_input() {
         record input SKIPPED "needs ydotool 1.x and 'sudo ydotoold' running"
         return 0
     fi
+    # Under sudo, ydotoold has no XDG_RUNTIME_DIR and listens on
+    # /tmp/.ydotool_socket, while the client looks in $XDG_RUNTIME_DIR; the
+    # checklist starts the daemon with that path explicitly.
+    export YDOTOOL_SOCKET=${YDOTOOL_SOCKET:-/tmp/.ydotool_socket}
+    if [ ! -S "$YDOTOOL_SOCKET" ]; then
+        record input SKIPPED "no ydotoold socket at $YDOTOOL_SOCKET (see CHECKLIST.md)"
+        return 0
+    fi
     if [ -z "${WAYLAND_DISPLAY:-}" ] && [ -z "${DISPLAY:-}" ]; then
         record input SKIPPED "no graphical session"
         return 0
@@ -388,9 +481,17 @@ step_input() {
         record input SKIPPED "run s3 first (screen size comes from its log)"
         return 0
     fi
+    # Absolute moves are only exact with a flat pointer profile: switch GNOME
+    # to it for the check and restore the previous profile afterwards.
+    local profile=""
+    if command -v gsettings > /dev/null 2>&1; then
+        profile=$(gsettings get org.gnome.desktop.peripherals.mouse accel-profile 2> /dev/null)
+        [ -z "$profile" ] || gsettings set org.gnome.desktop.peripherals.mouse accel-profile flat
+    fi
     python3 "$REPO/tools/linux-kit/input-check.py" "$REPO/spikes/target/release/s3-qt-shell" \
         "${RVP_SKIN:-}" "$width" "$height" "$LOG_DIR/input-app.log" > "$log" 2>&1
     local status=$?
+    [ -z "$profile" ] || gsettings set org.gnome.desktop.peripherals.mouse accel-profile "$profile"
     if [ "$status" -eq 0 ]; then
         record input PASS "$(grep -E '^input_check' "$log" | tr '\n' ' ')"
     else
@@ -406,7 +507,15 @@ step_s1() {
         record s1 SKIPPED "SVP 4 Manager is not running"
         return 0
     fi
-    "$REPO/spikes/target/release/s1-svp-attach" --input "$(test_video)" --seconds 60 > "$log" 2>&1
+    # SVP's filter runs inside this libmpv, which loads VSScript at run time:
+    # point it at SVP's runtime, as for S2.
+    local vsscript video
+    vsscript=$(find_vsscript)
+    video=$(s1_video)
+    VSSCRIPT_PATH=${vsscript:-${VSSCRIPT_PATH:-}} PYTHONDONTWRITEBYTECODE=1 \
+        "$REPO/spikes/target/release/s1-svp-attach" --input "$video" --seconds 60 > "$log" 2>&1
+    # On Linux the spike crashed on exit once SVP's filter was active (goal D).
+    echo "exit_status=$?" >> "$log"
     if grep -q '^result=PASS' "$log"; then
         record s1 PASS "$(grep -E '^(svp_filter_seen_after_s|best_fps_ratio)=' "$log" | tr '\n' ' ')"
     else
@@ -448,18 +557,18 @@ step_report() {
 }
 
 if [ "$#" -eq 0 ]; then
-    sed -n '2,31p' "$KIT_SCRIPT"
+    sed -n '2,36p' "$KIT_SCRIPT"
     exit 2
 fi
 for step in "$@"; do
     case $step in
-        all) set -- check deps mpv build s2 s3 input s1 report ;;
+        all) set -- check deps mpv mvtools build s2 s3 input s1 report ;;
     esac
 done
 overall=0
 for step in "$@"; do
     case $step in
-        check | deps | mpv | build | s1 | s2 | s3 | input | report) "step_$step" || overall=1 ;;
+        check | deps | mpv | mvtools | build | s1 | s2 | s3 | input | report) "step_$step" || overall=1 ;;
         all) ;;
         *) say "unknown step $step"; exit 2 ;;
     esac

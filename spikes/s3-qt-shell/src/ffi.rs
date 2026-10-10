@@ -60,6 +60,7 @@ pub mod bridge {
     extern "Rust" {
         fn rvp_mpv_init_gl();
         fn rvp_mpv_render(fbo: i32, width: i32, height: i32);
+        fn rvp_mpv_report_swap();
     }
 }
 
@@ -69,4 +70,8 @@ fn rvp_mpv_init_gl() {
 
 fn rvp_mpv_render(fbo: i32, width: i32, height: i32) {
     crate::mpv::render(fbo, width, height);
+}
+
+fn rvp_mpv_report_swap() {
+    crate::mpv::report_swap();
 }

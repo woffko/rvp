@@ -42,6 +42,9 @@ Window {
     readonly property string outDir: argValue("--out", "s3-out")
     property int step: 0
     property int failures: 0
+    // mpv's dropped-frame count once per second of playback, to tell a
+    // start-up stall from steady losses.
+    property var dropTimeline: []
 
     function check(name, ok, detail) {
         Tools.log(name + "=" + (ok ? "PASS" : "FAIL") + (detail ? " " + detail : ""))
@@ -207,6 +210,7 @@ Window {
             else if (root.chromeMode === "synced")
                 Tools.updateWithNextFrame(timeLayer)
             controller.refresh()
+            root.dropTimeline.push(controller.frame_drop_count)
         }
     }
 
@@ -262,8 +266,15 @@ Window {
             menu.close()
             // Without a pressed mouse button the compositor may refuse: this
             // only shows the API is reachable. Real drags need real input.
-            Tools.log("start_system_move_without_press=" + root.startSystemMove())
-            Tools.log("start_system_resize_without_press=" + root.startSystemResize(Qt.RightEdge | Qt.BottomEdge))
+            // On X11 Qt sends _NET_WM_MOVERESIZE even without a pressed
+            // button, and the window manager may start a move that follows
+            // the pointer, so the call is skipped there.
+            if (Qt.platform.pluginName === "xcb") {
+                Tools.log("start_system_move_without_press=SKIPPED on X11")
+            } else {
+                Tools.log("start_system_move_without_press=" + root.startSystemMove())
+                Tools.log("start_system_resize_without_press=" + root.startSystemResize(Qt.RightEdge | Qt.BottomEdge))
+            }
             root.width = Number(argValue("--width", "960"))
             root.height = Number(argValue("--height", "540"))
         } else if (step === 5) {
@@ -292,6 +303,7 @@ Window {
         Tools.log("mpv_time_pos=" + controller.time_pos)
         Tools.log("mpv_frames_rendered=" + controller.frames_rendered)
         Tools.log("mpv_frame_drop_count=" + controller.frame_drop_count)
+        Tools.log("mpv_frame_drop_timeline=" + root.dropTimeline.join(","))
         Tools.log("mpv_vo_delayed_frame_count=" + controller.vo_delayed_frame_count)
         Tools.log("mpv_mistimed_frame_count=" + controller.mistimed_frame_count)
         Tools.log("mpv_decoder_frame_drop_count=" + controller.decoder_frame_drop_count)

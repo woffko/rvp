@@ -104,6 +104,17 @@ MpvItem::MpvItem(QQuickItem *parent)
 {
     instance = this;
     setMirrorVertically(true);
+    // RVP_REPORT_SWAP=1: report each presented video frame to mpv
+    // (mpv_render_context_report_swap). frameSwapped is emitted on the render
+    // thread, where the render context lives.
+    if (qEnvironmentVariableIntValue("RVP_REPORT_SWAP") == 1) {
+        connect(this, &QQuickItem::windowChanged, this, [](QQuickWindow *window) {
+            if (window != nullptr) {
+                connect(window, &QQuickWindow::frameSwapped, window, [] { rvp_mpv_report_swap(); },
+                        Qt::DirectConnection);
+            }
+        });
+    }
 }
 
 MpvItem::~MpvItem()

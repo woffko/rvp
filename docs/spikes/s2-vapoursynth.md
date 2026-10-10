@@ -100,6 +100,38 @@ chose option 1 on 2026-10-10:
 3. **An older VapourSynth** that still has `get_core()` (PotPlayer bundles
    one). Not compatible with SVP's R73 runtime, so it contradicts S2's premise.
 
+## Ubuntu 26.10 boot (goal D)
+
+The same result on Linux with SVP's own runtime: the unchanged script fails
+on `get_core`, the wrapper reaches 60 fps in real time.
+
+| Component | Version |
+|-----------|---------|
+| SVP 4 for Linux | 4.7.0.321, installed by SVP's installer in `~/SVP4` |
+| VapourSynth | Core R73 (`~/SVP4/mpv/libvapoursynth.so`), VSScript `~/SVP4/mpv/libvapoursynth-script.so.0` with RPATH `$ORIGIN/../python` |
+| Python | 3.12.11, embedded in `~/SVP4/python` (`libpython3.12.so.1.0`, module path `../mpv/python`) |
+| mvtools | v24 (`d9270bec`), built by the kit's new `mvtools` step against the R73 API 3 headers; SVP ships only `libsvpflow1/2.so` |
+| libmpv | the kit's build: mpv `b2c255c13e`, FFmpeg n9.0.2 |
+
+```text
+kit.sh s2   (VSSCRIPT_PATH=~/SVP4/mpv/libvapoursynth-script.so.0, RVP_VPY=<Windows partition>/.../motioninterpolation.vpy)
+  == plain
+  [vapoursynth] Python exception: module 'vapoursynth' has no attribute 'get_core'
+  estimated_vf_fps_mean=23.976
+  result=FAIL
+  == --compat
+  realtime_ratio=1.000
+  estimated_vf_fps_mean=60.000
+  result=PASS
+```
+
+On the 64-thread 32-core processor the 1280x720 interpolation keeps up with
+real time (1.000; 0.831 on the two-core Windows VM). R73 still loads
+mvtools' API 3 plugin; it logs "Explicitly instantiated a Cache. This is no
+longer possible" once per filter and passes the clip through. The runs used
+`PYTHONDONTWRITEBYTECODE=1` (the kit sets it now) and left SVP's installation
+unchanged.
+
 ## Findings for RVP
 
 1. **`get_core` compatibility.** Whichever option is chosen, `vs.get_core()`
@@ -116,7 +148,9 @@ chose option 1 on 2026-10-10:
    `vapoursynth.pyd` (see `spikes/tools/windows-deps.sh`).
 4. **Linux.** mpv master loads `libvapoursynth-script.so` with `dlopen` and
    needs only the VapourSynth headers at build time. The Linux kit builds
-   libmpv that way, so SVP's own runtime can be used through `VSSCRIPT_PATH`.
-   There is no Linux VapourSynth wheel for R73, and the shared Ubuntu 22.04
-   VM has Python 3.10, so S2 on Linux runs on the owner's Ubuntu 26.10 boot
-   (goal D).
+   libmpv that way, so SVP's own runtime can be used through `VSSCRIPT_PATH`
+   (confirmed in goal D). SVP 4 for Linux installs in `~/SVP4` with the
+   library named `libvapoursynth-script.so.0`, so RVP has to look there too.
+5. **mvtools.** Neither SVP nor Ubuntu ships mvtools, which PotPlayer's
+   script needs. RVP has to bring it (or document it) for the PotPlayer
+   script slot (M6); the kit builds v24 from source.

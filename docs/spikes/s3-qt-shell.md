@@ -18,6 +18,12 @@ long as chrome updates are applied together with the next video frame; mpv
 in a native child window (`wid`) needs no such care. Real mouse drags move
 and resize the frameless window on Windows and on GNOME Wayland.
 
+On the owner's Ubuntu 26.10 boot (goal D, same RTX 30-series card) everything
+works with real input too, but the GPU check does not reach zero dropped
+frames. Most of the losses (93 per 20 s) came from mpv playing audio through
+the PulseAudio API; with libmpv built with PipeWire 6 remain, against 3 for
+mpv's own output on the same desktop. See the goal D section.
+
 ## The spike
 
 `spikes/s3-qt-shell` (cxx 1.0.204, cxx-qt 0.10.0, libmpv2 6.0.0, Qt 6.10.3):
@@ -42,6 +48,13 @@ and resize the frameless window on Windows and on GNOME Wayland.
   its size and, when the menu opens, the window list; a middle click shrinks
   it to 440x77. The kit's input check (`tools/linux-kit/input-check.py`) uses
   them and injects only mouse input.
+- Experiment switches (goal D): `RVP_MPV_OPTIONS="a=b,c=d"` sets extra mpv
+  options, `RVP_REPORT_SWAP=1` calls `mpv_render_context_report_swap()`
+  after every swapped frame that contained a new video frame, and the
+  self-test logs `mpv_frame_drop_timeline` (the drop count after each second
+  of playback). On X11 the self-test skips the unpressed
+  `startSystemMove()`: Qt sends `_NET_WM_MOVERESIZE` even without a pressed
+  button, and the window manager may start a move that follows the pointer.
 
 The self-test resizes the window to 440x77, opens the menu, checks that the
 menu is a separate top-level window larger than the main window, calls the
@@ -214,6 +227,89 @@ input_check_resize=PASS grown=100,80 expected=100,80 window=880,486 540x157
 input_check_menu=PASS menu=1048,504 264x509 class=Qt6103QWindowPopupSaveBitsOwnDC main_height=157
 ```
 
+## Ubuntu 26.10 boot (goal D): performance and real input
+
+Environment: the owner's PC booted into Ubuntu 26.10 (development branch,
+kernel 7.2.0-5), GNOME Shell 51.beta on Wayland (Mutter 51~beta, Xwayland
+24.1.13), NVIDIA 595.91.07 (open kernel modules), PipeWire 1.6.8, one
+2560x1440 monitor at 59.95 Hz, 100% scaling. The kit's libmpv: mpv
+`b2c255c13e`, FFmpeg n9.0.2, libplacebo v7.360.1, Qt 6.10.3. Clip:
+`video-2160p60-hevc.mkv` from `tools/test-clips/make-clips.sh`, as on
+Windows. Each run is the kit's GPU mode (`--selftest --gpu-checks --chrome
+synced --hwdec auto-copy --video-seconds 20 --width 1920 --height 1080`,
+video slot 1610x972, about 18.8 s of playback measured) with one change.
+Raw logs are in `~/.cache/rvp-kit/logs/s3-diag` on the Ubuntu boot.
+
+Qt picks OpenGL ES 3.2 (`OpenGL ES 3.2 NVIDIA 595.91.07`) and the basic
+(single-threaded) render loop on NVIDIA Wayland; under Xwayland it picks
+desktop OpenGL 4.6 and the threaded loop. Decoder drops were 0 in every run.
+
+First kit build (mpv plays audio through the PulseAudio API, which PipeWire
+emulates; `auto-copy` picks `vdpau-copy` because FFmpeg was built without
+NVIDIA's codec headers):
+
+| Run | Change | Rendered | Drops |
+|-----|--------|----------|-------|
+| kit `s3` | none | 1090 | 93 |
+| 1 | no chrome updates | 1106 | 79 |
+| 2 | none (repeat) | 1110 | 74 |
+| 3 | `video-sync=display-resample` | 1087 | 99 |
+| 4 | `hwdec=nvdec-copy` (unsupported, so software decoding) | 1094 | 91 |
+| 5 | `QSG_RENDER_LOOP=basic` (the default here) | 1093 | 90 |
+| 6 | no chrome updates, `video-timing-offset=0` | 466 | 687 |
+| 7 | `video-timing-offset=0` | 468 | 684 |
+| 8 | `video-timing-offset=0`, threaded render loop | 466 | 687 |
+| 9 | threaded render loop | 1113 | 74 |
+| 10 | `RVP_REPORT_SWAP=1` | 1096 | 87 |
+| 11 | `RVP_REPORT_SWAP=1`, `display-resample`, `display-fps-override=59.95` | 1179 | 114 |
+| 12 | Xwayland (`QT_QPA_PLATFORM=xcb`) | 1109 | 74 |
+| 13 | Xwayland, mpv in a child window (`--wid`, `vo=gpu-next`) | n/a | 67 |
+| 14 | none; drops after each second: 3,7,7,13,17,19,22,25,28,36,45,45,48,61,61,68,75,79,82,89 | 1093 | 89 |
+| 15 | none, GPU clocks logged: P2/P3/P5, 345-1665 MHz | 1094 | 87 |
+| 16 | `ao=null` | 1182 | 9 |
+| 17 | 1080p60 H.264 clip instead of 4K | 1110 | 80 |
+| 18 | `ao=alsa` (PipeWire's ALSA plugin) | 1178 | 8 |
+| 19 | `ao=pulse`, `pulse-latency-hacks=yes` | 1096 | 91 |
+
+The losses were steady (run 14), independent of chrome, decoder, render
+loop, Wayland or Xwayland, and also hit mpv's own output (run 13). They
+disappeared with any audio output other than PulseAudio's (runs 16 and 18):
+mpv times video by the audio clock, and the PulseAudio API on PipeWire
+reports the audio delay in coarse steps, so frames looked late. The kit now
+installs `libpipewire-0.3-dev` (and `libffmpeg-nvenc-dev` for NVDEC); after a
+rebuild mpv picks `ao=pipewire` and `nvdec-copy` on its own:
+
+| Run | Change | Rendered | Drops |
+|-----|--------|----------|-------|
+| 20 | none (GPU clocks logged: P2, 1665 MHz) | 1163 | 9 |
+| 21 | no chrome updates | 1168 | 6 |
+| 22 | threaded render loop | 1168 | 5 |
+| 23 | `RVP_REPORT_SWAP=1`, `display-resample`, `display-fps-override=59.95` | 1169 | 7 |
+| 24 | Xwayland, mpv in a child window (`--wid`, `vo=gpu-next`) | n/a | 3 |
+| 25 | 4K 59.94 fps clip (slower than the display) | 1166 | 7 |
+| 26 | `display-resample`, `display-fps-override=59.95` | 1172 | 6 |
+| 27 | CoolerControl's daemon stopped | 1166 | 6 |
+| kit `s3` | ydotoold stopped; drops after each second: 0,0,0,0,0,0,0,1,1,4,4,4,4,4,4,6,6,6,6,6 | 1167 | 6 |
+
+The remaining 5-9 drops come in bursts of one or two every 5-7 seconds. They
+do not depend on the chrome, the render loop, display sync, the content
+rate, CoolerControl's GPU polling or ydotool's virtual device, and mpv's own
+output on the same desktop loses 3. The cause was not found; it is below the
+choice of video output, so it does not argue for another output path.
+`RVP_REPORT_SWAP=1` gives mpv irregular swap times on Wayland (it estimated
+59.46-59.58 Hz for a 59.95 Hz display), so display-synced modes cannot rely
+on it there.
+
+Real input with the kit's input check (ydotool 1.0.4, flat pointer
+profile, pointer scale 1.0):
+
+```text
+window_origin=800,434 size=960x540
+input_check_move=PASS moved=-80,60 expected=-80,60
+input_check_resize=PASS resized=-100,-80 expected=-100,-80
+input_check_menu=PASS menu 200x401 main 440x77 class QQuickPopupWindow
+```
+
 ## Findings for RVP
 
 1. **cxx-qt constructors.** cxx-qt's default constructor passes `QObject*`
@@ -268,3 +364,27 @@ input_check_menu=PASS menu=1048,504 264x509 class=Qt6103QWindowPopupSaveBitsOwnD
     Windows fallback (D4). With `wid`, the Qt thread must never wait on mpv:
     mpv's video thread sends window messages to the child window, which the
     Qt thread owns (the spike polls properties on a worker thread).
+11. **Linux needs mpv's PipeWire audio output.** Through the PulseAudio API
+    on PipeWire, mpv's audio clock is too coarse for 60 fps video: 74-99
+    dropped frames per 20 s in every output mode, against 5-9 with
+    `ao=pipewire`, `ao=alsa` or no audio (goal D). RVP's Linux libmpv
+    (kit, AppImage, packages) must be built with PipeWire, and diagnostics
+    should show `current-ao`.
+12. **Keep mpv's default `video-timing-offset`.** With the offset at 0 the
+    render call no longer waits, but Qt shows the frame only at the next
+    compositor frame, and mpv dropped 9 times as many frames (684-687).
+13. **Wayland swap times are not presentation times.** Reporting swaps from
+    `QQuickWindow::frameSwapped` made mpv estimate 59.46-59.58 Hz on a
+    59.95 Hz display. Display-synced modes need real presentation feedback
+    (or `display-fps-override`), not swap reports, on Wayland.
+14. **Qt's defaults on NVIDIA Wayland differ.** Qt chose OpenGL ES 3.2 and
+    the basic render loop (desktop GL 4.6 and the threaded loop under
+    Xwayland). mpv's render API works with both; the forced threaded loop
+    works too and dropped no more frames. M2 should set the render loop
+    explicitly and log the GL flavour.
+15. **NVDEC needs NVIDIA's codec headers at build time.** Without
+    `libffmpeg-nvenc-dev`, FFmpeg has no NVDEC and `auto-copy` falls back to
+    `vdpau-copy`. Both decoded 4K60 HEVC without decoder drops.
+16. **A residual drop rate remains on GNOME Wayland with NVIDIA.** About 6
+    frames per 20 s at 4K60 in a 1920x1080 window, 3 for mpv's own output.
+    Recheck in M2's GPU check (fullscreen, longer runs, film-rate content).

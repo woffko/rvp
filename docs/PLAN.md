@@ -259,6 +259,8 @@ VapourSynth inside libmpv.
   through a run-time wrapper that restores `vs.get_core()` (owner decision
   2026-10-10, after goal B found that VapourSynth R73 removed it;
   `docs/spikes/s2-vapoursynth.md`).
+  Goal D result (Linux): PASS with SVP's own runtime (VapourSynth R73,
+  Python 3.12) and mvtools v24 built by the kit: 23.976 → 60 fps in real time.
 - **S1. Does SVP accept a libmpv process?** Minimal Rust binary (libmpv2) with
   `input-ipc-server`, `hwdec=auto-copy`, `hr-seek-framedrop=no`. Run with SVP on
   the owner's Linux machine and on Windows. Pass: SVP attaches and
@@ -267,6 +269,8 @@ VapourSynth inside libmpv.
   real `mpv` embedded through `wid` on X11 and Windows).
   Goal C result (Windows): PASS, SVP attached in 1.5 s and reached 59.94 fps
   (`docs/spikes/s1-svp-attach.md`).
+  Goal D result (Linux): PASS, SVP attached in 1.2 s through `/tmp/mpvsocket`
+  and reached 59.94 fps; the spike crashed on exit with SVP's filter active.
 - **S3. Qt shell.** cxx-qt + QML: frameless window that moves and resizes through
   `QWindow::startSystemMove`/`startSystemResize` on Windows, X11 and Wayland; a
   context menu that extends beyond the window bounds on all three (on Wayland
@@ -280,6 +284,10 @@ VapourSynth inside libmpv.
   Goal C result (Windows): PASS; the OpenGL path needs chrome updates applied
   together with the next video frame, the `wid` path does not
   (`docs/spikes/s3-qt-shell.md`).
+  Goal D result (Linux, GNOME Wayland): window, menu, real-input move and
+  resize, skin and video pass; libmpv must use the PipeWire audio output
+  (93 dropped frames per 20 s through the PulseAudio API, 6 with PipeWire).
+  The remaining 6 (mpv's own output: 3) are an open item accepted by the owner.
 - **S4. Static skin render.** Parse BlackSpace `VideoSkin.xml` (classic area)
   and render the window frame to PNG at a fixed size. Compare with reference
   captures.

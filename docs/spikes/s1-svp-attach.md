@@ -3,8 +3,9 @@
 Question: does SVP 4 Manager detect a player built on libmpv whose process is
 not called `mpv`, and switch on its interpolation through mpv's JSON IPC?
 
-Status: **Windows: PASS** (goal C, 2026-10-10). Linux: runs on the owner's
-Ubuntu 26.10 boot through the Linux kit (goal D).
+Status: **Windows: PASS** (goal C, 2026-10-10). **Linux: PASS** (goal D,
+2026-10-10, the owner's Ubuntu 26.10 boot): SVP attached after 1.2 s and
+interpolated 23.976 fps to 59.94 fps.
 
 SVP 4 Manager 4.7.0.302 attached to `s1-svp-attach.exe` 1.5 s after it
 started and interpolated 23.976 fps to 59.94 fps (the display runs at
@@ -74,14 +75,45 @@ generates per file in `%APPDATA%\SVP4\scripts\`, with
 the `@svp` label (for the status display and the fps footer) and must not
 remove it when it changes its own filters.
 
-## What to look for (Linux, goal D)
+## Ubuntu 26.10 boot (goal D)
 
-- Whether SVP needs the process name `mpv` (on Windows it does not). If it does,
-  record what it checks (read-only) and evaluate the fallbacks in PLAN.md:
-  process naming, or real `mpv` embedded through `wid` on X11 and Windows.
-- Which IPC path SVP finds. SVP's own `mpvSockets.lua` creates
-  `<tmp>/mpvSockets/<pid>`, its `mpv.conf` uses `mpvpipe` on Windows, and on
-  Linux SVP looks up the socket's owner through `lsof` (in the kit's package
-  list). If the default path is not picked up, rerun with
-  `--ipc /tmp/mpvSockets/<pid>` style paths.
-- Whether the inserted filter carries the same `@svp` label as on Windows.
+Environment: Ubuntu 26.10 (development branch), GNOME 51 Wayland, RTX 30-series card
+(NVIDIA 595.91.07), 2560x1440 at 59.95 Hz; SVP 4 for Linux 4.7.0.321
+installed by SVP's installer in `~/SVP4` (its own mpv, VapourSynth R73 and
+Python 3.12.11), started with the owner's profile and settings unchanged.
+Clip: the kit's 1080p 23.976 fps H.264 clip (the same parameters as
+`video-1080p23976-h264.mkv`). The spike ran with the kit's libmpv (mpv
+`b2c255c13e`) and `VSSCRIPT_PATH` pointing at SVP's
+`libvapoursynth-script.so.0`, because SVP's filter runs inside our libmpv.
+
+```text
+kit.sh s1    (RVP_VIDEO=video-1080p23976-h264.mkv, VSSCRIPT_PATH=~/SVP4/mpv/libvapoursynth-script.so.0)
+  mpv_version=mpv v0.41.0-1115-gb2c255c13
+  ipc=/tmp/mpvsocket
+  t=1.2s vf=@svp:vapoursynth=file=%47%~/.local/share/SVP4/scripts/19004f47.py:buffered-frames=4:concurrent-frames=25
+  container_fps=23.976025
+  estimated_vf_fps=59.940767
+  best_fps_ratio=2.50
+  svp_filter_seen_after_s=1.2
+  result=PASS
+```
+
+Answers to the questions goal C left for Linux:
+
+- **Process name.** Not needed on Linux either: the process is
+  `s1-svp-attach`. SVP found the player through the default
+  `/tmp/mpvsocket` (the path in SVP's own Linux `mpv.conf`).
+- **Filter label.** The same `@svp` label as on Windows; SVP's generated
+  script lives in `~/.local/share/SVP4/scripts/` and uses
+  `concurrent-frames=25` here (8 on Windows).
+- **Exit.** After printing `result=PASS` the spike crashed with a
+  segmentation fault while libmpv was destroyed with SVP's filter still in
+  the chain (no core dump was kept: Apport ignores programs that are not
+  packaged). On Windows it exited cleanly. RVP must stop playback and let
+  the filter chain shut down before `mpv_terminate_destroy` (M2); the kit
+  now records the spike's exit status.
+
+The kit originally played the S3 clip (4K60) for S1 as well; SVP has
+nothing to interpolate on a 60 fps source at 60 Hz, so the kit now
+generates a 23.976 fps clip for S1 (`RVP_S1_VIDEO` overrides it) and passes
+SVP's `VSSCRIPT_PATH` to the spike.

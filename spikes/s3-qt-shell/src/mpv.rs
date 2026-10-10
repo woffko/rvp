@@ -82,6 +82,8 @@ static FRAMES: AtomicU64 = AtomicU64::new(0);
 static PENDING: Mutex<Option<String>> = Mutex::new(None);
 /// Set in `wid` mode: mpv renders itself and the OpenGL item stays idle.
 static WID_MODE: AtomicBool = AtomicBool::new(false);
+/// Set by `render` when mpv drew a frame; `report_swap` reports it once.
+static SWAP_PENDING: AtomicBool = AtomicBool::new(false);
 
 /// Property values read by a worker thread. The Qt thread never calls a
 /// blocking mpv function: with `wid` on Windows, mpv's video thread sends
@@ -310,6 +312,22 @@ pub fn render(fbo: i32, width: i32, height: i32) {
             && context.render::<()>(fbo, width, height, false).is_ok()
         {
             FRAMES.fetch_add(1, Ordering::Relaxed);
+            SWAP_PENDING.store(true, Ordering::Relaxed);
+        }
+    });
+}
+
+/// Tells mpv that the frame drawn by `render` was presented, so it can time
+/// frames by real swaps. The C++ video item calls this after
+/// `QQuickWindow::frameSwapped` when `RVP_REPORT_SWAP=1`, on the same thread
+/// as `render`; swaps without a new video frame are not reported.
+pub fn report_swap() {
+    if !SWAP_PENDING.swap(false, Ordering::Relaxed) {
+        return;
+    }
+    RENDER.with(|slot| {
+        if let Some(context) = slot.borrow().as_ref() {
+            context.report_swap();
         }
     });
 }
