@@ -50,7 +50,9 @@ impl Player {
         self.events.clear();
         self.engine.load(target, false).expect("loadfile");
         self.wait("file loaded", |_, events| {
-            events.contains(&EngineEvent::FileLoaded)
+            events
+                .iter()
+                .any(|event| matches!(event, EngineEvent::FileLoaded { .. }))
         });
         self.wait("duration", |model, _| {
             model.double(PropertyId::Duration).is_some()
@@ -82,7 +84,15 @@ fn loading_fills_the_model() {
     let duration = model.double(PropertyId::Duration).unwrap_or_default();
     assert!((duration - 60.0).abs() < 0.1, "duration {duration}");
     assert!(model.media_loaded());
-    assert_eq!(model.text(PropertyId::Path), Some(LONG));
+    // mpv normalizes the path on Windows (`..`, separators) but not on Linux;
+    // the application keys its resume store by mpv's `path` for that reason.
+    assert!(
+        model
+            .text(PropertyId::Path)
+            .is_some_and(|path| path.ends_with("fixture-60s.mkv")),
+        "path {:?}",
+        model.text(PropertyId::Path)
+    );
     assert_eq!(model.text(PropertyId::MediaTitle), Some("RVP fixture 60 s"));
 }
 
@@ -181,8 +191,11 @@ fn stop_clears_unavailable_properties() {
     player.events.clear();
     player.engine.stop().expect("stop");
     player.wait("end of file", |_, events| {
-        events.contains(&EngineEvent::EndFile(EndReason::Stop))
+        events.iter().any(|event| {
+            matches!(event, EngineEvent::EndFile { reason: EndReason::Stop, path: Some(path) } if path.ends_with("fixture-3s.mkv"))
+        })
     });
+    assert_eq!(player.model.loaded_path(), None);
     player.wait("duration cleared", |model, _| {
         model.double(PropertyId::Duration).is_none()
     });

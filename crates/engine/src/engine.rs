@@ -101,8 +101,15 @@ pub enum EndReason {
 #[derive(Debug, Clone, PartialEq)]
 pub enum EngineEvent {
     StartFile,
-    FileLoaded,
-    EndFile(EndReason),
+    /// A file is open; `path` is mpv's `path` for it.
+    FileLoaded {
+        path: String,
+    },
+    /// The file loaded before (if any) stopped playing.
+    EndFile {
+        reason: EndReason,
+        path: Option<String>,
+    },
     /// A seek finished and playback continues from the new position.
     PlaybackRestart,
     /// An error reported by libmpv, for example a file that cannot be opened.
@@ -268,8 +275,25 @@ impl Engine {
                 }
             }
             Ok(Event::StartFile) => events.push(EngineEvent::StartFile),
-            Ok(Event::FileLoaded) => events.push(EngineEvent::FileLoaded),
-            Ok(Event::EndFile(reason)) => events.push(EngineEvent::EndFile(end_reason(reason))),
+            Ok(Event::FileLoaded) => {
+                // Asked directly: the observed `path` may arrive in a later
+                // batch than this event.
+                let path = self
+                    .mpv
+                    .get_property::<String>("path")
+                    .ok()
+                    .or_else(|| model.text(PropertyId::Path).map(str::to_owned))
+                    .unwrap_or_default();
+                model.set_loaded_path(Some(path.clone()));
+                events.push(EngineEvent::FileLoaded { path });
+            }
+            Ok(Event::EndFile(reason)) => {
+                let path = model.set_loaded_path(None);
+                events.push(EngineEvent::EndFile {
+                    reason: end_reason(reason),
+                    path,
+                });
+            }
             Ok(Event::PlaybackRestart) => events.push(EngineEvent::PlaybackRestart),
             Ok(Event::Shutdown) => events.push(EngineEvent::Shutdown),
             Ok(_) => {}

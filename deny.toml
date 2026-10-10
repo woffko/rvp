@@ -42,6 +42,8 @@ exceptions = [
 # png and zip pull two miniz_oxide versions through flate2; harmless.
 multiple-versions = "warn"
 wildcards = "deny"
+# Workspace crates depend on each other by path; none is published.
+allow-wildcard-paths = true
 
 [sources]
 unknown-registry = "deny"

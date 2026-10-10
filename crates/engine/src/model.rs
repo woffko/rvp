@@ -131,6 +131,8 @@ pub enum Value {
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct PlayerModel {
     values: Vec<Option<Value>>,
+    /// The file between its `FileLoaded` and `EndFile` events.
+    loaded_path: Option<String>,
 }
 
 impl PlayerModel {
@@ -138,7 +140,21 @@ impl PlayerModel {
     pub fn new() -> Self {
         Self {
             values: vec![None; PropertyId::ALL.len()],
+            loaded_path: None,
         }
+    }
+
+    /// The file that is open, from its `FileLoaded` to its `EndFile` event
+    /// (unlike the `path` property, it is never ahead of or behind the
+    /// events).
+    #[must_use]
+    pub fn loaded_path(&self) -> Option<&str> {
+        self.loaded_path.as_deref()
+    }
+
+    /// Replaces the loaded path, returning the previous one.
+    pub(crate) fn set_loaded_path(&mut self, path: Option<String>) -> Option<String> {
+        std::mem::replace(&mut self.loaded_path, path)
     }
 
     /// Stores a value; returns true if it differs from the previous one.

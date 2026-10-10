@@ -1,12 +1,17 @@
 [package]
 name = "rvp-app"
-description = "Application logic: commands, input bindings, settings, playlists and the resume store (milestones M2 and M3)."
+description = "Application logic: commands, input bindings, settings and the resume store (milestones M2 and M3)."
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
 publish.workspace = true
+
+[dependencies]
+rvp-engine = { path = "../engine" }
+serde.workspace = true
+serde_json.workspace = true
 
 [lints]
 workspace = true
