@@ -10,6 +10,10 @@
 //! and the process exits. The engine itself is never destroyed: the render
 //! context borrows it for the life of the process.
 
+// No console window on Windows; the self-test's output still reaches a
+// pipe or file that the caller redirects to.
+#![cfg_attr(windows, windows_subsystem = "windows")]
+
 mod ffi;
 mod metrics;
 mod player;

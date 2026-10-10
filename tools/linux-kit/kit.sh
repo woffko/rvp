@@ -17,8 +17,20 @@
 #   input   drag the frameless S3 window with injected mouse input (needs
 #           ydotool and ydotoold running as root; optional)
 #   s1      SVP 4 Manager attaches to a libmpv player (start SVP first)
+#   m2build build the RVP player (milestone M2) against the kit's Qt and
+#           libmpv
+#   m2      RVP's functional self-test, then a restart that must resume the
+#           last file paused at its position
+#   m2input drag, resize, double-click and right-click the RVP window with
+#           injected mouse input (needs ydotool, like input)
+#   m2gpu   RVP plays the test video for RVP_M2_SECONDS (default 60) in
+#           fullscreen and in a 1920x1080 window and counts dropped frames
+#           (goal D's open item; GPU machines only)
+#   m2svp   RVP plays the film-rate clip with SVP attached, then exits
+#           (goal D rule 6; start SVP first)
 #   report  write docs/test-runs/<date>-<host>.md from the logs
 #   all     check deps mpv mvtools build s2 s3 input s1 report
+#   m2all   check deps mpv m2build m2 m2input m2gpu m2svp report
 #
 # environment:
 #   RVP_KIT_DIR     build and download directory (default ~/.cache/rvp-kit)
@@ -34,6 +46,7 @@
 #                   (default /tmp/.ydotool_socket)
 #   RVP_GPU_CHECKS  1 or 0 to override GPU detection
 #   RVP_KIT_REBUILD 1 to rebuild libmpv even if this commit is already built
+#   RVP_M2_SECONDS  playback length of the m2gpu runs (default 60)
 set -u
 
 KIT_SCRIPT=$(readlink -f "${BASH_SOURCE[0]}")
@@ -454,44 +467,61 @@ step_s3() {
     return "$status"
 }
 
-step_input() {
-    local log=$LOG_DIR/input.log size
-    spike_env
+# Prepares an input check: ydotool, its socket and the screen size from
+# `$2` (the log of a run that printed its environment). Prints "WIDTH HEIGHT".
+input_ready() {
+    local step=$1 size_log=$2
     if ! command -v ydotool > /dev/null 2>&1 || ! pgrep -x ydotoold > /dev/null 2>&1; then
-        record input SKIPPED "needs ydotool 1.x and 'sudo ydotoold' running"
-        return 0
+        record "$step" SKIPPED "needs ydotool 1.x and 'sudo ydotoold' running"
+        return 1
     fi
     # Under sudo, ydotoold has no XDG_RUNTIME_DIR and listens on
     # /tmp/.ydotool_socket, while the client looks in $XDG_RUNTIME_DIR; the
     # checklist starts the daemon with that path explicitly.
     export YDOTOOL_SOCKET=${YDOTOOL_SOCKET:-/tmp/.ydotool_socket}
     if [ ! -S "$YDOTOOL_SOCKET" ]; then
-        record input SKIPPED "no ydotoold socket at $YDOTOOL_SOCKET (see CHECKLIST.md)"
-        return 0
+        record "$step" SKIPPED "no ydotoold socket at $YDOTOOL_SOCKET (see CHECKLIST.md)"
+        return 1
     fi
     if [ -z "${WAYLAND_DISPLAY:-}" ] && [ -z "${DISPLAY:-}" ]; then
-        record input SKIPPED "no graphical session"
-        return 0
+        record "$step" SKIPPED "no graphical session"
+        return 1
     fi
-    size=$(grep -o '"width":[0-9]*,"height":[0-9]*\|"height":[0-9]*,"name":"[^"]*","width":[0-9]*' "$LOG_DIR/s3.log" 2> /dev/null | head -1)
-    local width height
+    local size width height
+    size=$(grep -o '"width":[0-9]*,"height":[0-9]*\|"height":[0-9]*,"name":"[^"]*","width":[0-9]*\|"height":[0-9]*,"name":"[^"]*","refresh_rate":[0-9.]*,"width":[0-9]*' "$size_log" 2> /dev/null | head -1)
     width=$(echo "$size" | grep -o '"width":[0-9]*' | cut -d: -f2)
     height=$(echo "$size" | grep -o '"height":[0-9]*' | cut -d: -f2)
     if [ -z "$width" ] || [ -z "$height" ]; then
-        record input SKIPPED "run s3 first (screen size comes from its log)"
-        return 0
+        record "$step" SKIPPED "run $(basename "$size_log" .log) first (the screen size comes from its log)"
+        return 1
     fi
-    # Absolute moves are only exact with a flat pointer profile: switch GNOME
-    # to it for the check and restore the previous profile afterwards.
-    local profile=""
+    echo "$width $height"
+}
+
+# Runs input-check.py with GNOME's pointer acceleration set to flat
+# (absolute moves are only exact then) and restores the profile afterwards.
+run_input_check() {
+    local log=$1
+    shift
+    local profile="" status
     if command -v gsettings > /dev/null 2>&1; then
         profile=$(gsettings get org.gnome.desktop.peripherals.mouse accel-profile 2> /dev/null)
         [ -z "$profile" ] || gsettings set org.gnome.desktop.peripherals.mouse accel-profile flat
     fi
-    python3 "$REPO/tools/linux-kit/input-check.py" "$REPO/spikes/target/release/s3-qt-shell" \
-        "${RVP_SKIN:-}" "$width" "$height" "$LOG_DIR/input-app.log" > "$log" 2>&1
-    local status=$?
+    python3 "$REPO/tools/linux-kit/input-check.py" "$@" > "$log" 2>&1
+    status=$?
     [ -z "$profile" ] || gsettings set org.gnome.desktop.peripherals.mouse accel-profile "$profile"
+    return "$status"
+}
+
+step_input() {
+    local log=$LOG_DIR/input.log screen
+    spike_env
+    screen=$(input_ready input "$LOG_DIR/s3.log") || return 0
+    # shellcheck disable=SC2086 # "WIDTH HEIGHT"
+    run_input_check "$log" "$REPO/spikes/target/release/s3-qt-shell" "${RVP_SKIN:-}" $screen \
+        "$LOG_DIR/input-app.log"
+    local status=$?
     if [ "$status" -eq 0 ]; then
         record input PASS "$(grep -E '^input_check' "$log" | tr '\n' ' ')"
     else
@@ -523,6 +553,160 @@ step_s1() {
     fi
 }
 
+rvp_bin() { echo "$REPO/target/release/rvp"; }
+
+step_m2build() {
+    local log=$LOG_DIR/m2build.log
+    (
+        cd "$REPO" || exit 1
+        export QMAKE MPV_LIB_DIR
+        QMAKE=$(qt_dir)/bin/qmake
+        MPV_LIB_DIR=$(mpv_lib_dir)
+        cargo build --release -p rvp-shell
+    ) > "$log" 2>&1
+    if [ -x "$(rvp_bin)" ]; then
+        record m2build PASS "rvp built"
+    else
+        record m2build FAIL "see $log"
+        return 1
+    fi
+}
+
+# RVP's settings and state for kit runs live in the log directory; the
+# user's own ~/.config/rvp and ~/.local/state/rvp are not touched.
+m2_env() {
+    spike_env
+    export RVP_CONFIG_DIR=$LOG_DIR/m2-config RVP_STATE_DIR=$LOG_DIR/m2-state
+}
+
+m2_ready() {
+    local step=$1
+    if [ ! -x "$(rvp_bin)" ]; then
+        record "$step" SKIPPED "run m2build first"
+        return 1
+    fi
+    if [ -z "${WAYLAND_DISPLAY:-}" ] && [ -z "${DISPLAY:-}" ]; then
+        record "$step" SKIPPED "no graphical session"
+        return 1
+    fi
+}
+
+# Hardware decoding where a GPU decodes; the VM's virtual GPU does not.
+m2_hwdec() {
+    if gpu_checks; then echo auto-copy; else echo no; fi
+}
+
+step_m2() {
+    local log=$LOG_DIR/m2.log out=$LOG_DIR/m2-grabs functional played resumed time summary
+    m2_ready m2 || return 0
+    m2_env
+    rm -rf "$RVP_CONFIG_DIR" "$RVP_STATE_DIR" "$out"
+    : > "$log"
+    # Functional check with two files (next and previous).
+    echo "== functional" >> "$log"
+    "$(rvp_bin)" --selftest "--out=$out" "--skin=${RVP_SKIN:-}" \
+        "--mpv-options=hwdec=$(m2_hwdec)" "$(test_video)" "$(s1_video)" >> "$log" 2>&1
+    functional=$?
+    # Resume: play a few seconds, exit, start again without files.
+    rm -rf "$RVP_STATE_DIR"
+    echo "== play before restart" >> "$log"
+    "$(rvp_bin)" --selftest=playback --play-seconds=6 "--out=$out" "--skin=${RVP_SKIN:-}" \
+        "--mpv-options=hwdec=$(m2_hwdec)" "$(s1_video)" >> "$log" 2>&1
+    played=$?
+    time=$(grep '^status=' "$log" | tail -1 | grep -o '"time":[0-9.]*' | cut -d: -f2)
+    echo "== restart (expect $time s)" >> "$log"
+    "$(rvp_bin)" --selftest=resume "--expect-time=${time:-0}" "--out=$out" "--skin=${RVP_SKIN:-}" \
+        "--mpv-options=hwdec=$(m2_hwdec)" >> "$log" 2>&1
+    resumed=$?
+    summary="functional=$functional played=$played resumed=$resumed $(grep -E '^metric ' "$log" | sed 's/^metric //' | tr '\n' ' ')"
+    if [ "$functional" -eq 0 ] && [ "$played" -eq 0 ] && [ "$resumed" -eq 0 ]; then
+        record m2 PASS "$summary"
+    else
+        record m2 FAIL "$summary $(grep -E '=FAIL' "$log" | tr '\n' ' ')"
+        return 1
+    fi
+}
+
+step_m2input() {
+    local log=$LOG_DIR/m2input.log screen
+    m2_ready m2input || return 0
+    screen=$(input_ready m2input "$LOG_DIR/m2.log") || return 0
+    m2_env
+    rm -rf "$RVP_CONFIG_DIR" "$RVP_STATE_DIR"
+    mkdir -p "$RVP_CONFIG_DIR" "$RVP_STATE_DIR"
+    # A 900x560 window that keeps its size when the video opens.
+    printf '{ "fit-window-to-video": false }\n' > "$RVP_CONFIG_DIR/settings.json"
+    printf '{ "window": { "x": null, "y": null, "width": 900, "height": 560, "maximized": false } }\n' \
+        > "$RVP_STATE_DIR/state.json"
+    # shellcheck disable=SC2086 # "WIDTH HEIGHT"
+    run_input_check "$log" --rvp "$(rvp_bin)" "${RVP_SKIN:-}" $screen "$LOG_DIR/m2input-app.log" "$(s1_video)"
+    local status=$?
+    if [ "$status" -eq 0 ]; then
+        record m2input PASS "$(grep -E '^input_check' "$log" | tr '\n' ' ')"
+    else
+        record m2input FAIL "$(grep -E '^(input_check|window_origin)' "$log" | tr '\n' ' ')"
+    fi
+    return "$status"
+}
+
+step_m2gpu() {
+    local log=$LOG_DIR/m2gpu.log out=$LOG_DIR/m2-grabs seconds=${RVP_M2_SECONDS:-60}
+    m2_ready m2gpu || return 0
+    if ! gpu_checks; then
+        record m2gpu SKIPPED "no hardware GPU"
+        return 0
+    fi
+    m2_env
+    : > "$log"
+    local mode status=0 detail=""
+    for mode in fullscreen window; do
+        echo "== $mode" >> "$log"
+        rm -rf "$RVP_STATE_DIR"
+        local extra=()
+        [ "$mode" = fullscreen ] && extra+=(--fullscreen)
+        # A 1920x1080 window, as goal D measured.
+        mkdir -p "$RVP_STATE_DIR" "$RVP_CONFIG_DIR"
+        printf '{ "window": { "x": null, "y": null, "width": 1920, "height": 1080, "maximized": false } }\n' \
+            > "$RVP_STATE_DIR/state.json"
+        printf '{ "fit-window-to-video": false }\n' > "$RVP_CONFIG_DIR/settings.json"
+        "$(rvp_bin)" --selftest=playback "--play-seconds=$seconds" --gpu-checks "${extra[@]}" \
+            "--out=$out" "--skin=${RVP_SKIN:-}" --mpv-options=hwdec=auto-copy "$(test_video)" >> "$log" 2>&1 ||
+            status=1
+        detail="$detail $mode: $(grep '^frames_dropped=' "$log" | tail -1)"
+    done
+    if [ "$status" -eq 0 ]; then
+        record m2gpu PASS "$detail"
+    else
+        record m2gpu FAIL "$detail"
+        return 1
+    fi
+}
+
+step_m2svp() {
+    local log=$LOG_DIR/m2svp.log out=$LOG_DIR/m2-grabs vsscript status
+    m2_ready m2svp || return 0
+    if ! pgrep -f SVPManager > /dev/null 2>&1; then
+        record m2svp SKIPPED "SVP 4 Manager is not running"
+        return 0
+    fi
+    m2_env
+    rm -rf "$RVP_STATE_DIR"
+    vsscript=$(find_vsscript)
+    VSSCRIPT_PATH=${vsscript:-${VSSCRIPT_PATH:-}} PYTHONDONTWRITEBYTECODE=1 \
+        "$(rvp_bin)" --selftest=playback --play-seconds=40 --svp "--out=$out" "--skin=${RVP_SKIN:-}" \
+        --mpv-options=hwdec=auto-copy "$(s1_video)" > "$log" 2>&1
+    # The exit status shows whether RVP shut down cleanly with SVP's filter
+    # active (goal D rule 6).
+    status=$?
+    echo "exit_status=$status" >> "$log"
+    if [ "$status" -eq 0 ]; then
+        record m2svp PASS "$(grep -E 'svp_filter_attached|^frames_dropped=' "$log" | tr '\n' ' ') exit 0"
+    else
+        record m2svp FAIL "exit $status $(grep -E '=FAIL' "$log" | tr '\n' ' ')"
+        return 1
+    fi
+}
+
 step_report() {
     local file
     file=$REPO/docs/test-runs/$(date +%Y-%m-%d)-$(hostname).md
@@ -543,13 +727,13 @@ step_report() {
         echo "| Time | Step | Result | Detail |"
         echo "|------|------|--------|--------|"
         awk -F'\t' '{ printf "| %s | %s | %s | %s |\n", $1, $2, $3, $4 }' "$RESULTS" 2> /dev/null
-        for step in s2 s3 input s1; do
+        for step in s2 s3 input s1 m2 m2input m2gpu m2svp; do
             [ -s "$LOG_DIR/$step.log" ] || continue
             echo
             echo "## $step output"
             echo
             echo '```text'
-            grep -v -E '^(windows=|\[libmpv_render\] Loaded extension)' "$LOG_DIR/$step.log" | tail -60
+            grep -v -E '^(windows=|grabbed=|\[libmpv_render\] Loaded extension)' "$LOG_DIR/$step.log" | tail -60
             echo '```'
         done
     } > "$file"
@@ -557,19 +741,22 @@ step_report() {
 }
 
 if [ "$#" -eq 0 ]; then
-    sed -n '2,36p' "$KIT_SCRIPT"
+    sed -n '2,49p' "$KIT_SCRIPT"
     exit 2
 fi
 for step in "$@"; do
     case $step in
         all) set -- check deps mpv mvtools build s2 s3 input s1 report ;;
+        m2all) set -- check deps mpv m2build m2 m2input m2gpu m2svp report ;;
     esac
 done
 overall=0
 for step in "$@"; do
     case $step in
-        check | deps | mpv | mvtools | build | s1 | s2 | s3 | input | report) "step_$step" || overall=1 ;;
-        all) ;;
+        check | deps | mpv | mvtools | build | s1 | s2 | s3 | input | m2build | m2 | m2input | m2gpu | m2svp | report)
+            "step_$step" || overall=1
+            ;;
+        all | m2all) ;;
         *) say "unknown step $step"; exit 2 ;;
     esac
 done

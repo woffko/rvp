@@ -214,6 +214,24 @@ QString Tools::environment_json() const
             .toJson(QJsonDocument::Compact));
 }
 
+QString Tools::windows_json() const
+{
+    QJsonArray windows;
+    for (QWindow *window : QGuiApplication::topLevelWindows()) {
+        const QRect geometry = window->geometry();
+        windows.append(QJsonObject{
+            {QStringLiteral("class"), QString::fromLatin1(window->metaObject()->className())},
+            {QStringLiteral("title"), window->title()},
+            {QStringLiteral("visible"), window->isVisible()},
+            {QStringLiteral("exposed"), window->isExposed()},
+            {QStringLiteral("width"), geometry.width()},
+            {QStringLiteral("height"), geometry.height()},
+            {QStringLiteral("popup"), window->type() == Qt::Popup || window->type() == Qt::ToolTip},
+        });
+    }
+    return QString::fromUtf8(QJsonDocument(windows).toJson(QJsonDocument::Compact));
+}
+
 void rvp_setup_graphics()
 {
     QQuickWindow::setGraphicsApi(QSGRendererInterface::OpenGL);

@@ -57,6 +57,9 @@ public:
     // Renders windows that are visible but not exposed (Windows session 0).
     Q_INVOKABLE int render_offscreen() const;
     Q_INVOKABLE QString environment_json() const;
+    // The top-level windows (class, title, geometry, popup) for the input
+    // check.
+    Q_INVOKABLE QString windows_json() const;
 };
 
 // Called from Rust (declared in src/ffi.rs).

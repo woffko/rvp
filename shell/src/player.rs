@@ -8,6 +8,7 @@
 //! (the `damaged` signal and `Tools.repaint`), which applies them with mpv's
 //! next video frame while a video plays (goal C rule 1).
 
+use std::fmt::Write as _;
 use std::path::{Path, PathBuf};
 use std::pin::Pin;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -65,7 +66,6 @@ struct Core {
     engine: &'static Engine,
     chrome: Option<Chrome>,
     pointer: Pointer,
-    cli: Cli,
     /// Files to open once the video item is ready; `None` once started.
     pending: Option<Vec<String>>,
     /// mpv's playlist entries.
@@ -102,6 +102,8 @@ pub struct PlayerRust {
     pub(crate) restore_height: i32,
     pub(crate) restore_position: bool,
     pub(crate) restore_maximized: bool,
+    /// The command line, parsed by `start`.
+    cli: Cli,
     core: Option<Core>,
 }
 
@@ -191,6 +193,24 @@ fn load_chrome(cli: &Cli, settings: &Settings) -> Result<Chrome, String> {
     Ok(Chrome::new(skin))
 }
 
+/// A JSON string literal (for the self-test's status lines).
+fn json_string(value: &str) -> String {
+    let mut out = String::with_capacity(value.len() + 2);
+    out.push('"');
+    for c in value.chars() {
+        match c {
+            '"' => out.push_str("\\\""),
+            '\\' => out.push_str("\\\\"),
+            c if u32::from(c) < 0x20 => {
+                let _ = write!(out, "\\u{:04x}", u32::from(c));
+            }
+            c => out.push(c),
+        }
+    }
+    out.push('"');
+    out
+}
+
 /// `--mpv-options=name=value,name=value` for experiments and test runs.
 fn extra_mpv_options(cli: &Cli) -> Vec<(String, String)> {
     cli.value("mpv-options")
@@ -220,7 +240,10 @@ impl qobject::Player {
         if self.core().is_some() {
             return;
         }
+        // First, so that --selftest runs (and reports) even when the start
+        // fails below.
         let cli = Cli::parse(std::env::args().skip(1));
+        self.as_mut().rust_mut().get_mut().cli = cli.clone();
         let mut messages = Vec::new();
         let app = match load_app() {
             Ok((app, message)) => {
@@ -291,7 +314,6 @@ impl qobject::Player {
             engine,
             chrome,
             pointer: Pointer::default(),
-            cli,
             pending: Some(files),
             playlist: Vec::new(),
             width: 0,
@@ -499,6 +521,22 @@ impl qobject::Player {
             chrome.state.window_active = active;
         }
         self.sync_chrome();
+    }
+
+    pub(crate) fn window_fullscreen(mut self: Pin<&mut Self>, fullscreen: bool) {
+        if *self.fullscreen() == fullscreen {
+            return;
+        }
+        if let Some(core) = self.as_mut().core_mut()
+            && !fullscreen
+            && core.stretch
+        {
+            core.stretch = false;
+            let _ = core.engine.set_keep_aspect(true);
+        }
+        self.as_mut().set_chrome_shown(false);
+        self.as_mut().set_fullscreen(fullscreen);
+        self.relayout();
     }
 
     pub(crate) fn window_geometry(
@@ -833,6 +871,7 @@ impl qobject::Player {
     }
 
     pub(crate) fn shutdown(mut self: Pin<&mut Self>) {
+        crate::video::CLOSING.store(true, Ordering::Release);
         let Some(core) = self.as_mut().core_mut() else {
             return;
         };
@@ -871,12 +910,7 @@ impl qobject::Player {
         let integer =
             |value: Option<i64>| value.map_or_else(|| "null".to_owned(), |v| v.to_string());
         let flag = |value: Option<bool>| value.map_or_else(|| "null".to_owned(), |v| v.to_string());
-        let text = |value: Option<&str>| {
-            value.map_or_else(
-                || "null".to_owned(),
-                |v| format!("\"{}\"", v.replace('\\', "\\\\").replace('"', "\\\"")),
-            )
-        };
+        let text = |value: Option<&str>| value.map_or_else(|| "null".to_owned(), json_string);
         let fields = [
             ("time", number(model.double(PropertyId::TimePos))),
             ("duration", number(model.double(PropertyId::Duration))),
@@ -924,14 +958,60 @@ impl qobject::Player {
         QString::from(&format!("{{{}}}", body.join(",")))
     }
 
+    pub(crate) fn diagnostics(&self) -> QString {
+        let Some(core) = self.core() else {
+            return QString::from("{}");
+        };
+        let mpv = core.engine.mpv();
+        let count = |name: &str| {
+            mpv.get_property::<i64>(name)
+                .map_or_else(|_| "null".to_owned(), |value| value.to_string())
+        };
+        let float = |name: &str| {
+            mpv.get_property::<f64>(name)
+                .map_or_else(|_| "null".to_owned(), |value| format!("{value:.4}"))
+        };
+        let text = |name: &str| {
+            mpv.get_property::<String>(name)
+                .map_or_else(|_| "null".to_owned(), |value| json_string(&value))
+        };
+        let fields = [
+            ("frame_drop_count", count("frame-drop-count")),
+            (
+                "decoder_frame_drop_count",
+                count("decoder-frame-drop-count"),
+            ),
+            ("vo_delayed_frame_count", count("vo-delayed-frame-count")),
+            ("mistimed_frame_count", count("mistimed-frame-count")),
+            ("estimated_vf_fps", float("estimated-vf-fps")),
+            ("container_fps", float("container-fps")),
+            ("display_fps", float("display-fps")),
+            ("estimated_display_fps", float("estimated-display-fps")),
+            ("vsync_jitter", float("vsync-jitter")),
+            ("current_vo", text("current-vo")),
+            ("current_ao", text("current-ao")),
+            ("hwdec_current", text("hwdec-current")),
+            ("video_sync", text("video-sync")),
+            ("vf", text("vf")),
+            ("width", count("video-params/w")),
+            ("height", count("video-params/h")),
+        ];
+        let body: Vec<String> = fields
+            .iter()
+            .map(|(name, value)| format!("\"{name}\":{value}"))
+            .collect();
+        QString::from(&format!("{{{}}}", body.join(",")))
+    }
+
     pub(crate) fn has_option(&self, name: &QString) -> bool {
-        self.core()
-            .is_some_and(|core| core.cli.flag(&name.to_string()))
+        self.rust().cli.flag(&name.to_string())
     }
 
     pub(crate) fn option(&self, name: &QString) -> QString {
-        self.core()
-            .and_then(|core| core.cli.value(&name.to_string()).map(QString::from))
+        self.rust()
+            .cli
+            .value(&name.to_string())
+            .map(QString::from)
             .unwrap_or_default()
     }
 }

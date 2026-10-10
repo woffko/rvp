@@ -24,6 +24,9 @@ use crate::ffi::bridge::{rvp_gl_get_proc_address, rvp_video_request_update};
 pub static ENGINE: OnceLock<Engine> = OnceLock::new();
 /// Set once the render context exists.
 pub static READY: AtomicBool = AtomicBool::new(false);
+/// Set when the window closes: only then may the video item's renderer
+/// free the render context.
+pub static CLOSING: AtomicBool = AtomicBool::new(false);
 /// Called on the render thread once the render context exists.
 static ON_READY: OnceLock<Box<dyn Fn() + Send + Sync>> = OnceLock::new();
 
@@ -86,8 +89,15 @@ pub fn render(fbo: i32, width: i32, height: i32) {
     });
 }
 
-/// Frees the render context before the GL context goes away.
+/// The video item's renderer is going away. Qt also builds and drops
+/// renderers for window grabs while the window is hidden (the self-test in
+/// Windows session 0); `vo=libmpv` cannot take a new render context for the
+/// file that plays, so the context is freed only when the window closes,
+/// before the GL context goes away.
 pub fn release() {
+    if !CLOSING.load(Ordering::Acquire) {
+        return;
+    }
     CONTEXT.with(|slot| {
         slot.borrow_mut().take();
     });

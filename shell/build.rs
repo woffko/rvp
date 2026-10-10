@@ -3,6 +3,17 @@
 use cxx_qt_build::{CxxQtBuilder, QmlModule};
 
 fn main() {
+    // cxx-qt-build 0.10 compiles the QML ahead of time (qmlcachegen) before
+    // it writes this build's type information, so an incremental build used
+    // the previous build's `plugin.qmltypes`: once a bridge gained a
+    // method, the compiled bindings called methods by stale indexes and the
+    // window crashed at start. Without the old file every build compiles the
+    // QML the same way a clean build does.
+    if let Some(out) = std::env::var_os("OUT_DIR") {
+        let stale =
+            std::path::Path::new(&out).join("qt-build-utils/qml_modules/Rvp/plugin.qmltypes");
+        let _ = std::fs::remove_file(stale);
+    }
     CxxQtBuilder::new_qml_module(QmlModule::new("Rvp").qml_file("qml/Main.qml"))
         .qt_module("Gui")
         .qt_module("Qml")

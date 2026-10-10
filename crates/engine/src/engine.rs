@@ -173,11 +173,15 @@ impl Engine {
             init.set_option("hr-seek-framedrop", "no")?;
             init.set_option("keep-open", "yes")?;
             init.set_option("idle", "yes")?;
-            init.set_option("osc", "no")?;
             init.set_option("input-default-bindings", "no")?;
             init.set_option("input-vo-keyboard", "no")?;
-            init.set_option("ytdl", "no")?;
             init.set_option("terminal", "no")?;
+            // The OSC and the youtube-dl hook are Lua scripts; libmpv built
+            // without Lua (the Linux kit's) has neither option, and nothing
+            // to turn off.
+            for name in ["osc", "ytdl"] {
+                drop(init.set_option(name, "no"));
+            }
             if let Some(server) = &options.ipc_server {
                 init.set_option("input-ipc-server", server.as_str())?;
             }

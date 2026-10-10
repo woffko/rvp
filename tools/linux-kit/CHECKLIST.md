@@ -1,9 +1,10 @@
 # Linux test kit: owner checklist (Ubuntu 26.10, GNOME Wayland)
 
-The kit builds libmpv, Qt, mvtools and the goal B spikes in user space and
-records the results of S1 (SVP attaches), S2 (VapourSynth interpolation) and
-S3 (Qt shell) in `docs/test-runs/`. It never uses `sudo`: steps that need
-root are listed here and printed by `kit.sh check`.
+The kit builds libmpv, Qt, mvtools, the goal B spikes and the RVP player in
+user space and records the results in `docs/test-runs/`: S1 (SVP attaches),
+S2 (VapourSynth interpolation), S3 (Qt shell) and, for milestone M2, the
+player's own checks (section 5). It never uses `sudo`: steps that need root
+are listed here and printed by `kit.sh check`.
 
 Everything the kit downloads or builds goes to `~/.cache/rvp-kit`.
 Nothing is installed system-wide by the kit.
@@ -111,6 +112,63 @@ What appears on screen:
       `git add docs/test-runs && git commit -m "Record the Ubuntu 26.10 kit run" && git push`.
 - [ ] Stop `ydotoold` (Ctrl+C in its terminal).
 
+## 5. Milestone M2: the RVP player (goal E)
+
+Same preparation as above (sections 1 and 2: packages, Rust, the skin in
+`RVP_SKIN`, SVP 4 for the last step). Then, from a terminal inside the
+GNOME session:
+
+```sh
+cd ~/rvp && git pull
+tools/linux-kit/kit.sh m2all
+```
+
+`m2all` runs `check deps mpv m2build m2 m2input m2gpu m2svp report`; libmpv is
+reused from earlier runs. RVP's settings and resume state for these runs
+are kept in the kit's log directory; your own `~/.config/rvp` is not used.
+**Do not touch the mouse or keyboard while the windows are open**: the
+checks drive RVP themselves (through its own input handlers, not by
+injecting input).
+
+What appears on screen:
+
+- `m2` (about a minute): the BlackSpace window plays the 4K60 test clip,
+  seeks, pauses and resumes, changes volume and mute, moves to the next and
+  previous file, goes fullscreen and back, shrinks to 900x500 and hides and
+  shows the playlist. Then the film-rate clip plays for 6 seconds, RVP
+  closes, starts again without a file and must reopen that clip paused
+  where it stopped.
+- `m2input` (about 40 seconds, needs `ydotoold` as in section 2): a
+  900x560 RVP window playing the film-rate clip. The pointer finds it,
+  drags its title bar and its bottom-right corner, double-clicks the video
+  (fullscreen) and double-clicks again (back), then right-clicks for the
+  menu. Only the mouse is used.
+- `m2gpu` (about 2 minutes, GPU machines only): the 4K60 clip plays for 60
+  seconds in fullscreen, then 60 seconds in a 1920x1080 window. This
+  rechecks goal D's open item (about 6 dropped frames per 20 seconds in a
+  window). `RVP_M2_SECONDS` changes the length.
+- `m2svp` (about 45 seconds): start SVP 4 Manager first. RVP plays the
+  23.976 fps clip with SVP attached, then exits; the step passes when RVP
+  exits cleanly with SVP's filter active (goal D rule 6).
+
+Afterwards, a few things only a person can judge (about 10 minutes; note
+anything odd in the report or tell the session):
+
+- [ ] `target/release/rvp --skin="$RVP_SKIN" <a video>`: the window looks
+      like PotPlayer's BlackSpace window; drag it by the title bar, resize
+      it from an edge and a corner, maximize and restore with the title
+      bar button and by double-clicking the title bar, minimize.
+- [ ] Double-click the video: fullscreen. Move the pointer to the bottom:
+      the control bar appears; away from it: it hides; the pointer hides
+      after two seconds. Esc or a double click leaves fullscreen.
+- [ ] Space, Left/Right, Ctrl+Left/Right, Up/Down, M, Enter, PgUp/PgDn, the
+      mouse wheel and the side buttons do what they do in PotPlayer.
+- [ ] Right-click the video: the menu shows the shortcuts. Hover over a
+      button: a tooltip appears. Drag a file from Files onto the window: it
+      plays. F3 or Ctrl+O opens the file dialog.
+- [ ] Close RVP while a video plays and start it again: it reopens the file
+      paused at the same place, with the same volume and window size.
+
 ## Steps and what they record
 
 | Step | Needs | PASS means |
@@ -124,6 +182,11 @@ What appears on screen:
 | `s3` | graphical session | frameless window, menu outside the window, skin painted, video frames rendered; on a real GPU also no dropped frames (`mpv_frame_drop_timeline` in the log shows when drops happened) |
 | `input` | ydotool, `ydotoold` | the window moved and resized by the dragged distance, and a right click on the 440x77 window opened a larger menu window |
 | `s1` | SVP 4 Manager running | SVP inserted its VapourSynth filter and the frame rate rose |
+| `m2build` | `mpv` | the RVP player builds against the kit's libmpv and Qt |
+| `m2` | graphical session | RVP's functional self-test passes; after a restart the last file is reopened paused within 2.5 s of where it stopped; the usability measurements are in the detail |
+| `m2input` | ydotool, `ydotoold`, `m2` | the RVP window moved and resized by the dragged distance, a double click entered fullscreen at the screen size and a second one restored the window, and a right click opened the menu window |
+| `m2gpu` | hardware GPU | no dropped frames over `RVP_M2_SECONDS` in fullscreen and in a 1920x1080 window (the counts and a per-second timeline are in the log) |
+| `m2svp` | SVP 4 Manager running | SVP's `@svp` filter appeared and RVP exited with status 0 |
 | `report` | — | the Markdown report was written |
 
 GPU checks run when an NVIDIA, AMD or Intel GPU is detected; set

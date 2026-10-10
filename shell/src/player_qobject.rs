@@ -55,6 +55,11 @@ pub mod qobject {
         #[qinvokable]
         fn window_state(self: Pin<&mut Self>, maximized: bool, active: bool);
 
+        /// The window system changed fullscreen on its own (not at RVP's
+        /// request).
+        #[qinvokable]
+        fn window_fullscreen(self: Pin<&mut Self>, fullscreen: bool);
+
         /// The normal (not maximized, not fullscreen) geometry, for the
         /// resume store.
         #[qinvokable]
@@ -125,6 +130,11 @@ pub mod qobject {
         /// The player state as JSON (self-test and diagnostics).
         #[qinvokable]
         fn status(self: &Self) -> QString;
+
+        /// Frame timing and output diagnostics from mpv as JSON (dropped
+        /// frames, display rate, audio output; goal D rule 5).
+        #[qinvokable]
+        fn diagnostics(self: &Self) -> QString;
 
         /// True when `--name` was given on the command line.
         #[qinvokable]

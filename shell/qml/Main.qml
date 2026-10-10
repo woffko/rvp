@@ -32,6 +32,12 @@ Window {
     readonly property int requestStartResize: 8
 
     property bool wasMaximized: false
+    // When RVP last asked for fullscreen or back (see applyFullscreen).
+    property real fullscreenRequested: 0
+    // --log-pointer and --log-geometry: report pointer positions, window
+    // sizes and the menu's windows for the kit's input check.
+    property bool logPointer: false
+    property bool logGeometry: false
     property bool closing: false
     property bool pointerIdle: false
     readonly property bool isFullscreen: visibility === Window.FullScreen
@@ -58,6 +64,8 @@ Window {
         else
             show()
         player.resized(width, height)
+        logPointer = player.has_option("log-pointer")
+        logGeometry = player.has_option("log-geometry")
         keys.forceActiveFocus()
         if (player.has_option("selftest"))
             selftest.begin()
@@ -73,10 +81,25 @@ Window {
         return false
     }
 
-    onWidthChanged: player.resized(width, height)
-    onHeightChanged: player.resized(width, height)
-    onVisibilityChanged: player.window_state(visibility === Window.Maximized, active)
-    onActiveChanged: player.window_state(visibility === Window.Maximized, active)
+    onWidthChanged: {
+        player.resized(width, height)
+        if (logGeometry)
+            Tools.log("window_size=" + width + "x" + height)
+    }
+    onHeightChanged: {
+        player.resized(width, height)
+        if (logGeometry)
+            Tools.log("window_size=" + width + "x" + height)
+    }
+    onVisibilityChanged: {
+        player.window_state(root.visibility === Window.Maximized, root.active)
+        if (Date.now() - root.fullscreenRequested < 2000)
+            fullscreenCheck.restart()
+        else if (root.isFullscreen !== player.fullscreen && root.visibility !== Window.Minimized
+                 && root.visibility !== Window.Hidden)
+            player.window_fullscreen(root.isFullscreen)
+    }
+    onActiveChanged: player.window_state(root.visibility === Window.Maximized, root.active)
     onXChanged: geometryTimer.restart()
     onYChanged: geometryTimer.restart()
 
@@ -116,14 +139,11 @@ Window {
             fileDialog.open()
             break
         case requestFullscreen:
-            if (argument) {
+            root.fullscreenRequested = Date.now()
+            if (argument)
                 root.wasMaximized = root.visibility === Window.Maximized
-                root.showFullScreen()
-            } else if (root.wasMaximized) {
-                root.showMaximized()
-            } else {
-                root.showNormal()
-            }
+            root.applyFullscreen()
+            fullscreenCheck.restart()
             break
         case requestMinimize:
             root.showMinimized()
@@ -146,6 +166,32 @@ Window {
         case requestStartResize:
             root.startSystemResize(argument)
             break
+        }
+    }
+
+    // Brings the window to the player's fullscreen state. On Wayland a
+    // request made before the compositor applied the previous one is lost
+    // (seen on GNOME: leaving fullscreen right after entering it), so for a
+    // short time after RVP's own request the state is checked again.
+    function applyFullscreen() {
+        if (player.fullscreen && !root.isFullscreen)
+            root.showFullScreen()
+        else if (!player.fullscreen && root.isFullscreen) {
+            if (root.wasMaximized)
+                root.showMaximized()
+            else
+                root.showNormal()
+        }
+    }
+    Timer {
+        id: fullscreenCheck
+        interval: 300
+        onTriggered: {
+            if (Date.now() - root.fullscreenRequested < 2000) {
+                root.applyFullscreen()
+                if (root.isFullscreen !== player.fullscreen)
+                    restart()
+            }
         }
     }
 
@@ -244,6 +290,9 @@ Window {
         onReleased: (mouse) => player.mouse_release(mouse.x, mouse.y, mouse.button)
         onDoubleClicked: (mouse) => player.mouse_double(mouse.x, mouse.y, mouse.button)
         onPositionChanged: (mouse) => {
+            if (root.logPointer)
+                Tools.log("pointer_local=" + Math.round(mouse.x) + "," + Math.round(mouse.y)
+                          + " size=" + root.width + "x" + root.height)
             root.pointerIdle = false
             idleTimer.restart()
             tipTimer.restart()
@@ -353,9 +402,17 @@ Window {
         }
     }
 
+    // The menu's window maps after `opened`; list the windows a little later.
+    Timer {
+        id: menuLog
+        interval: 400
+        onTriggered: Tools.log("menu_windows=" + Tools.windows_json())
+    }
+
     Menu {
         id: contextMenu
         popupType: Popup.Window
+        onOpened: if (root.logGeometry) menuLog.restart()
         ActionItem { actionName: "open-files" }
         ActionItem { actionName: "close-media" }
         MenuSeparator {}
@@ -389,19 +446,33 @@ Window {
         ActionItem { actionName: "exit" }
     }
 
-    // --selftest: a scripted functional check that prints check=PASS/FAIL
-    // lines and the usability measurements, then exits with the number of
-    // failures (0 = pass). Input goes through the same handlers as real
-    // input (Player.key, Player.mouse_*), never through the window system.
+    // --selftest: a scripted check that prints check=PASS/FAIL lines and the
+    // usability measurements, then exits with 0 when everything passed.
+    // Input goes through the same handlers as real input (Player.key,
+    // Player.mouse_*), never through the window system.
+    //   --selftest            functional check (default)
+    //   --selftest=playback   plays --play-seconds=N (default 20), with
+    //                         --fullscreen in fullscreen; --gpu-checks
+    //                         fails on dropped frames; --svp waits for
+    //                         SVP's @svp filter
+    //   --selftest=resume     expects the last file reopened paused near
+    //                         --expect-time=SECONDS
     QtObject {
         id: selftest
+        // Read in begin(): the command line is parsed by Player.start().
+        property string mode: ""
         property int step: 0
+        property var drops: []
+        property real svpSeen: -1
         property real stepStarted: 0
         property int failures: 0
         property var before: ({})
-        readonly property string outDir: player.option("out") !== "" ? player.option("out") : "rvp-selftest"
+        property string outDir: "rvp-selftest"
 
         function begin() {
+            mode = player.option("selftest")
+            if (player.option("out") !== "")
+                outDir = player.option("out")
             Tools.log("environment=" + Tools.environment_json())
             testTimer.start()
         }
@@ -461,6 +532,99 @@ Window {
     }
 
     function selftestTick() {
+        if (selftest.mode === "playback")
+            return playbackTick()
+        if (selftest.mode === "resume")
+            return resumeTick()
+        functionalTick()
+    }
+
+    function resumeTick() {
+        const t = selftest
+        const s = t.status()
+        const expected = Number(player.option("expect-time"))
+        switch (t.step) {
+        case 0:
+            t.next()
+            break
+        case 1:
+            t.waitFor("last_file_reopened", () => s.loaded && s.time !== null, 15000,
+                      () => "path " + s.path)
+            break
+        case 2:
+            // The resume seek follows the load.
+            t.waitFor("resumed_at_position", () => Math.abs(s.time - expected) < 2.5, 5000,
+                      () => "time " + s.time + " expected " + expected)
+            break
+        case 3:
+            t.check("reopened_paused", s.pause === true, "pause " + s.pause)
+            t.finish()
+            break
+        }
+    }
+
+    function playbackTick() {
+        const t = selftest
+        const s = t.status()
+        const seconds = Number(player.option("play-seconds") || "20")
+        switch (t.step) {
+        case 0:
+            t.next()
+            break
+        case 1:
+            t.waitFor("file_playing", () => s.loaded && s.video_width > 0 && s.time > 0.5, 20000,
+                      () => "time " + s.time)
+            break
+        case 2:
+            if (player.has_option("fullscreen"))
+                player.run_action("toggle-fullscreen")
+            t.next()
+            break
+        case 3:
+            if (!player.has_option("fullscreen") || (root.isFullscreen && Date.now() - t.stepStarted > 1500)) {
+                // Count from here: the start-up and the mode switch are not
+                // steady playback.
+                t.before = JSON.parse(player.diagnostics())
+                Tools.log("diagnostics_start=" + player.diagnostics())
+                t.next()
+            } else if (Date.now() - t.stepStarted > 5000) {
+                t.check("enter_fullscreen", false, "visibility " + root.visibility)
+                t.next()
+            }
+            break
+        case 4: {
+            const d = JSON.parse(player.diagnostics())
+            const elapsed = (Date.now() - t.stepStarted) / 1000
+            if (Math.floor(elapsed) > t.drops.length)
+                t.drops.push(d.frame_drop_count - t.before.frame_drop_count)
+            if (t.svpSeen < 0 && d.vf !== null && d.vf.indexOf("@svp") >= 0)
+                t.svpSeen = elapsed
+            if (elapsed >= seconds)
+                t.next()
+            break
+        }
+        case 5: {
+            const d = JSON.parse(player.diagnostics())
+            const dropped = d.frame_drop_count - t.before.frame_drop_count
+            const decoderDropped = d.decoder_frame_drop_count - t.before.decoder_frame_drop_count
+            Tools.log("diagnostics_end=" + player.diagnostics())
+            Tools.log("frame_drop_timeline=" + t.drops.join(","))
+            Tools.log("frames_dropped=" + dropped + " decoder_dropped=" + decoderDropped
+                      + " seconds=" + seconds + " fullscreen=" + root.isFullscreen)
+            if (player.has_option("gpu-checks")) {
+                t.check("gpu_no_dropped_frames", dropped === 0, "dropped " + dropped)
+                t.check("gpu_no_decoder_drops", decoderDropped === 0, "decoder dropped " + decoderDropped)
+            }
+            if (player.has_option("svp"))
+                t.check("svp_filter_attached", t.svpSeen >= 0, "after " + t.svpSeen + " s, vf " + d.vf)
+            t.check("still_playing", s.playing, "time " + s.time)
+            t.finish()
+            break
+        }
+        }
+    }
+
+    function functionalTick() {
         const t = selftest
         const s = t.status()
         switch (t.step) {
@@ -557,11 +721,20 @@ Window {
             break
         case 22:
             root.showNormal()
-            root.width = 900
-            root.height = 500
             t.next()
             break
         case 23:
+            // The compositor restores the old size first; resize after it.
+            if (root.visibility === Window.Windowed && Date.now() - t.stepStarted > 500) {
+                root.width = 900
+                root.height = 500
+                t.next()
+            } else if (Date.now() - t.stepStarted > 3000) {
+                t.check("restored_window", false, "visibility " + root.visibility)
+                t.next()
+            }
+            break
+        case 24:
             t.waitFor("relayout_on_resize", () => player.video_rect.width > 0
                           && player.video_rect.x + player.video_rect.width <= root.width
                           && player.video_rect.y + player.video_rect.height <= root.height
@@ -569,23 +742,23 @@ Window {
                       () => "video " + player.video_rect.width + "x" + player.video_rect.height
                           + " window " + root.width + "x" + root.height)
             break
-        case 24:
+        case 25:
             player.seek_fraction(0.5)
             t.next()
             break
-        case 25:
+        case 26:
             t.waitFor("seek_bar_to_middle", () => s.duration > 0 && Math.abs(s.time - s.duration / 2) < 2,
                       3000, () => "time " + s.time + " of " + s.duration)
             break
-        case 26:
+        case 27:
             player.run_action("toggle-playlist")
             t.next()
             break
-        case 27:
+        case 28:
             if (t.waitFor("playlist_toggles", () => s.playlist_attached === false || !player.has_skin, 2000))
                 player.run_action("toggle-playlist")
             break
-        case 28:
+        case 29:
             // Let a few seconds of playback run for the measurements.
             if (Date.now() - t.stepStarted > 2000)
                 t.finish()
