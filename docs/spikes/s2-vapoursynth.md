@@ -4,10 +4,18 @@ Question: does libmpv with VapourSynth run PotPlayer's
 `VapourSynth/motioninterpolation.vpy` unchanged, headless, with a VapourSynth
 and Python runtime compatible with SVP 4's?
 
-Answer: **the chain works, but the script does not run unchanged.**
-VapourSynth R73 (SVP's version) removed `vs.get_core()`, which the script
-calls on line 2. Run through a small wrapper that restores `get_core`, the
-unchanged script file interpolates 23.976 fps to 60 fps.
+Answer: **not as written; owner decision needed.** With SVP's runtime as it
+is (VapourSynth R73), the unchanged script fails on line 2: R73 removed
+`vs.get_core()`. The libmpv + VapourSynth + mvtools chain itself works. The
+unchanged file (SHA-256 identical to PotPlayer's) interpolates 23.976 fps to
+60 fps in two ways, each of which adds something that SVP's runtime does not
+have:
+
+| Run | What is added | Result |
+|-----|---------------|--------|
+| Original file, SVP-compatible runtime as is | nothing | FAIL (`get_core` missing) |
+| Original file passed directly to libmpv | a 6-line `sitecustomize.py` in the Python runtime that defines `vs.get_core` (`spikes/s2-vapoursynth/shim/`) and `import site` enabled in `python312._pth` | PASS, 60.000 fps |
+| Generated wrapper `.vpy` that defines `get_core` and executes the original file (`--compat`) | nothing in the runtime | PASS, 60.000 fps |
 
 ## Runtime compared with SVP 4
 
@@ -56,21 +64,49 @@ s2-vapoursynth.exe --script C:/rvp-spikes/s2-bundle/motioninterpolation.vpy --se
   realtime_ratio=0.831
   estimated_vf_fps_mean=60.000
   result=PASS
+
+# copy of s2-bundle with spikes/s2-vapoursynth/shim/sitecustomize.py in
+# Lib/site-packages and "import site" enabled in python312._pth
+s2-vapoursynth.exe --script C:/rvp-spikes/s2-shim/motioninterpolation.vpy --seconds 15
+  [vapoursynth] Frame requested during init! This is unsupported.
+  [vapoursynth] Returning black dummy frame with 0 duration.
+  vf=vapoursynth=file=%45%C:/rvp-spikes/s2-shim/motioninterpolation.vpy:buffered-frames=4
+  container_fps=23.976
+  realtime_ratio=0.769
+  estimated_vf_fps_mean=60.000
+  result=PASS
 ```
+
+The "frame requested during init" warning comes from mpv's filter while
+the script initializes; it costs one black frame at the start.
 
 `realtime_ratio` is playback time divided by wall time: on two virtual CPUs
 without a GPU, mvtools at 1280x720 keeps up with 83% of real time. Speed is
 for the owner's machine to measure (goal C and goal D).
 
+## Decision needed
+
+PLAN.md's pass condition ("runs unchanged" with an SVP-compatible runtime)
+cannot be met with VapourSynth R73 as shipped. Options:
+
+1. **Wrapper at run time (recommended).** RVP hands libmpv a generated
+   wrapper that defines `get_core` and executes the original file in the same
+   globals. Nothing installed is changed, so it also works with SVP's own
+   runtime on Linux, which RVP must not modify.
+2. **Shim in the runtime.** The original file goes to libmpv directly, but the
+   Python runtime needs `sitecustomize.py`. That works only for a runtime RVP
+   ships itself; it cannot be applied to SVP's installation.
+3. **An older VapourSynth** that still has `get_core()` (PotPlayer bundles
+   one). Not compatible with SVP's R73 runtime, so it contradicts S2's premise.
+
 ## Findings for RVP
 
-1. **Compatibility wrapper.** RVP should run user `.vpy` files through a
-   wrapper that restores `vs.get_core()` and then executes the original file
-   in the same globals, so mpv's `video_in`, `container_fps` and
-   `display_fps` reach it. The spike's wrapper (`write_compat_wrapper` in
-   `spikes/s2-vapoursynth/src/main.rs`) does this without touching the file.
-   It also loads extra plugins listed in `RVP_VS_PLUGINS`, because SVP's
-   runtime has no mvtools.
+1. **`get_core` compatibility.** Whichever option is chosen, `vs.get_core()`
+   must be provided. The spike's wrapper (`write_compat_wrapper` in
+   `spikes/s2-vapoursynth/src/main.rs`) executes the original file in the
+   same globals, so mpv's `video_in`, `container_fps` and `display_fps`
+   reach it. It also loads extra plugins listed in `RVP_VS_PLUGINS`, because
+   SVP's runtime has no mvtools.
 2. **Quote filter arguments.** mpv splits filter arguments at `:`, so a
    Windows path such as `C:/...` must be written as `file=%LEN%C:/...`.
    Unquoted, the drive letter is silently dropped.
