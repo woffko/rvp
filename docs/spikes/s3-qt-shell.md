@@ -12,8 +12,11 @@ Questions (PLAN.md M0):
 
 Answer: **yes to all four, with the limits listed below.** The stack chosen in
 PLAN.md (Qt 6 Quick + cxx-qt + libmpv render API) is confirmed on Windows and
-on Linux (GNOME Wayland). Real-GPU performance and interactive dragging on
-Windows remain for goal C.
+on Linux (GNOME Wayland). On the owner's RTX 30-series card (goal C) 4K60 HEVC
+plays without dropped frames while the chrome updates once per second, as
+long as chrome updates are applied together with the next video frame; mpv
+in a native child window (`wid`) needs no such care. Real mouse drags move
+and resize the frameless window on Windows and on GNOME Wayland.
 
 ## The spike
 
@@ -97,10 +100,8 @@ the 440x77 main window. The video slot is black in grabs: in session 0 each
 offscreen grab renders with a fresh GL context, and frames are pumped by a
 timer (hence the dropped-frame count).
 
-Not verified on the VM: that a real mouse drag moves and resizes the window
-(no interactive desktop) and that video is visible on screen. Both belong to
-goal C on the host desktop, or to an interactive session on the VM if the
-owner enables one.
+Not verifiable on the VM (no interactive desktop): real mouse drags and
+video on screen. Both were checked on the host in goal C (below).
 
 ## Ubuntu VM (GNOME Wayland)
 
@@ -165,6 +166,53 @@ window opens the menu as a separate 200x388 popup window. The final grab
 video slot. Only 105 of 480 frames were rendered in 8 s, which is expected
 from llvmpipe; GPU performance is for goal D.
 
+## Windows host (goal C): performance and real input
+
+Environment: the owner's Windows host, RTX 30-series card (OpenGL 4.6.0 NVIDIA
+610.88), one 2560x1440 monitor at 59.951 Hz, 100% scaling. Clip:
+`video-2160p60-hevc.mkv` from `tools/test-clips/make-clips.sh` (3840x2160,
+60 fps, HEVC 40 Mb/s). Each run: `s3-qt-shell.exe --selftest --gpu-checks
+--video CLIP --video-seconds 30 --width 1920 --height 1080` plus the options
+in the table; video slot 1610x972; about 29.5 s of playback measured.
+
+| Video output | hwdec | Chrome once per second | Rendered | VO drops |
+|--------------|-------|------------------------|----------|----------|
+| OpenGL item | `auto-copy` (d3d11va-copy) | whole skin item | 1753 | 13 |
+| OpenGL item | `auto` (nvdec) | whole skin item | 1759 | 7 |
+| OpenGL item | nvdec | none | 1779 | **0** |
+| OpenGL item | nvdec | time label's rectangle of the skin item | 1765 | 15 |
+| OpenGL item | nvdec | whole skin item, `video-sync=display-resample` | 1780 | 1 |
+| OpenGL item | nvdec | time label as its own small item | 1765 | 10 |
+| OpenGL item | d3d11va-copy | time label as its own small item | 1757 | 7 |
+| OpenGL item | nvdec | small item, updated with the next video frame | 1774 | **0** |
+| OpenGL item | d3d11va-copy | small item, updated with the next video frame | 1763 | **0** |
+| OpenGL item | d3d11va-copy | the same, `video-sync=display-resample` | 1763 | **0** |
+| child window (`wid`), `gpu-next` D3D11 | `auto` (d3d11va) | whole skin item | n/a | **0** |
+
+Decoder drops were 0 in every run. Painting is not the cause: the whole
+skin item takes 5.1 ms on average (85 ms once, when its atlases are
+decoded), the small time-label item 2.1 ms, yet both drop frames when they
+are updated on their own. Any update outside the video item makes the scene
+graph sync and present an extra frame; a 60 fps video on a 59.95 Hz display
+has no spare vsync for it, so the next video frame is late. Updating the
+chrome item in the same event-loop pass as the video item (the spike's
+`--chrome synced`: `SpikeTools::updateWithNextFrame` queues the item and
+`MpvItem::frameUpdate` updates both) removes the drops. Two earlier synced
+runs dropped 5 and 29 frames while the owner moved the mouse over the
+window; the skin item was then repainted 44 and 84 times instead of 4, so
+pointer movement over the window also triggers repaints that must go
+through the same path.
+
+Real input (`host-session s3-input`, mouse injected with `SendInput`,
+window positions read with `GetWindowRect`):
+
+```text
+window=800,426 440x77
+input_check_move=PASS moved=80,60 expected=80,60 window=880,486 440x77
+input_check_resize=PASS grown=100,80 expected=100,80 window=880,486 540x157
+input_check_menu=PASS menu=1048,504 264x509 class=Qt6103QWindowPopupSaveBitsOwnDC main_height=157
+```
+
 ## Findings for RVP
 
 1. **cxx-qt constructors.** cxx-qt's default constructor passes `QObject*`
@@ -195,9 +243,13 @@ from llvmpipe; GPU performance is for goal D.
    stop, not as a right-aligned shortcut column, and long items are elided.
    PotPlayer-style menus need a custom `MenuItem` delegate with a shortcut
    column and a dark style.
-6. **Skin painting cost.** BlackSpace's main window is 138 drawing
-   operations, repainted once a second in the spike. The cost was not
-   measured; goal C measures it on the real GPU.
+6. **Chrome updates ride on video frames.** With the OpenGL item, every
+   chrome change during playback (time display, hover, state changes) must
+   be applied in the same scene-graph sync as a video frame, or 60 fps video
+   on a 60 Hz display drops frames. Split the skin into a static layer and
+   small dynamic items, and queue dynamic updates until mpv's next frame
+   (goal C measurements above). Painting cost itself is small: 5 ms for the
+   whole 1920x1080 skin, 2 ms for the time label.
 7. **Locale.** libmpv requires the C numeric locale, and `QGuiApplication`
    sets the user's locale on Unix. The spike resets `LC_NUMERIC` to `C` right
    before creating the mpv handle.
@@ -208,3 +260,10 @@ from llvmpipe; GPU performance is for goal D.
 9. **Injected input on GNOME.** ydotool's absolute moves were scaled by 2 on
    the VM while relative moves were not, even with a flat profile at speed 0.
    The input check measures the scale first and drags with absolute moves.
+10. **Child window is the low-risk path on Windows.** mpv in a native child
+    window (`vo=gpu-next`, D3D11, d3d11va) dropped nothing with unsynchronised
+    full chrome repaints, because DWM composes its swapchain independently.
+    SVP's own `mpv.conf` uses the same output (`vo=gpu-next`). Keep it as the
+    Windows fallback (D4). With `wid`, the Qt thread must never wait on mpv:
+    mpv's video thread sends window messages to the child window, which the
+    Qt thread owns (the spike polls properties on a worker thread).

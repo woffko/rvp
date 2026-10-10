@@ -1,0 +1,1581 @@
+depth	command_id	text	shortcut	flags
+0	10443	Open File(s)...	F3	
+0	569384069	Open		submenu
+1	10158	  Open File(s)...	Ctrl+O	
+1	10159	  Open URL...	Ctrl+U	
+1	10160	  Open Folder...	F2	
+1	10668	  Open FTP/WebDAV/HTTP...	Alt+F12	
+1	10168	  Open File/URL(s) from Clipboard	Ctrl+V	
+1	718279287	  Default Open Action		submenu
+2	10358	    Open File(s)		
+2	10359	    Open URL		
+2	10360	    Open Folder		
+2	10361	    Open File Navigator		
+1	204802643	  Navigate		submenu
+2	10331	    Files...	F12	
+2	10332	    Subtitles...		
+2	11019	    Albums...		
+2	11017	    URLs...		
+2	11018	    FTP/WebDAV/HTTP Servers...		
+2	11020	    Bookmarks...		
+2	10447	    Menus... 	Ctrl+F12	
+2	11022	    Current File...		
+2	0	    ---		disabled
+2	11023	    Navigation Settings...		
+1	0	  ---		disabled
+1	10161	  Open Screen Capture 	Ctrl+S	
+1	10162	  Open Webcam/Other Device	Ctrl+J	
+1	10163	  Open Analog TV 	Ctrl+W	
+1	10164	  Open Digital TV (BDA device) 	Ctrl+K	
+1	10338	  Device Settings...	Alt+D	
+1	0	  ---		disabled
+1	10165	  Open DVD 	Ctrl+D	
+1	10412	  Open DVD files (*.IFO)...		
+1	10795	  Open Blu-ray	Ctrl+Alt+D	
+1	10796	  Open Blu-ray files (*.MPLS)...		
+1	0	  ---		disabled
+1	10146	  Load Subtitle... 	Alt+O	
+1	10147	  Add Subtitle...		
+1	10940	  Combine Subtitle...		
+1	10488	  Reload Subtitle	Ctrl+Alt+Y	
+1	0	  ---		disabled
+1	10385	  Reopen Current/Last Item	Ctrl+Y	
+1	10400	  Load External Audio...		
+0	1186534341	Tools		submenu
+1	10012	  Browser Window...	F9	
+1	0	  ---		disabled
+1	10281	  Show/Hide Capture1 Area 	Ctrl+Alt+F1	
+1	10282	  Show/Hide Capture2 Area 	Ctrl+Alt+F2	
+1	10283	  PIP Primary Screen:  Capture1 Area	Ctrl+Alt+F3	
+1	10284	  PIP Primary Screen:  Capture2 Area	Ctrl+Alt+F4	
+1	10666	  Set Capture1 Area...		
+1	10667	  Set Capture2 Area...		
+1	10285	  Screen Capture Settings... 	Ctrl+Alt+F5	
+0	606737285	Album/Favorites		submenu
+1	39100	  Default		
+1	39101	  <album 1>		
+1	39102	  <album 2>		
+1	39103	  <album 3>		
+1	39104	  <album 4>		
+1	0	  ---		disabled
+1	10310	  Add Current Item to Favorites	Alt+Insert	
+1	10311	  Add Current Folder to Favorites	Ctrl+Insert	
+1	10312	  Edit Favorites...		
+0	10167	Close Playback	F4	
+0	0	---		disabled
+0	1032658127	Playback		submenu
+1	10014	  Play/Pause Playback	Space	
+1	0	  ---		disabled
+1	10067	  Play Previous Item	PgUp	
+1	10068	  Play Next Item	PgDn	
+1	0	  ---		disabled
+1	10324	  Chapter/Bookmark	H	submenu
+2	10326	    Add Bookmark	P	
+2	0	    ---		disabled
+2	28842062	    <recent file>		submenu
+2	3938270	    <recent file>		submenu
+2	0	    ---		disabled
+2	10455	    View bookmarks as thumbnails		
+2	10456	    Auto delete the selected bookmarks		
+2	10457	    Store bookmarks into .pbf files instead of Registry/INI		
+2	10459	    Prompt before adding a bookmark		
+2	10460	    Show bookmark list in this menu		
+2	10330	    Edit Bookmarks...		
+1	1016864325	  Jump (to)		submenu
+2	10242	    Previous frame	D	
+2	10241	    Next frame	F	
+2	10786	    Previous keyframe	Ctrl+Shift+Left	
+2	10787	    Next keyframe	Ctrl+Shift+Right	
+2	0	    ---		disabled
+2	10059	    %s Backward	Left	
+2	10060	    %s Forward	Right	
+2	10061	    %s Backward	Ctrl+Left	
+2	10062	    %s Forward	Ctrl+Right	
+2	10063	    %s Backward	Shift+Left	
+2	10064	    %s Forward	Shift+Right	
+2	10065	    %s Backward	Ctrl+Alt+Left	
+2	10066	    %s Forward	Ctrl+Alt+Right	
+2	0	    ---		disabled
+2	10243	    Starting point 	BackSpace	
+2	10619	    Middle point	Ctrl+BackSpace	
+2	10620	    30 Sec. before ending	Shift+BackSpace	
+2	0	    ---		disabled
+2	10244	    Previous subtitle position	Home	
+2	10245	    Next subtitle position	End	
+2	10582	    Current subtitle position	Ctrl+Home	
+2	0	    ---		disabled
+2	10265	    Use keyframe to jump to a time		
+2	10325	    Jump to Specified Time/Frame...	G	
+2	10416	    Browse Scenes by Time Intervals...	Shift+Z	
+2	10802	    Browse Scenes by Marker Positions...	Alt+Z	
+2	10962	    Browse Scenes by Subtitle Intervals...		
+2	0	    ---		disabled
+2	10758	    Time Jump Settings...		
+1	179636153	  Speed		submenu
+2	10246	    Default/Last used	Z	
+2	10247	    Decrease speed	X	
+2	10248	    Increase speed	C	
+2	0	    ---		disabled
+2	10396	    Use default quality audio time stretching		
+2	10397	    Use high quality audio time stretching (Recom'd)		
+2	10398	    Use audio pitch shifting		
+2	11014	    Use FFmpeg audio time stretching		
+2	0	    ---		disabled
+2	11016	    Keep playback speed changes		
+1	909644279	  Skip		submenu
+2	10239	    Enable skip feature	Shift+ '	
+2	10579	    Skip Intro %s		
+2	10580	    Skip Ending %s		
+2	10581	    Skip chapter(s)		
+2	0	    ---		disabled
+2	10240	    Skip Setup...	'	
+1	24776019	  Playlist		submenu
+2	2112494733	    Album		submenu
+3	10002	      Add a new album...		
+3	10003	      Edit album...		
+3	10004	      Delete album		
+3	0	      ---		disabled
+3	10946	      Start instantly to play selected albums from menus		
+3	10410	      Open playlist storage folder		
+2	1692801325	    Playlist		submenu
+3	10000	      Open a playlist...		
+3	10206	      Save playlist as...		
+3	10411	      Remember default playlist/recent URL items		
+2	111938193	    Playback Queue		submenu
+3	10005	      Add to playback queue		
+3	10006	      Clear playback queue		
+2	142868551	    Add && Edit		submenu
+3	10196	      Add file(s)...		
+3	10197	      Add folder...		
+3	10198	      Add URL...		
+3	11367	      Add all files in the playing folder		
+3	0	      ---		disabled
+3	10211	      Edit title of selected items...		
+3	10207	      Open file location of selected item		
+3	10490	      Search title and filenames…		
+3	10583	      Rename filename of selected items...		
+3	0	      ---		disabled
+3	11365	      Copy path of selected items to clipboard 		
+3	10007	      Copy		
+3	10008	      Paste		
+3	11364	      Paste below selected item		
+3	10948	      Paste recent items list		
+3	0	      ---		disabled
+3	10215	      Move files...		
+3	10216	      Move files(e.g. subtitles/bookmarks)...		
+3	11368	      Copy files...		
+3	11369	      Copy files(e.g. subtitles/bookmarks)...		
+3	0	      ---		disabled
+3	27022	      Move selected items to top 		
+3	27026	      Move selected items to top of page		
+3	27020	      Move selected items up 		
+3	27021	      Move selected items down 		
+3	27027	      Move selected items to bottom of page		
+3	27023	      Move selected items to bottom 		
+3	27025	      Move selected items below playing item 		
+2	1063519943	    Remove		submenu
+3	10200	      Remove selected items		
+3	10212	      Remove unselected items		
+3	10201	      Remove all items		
+3	10210	      Remove nonexistent items		
+3	10208	      Remove played items		
+3	10214	      Remove duplicated items		
+3	0	      ---		disabled
+3	10417	      Delete files	Shift+Del	
+3	10418	      Delete files (e.g. subtitles)	Shift+Ctrl+Del	
+2	880677245	    Sort by		submenu
+3	10202	      Ascending order (A to Z)		
+3	10203	      Descending order (Z to A)		
+3	0	      ---		disabled
+3	10980	      Title		
+3	10981	      Name		
+3	10982	      Extension		
+3	10983	      Size		
+3	10984	      Duration		
+3	10985	      Date		
+3	10988	      Randomly		
+3	10986	      By release date		
+3	0	      ---		disabled
+3	10001	      Sort by folder		
+2	1252923295	    Select		submenu
+3	10204	      Select All		
+3	10205	      Invert Selection		
+2	269771	    View as		submenu
+3	10900	      List (Recommended)		
+3	10901	      Thumbnails (up to 2 rows) + Details		
+3	10902	      Thumbnails (up to 3 rows) + Details		
+3	10903	      Thumbnails (up to 4 rows) + Details		
+3	10904	      Thumbnails (up to 5 rows) + Details		
+3	10905	      Thumbnails (up to 6 rows) + Details		
+3	10906	      Thumbnails (up to 7 rows) + Details		
+3	0	      ---		disabled
+3	10908	      Reload Thumbnails + Details		
+3	11075	      Use 16:9 Thumbnail Ratio		
+2	0	    ---		disabled
+2	10759	    Playlist Settings...		
+1	1718225689	  A-B Repeat	B	submenu
+2	10249	    Set Starting Point (A)	[	
+2	10251	    Reset Point A	Shift+[	
+2	10533	    Move Point A 0.1 Sec. Backward	Ctrl+[	
+2	10535	    Move Point A 0.1 Sec. Forward	Alt+[	
+2	0	    ---		disabled
+2	10250	    Set Ending Point (B)	]	
+2	10252	    Reset Point B	Shift+]	
+2	10537	    Move Point B 0.1 Sec. Backward	Ctrl+]	
+2	10539	    Move Point B 0.1 Sec. Forward	Alt+]	
+2	0	    ---		disabled
+2	10541	    Move A-B Points 0.1 Sec. Backward	Ctrl+Alt+[	
+2	10543	    Move A-B Points 0.1 Sec. Forward	Ctrl+Alt+]	
+2	10594	    Decrease the number of loop repeats	Ctrl+Alt+-	
+2	10595	    Increase the number of loop repeats	Ctrl+Alt+=	
+2	0	    ---		disabled
+2	10591	    Repeat previous subtitle section	Ctrl+-	
+2	10592	    Repeat current subtitle section	Ctrl+\ or Insert	
+2	10593	    Repeat next subtitle section	Ctrl+=	
+2	10745	    Repeat previous marked section	Alt+-	
+2	10746	    Repeat current marked section	Alt+\	
+2	10747	    Repeat next marked section	Alt+=	
+2	10596	    Repeat 5 Sec. behind current point		Ctrl+\	
+2	10253	    Start/Stop A-B Section Repeat	\	
+2	0	    ---		disabled
+2	10777	    Remember A-B Repeat List		
+2	10780	    Prevent backward navigation from point A		
+2	10781	    Enable toggle for repeat current section		
+2	0	    ---		disabled
+2	10782	    Section Repeat Settings...		
+2	10778	    A-B Repeat List Setup...	Shift+\	
+1	474028775	  Repeat Playback		submenu
+2	10034	    Cycle Repeat Playback		
+2	10495	    Disable		
+2	10496	    Enable: Repeat playlist		
+2	10497	    Enable: Repeat playing item		
+1	10619739	  Seamless Playback		submenu
+2	10602	    Disable (Recommended)		
+2	10603	    Enable: Preload Multiple Files		
+2	10604	    Enable: Preload && Combine Multiple Files		
+2	0	    ---		disabled
+2	10605	    Seamless Playback Settings...		
+1	0	  ---		disabled
+1	10069	  Use shuffle playback mode		
+1	10419	  Remember playback positions		
+1	10121	  Hide mouse cursor during playback		
+1	10122	  Prevent screen saver during playback		
+1	10445	  Close playback when playlist ends		
+1	10921	  Send played and related files to Recycle Bin		
+1	0	  ---		disabled
+1	10812	  Show time info on tooltip when seeking		
+1	10813	  Show thumbnail previews on navigation bar		
+1	10814	  Show markers of bookmark/chapter on nav bar		
+1	0	  ---		disabled
+1	10757	  Playback Settings...		
+0	269745	Subtitles		submenu
+1	1910245131	  Add/Select Subtitles	L	submenu
+2	10147	    Add Subtitle...		
+2	10940	    Combine Subtitle...		
+2	0	    ---		disabled
+2	29199	    Cycle Subtitle	Alt+L	
+1	10126	  Show/Hide Subtitles	Alt+H	
+1	10228	  Browse/Edit/Sync Subtitles...	Alt+E	
+1	10266	  Input Subtitles...	Alt+P	
+1	0	  ---		disabled
+1	10220	  Display on Video (TV-OUT)	Alt+I	
+1	10221	  Display on Overlay/VMR/EVR Surface	Alt+I	
+1	0	  ---		disabled
+1	1089871431	  Subtitle Font Renderer		submenu
+2	10817	    Auto selection (Recommended)		
+2	10818	    GDI - High compatibility, reasonable speed		
+2	10819	    FreeType - Medium compatibility, fast speed		
+2	10820	    DirectWrite - Medium compatibility, fast speed		
+1	1089668797	  Subtitle Style		submenu
+2	10136	    Use Bold Font	Alt+B	
+2	10137	    Increase Font Size	Alt+PGUP	
+2	10138	    Decrease Font Size	Alt+PGDN	
+2	10139	    Font Settings...	Alt+F	
+2	0	    ---		disabled
+2	10143	    Align Left		
+2	10144	    Align Center		
+2	10145	    Align Right		
+2	0	    ---		disabled
+2	10127	    Default Position	Alt+Home	
+2	10128	    Move Up 	Alt+Up	
+2	10129	    Move Down	Alt+Down	
+2	10130	    Move Left	Alt+Left	
+2	10131	    Move Right	Alt+Right	
+2	0	    ---		disabled
+2	10132	    Increase Horizontal Spacing	Alt+Numpad 6	
+2	10133	    Decrease Horizontal Spacing	Alt+Numpad 4	
+2	10134	    Increase Vertical Spacing	Alt+Numpad 8	
+2	10135	    Decrease Vertical Spacing	Alt+Numpad 2	
+2	0	    ---		disabled
+2	10761	    Subtitle Font Style Settings...		
+1	1985613813	  Subtitle Sync		submenu
+2	10865	    Adjust Subtitle Sync...		
+2	10140	    Increase Subtitle Sync by %s	> or .	
+2	10141	    Decrease Subtitle Sync by %s 	< or ,	
+2	10950	    Increase Subtitle Sync by %s	Ctrl+> or .	
+2	10952	    Decrease Subtitle Sync by %s 	Ctrl+< or ,	
+2	10951	    Increase Subtitle Sync by %s	Alt+> or .	
+2	10953	    Decrease Subtitle Sync by %s 	Alt+< or ,	
+2	10955	    Reset next subtitle sync to current position	Ctrl+Alt+> or .	
+2	10954	    Reset previous subtitle sync to current position	Ctrl+Alt+< or ,	
+2	10142	    Default Subtitle Sync	/	
+2	10629	    Keep subtitle sync changes over whole runtime		
+2	10958	    Apply sync changes starting from next position		
+2	0	    ---		disabled
+2	10844	    Convert Subtitle FPS : %g -> 12		
+2	10845	    Convert Subtitle FPS : %g -> 15		
+2	10846	    Convert Subtitle FPS : %g -> 23.976		
+2	10847	    Convert Subtitle FPS : %g -> 24		
+2	10848	    Convert Subtitle FPS : %g -> 25		
+2	10849	    Convert Subtitle FPS : %g -> 29.97		
+2	10850	    Convert Subtitle FPS : %g -> 30		
+2	10851	    Convert Subtitle FPS...		
+2	0	    ---		disabled
+2	10762	    Subtitle Language/Sync/Other Settings...		
+1	23793365	  Subtitle Saving		submenu
+2	10401	    Apply subtitle sync	Alt+S	
+2	10485	    Save subtitle as video filename	Ctrl+Shift+S	
+2	10362	    Save subtitle as...	Ctrl+Alt+S	
+2	0	    ---		disabled
+2	11096	    Save translation when saving subtitles		
+1	2014843779	  Stereo 3D Subtitle Mode		submenu
+2	10633	    Disable		
+2	10634	    Enable : SBS (Side by Side)		
+2	10635	    Enable : TAB (Top and Bottom)		
+2	0	    ---		disabled
+2	10570	    Scale subtitles after output		
+2	10571	    Scale subtitles before output		
+2	0	    ---		disabled
+2	10572	    Move Up		
+2	10573	    Move Down		
+2	10574	    Move Left		
+2	10575	    Move Right		
+2	10576	    Default Position		
+2	0	    ---		disabled
+2	10965	    Auto determine 3D subtitle mode		
+2	0	    ---		disabled
+2	10966	    3D Subtitle Settings...		
+1	204203	  Subtitle Searching		submenu
+2	45050	    Search Subtitles on OpenSubtitles		
+2	45052	    Search Subtitles on podnapisi		
+2	0	    ---		disabled
+2	10864	    Upload Subtitles...		
+2	10863	    Download Subtitles...		
+2	0	    ---		disabled
+2	45300	    Search Subtitles with Google		
+2	0	    ---		disabled
+2	45349	    Online Subtitle Search Settings...		
+1	335283	  Subtitle Translation		submenu
+2	11114	    Do not use		
+2	11115	    Always use		
+2	11116	    Use when source subs are in specified lang(s)		
+2	11117	    Use when source subs are in English language		
+2	11118	    Use when source subs are not in specified lang(s)		
+2	0	    ---		disabled
+2	11120	    Show translation only		
+2	11121	    Show translation at the top of source subs		
+2	11122	    Show translation at the bottom of source subs		
+2	0	    ---		disabled
+2	11125	    Bing translate		
+2	11126	    DeepL translate		
+2	11127	    Google translate		
+2	11128	    Libre Translate		
+2	11129	    Naver papago translate(NMT)		
+2	11130	    Yandex translate		
+2	11131	    LM Studio translate		
+2	0	    ---		disabled
+2	525162	    Source Language		submenu
+2	596298	    Translation Language		submenu
+2	0	    ---		disabled
+2	12400	    Online Subtitle Translation Settings...		
+1	530550	  Create subtitles from audio		submenu
+2	11371	    Start		
+2	0	    ---		disabled
+2	530766	    Whisper AI engine		submenu
+3	11380	      whisper.cpp CPU		
+3	11381	      whisper.cpp BLAS		
+3	11382	      whisper.cpp Vulkan		
+3	11383	      whisper.cpp CUDA		
+3	11384	      Whisper Const-me		
+3	11385	      Whisper-Faster		
+3	11386	      Faster-Whisper-XXL (Recommended)		
+3	0	      ---		disabled
+3	11394	      Open engine folder		
+2	6751510	    Whisper AI model		submenu
+3	11395	      tiny		
+3	11396	      tiny.en		
+3	11397	      base		
+3	11398	      base.en		
+3	11399	      small		
+3	11400	      small.en		
+3	11401	      medium		
+3	11402	      medium.en		
+3	11403	      large		
+3	11404	      large-v1		
+3	11405	      large-v2		
+3	11406	      large-v3		
+3	11407	      large-v3-turbo		
+3	0	      ---		disabled
+3	11419	      Open model folder		
+2	11408618	    Whisper AI language		submenu
+3	11420	      Auto		
+3	11421	      korean		
+3	11422	      english		
+3	11423	      japanese		
+3	11424	      chinese		
+3	11425	      german		
+3	11426	      spanish		
+3	11427	      russian		
+3	11428	      french		
+3	11429	      portuguese		
+3	11430	      turkish		
+3	11431	      polish		
+3	11432	      catalan		
+3	11433	      dutch		
+3	11434	      arabic		
+3	11435	      swedish		
+3	11436	      italian		
+3	11437	      indonesian		
+3	11438	      hindi		
+3	11439	      finnish		
+3	11440	      vietnamese		
+3	11441	      hebrew		
+3	11442	      ukrainian		
+3	11443	      greek		
+3	11444	      malay		
+3	11445	      czech		
+3	11446	      romanian		
+3	11447	      danish		
+3	11448	      hungarian		
+3	11449	      tamil		
+3	11450	      norwegian		
+3	11451	      thai		
+3	11452	      urdu		
+3	11453	      croatian		
+3	11454	      bulgarian		
+3	11455	      cantonese		
+3	11456	      lithuanian		
+3	11457	      latin		
+3	11458	      maori		
+3	11459	      malayalam		
+3	11460	      welsh		
+3	11461	      slovak		
+3	11462	      telugu		
+3	11463	      persian		
+3	11464	      latvian		
+3	11465	      bengali		
+3	11466	      serbian		
+3	11467	      azerbaijani		
+3	11468	      slovenian		
+3	11469	      kannada		
+3	11470	      estonian		
+3	11471	      macedonian		
+3	11472	      breton		
+3	11473	      basque		
+3	11474	      icelandic		
+3	11475	      armenian		
+3	11476	      nepali		
+3	11477	      mongolian		
+3	11478	      bosnian		
+3	11479	      kazakh		
+3	11480	      albanian		
+3	11481	      swahili		
+3	11482	      galician		
+3	11483	      marathi		
+3	11484	      punjabi		
+3	11485	      sinhala		
+3	11486	      khmer		
+3	11487	      shona		
+3	11488	      yoruba		
+3	11489	      somali		
+3	11490	      afrikaans		
+3	11491	      occitan		
+3	11492	      georgian		
+3	11493	      belarusian		
+3	11494	      tajik		
+3	11495	      sindhi		
+3	11496	      gujarati		
+3	11497	      amharic		
+3	11498	      yiddish		
+3	11499	      lao		
+3	11500	      uzbek		
+3	11501	      faroese		
+3	11502	      haitian creole		
+3	11503	      pashto		
+3	11504	      turkmen		
+3	11505	      nynorsk		
+3	11506	      maltese		
+3	11507	      sanskrit		
+3	11508	      luxembourgish		
+3	11509	      myanmar		
+3	11510	      tibetan		
+3	11511	      tagalog		
+3	11512	      malagasy		
+3	11513	      assamese		
+3	11514	      tatar		
+3	11515	      hawaiian		
+3	11516	      lingala		
+3	11517	      hausa		
+3	11518	      bashkir		
+3	11519	      javanese		
+3	11520	      sundanese		
+2	11378	    Applying voice emphasis filter when extracting sound		
+2	11379	    If possible, save subtitles in the same folder as the video		
+2	0	    ---		disabled
+2	11373	    Do not use		
+2	11374	    Automatically generated when playback starts		
+2	11375	    If there are no subtitles, using		
+2	0	    ---		disabled
+2	11370	    Create subtitles from audio...		
+1	7800374	  Create subtitles from audio(Real-time)		submenu
+2	11600	    Not used		
+2	11601	    Always use		
+2	11602	    Use if there are no subtitles		
+2	11603	    Use only when generating subtitles from sound is not possible(not a file)		
+2	0	    ---		disabled
+2	2561986	    Whisper AI engine		submenu
+3	11610	      whisper.cpp CPU		
+3	11611	      whisper.cpp BLAS		
+3	11612	      whisper.cpp Vulkan (Recommended)		
+3	11613	      whisper.cpp CUDA		
+3	0	      ---		disabled
+3	11624	      Open engine folder		
+2	1186868	    Whisper AI model		submenu
+3	11625	      tiny		
+3	11626	      tiny.en		
+3	11627	      base		
+3	11628	      base.en		
+3	11629	      small		
+3	11630	      small.en		
+3	11631	      medium		
+3	11632	      medium.en		
+3	11633	      large		
+3	11634	      large-v1		
+3	11635	      large-v2		
+3	11636	      large-v3		
+3	0	      ---		disabled
+3	11649	      Open model folder		
+2	4263276	    Whisper AI language		submenu
+3	11650	      Auto		
+3	11651	      korean		
+3	11652	      english		
+3	11653	      japanese		
+3	11654	      chinese		
+3	11655	      german		
+3	11656	      spanish		
+3	11657	      russian		
+3	11658	      french		
+3	11659	      portuguese		
+3	11660	      turkish		
+3	11661	      polish		
+3	11662	      catalan		
+3	11663	      dutch		
+3	11664	      arabic		
+3	11665	      swedish		
+3	11666	      italian		
+3	11667	      indonesian		
+3	11668	      hindi		
+3	11669	      finnish		
+3	11670	      vietnamese		
+3	11671	      hebrew		
+3	11672	      ukrainian		
+3	11673	      greek		
+3	11674	      malay		
+3	11675	      czech		
+3	11676	      romanian		
+3	11677	      danish		
+3	11678	      hungarian		
+3	11679	      tamil		
+3	11680	      norwegian		
+3	11681	      thai		
+3	11682	      urdu		
+3	11683	      croatian		
+3	11684	      bulgarian		
+3	11685	      cantonese		
+3	11686	      lithuanian		
+3	11687	      latin		
+3	11688	      maori		
+3	11689	      malayalam		
+3	11690	      welsh		
+3	11691	      slovak		
+3	11692	      telugu		
+3	11693	      persian		
+3	11694	      latvian		
+3	11695	      bengali		
+3	11696	      serbian		
+3	11697	      azerbaijani		
+3	11698	      slovenian		
+3	11699	      kannada		
+3	11700	      estonian		
+3	11701	      macedonian		
+3	11702	      breton		
+3	11703	      basque		
+3	11704	      icelandic		
+3	11705	      armenian		
+3	11706	      nepali		
+3	11707	      mongolian		
+3	11708	      bosnian		
+3	11709	      kazakh		
+3	11710	      albanian		
+3	11711	      swahili		
+3	11712	      galician		
+3	11713	      marathi		
+3	11714	      punjabi		
+3	11715	      sinhala		
+3	11716	      khmer		
+3	11717	      shona		
+3	11718	      yoruba		
+3	11719	      somali		
+3	11720	      afrikaans		
+3	11721	      occitan		
+3	11722	      georgian		
+3	11723	      belarusian		
+3	11724	      tajik		
+3	11725	      sindhi		
+3	11726	      gujarati		
+3	11727	      amharic		
+3	11728	      yiddish		
+3	11729	      lao		
+3	11730	      uzbek		
+3	11731	      faroese		
+3	11732	      haitian creole		
+3	11733	      pashto		
+3	11734	      turkmen		
+3	11735	      nynorsk		
+3	11736	      maltese		
+3	11737	      sanskrit		
+3	11738	      luxembourgish		
+3	11739	      myanmar		
+3	11740	      tibetan		
+3	11741	      tagalog		
+3	11742	      malagasy		
+3	11743	      assamese		
+3	11744	      tatar		
+3	11745	      hawaiian		
+3	11746	      lingala		
+3	11747	      hausa		
+3	11748	      bashkir		
+3	11749	      javanese		
+3	11750	      sundanese		
+2	0	    ---		disabled
+2	11604	    Create subtitles from audio(Real-time)...		
+1	0	  ---		disabled
+1	10624	  Copy current subtitle to clipboard		
+1	10823	  Display bitmap subtitles outside the video		
+1	10822	  Display text subtitles inside the video		
+1	10824	  Force subtitles to display under the video		
+1	10825	  Enable ASS/SSA subtitle animations		
+1	10826	  Use opaque box border style		
+1	10827	  Use fade effect		
+1	10828	  Use smooth output on VMR/EVR surface		
+1	0	  ---		disabled
+1	10760	  Subtitle Processing Settings...		
+0	393090587	Video		submenu
+1	204219	  Video Renderer		submenu
+2	10294	    Auto select (Recommended)		
+2	10295	    Video Renderer		
+2	10297	    VMR 7 Windowed		
+2	10298	    VMR 7 Renderless		
+2	10299	    VMR 9 Windowed		
+2	10300	    VMR 9 Renderless		
+2	10301	    EVR (Vista / .Net3)		
+2	10302	    EVR Custom Present		
+2	10303	    Haali Video Renderer		
+2	10304	    Madshi Video Renderer		
+2	10565	    MPC Video Renderer		
+2	10560	    Built-in Direct3D 9 Video Renderer		
+2	10564	    Built-in Direct3D 11 Video Renderer		
+2	10562	    Null Video Renderer (Compressed)		
+2	10563	    Null Video Renderer (Uncompressed)		
+1	204189	  Pixel Shaders	S	submenu
+2	10290	    Use Pre-Resize Pixel Shaders	Shift+P	
+2	204269	    Pre-Resize Pixel Shaders		submenu
+3	37500	      Do not use		
+3	37501	      Enable Shader Stacker		
+3	37502	      Adaptive sharpen(Contrast)		
+3	37503	      Adaptive sharpen		
+3	37504	      BT601BT709		
+3	37505	      Contour		
+3	37506	      Deinterlace (blend)		
+3	37507	      Denoise		
+3	37508	      DisplayLessThan16 v1_1		
+3	37509	      EdgeSharpen v1_1(jim ro)		
+3	37510	      EdgeSharpen v1_1		
+3	37511	      Emboss		
+3	37512	      GrayScale		
+3	37513	      HorzFlip		
+3	37514	      Invert		
+3	37515	      LCD angle correction		
+3	37516	      Letterbox		
+3	37517	      Levels		
+3	37518	      Levels2		
+3	37519	      MaskBox		
+3	37520	      NightVision		
+3	37521	      Procamp		
+3	37522	      Remap_16_235		
+3	37523	      Sharpen		
+3	37524	      SharpenComplex (jim ro)		
+3	37525	      SharpenComplex2		
+3	37526	      SharpenFlou (jim ro)		
+3	37527	      Sharpen_3x3		
+3	37528	      Sharpen_5x5		
+3	37529	      Sphere		
+3	37530	      Spotlight		
+3	37531	      Undot		
+3	37532	      Unsharp mask		
+3	37533	      VertFlip		
+3	37534	      Wave		
+3	37535	      YV12 Chroma Upsampling		
+3	0	      ---		disabled
+3	10287	      Stack...		
+2	0	    ---		disabled
+2	10654	    Use Post-Resize Pixel Shaders	Ctrl+Alt+P	
+2	269761	    Post-Resize Pixel Shaders		submenu
+3	39800	      Do not use		
+3	39801	      Enable Shader Stacker		
+3	39802	      Adaptive sharpen(Contrast)		
+3	39803	      Adaptive sharpen		
+3	39804	      BT601BT709		
+3	39805	      Contour		
+3	39806	      Deinterlace (blend)		
+3	39807	      Denoise		
+3	39808	      DisplayLessThan16 v1_1		
+3	39809	      EdgeSharpen v1_1(jim ro)		
+3	39810	      EdgeSharpen v1_1		
+3	39811	      Emboss		
+3	39812	      GrayScale		
+3	39813	      HorzFlip		
+3	39814	      Invert		
+3	39815	      LCD angle correction		
+3	39816	      Letterbox		
+3	39817	      Levels		
+3	39818	      Levels2		
+3	39819	      MaskBox		
+3	39820	      NightVision		
+3	39821	      Procamp		
+3	39822	      Remap_16_235		
+3	39823	      Sharpen		
+3	39824	      SharpenComplex (jim ro)		
+3	39825	      SharpenComplex2		
+3	39826	      SharpenFlou (jim ro)		
+3	39827	      Sharpen_3x3		
+3	39828	      Sharpen_5x5		
+3	39829	      Sphere		
+3	39830	      Spotlight		
+3	39831	      Undot		
+3	39832	      Unsharp mask		
+3	39833	      VertFlip		
+3	39834	      Wave		
+3	39835	      YV12 Chroma Upsampling		
+3	0	      ---		disabled
+3	10655	      Stack...		
+2	10918	    Apply only to video image (ignores spaces)		
+2	0	    ---		disabled
+2	10289	    Reload Pixel Shader list		
+2	10288	    Open Pixel Shader folder		
+2	0	    ---		disabled
+2	10917	    Enable Display ICC Color Gamut Correction		
+2	11025	    Enable YCgCo Colorspace Correction		
+2	11027	    Enable SMPTE ST 2084 HDR Correction		
+2	11026	    Enable SMPTE ST 2086 HDR Correction		
+2	0	    ---		disabled
+2	10920	    Pixel Shader Settings...		
+1	204247	  3D Video Mode	J	submenu
+2	10744	    Use Built-in H.264 MVC 3D Video Decoder		
+2	1184046	    MVC 3D Transfer Mode		submenu
+3	11055	      Individual View: SBS (Side by Side)		
+3	11056	      Synthesized View: TAB at full resolution		
+3	11057	      Synthesized View: TAB at half resolution		
+3	11058	      Synthesized View: SBS at full resolution		
+3	11059	      Synthesized View: SBS at half resolution		
+2	0	    ---		disabled
+2	10682	    Disable 3D Video Mode		
+2	10683	    Enable 3D Video Mode		
+2	10684	    Auto enable 3D Video Mode		
+2	0	    ---		disabled
+2	10714	    3D Video Input (Source) : SBS (Side by Side)		
+2	10715	    3D Video Input (Source) : TAB (Top and Bottom)		
+2	10716	    3D Video Input (Source) : Original Image		
+2	0	    ---		disabled
+2	10717	    Full resolution		
+2	10718	    Swap left/right images		
+2	10700	    Invert left/right images horizontally		
+2	10743	    Auto detect 3D input format		
+2	0	    ---		disabled
+2	335317	    3D Video Output (Screen)		submenu
+3	10719	      SBS (Side by Side)		
+3	10720	      TAB (Top and Bottom)		
+3	10721	      3D to 2D (Left or Top Image)		
+3	10722	      3D to 2D (Right or Bottom Image)		
+3	10723	      Row Interleave		
+3	10724	      Column Interleave		
+3	10725	      Anaglyph Red/Cyan Gray		
+3	10726	      Anaglyph Red/Cyan Half Colored		
+3	10727	      Anaglyph Red/Cyan Colored		
+3	10728	      Anaglyph Red/Cyan Dubois		
+3	10729	      Anaglyph Green/Magenta Gray		
+3	10730	      Anaglyph Green/Magenta Half colored		
+3	10731	      Anaglyph Green/Magenta Colored		
+3	10732	      Anaglyph Green/Magenta Dubois		
+3	10733	      Anaglyph Yellow/Blue Gray		
+3	10734	      Anaglyph Yellow/Blue Half Colored		
+3	10735	      Anaglyph Yellow/Blue Colored		
+3	10736	      Anaglyph Yellow/Blue Dubois		
+3	10737	      Anaglyph Red/Blue Gray		
+3	10738	      Anaglyph Red/Green Gray		
+3	10739	      Shutter Glasses (Page Flipping)		
+3	10740	      NVIDIA 3D Vision		
+3	10741	      Stereoscopic 3D (Windows 8 Native 3D)		
+2	466361	    Stereo 3D Subtitle Mode		submenu
+3	10633	      Disable		
+3	10634	      Enable : SBS (Side by Side)		
+3	10635	      Enable : TAB (Top and Bottom)		
+3	0	      ---		disabled
+3	10570	      Scale subtitles after output		
+3	10571	      Scale subtitles before output		
+3	0	      ---		disabled
+3	10572	      Move Up		
+3	10573	      Move Down		
+3	10574	      Move Left		
+3	10575	      Move Right		
+3	10576	      Default Position		
+3	0	      ---		disabled
+3	10965	      Auto determine 3D subtitle mode		
+3	0	      ---		disabled
+3	10966	      3D Subtitle Settings...		
+2	0	    ---		disabled
+2	11065	    Default Right/Bottom Image Position		
+2	11066	    Move Right/Bottom Image from Up to Down		
+2	11067	    Move Right/Bottom Image from Down to Up		
+2	11068	    Move Right/Bottom Image from Left to Right		
+2	11069	    Move Right/Bottom Image from Right to Left		
+2	0	    ---		disabled
+2	10742	    3D Video Mode Settings...		
+1	335325	  Video Transform Filter		submenu
+2	10306	    Cycle Built-in Video Transform Filter Usage 	Ctrl+X	
+2	10450	    Always Use (Recommended)		
+2	10451	    Disable with conditions		
+2	10452	    Disable		
+1	0	  ---		disabled
+1	204265	  Resize		submenu
+2	10153	    Do nothing		
+2	10154	    Resize when input size is smaller than the specified size		
+2	10155	    Resize when input size is larger than the specified size		
+2	10156	    Resize always		
+2	0	    ---		disabled
+2	10321	    Video Resizing Settings...		
+1	204271	  Deinterlacing		submenu
+2	10420	    Cycle Deinterlacing Mode	Ctrl+I	
+2	10421	    Auto		
+2	10422	    Enabled		
+2	10423	    Disabled		
+2	0	    ---		disabled
+2	10424	    Deinterlacing Settings...		
+1	269803	  Extend/Crop		submenu
+2	10073	    Do nothing		
+2	10074	    4:3 Extending		
+2	10075	    16:9 Extending		
+2	10076	    16:10 Extending		
+2	10077	    1.85:1 Extending		
+2	10078	    2.35.1 Extending		
+2	11040	    Extend by aspect ratio (4:3)		
+2	10079	    4:3 Cropping		
+2	10080	    16:9 Cropping		
+2	10081	    16:10 Cropping		
+2	10082	    1.85:1 Cropping		
+2	10083	    2:35:1 Cropping		
+2	11041	    Crop by aspect ratio (4:3)		
+2	10084	    Extend/Crop by pixel		
+2	0	    ---		disabled
+2	10148	    Reset Video Position		
+2	10149	    Move Left		
+2	10150	    Move Right		
+2	10151	    Move Up		
+2	10152	    Move Down		
+2	0	    ---		disabled
+2	10323	    Extend/Crop Video...	Ctrl+Q	
+1	204279	  Bottom Margin		submenu
+2	10342	    Cycle Bottom Margin	Ctrl+Alt+B	
+2	10343	    No Margin		
+2	10344	    Margin by 05% of Video Area		
+2	10345	    Margin by 10% of Video Area		
+2	10346	    Margin by 15% of Video Area		
+2	10347	    Margin by 20% of Video Area		
+2	10348	    Margin by 25% of Video Area		
+2	10349	    Margin by 30% of Video Area		
+2	0	    ---		disabled
+2	10350	    Operate only when subtitles exist		
+2	10577	    Use Pan&&Scan method when Transform Filter fails		
+1	204275	  Video Effects		submenu
+2	10070	    Flip Vertical	Ctrl+P	
+2	10071	    Flip Horizontal	Ctrl+Z	
+2	10072	    Rotation (Horizontal/Vertical)		
+2	10257	    Soften	Ctrl+B	
+2	10256	    Sharpen 	Ctrl+R	
+2	10260	    Auto Level Control		
+2	10352	    Level Control 	Ctrl+L	
+2	10218	    Deblock	Ctrl+H	
+2	10425	    Denoise 3D	Ctrl+N	
+2	10426	    Gradual Denoise		
+2	10427	    Temporary Denoise 	Ctrl+M	
+2	10428	    Luma && Chroma Offset		
+2	10429	    WarpSharp		
+2	10837	    Deband		
+2	10531	    Motion Blur		
+2	0	    ---		disabled
+2	10529	    Video Effect Settings...		
+1	269787	  Screen Rotation		submenu
+2	10612	    Cycle Screen Rotation	Alt+K	
+2	10613	    Do nothing		
+2	10614	    90 degrees Rotation		
+2	10615	    180 degrees Rotation		
+2	10616	    270 degrees Rotation		
+2	10617	    Auto rotate 0/90 degrees according to AR		
+2	10618	    Auto rotate 180/270 degrees according to AR		
+1	204187	  Video Capture 	K	submenu
+2	10353	    Create Thumbnail Image...	Alt+N	
+2	0	    ---		disabled
+2	10222	    Capture Consecutive Images...	Ctrl+G	
+2	10431	    Start/Stop Consecutive Image Capturing		
+2	10334	    Set Image Storage Folder...		
+2	10225	    Open Image Storage Folder		
+2	10913	    Store captured images into play folders (if available)		
+2	0	    ---		disabled
+2	10223	    Copy Current Source Frame to Clipboard	Ctrl+C	
+2	10224	    Save Current Source Frame	Ctrl+E	
+2	10357	    Save Current Source Frame As...		
+2	0	    ---		disabled
+2	10432	    Copy Current Screen Frame to Clipboard	Ctrl+Alt+C	
+2	10433	    Save Current Screen Frame	Ctrl+Alt+E	
+2	10434	    Save Current Screen Frame As...		
+2	0	    ---		disabled
+2	10354	    Save images in BMP format		
+2	10355	    Save images in JPEG format		
+2	10356	    Save images in PNG format		
+2	10408	    Save images in WEBP format		
+2	0	    ---		disabled
+2	10556	    Include system date and time in filename		
+2	10557	    Include file elapsed time in filename		
+2	0	    ---		disabled
+2	10305	    Include message and subtitles in image		
+2	10587	    Correct aspect ratio when capturing		
+2	0	    ---		disabled
+2	11046	    Delete the last saved frame		
+1	793577007	  Video Recording		submenu
+2	10370	    Record Video...	Alt+C	
+2	10430	    Start/Stop Video Recording		
+2	10909	    Set Video Storage Folder...		
+2	10910	    Open Video Storage Folder		
+2	10912	    Store recorded videos into play folders (if available)		
+1	13896702	  AviSynth		submenu
+2	10770	    Enable AviSynth processing		
+2	10775	    Open AviSynth preset folder		
+2	10773	    AviSynth Settings...		
+2	0	    ---		disabled
+2	39900	    ColorBars.avs		
+2	39901	    FasterTrueMotion.avs		
+2	39902	    FastestTrueMotion.avs		
+2	39903	    FastTrueMotion.avs		
+2	39904	    FastTrueMotionNoGPU.avs		
+2	39905	    OverlayText.avs		
+2	39906	    TrueMotion.avs		
+2	39907	    TrueMotion2.avs		
+2	39908	    TrueMotion2NoGPU.avs		
+2	39909	    TrueMotionNoGPU.avs		
+1	531020	  VapourSynth		submenu
+2	10995	    Enable VapourSynth processing		
+2	10996	    Open VapourSynth preset folder		
+2	10997	    VapourSynth Settings...		
+2	0	    ---		disabled
+2	38400	    Histogram.vpy		
+2	38401	    motioninterpolation.vpy		
+1	3087478	  360° Video Mode		submenu
+2	11000	    Disable 360° Video Mode		
+2	11001	    Enable/Disable 360° Video Mode		
+2	11002	    Auto enable 360° Video Mode		
+2	0	    ---		disabled
+2	11090	    Auto select		
+2	11091	    Equirectangular		
+2	11092	    Dual Fisheye		
+2	11093	    Cubemap		
+2	11094	    Equi-Angular Cubemap 3x2 (Mono 2D)		
+2	11095	    Equi-Angular Cubemap 2x3 (Stereo 3D)		
+2	0	    ---		disabled
+2	11003	    Display 4x90° camera angles (front/left/right/rear)		
+1	0	  ---		disabled
+1	10085	  Disable/Last used Color Controls	Q	
+1	10086	  Decrease Brightness by 1% 	W	
+1	10087	  Increase Brightness by 1% 	E	
+1	10088	  Decrease Contrast by 1% 	R	
+1	10089	  Increase Contrast by 1% 	T	
+1	10090	  Decrease Saturation by 1% 	Y	
+1	10091	  Increase Saturation by 1% 	U	
+1	10092	  Decrease Hue by 1% 	I	
+1	10093	  Increase Hue by 1% 	O	
+1	0	  ---		disabled
+1	10363	  Video Processing Settings...		
+0	595944	Audio		submenu
+1	4457760	  Select Audio Stream 	A	submenu
+2	37750	    Both		
+2	37751	    Left channel		
+2	37752	    Right channel		
+1	4398248	  Audio Renderer		submenu
+2	37600	    Auto select (Recommended)		
+2	37601	    Default DirectSound Device		
+2	37602	    Default WaveOut Device		
+2	37603	    DirectSound: Speakers (FiiO Q series)		
+2	37604	    DirectSound: BenQ LCD (NVIDIA High Definition Audio)		
+2	37605	    DirectSound: BenQ LCD (NVIDIA High Definition Audio)		
+2	37606	    WaveOut: Speakers (FiiO Q series)		
+2	37607	    WaveOut: BenQ LCD (NVIDIA High Definition Audio)		
+2	37608	    WaveOut: BenQ LCD (NVIDIA High Definition Audio)		
+2	37609	    Surodev ASIO Renderer 0		
+2	37610	    Sanear Audio Renderer		
+2	37611	    Built-in DirectSound Audio Renderer (Crossfade)		
+2	37612	    Built-in WASAPI Audio Renderer		
+2	37613	    Null Audio Renderer (Compressed)		
+2	37614	    Null Audio Renderer (Uncompressed)		
+1	4132184	  Audio Renderer (Pass-through)		submenu
+2	37650	    Default Audio Device (Recommended)		
+2	37651	    Default DirectSound Device		
+2	37652	    Default WaveOut Device		
+2	37653	    DirectSound: Speakers (FiiO Q series)		
+2	37654	    DirectSound: BenQ LCD (NVIDIA High Definition Audio)		
+2	37655	    DirectSound: BenQ LCD (NVIDIA High Definition Audio)		
+2	37656	    WaveOut: Speakers (FiiO Q series)		
+2	37657	    WaveOut: BenQ LCD (NVIDIA High Definition Audio)		
+2	37658	    WaveOut: BenQ LCD (NVIDIA High Definition Audio)		
+2	37659	    Surodev ASIO Renderer 0		
+2	37660	    Sanear Audio Renderer		
+2	37661	    Built-in DirectSound Audio Renderer (Crossfade)		
+2	37662	    Built-in WASAPI Audio Renderer		
+2	37663	    Null Audio Renderer (Compressed)		
+2	37664	    Null Audio Renderer (Uncompressed)		
+1	1055848	  Audio Renderer (2nd Device)		submenu
+2	37700	    Disable (Recommended)		
+2	37701	    Default DirectSound Device		
+2	37702	    Default WaveOut Device		
+2	37703	    DirectSound: Speakers (FiiO Q series)		
+2	37704	    DirectSound: BenQ LCD (NVIDIA High Definition Audio)		
+2	37705	    DirectSound: BenQ LCD (NVIDIA High Definition Audio)		
+2	37706	    WaveOut: Speakers (FiiO Q series)		
+2	37707	    WaveOut: BenQ LCD (NVIDIA High Definition Audio)		
+2	37708	    WaveOut: BenQ LCD (NVIDIA High Definition Audio)		
+2	37709	    Surodev ASIO Renderer 0		
+2	37710	    Sanear Audio Renderer		
+2	37711	    Built-in DirectSound Audio Renderer (Crossfade)		
+2	37712	    Built-in WASAPI Audio Renderer		
+2	37713	    Null Audio Renderer (Compressed)		
+2	37714	    Null Audio Renderer (Uncompressed)		
+1	20005	  Output Speakers		submenu
+2	35300	    1/0/0 - 1.0 Mono		
+2	35301	    2/0/0 - 2.0 Stereo (Recommended)		
+2	35302	    3/0/0 - 3.0 Channels		
+2	35303	    2/0/1 - 3.0 Surround		
+2	35304	    3/0/1 - 4.0 Surround		
+2	35305	    2/0/2 - 4.0 Channels		
+2	35306	    3/0/2 - 5.0 Channels		
+2	35307	    3/2/1 - 6.0 Channels		
+2	35308	    3/2/2 - 7.0 Channels		
+2	35309	    Dolby Surround/Pro Logic		
+2	35310	    Dolby Pro Logic II		
+2	35311	    1/0/0+LFE - 1.1 Mono		
+2	35312	    2/0/0+LFE - 2.1 Stereo		
+2	35313	    3/0/0+LFE - 3.1 Channels		
+2	35314	    2/0/1+LFE - 3.1 Surround		
+2	35315	    3/0/1+LFE - 4.1 Surround		
+2	35316	    2/0/2+LFE - 4.1 Channels		
+2	35317	    3/0/2+LFE - 5.1 Channels		
+2	35318	    3/2/1+LFE - 6.1 Channels		
+2	35319	    3/2/2+LFE - 7.1 Channels		
+2	35320	    Dolby Surround/Pro Logic+LFE		
+2	35321	    Dolby Pro Logic II+LFE		
+2	35322	    Same as input		
+2	35323	    Virtual Headphone		
+2	35324	    Virtual Surround (HRTF)		
+2	35325	    Virtual Dolby Decoder		
+1	20006	  Output Format/Resample		submenu
+2	35350	    16-bit (Recommended)		
+2	35351	    24-bit		
+2	35352	    32-bit		
+2	35353	    32-bit (floating point)		
+2	35354	    16-bit (dithering)		
+2	0	    ---		disabled
+2	35400	    Same as input (Recommended)		
+2	35401	    192000Hz		
+2	35402	    96000Hz		
+2	35403	    48000Hz		
+2	35404	    44100Hz		
+2	35405	    32000Hz		
+2	35406	    24000Hz		
+2	35407	    22050Hz		
+2	35408	    16000Hz		
+2	35409	    12000Hz		
+2	35410	    11025Hz		
+2	35411	    8000Hz		
+2	0	    ---		disabled
+2	35450	    High quality		
+2	35451	    Normal quality (Recommended)		
+2	35452	    Low quality		
+1	20007	  Output Mode		submenu
+2	35380	    PCM (Default) (Recommended)		
+2	35381	    LPCM		
+2	35382	    Pass-through after AC3 re-encoding		
+2	0	    ---		disabled
+2	35399	    Use Pass-through output when at least 1 chs exist		
+1	0	  ---		disabled
+1	1773338	  Playback Volume		submenu
+2	10393	    Default volume control (Recommended)		
+2	10394	    System Wave volume control		
+2	10395	    System Master volume control		
+2	0	    ---		disabled
+2	10435	    Enable individual volume control		
+2	10520	    Increase master volume	Shift+Up	
+2	10521	    Decrease master volume	Shift+Down	
+2	0	    ---		disabled
+2	10436	    Pre-amplify AC3/DTS Volume to proper level		
+2	10522	    Increase PreAmp		
+2	10523	    Decrease PreAmp		
+2	0	    ---		disabled
+2	10437	    Volume control settings...		
+1	1771420	  System Volume		submenu
+2	10267	    Increase Master Volume	Ctrl+Alt+Shift+Up	
+2	10268	    Decrease Master Volume	Ctrl+Alt+Shift+Down	
+2	10269	    Mute (Master)	Ctrl+Alt+Shift+M	
+2	0	    ---		disabled
+2	10270	    Increase Wave Volume	Ctrl+Alt+Up	
+2	10271	    Decrease Wave Volume	Ctrl+Alt+Down	
+2	10272	    Mute (Wave)	Ctrl+Alt+M	
+1	10035	  Increase Volume	Up	
+1	10036	  Decrease Volume	Down	
+1	10037	  Mute	M	
+1	0	  ---		disabled
+1	10095	  Use Equalizer	Shift+E	
+1	20008	  Equalizer Presets		submenu
+2	36600	    (Default)		
+2	36601	    Classical		
+2	36602	    Club		
+2	36603	    Dance		
+2	36604	    Full Bass		
+2	36605	    Full Bass && Treble		
+2	36606	    Full Treble		
+2	36607	    Laptop		
+2	36608	    Large Hall		
+2	36609	    Live		
+2	36610	    Loudness		
+2	36611	    Party		
+2	36612	    Pop		
+2	36613	    Reggae		
+2	36614	    Rock		
+2	36615	    Ska		
+2	36616	    Soft		
+2	36617	    Soft Rock		
+2	36618	    Techno		
+1	0	  ---		disabled
+1	530614	  Audio Sync		submenu
+2	10878	    Adjust Audio Sync...		
+2	10291	    Decrease audio sync by %s 	Shift+,	
+2	10292	    Increase audio sync by %s 	Shift+.	
+2	10293	    Default Audio Sync	Shift+/	
+2	0	    ---		disabled
+2	10625	    Do not keep audio sync changes		
+2	10626	    Keep audio sync changes over whole runtime		
+2	10627	    Always keep audio sync changes		
+1	661806	  Audio Effects		submenu
+2	10009	    Normalizer	Shift+N	
+2	10389	    Crystality	Shift+C	
+2	10390	    Noise Reduction	Shift+D	
+2	10096	    Freeverb	Shift+R	
+2	10438	    Voice Removal	Shift+V	
+2	10439	    Voice Emphasis	Shift+A	
+2	10660	    Swap Stereo Channels	Shift+T	
+2	10661	    Crossfeed		
+2	0	    ---		disabled
+2	10756	    Audio Language/Sync/Other Settings...		
+1	1185638	  Audio Recording		submenu
+2	10226	    Record Audio...	Shift+G	
+2	10798	    Start/Stop Audio Recording		
+2	10335	    Set Audio Storage Folder...		
+2	10227	    Open Audio Storage Folder		
+2	10915	    Store recorded audios into play folders (if available)		
+1	721006	  Audio Stretching		submenu
+2	11110	    Decrease Audio Stretching	Shift+H	
+2	11111	    Increase Audio Stretching	Shift+J	
+2	11112	    Disable	Shift+K	
+1	0	  ---		disabled
+1	10454	  Use Built-in Audio Transform Filter	Shift+X	
+1	10391	  Audio Processing Settings...		
+0	1836376	Filters		submenu
+1	10972	  Use Built-in DXVA Video Decoder		
+1	0	  ---		disabled
+1	10	  Built-in MKV Source		disabled
+1	11	  Built-in Video Codec/Transform		disabled
+1	36000	  AviSynth Filter		
+1	36001	  Enhanced Video Renderer(Custom Present)		
+1	36099	  Built-in Audio Codec/Transform		
+1	36002	  DirectSound Audio Renderer		
+1	0	  ---		disabled
+1	10264	  Manage Filters...	Ctrl+F	
+0	1383442	Skins		submenu
+1	44700	  [Built-in skin]		
+1	44701	  Bhargavi.dsf		
+1	44702	  BlackBox2_en.dsf		
+1	44703	  BlackBox3_en.dsf		
+1	44704	  BlackBox_en.dsf		
+1	44705	  BlackSpace_en.dsf		
+1	44706	  Default Skin	Default.dsf	
+1	44707	  fl2_en.dsf		
+1	44708	  gom_en.dsf		
+1	44709	  kmp1_en.dsf		
+1	44710	  kmp2_en.dsf		
+1	44711	  Olddefault.dsf		
+1	44712	  original_en.dsf		
+1	44713	  Potplayer default skin	original_new_en.dsf	
+1	44714	  pot_en.dsf		
+1	44715	  qqblack_en.dsf		
+1	44716	  qqblue_en.dsf		
+1	44717	  TabList.dsf		
+1	44718	  tmt3_en.dsf		
+1	44719	  tmt3_en_erpy-meu-mix.dsf		
+1	44720	  vlc_en.dsf		
+1	44721	  Window Frame Skin	WindowFrame.dsf	
+1	44722	  zoom5_en.dsf		
+1	44723	  zoom6_en.dsf		
+1	0	  ---		disabled
+1	2170038	  Logo (while playback is off)		submenu
+2	35000	    [Skin defined]		
+2	35001	    <Default logo>		
+2	35002	    PotPlayer.png		
+2	0	    ---		disabled
+2	10440	    Logo Settings...		
+1	1311826	  Logo (while starting playback)		submenu
+2	34900	    {Same as 1st logo}		
+2	34901	    [Skin defined]		
+2	34902	    <Default logo>		
+2	34903	    PotPlayer.png		
+2	0	    ---		disabled
+2	10440	    Logo Settings...		
+1	3020852	  Color Themes		submenu
+2	35100	    Do not use		
+2	35101	    Random Color Theme		
+2	35102	    Custom Color Theme		
+2	35103	    Default		
+2	35104	    Background color - gray		
+2	35105	    Background color - red		
+2	35106	    Background color - purple		
+2	35107	    Background color - purple cobalt		
+2	35108	    Background color - green peafowl		
+2	35109	    Background color - green		
+2	35110	    Background color - pink		
+2	35111	    Background color - sepia		
+2	35112	    Background color - dark red		
+2	35113	    Background color - indigo		
+2	35114	    Background color - Olive		
+2	35115	    Black		
+2	35116	    Gray		
+2	35117	    Light gray		
+2	35118	    Grayish-blue 		
+2	35119	    Light green		
+2	35120	    Lilac 		
+2	35121	    Emerald		
+2	35122	    Pink		
+2	35123	    Blue		
+2	35124	    Coral		
+2	35125	    Cobalt violet		
+2	35126	    Raspberry		
+2	35127	    Green		
+2	35128	    Indigo 		
+2	35129	    Purple		
+2	35130	    Dark Green		
+2	35131	    Blue-black		
+2	0	    ---		disabled
+2	10387	    HSB color theme		
+2	10388	    RGB color theme		
+2	0	    ---		disabled
+2	10527	    Customize...		
+1	269744	  Opacity		submenu
+2	4130408	    Main Window		submenu
+3	39600	      100 %		
+3	39601	      90 %		
+3	39602	      80 %		
+3	39603	      70 %		
+3	39604	      60 %		
+3	39605	      50 %		
+3	39606	      40 %		
+3	39607	      30 %		
+3	39608	      20 %		
+3	39609	      10 %		
+2	1115359397	    Control Panel		submenu
+3	39620	      100 %		
+3	39621	      90 %		
+3	39622	      80 %		
+3	39623	      70 %		
+3	39624	      60 %		
+3	39625	      50 %		
+3	39626	      40 %		
+3	39627	      30 %		
+3	39628	      20 %		
+3	39629	      10 %		
+1	3277658	  On Screen Control		submenu
+2	10514	    Disable		
+2	10515	    Enable: Direct3D9 Mode		
+2	10517	    Enable: Direct3D11 Mode		
+2	10516	    Enable: Layered Window Mode		
+2	0	    ---		disabled
+2	10519	    Skin Advanced Settings...		
+1	1382002	  Context Menu Design		submenu
+2	38210	    Skin defined/Default (Recommended)		
+2	38211	    Default		
+2	38212	    Simple popup menu	SimpleMenu.xml	
+1	593672	  Context Menu Style		submenu
+2	38200	    Auto select		
+2	38201	    System default		
+2	38202	    Style #1 (defined in skin)		
+2	38203	    Style #2 (defined in skin)		
+2	0	    ---		disabled
+2	38204	    Use system dark menu mode		
+1	0	  ---		disabled
+1	10369	  Auto hide main skin while video screen is active		
+1	10340	  Auto resize video depending on fullscreen pop-ups		
+1	10402	  Use video skin at program start		
+1	10578	  Disable switching between skin modes		
+1	10919	  Remember window pos. && size of each skin mode		
+1	0	  ---		disabled
+1	10384	  Skin Settings...		
+0	3935328	Misc		submenu
+1	35200	  *Default preset		
+1	35201	  saved-pot64		
+1	35202	  potplayer64		
+1	35203	  potplay		
+1	10644	  Manage Presets...		
+1	0	  ---		disabled
+1	2038616	  Interface Language	Shift+L	submenu
+2	45100	    Auto select (recommended)		
+2	45101	    Built-in (Korean)		
+2	45102	    العربية ( تعريب : هشام بن عبدالعزيز بن هليّل )	Arabic.ini	
+2	45103	    Հայերեն	Armenian.ini	
+2	45104	    Azərbaycan-türkcəsi	Azerbaijan.ini	
+2	45105	    Беларуская	Belarusian.ini	
+2	45106	    БЪЛГАРСКИ	Bulgarian.ini	
+2	45107	    Catalá (Espanya)	Catalan.ini	
+2	45108	    中文(简体)	Chinese(Simplified).ini	
+2	45109	    中文(繁體)	Chinese(Traditional).ini	
+2	45110	    Čeština	Czech.ini	
+2	45111	    Nederlands	Dutch.ini	
+2	45112	    English	English.ini	
+2	45113	    Français	French.ini	
+2	45114	    German	German.ini	
+2	45115	    Greek	Greek.ini	
+2	45116	    עברית	Hebrew.ini	
+2	45117	    香港正體字	Hongkonglocale.ini	
+2	45118	    Magyar	Hungarian.ini	
+2	45119	    Bahasa Indonesia	Indonesian.ini	
+2	45120	    Italian	Italian.ini	
+2	45121	    日本語	Japanese.ini	
+2	45122	    한국어	Korean.ini	
+2	45123	    کوردی	Kurdish.ini	
+2	45124	    فارسی 	Persian.ini	
+2	45125	    Polski	Polish.ini	
+2	45126	    Portuguese (Brazil)	Portuguese.ini	
+2	45127	    РУССКИЙ	Russian.ini	
+2	45128	    Српски	Serbian.ini	
+2	45129	    Español (España)	Spanish.ini	
+2	45130	    Svenska	Swedish.ini	
+2	45131	    Тоҷикӣ	Tajik(Cyrillic).ini	
+2	45132	    தமிழ்	Tamil.ini	
+2	45133	    ภาษาไทย	Thai.ini	
+2	45134	    Türkçe	Turkish.ini	
+2	45135	    Українська	Ukrainian.ini	
+2	45136	    ئۇيغۇرچە	Uyghur.ini	
+2	45137	    Oʻzbekcha	Uzbek(Latin).ini	
+2	45138	    Tiếng Việt	Vietnamese.ini	
+1	2294998	  Stay on Top		submenu
+2	10337	    Cycle Stay on Top	Ctrl+T	
+2	10038	    Always		
+2	10039	    While playing		
+2	10968	    While playing in fullscreen mode		
+1	2693560	  When Playback Finished		submenu
+2	10336	    Cycle Playback Finished Action	Ctrl+Alt+A	
+2	10169	    Default action when playback ends		
+2	10116	    Exit PotPlayer when playback ends		
+2	10117	    Exit PotPlayer when playlist ends		
+2	10118	    Perform the action when playback ends		
+2	10119	    Perform the action when playlist ends		
+2	10120	    Stay in current item when playback ends		
+2	0	    ---		disabled
+2	10766	    Action : Shut down		
+2	10767	    Action : Sleep		
+2	10768	    Action : Hibernate		
+2	0	    ---		disabled
+2	10553	    Remember playback finished action		
+1	3414640	  When Files Opened		submenu
+2	10277	    Add only selected files to playlist		
+2	10278	    Add together similar files to playlist		
+2	10279	    Add together all files to playlist		
+1	531404	  Other		submenu
+2	10926	    Copy current item's name to clipboard		
+2	10927	    Copy current item's path to clipboard		
+2	10928	    Copy current item's path && name to clipboard		
+2	0	    ---		disabled
+2	10924	    Copy current playback elapsed time to clipboard		
+2	10925	    Copy current playback total time to clipboard		
+2	726998	    Format		submenu
+3	10929	      Time format : Auto		
+3	10930	      Minute:Second		
+3	10931	      Hour:Minute:Second		
+3	0	      ---		disabled
+3	10932	      To the end of time : Add nothing		
+3	10933	      Add 1 second (in decimal)		
+3	10934	      Add 2 seconds (in decimal)		
+3	10935	      Add 3 milliseconds (in decimal)		
+3	0	      ---		disabled
+3	10938	      Fill with zeros		
+2	0	    ---		disabled
+2	10944	    Remove history of opened files from the OpenBox/Taskbar		
+1	0	  ---		disabled
+1	10479	  Shutdown at %s		
+1	10784	  Shutdown in %s (if no time is specified)		
+1	10480	  Add a task to turn off PC or exit PotPlayer...		
+1	0	  ---		disabled
+1	10339	  Disable default hotkeys		
+1	10807	  Store and show recent items in Album/Fav menu		
+1	10809	  Enable touch feature		
+1	10810	  Prevent window from being dragged outside of title bar		
+1	0	  ---		disabled
+1	10351	  Display Full Playback/Audio Tag Info on Screen 	Tab	
+1	10442	  Display Misc Info on Screen	Scroll Lock	
+1	10449	  Show Short Playback Info on Screen	Shift+Tab	
+1	0	  ---		disabled
+1	10386	  Go to website...		
+1	10392	  Check for updates		
+1	0	  ---		disabled
+1	10970	  General Settings...		
+0	0	---		disabled
+0	4201426	Frame Size		submenu
+1	1383396	  Presets		submenu
+2	10229	    Add/Edit...		
+2	0	    ---		disabled
+2	37499	    Cycle Frame Size Presets	Numpad 0	
+2	37400	    (Default)		
+2	37401	    Zoom 1		
+2	37402	    Zoom 2		
+2	37403	    Zoom 3		
+2	37404	    Increasing width 1		
+2	37405	    Increasing width 2		
+2	37406	    Increasing width 3		
+2	37407	    Increasing Height 1		
+2	37408	    Increasing Height 2		
+2	37409	    Increasing Height 3		
+1	10058	  Actual/Last used size	Numpad 5	
+1	11363	  Remember video size/position changes		
+1	0	  ---		disabled
+1	10047	  Zoom In	Numpad 9	
+1	10048	  Zoom Out	Numpad 1	
+1	10049	  Stretch Horizontally	Numpad 6	
+1	10050	  Compress Horizontally	Numpad 4	
+1	10051	  Stretch Vertically	Numpad 8	
+1	10052	  Compress Vertically	Numpad 2	
+1	0	  ---		disabled
+1	10053	  Move Right	Ctrl+Numpad 6	
+1	10054	  Move Left	Ctrl+Numpad 4	
+1	10055	  Move Up	Ctrl+Numpad 8	
+1	10056	  Move Down	Ctrl+Numpad 2	
+1	10057	  Actual Position	Ctrl+Numpad 5	
+1	0	  ---		disabled
+1	11030	  Decrease Top Margin		
+1	11031	  Increase Top Margin		
+1	11032	  Decrease Left Margin		
+1	11033	  Increase Left Margin		
+1	11034	  Decrease Bottom Margin		
+1	11035	  Increase Bottom Margin		
+1	11036	  Decrease Right Margin		
+1	11037	  Increase Right Margin		
+1	11038	  Operate margin changes only in fullscreen		
+1	11039	  Remember screen margin changes		
+1	10406	  Screen Margin Settings...		
+0	2104118	Aspect Ratio		submenu
+1	10171	  Cycle Aspect Ratio Mode	Ctrl+F5	
+1	10040	  Keep Aspect Ratio (Recommended)		
+1	10041	  Stretch by Keeping Aspect Ratio		
+1	10042	  Stretch		
+1	10043	  Keep Video Frame to 0.5x Output Size		
+1	10044	  Keep Video Frame to 1.0x Output Size		
+1	10045	  Keep Video Frame to 1.5x Output Size		
+1	10046	  Keep Video Frame to 2.0x Output Size		
+1	0	  ---		disabled
+1	10261	  Cycle Aspect Ratio	Ctrl+F6	
+1	10015	  Default Display AR (Recommended)		
+1	10016	  Default Original DAR		
+1	10017	  4:3		
+1	10018	  16:9		
+1	10019	  16:10		
+1	10020	  1.85:1		
+1	10021	  2.35:1		
+1	10022	  Custom (%s)		
+1	10364	  Set Custom Aspect Ratio...		
+1	0	  ---		disabled
+1	7347328	  Correct AR of Output Device		submenu
+2	10273	    Monitor Output		
+2	10274	    TV-OUT 4:3		
+2	10275	    TV-OUT 16:9		
+2	10276	    Auto detect && correct		
+1	10341	  Adjust AR to Window Size		
+1	0	  ---		disabled
+1	10500	  Provide Bottom Margin for Subtitles		
+1	985150	  As Bottom Margin		submenu
+2	10677	    Reserve 1 line		
+2	10678	    Reserve 2 lines		
+2	10679	    Reserve 3 lines		
+2	10680	    Reserve available space		
+2	10681	    Reserve available space even if no subtitles exist		
+1	0	  ---		disabled
+1	10671	  Aspect Ratio Settings...		
+0	5772342	Window Size		submenu
+1	10230	  Minimize (to Taskbar/Tray)		
+1	10231	  Minimum size	`	
+1	10232	  0.5x video output size	1	
+1	10233	  1.0x video output size	2	
+1	10234	  1.5x video output size	3	
+1	10235	  2.0x video output size	4	
+1	11050	  30% of desktop size	Alt+1	
+1	11051	  45% of desktop size	Alt+2	
+1	11052	  60% of desktop size	Alt+3	
+1	11053	  75% of desktop size	Alt+4	
+1	10236	  Maximum size	5	
+1	10841	  Fit to video aspect ratio	8	
+1	10664	  Custom size	9	
+1	10404	  Set Custom Window Size...	0	
+1	0	  ---		disabled
+1	10237	  Maximize (to Desktop) / Restore	6	
+1	10238	  Maximize (to Screen) / Restore	7	
+1	0	  ---		disabled
+1	10013	  Fullscreen (Keep AR)	Alt+Enter	
+1	10308	  Fullscreen (Stretch)	Ctrl+Enter	
+1	10309	  Fullscreen (Stretch by Keeping AR)	Ctrl+Alt+Enter	
+1	11013	  Fullscreen (on Another Display)	Ctrl+Shift+Enter	
+1	0	  ---		disabled
+1	10371	  Increase Window Size	Ctrl+Alt+Numpad +	
+1	10372	  Decrease Window Size	Ctrl+Alt+Numpad -	
+1	1906308	  Move Window		submenu
+2	10373	    Move Left 	Ctrl+Alt+Numpad 4	
+2	10374	    Move Right 	Ctrl+Alt+Numpad 6	
+2	10375	    Move Up	Ctrl+Alt+Numpad 8	
+2	10376	    Move Down	Ctrl+Alt+Numpad 2	
+2	0	    ---		disabled
+2	10377	    Place on Screen Center	Ctrl+Alt+Numpad 5	
+2	10378	    Place on Top Left Corner	Ctrl+Alt+Numpad 7	
+2	10379	    Place on Top Right Corner	Ctrl+Alt+Numpad 9	
+2	10380	    Place on Bottom Left Corner	Ctrl+Alt+Numpad 1	
+2	10381	    Place on Bottom Right Corner	Ctrl+Alt+Numpad 3	
+1	0	  ---		disabled
+1	11048	  Window Size Control...		
+0	10013	Fullscreen (Keep AR)	Enter	
+0	10308	Fullscreen (Stretch)	Ctrl+Enter	
+0	0	---		disabled
+0	10010	Preferences... 	F5	
+0	10011	Playlist...	F6	checked
+0	10383	Control Panel... 	F7	
+0	10195	Playback/System Info...	Ctrl+F1	
+0	57664	About... 	F1	
+0	0	---		disabled
+0	57665	Exit 	Alt+F4	

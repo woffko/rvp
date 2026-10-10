@@ -1,0 +1,314 @@
+table	key	command_id	menu_items
+118	Ctrl+0	10001	Sort by folder
+118	Ctrl+1	10202	Ascending order (A to Z)
+118	Ctrl+2	10203	Descending order (Z to A)
+118	Ctrl+3	10980	Title
+118	Ctrl+4	10981	Name
+118	Ctrl+5	10982	Extension
+118	Ctrl+6	10983	Size
+118	Ctrl+7	10984	Duration
+118	Ctrl+8	10985	Date
+118	Ctrl+9	10988	Randomly
+118	Ctrl+A	10204	Select All
+118	Ctrl+C	10007	Copy
+118	Ctrl+Alt+C	11365	shown at: Copy Current Screen Frame to Clipboard
+118	Ctrl+D	10004	Delete album
+118	Ctrl+E	10211	Edit title of selected items...
+118	Ctrl+F	10207	Open file location of selected item
+118	Ctrl+I	10196	Add file(s)...
+118	Ctrl+J	10205	Invert Selection
+118	Ctrl+M	10583	Rename filename of selected items...
+118	Ctrl+N	10002	Add a new album...
+118	Ctrl+O	10197	Add folder...
+118	P	10199	Play  (menu 111)
+118	Q	10005	Add to playback queue
+118	Ctrl+Q	10006	Clear playback queue
+118	Ctrl+R	10003	Edit album...
+118	Ctrl+S	10490	Search title and filenames…
+118	Ctrl+T	10210	Remove nonexistent items
+118	Ctrl+U	10198	Add URL...
+118	Ctrl+V	10008	Paste
+118	Ctrl+Alt+V	10948	Paste recent items list
+118	Ctrl+Shift+V	11364	
+118	Del	10200	Remove selected items
+118	Ctrl+Del	10212	Remove unselected items
+118	Alt+Del	10201	Remove all items
+118	Shift+Del	10213	Delete files (menu 111)
+118	Ctrl+Shift+Del	10209	Delete files (e.g. subtitles/bookmarks) (menu 111)
+118	Ctrl+Down	27021	
+118	Ctrl+End	27023	
+118	Ctrl+F1	10505	File information... (menu 111)
+118	F2	10206	Save playlist as...
+118	F3	10000	Open a playlist...
+118	F4	10640	Detect file durations (menu 111)
+118	F5	10315	Playlist settings...  (menu 111)
+118	F6	10446	Close Playlist  (menu 111)
+118	Ctrl+Home	27022	shown at: Current subtitle position
+118	Ctrl+Ins	27025	shown at: Add Current Folder to Favorites
+118	Ctrl+PgDn	27027	shown at: Force Previous Channel
+118	Ctrl+PgUp	27026	shown at: Force Next Channel
+118	Enter	10199	Play  (menu 111)
+118	Ctrl+Up	27020	
+118	Shift+M	10215	
+118	Ctrl+Shift+M	10216	
+118	Shift+C	11368	shown at: Crystality
+118	Ctrl+Shift+C	11369	
+157	"	10239	Enable skip feature
+157	'	10240	Skip Setup...
+157	,	10141	Decrease Subtitle Sync by %s 
+157	Alt+,	10953	
+157	.	10140	Increase Subtitle Sync by %s
+157	Alt+.	10951	
+157	/	10142	Default Subtitle Sync
+157	0	10404	Set Custom Window Size...
+157	1	10232	0.5x video output size
+157	Alt+1	11050	
+157	2	10233	1.0x video output size
+157	Alt+2	11051	
+157	3	10234	1.5x video output size
+157	Alt+3	11052	
+157	4	10235	2.0x video output size
+157	Alt+4	11053	
+157	5	10236	Maximum size
+157	6	10237	Maximize (to Desktop) / Restore
+157	7	10238	Maximize (to Screen) / Restore
+157	8	10841	Fit to video aspect ratio
+157	9	10664	Custom size
+157	<	10141	Decrease Subtitle Sync by %s 
+157	>	10140	Increase Subtitle Sync by %s
+157	[	10249	Set Starting Point (A)
+157	Alt+[	10535	Move Point A 0.1 Sec. Forward
+157	\	10253	Start/Stop A-B Section Repeat
+157	Alt+\	10746	Repeat current marked section
+157	]	10250	Set Ending Point (B)
+157	Alt+]	10539	Move Point B 0.1 Sec. Forward
+157	`	10231	Minimum size
+157	A	10173	shown at: Select Audio Stream (submenu)
+157	Ctrl+A	10313	Record Stream... | Record Stream... | Record Stream...
+157	Alt+A	36799	Cycle Audio Stream
+157	Ctrl+Alt+A	10336	Cycle Playback Finished Action
+157	Shift+A	10439	Voice Emphasis
+157	Ctrl+Shift+A	10502	Start/Stop Stream Recording | Start/Stop Stream Recording
+157	B	10776	shown at: A-B Repeat (submenu)
+157	Ctrl+B	10257	Soften
+157	Alt+B	10136	Use Bold Font
+157	Ctrl+Alt+B	10342	Cycle Bottom Margin
+157	C	10248	Increase speed
+157	Ctrl+C	10223	Copy Current Source Frame to Clipboard
+157	Alt+C	10370	Record Video...
+157	Ctrl+Alt+C	10432	Copy Current Screen Frame to Clipboard
+157	Shift+C	10389	Crystality
+157	D	10242	Previous frame
+157	Ctrl+D	10165	Open DVD 
+157	Alt+D	10338	Device Settings...
+157	Ctrl+Alt+D	10795	Open Blu-ray
+157	Shift+D	10390	Noise Reduction
+157	E	10087	Increase Brightness by 1% 
+157	Ctrl+E	10224	Save Current Source Frame
+157	Alt+E	10228	Browse/Edit/Sync Subtitles...
+157	Ctrl+Alt+E	10433	Save Current Screen Frame
+157	Shift+E	10095	Use Equalizer
+157	F	10241	Next frame
+157	Ctrl+F	10264	Manage Filters...
+157	Alt+F	10139	Font Settings...
+157	G	10325	Jump to Specified Time/Frame...
+157	Ctrl+G	10222	Capture Consecutive Images...
+157	Alt+G	10307	Channel Management... 
+157	Shift+G	10226	Record Audio...
+157	H	10324	Chapter/Bookmark
+157	Ctrl+H	10218	Deblock
+157	Alt+H	10126	Show/Hide Subtitles
+157	Shift+H	11110	
+157	I	10092	Decrease Hue by 1% 
+157	Ctrl+I	10420	Cycle Deinterlacing Mode
+157	Alt+I	10262	shown at: Display on Video (TV-OUT) | Display on Overlay/VMR/EVR Surface
+157	J	10765	shown at: 3D Video Mode (submenu)
+157	Ctrl+J	10162	Open Webcam/Other Device
+157	Shift+J	11111	
+157	K	10365	shown at: Video Capture (submenu)
+157	Ctrl+K	10164	Open Digital TV (BDA device) 
+157	Alt+K	10612	Cycle Screen Rotation
+157	Shift+K	11112	
+157	L	10172	shown at: Add/Select Subtitles (submenu)
+157	Ctrl+L	10352	Level Control 
+157	Alt+L	29199	Cycle Subtitle
+157	Ctrl+Alt+L	29398	
+157	Shift+L	10881	shown at: Interface Language (submenu)
+157	M	10037	Mute
+157	Ctrl+M	10427	Temporary Denoise 
+157	Ctrl+Alt+M	10272	Mute (Wave)
+157	Ctrl+Alt+Shift+M	10269	Mute (Master)
+157	N	10382	shown at: Channel Control (submenu)
+157	Ctrl+N	10425	Denoise 3D
+157	Alt+N	10353	Create Thumbnail Image...
+157	Shift+N	10009	Normalizer
+157	O	10093	Increase Hue by 1% 
+157	Ctrl+O	10158	Open File(s)...
+157	Alt+O	10146	Load Subtitle...  | Load Subtitle...
+157	P	10326	
+157	Ctrl+P	10070	Flip Vertical
+157	Alt+P	10266	Input Subtitles...
+157	Ctrl+Alt+P	10654	Use Post-Resize Pixel Shaders
+157	Shift+P	10290	Use Pre-Resize Pixel Shaders
+157	Q	10085	Disable/Last used Color Controls
+157	Ctrl+Q	10323	Extend/Crop Video...
+157	R	10088	Decrease Contrast by 1% 
+157	Ctrl+R	10256	Sharpen 
+157	Shift+R	10096	Freeverb
+157	S	10367	shown at: Pixel Shaders (submenu)
+157	Ctrl+S	10161	Open Screen Capture 
+157	Alt+S	10401	Apply subtitle sync
+157	Ctrl+Alt+S	10362	Save subtitle as...
+157	Ctrl+Shift+S	10485	Save subtitle as video filename
+157	T	10089	Increase Contrast by 1% 
+157	Ctrl+T	10337	Cycle Stay on Top
+157	Shift+T	10660	Swap Stereo Channels
+157	U	10091	Increase Saturation by 1% 
+157	Ctrl+U	10159	Open URL...
+157	V	10366	shown at: Select Video Stream (submenu)
+157	Ctrl+V	10168	
+157	Alt+V	44699	Cycle Video Stream
+157	Shift+V	10438	Voice Removal
+157	Num+	10047	Zoom In
+157	Ctrl+Alt+Num+	10371	Increase Window Size
+157	Backspace	10243	Starting point 
+157	Ctrl+Backspace	10619	Middle point
+157	Alt+Backspace	10111	Title Menu
+157	Shift+Backspace	10620	30 Sec. before ending
+157	Del	10032	Enter a channel...
+157	Shift+Del	10417	Delete files
+157	Ctrl+Shift+Del	10418	Delete files (e.g. subtitles)
+157	Down	10036	Decrease Volume
+157	Alt+Down	10129	Move Down
+157	Ctrl+Alt+Down	10271	Decrease Wave Volume
+157	Shift+Down	10521	Decrease master volume
+157	Ctrl+Alt+Shift+Down	10268	Decrease Master Volume
+157	End	10245	Next subtitle position
+157	F1	57664	About... 
+157	Ctrl+F1	10195	Playback/System Info...
+157	Ctrl+Alt+F1	10281	Show/Hide Capture1 Area 
+157	F10	10186	Manage Broadcast...
+157	F11	10280	Start/Stop Broadcasting
+157	F12	10331	Files...
+157	Ctrl+F12	10447	Menus... 
+157	Alt+F12	10668	Open FTP/WebDAV/HTTP...
+157	F2	10160	Open Folder...
+157	Ctrl+Alt+F2	10282	Show/Hide Capture2 Area 
+157	F3	10443	Open File(s)...
+157	Ctrl+Alt+F3	10283	PIP Primary Screen:  Capture1 Area
+157	F4	10167	Close Playback
+157	Ctrl+Alt+F4	10284	PIP Primary Screen:  Capture2 Area
+157	F5	10010	Preferences... 
+157	Ctrl+F5	10171	
+157	Ctrl+Alt+F5	10285	Screen Capture Settings... 
+157	F6	10011	Playlist...
+157	Ctrl+F6	10261	Cycle Aspect Ratio
+157	Ctrl+Alt+F6	10286	Start/Stop Broadcast Recording
+157	F7	10383	Control Panel... 
+157	F8	10185	Broadcast Window...
+157	F9	10012	Chat Window...
+157	Home	10244	Previous subtitle position
+157	Ctrl+Home	10582	Current subtitle position
+157	Alt+Home	10127	Default Position
+157	Ins	10031	Recall Channel 
+157	Ctrl+Ins	10311	Add Current Folder to Favorites
+157	Alt+Ins	10310	Add Current Item to Favorites
+157	Alt+VK_17	10747	
+157	Left	10059	%s Backward
+157	Ctrl+Left	10061	%s Backward
+157	Alt+Left	10130	Move Left
+157	Ctrl+Alt+Left	10065	%s Backward
+157	Shift+Left	10063	%s Backward
+157	Ctrl+Shift+Left	10786	Previous keyframe
+157	PgDn	10124	shown at: Previous Channel | Next Chapter | Play Next Item
+157	Ctrl+PgDn	10030	Force Next Channel
+157	Alt+PgDn	10138	Decrease Font Size
+157	Shift+PgDn	10328	
+157	Num0	37499	
+157	Num1	10048	Zoom Out
+157	Ctrl+Alt+Num1	10380	Place on Bottom Left Corner
+157	Num2	10052	Compress Vertically
+157	Ctrl+Num2	10056	Move Down
+157	Alt+Num2	10135	Decrease Vertical Spacing
+157	Ctrl+Alt+Num2	10376	Move Down
+157	Ctrl+Alt+Num3	10381	Place on Bottom Right Corner
+157	Num4	10050	Compress Horizontally
+157	Ctrl+Num4	10054	Move Left
+157	Alt+Num4	10133	Decrease Horizontal Spacing
+157	Ctrl+Alt+Num4	10373	Move Left 
+157	Num5	10058	Actual/Last used size
+157	Ctrl+Num5	10057	Actual Position
+157	Ctrl+Alt+Num5	10377	Place on Screen Center
+157	Num6	10049	Stretch Horizontally
+157	Ctrl+Num6	10053	Move Right
+157	Alt+Num6	10132	Increase Horizontal Spacing
+157	Ctrl+Alt+Num6	10374	Move Right 
+157	Ctrl+Alt+Num7	10378	Place on Top Left Corner
+157	Num8	10051	Stretch Vertically
+157	Ctrl+Num8	10055	Move Up
+157	Alt+Num8	10134	Increase Vertical Spacing
+157	Ctrl+Alt+Num8	10375	Move Up
+157	Num9	10047	Zoom In
+157	Ctrl+Alt+Num9	10379	Place on Top Right Corner
+157	Shift+/	10293	Default Audio Sync
+157	Ctrl+[	10533	Move Point A 0.1 Sec. Backward
+157	Ctrl+Alt+[	10541	Move A-B Points 0.1 Sec. Backward
+157	Ctrl+\	10592	Repeat current subtitle section
+157	Ctrl+\	10596	
+157	Shift+\	10778	A-B Repeat List Setup...
+157	Ctrl+]	10537	Move Point B 0.1 Sec. Backward
+157	Ctrl+Alt+]	10543	Move A-B Points 0.1 Sec. Forward
+157	Ctrl+,	10952	
+157	Ctrl+Alt+,	10954	
+157	Shift+,	10291	Decrease audio sync by %s 
+157	Ctrl+-	10591	
+157	Alt+-	10745	
+157	Ctrl+Alt+-	10594	
+157	Ctrl+Shift+-	44598	
+157	Ctrl+.	10950	
+157	Ctrl+Alt+.	10955	
+157	Shift+.	10292	Increase audio sync by %s 
+157	Ctrl+=	10593	
+157	Ctrl+Alt+=	10595	
+157	Ctrl+Shift+=	44599	
+157	PgUp	10123	shown at: Next Channel | Previous Chapter | Play Previous Item
+157	Ctrl+PgUp	10029	Force Previous Channel
+157	Alt+PgUp	10137	Increase Font Size
+157	Shift+PgUp	10327	
+157	Enter	10013	Fullscreen (Keep AR) | Fullscreen (Keep AR)
+157	Ctrl+Enter	10308	Fullscreen (Stretch) | Fullscreen (Stretch)
+157	Alt+Enter	10013	Fullscreen (Keep AR) | Fullscreen (Keep AR)
+157	Ctrl+Alt+Enter	10309	Fullscreen (Stretch by Keeping AR)
+157	Shift+Enter	10033	Desktop Mode
+157	Ctrl+Shift+Enter	11013	
+157	Right	10060	%s Forward
+157	Ctrl+Right	10062	%s Forward
+157	Alt+Right	10131	Move Right
+157	Ctrl+Alt+Right	10066	%s Forward
+157	Shift+Right	10064	%s Forward
+157	Ctrl+Shift+Right	10787	Next keyframe
+157	ScrollLock	10442	Display Misc Info on Screen
+157	Space	10014	Play/Pause Playback
+157	Num-	10048	Zoom Out
+157	Ctrl+Alt+Num-	10372	Decrease Window Size
+157	Tab	10351	Display Full Playback/Audio Tag Info on Screen 
+157	Shift+Tab	10449	Show Short Playback Info on Screen
+157	Up	10035	Increase Volume
+157	Alt+Up	10128	Move Up 
+157	Ctrl+Alt+Up	10270	Increase Wave Volume
+157	Shift+Up	10520	Increase master volume
+157	Ctrl+Alt+Shift+Up	10267	Increase Master Volume
+157	W	10086	Decrease Brightness by 1% 
+157	Ctrl+W	10163	Open Analog TV 
+157	X	10247	Decrease speed
+157	Ctrl+X	10306	Cycle Built-in Video Transform Filter Usage 
+157	Shift+X	10454	Use Built-in Audio Transform Filter
+157	Y	10090	Decrease Saturation by 1% 
+157	Ctrl+Y	10385	Reopen Current/Last Item
+157	Ctrl+Alt+Y	10488	Reload Subtitle
+157	Z	10246	Default/Last used
+157	Ctrl+Z	10071	Flip Horizontal
+157	Alt+Z	10802	Browse Scenes by Marker Positions...
+157	Shift+Z	10416	Browse Scenes by Time Intervals...
+157	{	10251	Reset Point A
+157	}	10252	Reset Point B

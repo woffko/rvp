@@ -265,6 +265,8 @@ VapourSynth inside libmpv.
   `estimated-vf-fps` reaches the target rate. If SVP rejects a process not named
   `mpv`, record what it checks and evaluate fallbacks (process naming, running
   real `mpv` embedded through `wid` on X11 and Windows).
+  Goal C result (Windows): PASS, SVP attached in 1.5 s and reached 59.94 fps
+  (`docs/spikes/s1-svp-attach.md`).
 - **S3. Qt shell.** cxx-qt + QML: frameless window that moves and resizes through
   `QWindow::startSystemMove`/`startSystemResize` on Windows, X11 and Wayland; a
   context menu that extends beyond the window bounds on all three (on Wayland
@@ -275,6 +277,9 @@ VapourSynth inside libmpv.
   repainting once per second without dropped frames (on the owner's GPU
   machine). On Windows, also compare the OpenGL path with mpv in a child window
   (`wid`).
+  Goal C result (Windows): PASS; the OpenGL path needs chrome updates applied
+  together with the next video frame, the `wid` path does not
+  (`docs/spikes/s3-qt-shell.md`).
 - **S4. Static skin render.** Parse BlackSpace `VideoSkin.xml` (classic area)
   and render the window frame to PNG at a fixed size. Compare with reference
   captures.
@@ -284,6 +289,9 @@ VapourSynth inside libmpv.
   and loud action, one music track. Use loopback recordings of PotPlayer's
   output on Windows if feasible; otherwise the owner does a blind A/B listening
   test.
+  Goal C result: `dynaudnorm=f=5000:g=3:p=1.0:m=5` halves the difference
+  (2.2 LU RMS against 5.3 LU without a normalizer); the owner's blind A/B test
+  in M3 decides (`docs/spikes/s5-normalizer.md`).
 - **R1. Reference capture on the Windows host.** Announce first and wait for
   the owner's explicit permission. Capture PotPlayer screenshots at fixed window
   sizes, the full context-menu tree, the default hotkey table, the mouse action

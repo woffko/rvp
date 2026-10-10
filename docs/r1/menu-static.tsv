@@ -1,0 +1,895 @@
+path	depth	command_id	text	shortcut_shown	submenu
+101_0_0	0	10443	Open File(s)...	F3	
+101_0_1	0	0	Open		yes
+101_0_1_0	1	10158	  Open File(s)...	Ctrl+O	
+101_0_1_1	1	10159	  Open URL...	Ctrl+U	
+101_0_1_2	1	10160	  Open Folder...	F2	
+101_0_1_3	1	10668	  Open FTP/WebDAV/HTTP...	Alt+F12	
+101_0_1_4	1	0	  Default Open Action		yes
+101_0_1_4_0	2	10358	    Open File(s)		
+101_0_1_4_1	2	10359	    Open URL		
+101_0_1_4_2	2	10360	    Open Folder		
+101_0_1_4_3	2	10361	    Open File Navigator		
+101_0_1_5	1	0	  Navigate		yes
+101_0_1_5_0	2	10331	    Files...	F12	
+101_0_1_5_1	2	10332	    Subtitles...		
+101_0_1_5_2	2	11019	    Albums...		
+101_0_1_5_3	2	11017	    URLs...		
+101_0_1_5_4	2	11018	    FTP/WebDAV/HTTP Servers...		
+101_0_1_5_5	2	11020	    Bookmarks...		
+101_0_1_5_6	2	10447	    Menus... 	Ctrl+F12	
+101_0_1_5_7	2	11021	    Broadcasts...		
+101_0_1_5_8	2	11022	    Current File...		
+101_0_1_5_9	2	0	    ---		
+101_0_1_5_10	2	11023	    Navigation Settings...		
+101_0_1_6	1	0	  ---		
+101_0_1_7	1	10161	  Open Screen Capture 	Ctrl+S	
+101_0_1_8	1	10162	  Open Webcam/Other Device	Ctrl+J	
+101_0_1_9	1	10163	  Open Analog TV 	Ctrl+W	
+101_0_1_10	1	10164	  Open Digital TV (BDA device) 	Ctrl+K	
+101_0_1_11	1	10338	  Device Settings...	Alt+D	
+101_0_1_12	1	0	  ---		
+101_0_1_13	1	10165	  Open DVD 	Ctrl+D	
+101_0_1_14	1	10412	  Open DVD files (*.IFO)...		
+101_0_1_15	1	10795	  Open Blu-ray	Ctrl+Alt+D	
+101_0_1_16	1	10796	  Open Blu-ray files (*.MPLS)...		
+101_0_1_17	1	0	  ---		
+101_0_1_18	1	10146	  Load Subtitle... 	Alt+O	
+101_0_1_19	1	10147	  Add Subtitle...		
+101_0_1_20	1	10940	  Combine Subtitle...		
+101_0_1_21	1	10488	  Reload Subtitle	Ctrl+Alt+Y	
+101_0_1_22	1	0	  ---		
+101_0_1_23	1	10385	  Reopen Current/Last Item	Ctrl+Y	
+101_0_1_24	1	10400	  Load External Audio...		
+101_0_2	0	0	Tools		yes
+101_0_2_0	1	10185	  Broadcast Window...	F8	
+101_0_2_1	1	10012	  Chat Window...	F9	
+101_0_2_2	1	10186	  Manage Broadcast...	F10	
+101_0_2_3	1	10280	  Start/Stop Broadcasting	F11	
+101_0_2_4	1	10314	  Show Broadcast Quality...		
+101_0_2_5	1	0	  ---		
+101_0_2_6	1	0	  ---		
+101_0_2_7	1	10281	  Show/Hide Capture1 Area 	Ctrl+Alt+F1	
+101_0_2_8	1	10282	  Show/Hide Capture2 Area 	Ctrl+Alt+F2	
+101_0_2_9	1	10283	  PIP Primary Screen:  Capture1 Area	Ctrl+Alt+F3	
+101_0_2_10	1	10284	  PIP Primary Screen:  Capture2 Area	Ctrl+Alt+F4	
+101_0_2_11	1	10666	  Set Capture1 Area...		
+101_0_2_12	1	10667	  Set Capture2 Area...		
+101_0_2_13	1	10285	  Screen Capture Settings... 	Ctrl+Alt+F5	
+101_0_2_14	1	0	  ---		
+101_0_2_15	1	10286	  Start/Stop Broadcast Recording	Ctrl+Alt+F6	
+101_0_2_16	1	10313	  Record Stream...	Ctrl+A	
+101_0_2_17	1	0	  Broadcast Effects		yes
+101_0_2_17_0	2	10896	    Use logo		
+101_0_2_17_1	2	10890	    Use file info		
+101_0_2_17_2	2	10891	    Use marker pen		
+101_0_2_17_3	2	10892	    Use audio modulation		
+101_0_2_17_4	2	10893	    Use fixed subtitles		
+101_0_2_17_5	2	10894	    Use horizontal scrolling subtitles		
+101_0_2_17_6	2	10895	    Use vertical scrolling subtitles		
+101_0_3	0	0	Album/Favorites		yes
+101_0_3_0	1	10310	  Add Current Item to Favorites	Alt+Insert	
+101_0_3_1	1	10311	  Add Current Folder to Favorites	Ctrl+Insert	
+101_0_3_2	1	10312	  Edit Favorites...		
+101_0_4	0	10167	Close Playback	F4	
+101_0_5	0	0	---		
+101_0_6	0	0	Visualization		yes
+101_0_6_0	1	10413	  Enable visualization for audio tracks		
+101_0_6_1	1	10840	  Display album art/cover pictures		
+101_0_6_2	1	0	  ---		
+101_0_6_3	1	10317	  WMP visualization		
+101_0_6_4	1	10318	  Floating ball		
+101_0_6_5	1	10319	  WMP visualization+floating ball		
+101_0_6_6	1	10320	  Slideshow		
+101_0_6_7	1	0	  ---		
+101_0_6_8	1	10414	  Jump to previous slide		
+101_0_6_9	1	10415	  Jump to next slide		
+101_0_6_10	1	0	  ---		
+101_0_6_11	1	37999	  Download Visualizations...		
+101_0_6_12	1	10316	  Visualization Settings...		
+101_0_7	0	0	TV (WDM/BDA)		yes
+101_0_7_0	1	10025	  First Channel	Home	
+101_0_7_1	1	10026	  Previous Channel	PgDn	
+101_0_7_2	1	10027	  Next Channel	PgUp	
+101_0_7_3	1	10028	  Last Channel	End	
+101_0_7_4	1	10031	  Recall Channel 	Insert	
+101_0_7_5	1	10029	  Force Previous Channel	Ctrl+PgDn	
+101_0_7_6	1	10030	  Force Next Channel	Ctrl+PgUp	
+101_0_7_7	1	10032	  Enter a channel...	Delete	
+101_0_7_8	1	0	  ---		
+101_0_7_9	1	10405	  Enter a channel using numeric keypad		
+101_0_7_10	1	0	  Channel Control	N	yes
+101_0_7_10_0	2	10307	    Channel Management... 	Alt+G	
+101_0_7_11	1	10407	  Additional Settings...		
+101_0_7_12	1	10313	  Record Stream...	Ctrl+A	
+101_0_7_13	1	10502	  Start/Stop Stream Recording	Ctrl+Shift+A	
+101_0_7_14	1	0	  ---		
+101_0_7_15	1	10023	  Cable		
+101_0_7_16	1	10024	  Antenna		
+101_0_8	0	0	DVD Control		yes
+101_0_8_0	1	0	  Move		yes
+101_0_8_0_0	2	20001	    		
+101_0_8_1	1	10107	  Previous Chapter	PgUp	
+101_0_8_2	1	10108	  Next Chapter	PgDn	
+101_0_8_3	1	0	  ---		
+101_0_8_4	1	0	  Audio Output		yes
+101_0_8_4_0	2	20002	    		
+101_0_8_5	1	0	  Subtitle Option		yes
+101_0_8_5_0	2	20003	    		
+101_0_8_6	1	0	  Angle Option		yes
+101_0_8_6_0	2	20004	    		
+101_0_8_7	1	0	  Speed		yes
+101_0_8_7_0	2	10469	    1x Backward		
+101_0_8_7_1	2	10470	    2x Backward		
+101_0_8_7_2	2	10471	    4x Backward		
+101_0_8_7_3	2	10472	    8x Backward		
+101_0_8_7_4	2	0	    ---		
+101_0_8_7_5	2	10473	    1x Forward		
+101_0_8_7_6	2	10474	    2x Forward		
+101_0_8_7_7	2	10475	    4x Forward		
+101_0_8_7_8	2	10476	    8x Forward		
+101_0_8_8	1	0	  ---		
+101_0_8_9	1	10109	  Previous Menu		
+101_0_8_10	1	10110	  Root Menu		
+101_0_8_11	1	10111	  Title Menu	Alt+BackSpace	
+101_0_8_12	1	10112	  Chapter Menu		
+101_0_8_13	1	10113	  Audio Menu		
+101_0_8_14	1	10114	  Subtitle Menu		
+101_0_8_15	1	10115	  Angle Menu		
+101_0_9	0	0	Playback		yes
+101_0_9_0	1	10014	  Play/Pause Playback	Space	
+101_0_9_1	1	0	  ---		
+101_0_9_2	1	10067	  Play Previous Item	PgUp	
+101_0_9_3	1	10068	  Play Next Item	PgDn	
+101_0_9_4	1	0	  ---		
+101_0_9_5	1	10324	  Chapter/Bookmark	H	
+101_0_9_6	1	0	  Jump (to)		yes
+101_0_9_6_0	2	10242	    Previous frame	D	
+101_0_9_6_1	2	10241	    Next frame	F	
+101_0_9_6_2	2	10786	    Previous keyframe	Ctrl+Shift+Left	
+101_0_9_6_3	2	10787	    Next keyframe	Ctrl+Shift+Right	
+101_0_9_6_4	2	0	    ---		
+101_0_9_6_5	2	10059	    %s Backward	Left	
+101_0_9_6_6	2	10060	    %s Forward	Right	
+101_0_9_6_7	2	10061	    %s Backward	Ctrl+Left	
+101_0_9_6_8	2	10062	    %s Forward	Ctrl+Right	
+101_0_9_6_9	2	10063	    %s Backward	Shift+Left	
+101_0_9_6_10	2	10064	    %s Forward	Shift+Right	
+101_0_9_6_11	2	10065	    %s Backward	Ctrl+Alt+Left	
+101_0_9_6_12	2	10066	    %s Forward	Ctrl+Alt+Right	
+101_0_9_6_13	2	0	    ---		
+101_0_9_6_14	2	10243	    Starting point 	BackSpace	
+101_0_9_6_15	2	10619	    Middle point	Ctrl+BackSpace	
+101_0_9_6_16	2	10620	    30 Sec. before ending	Shift+BackSpace	
+101_0_9_6_17	2	0	    ---		
+101_0_9_6_18	2	10244	    Previous subtitle position	Home	
+101_0_9_6_19	2	10245	    Next subtitle position	End	
+101_0_9_6_20	2	10582	    Current subtitle position	Ctrl+Home	
+101_0_9_6_21	2	0	    ---		
+101_0_9_6_22	2	10265	    Use keyframe to jump to a time		
+101_0_9_6_23	2	10325	    Jump to Specified Time/Frame...	G	
+101_0_9_6_24	2	10416	    Browse Scenes by Time Intervals...	Shift+Z	
+101_0_9_6_25	2	10802	    Browse Scenes by Marker Positions...	Alt+Z	
+101_0_9_6_26	2	10962	    Browse Scenes by Subtitle Intervals...		
+101_0_9_6_27	2	0	    ---		
+101_0_9_6_28	2	10758	    Time Jump Settings...		
+101_0_9_7	1	0	  Speed		yes
+101_0_9_7_0	2	10246	    Default/Last used	Z	
+101_0_9_7_1	2	10247	    Decrease speed	X	
+101_0_9_7_2	2	10248	    Increase speed	C	
+101_0_9_7_3	2	0	    ---		
+101_0_9_7_4	2	10396	    Use default quality audio time stretching		
+101_0_9_7_5	2	10397	    Use high quality audio time stretching (Recom'd)		
+101_0_9_7_6	2	10398	    Use audio pitch shifting		
+101_0_9_8	1	0	  Skip		yes
+101_0_9_8_0	2	10239	    Enable skip feature	Shift+ '	
+101_0_9_8_1	2	10579	    Skip Intro %s		
+101_0_9_8_2	2	10580	    Skip Ending %s		
+101_0_9_8_3	2	10581	    Skip chapter(s)		
+101_0_9_8_4	2	0	    ---		
+101_0_9_8_5	2	10240	    Skip Setup...	'	
+101_0_9_9	1	0	  Playlist		yes
+101_0_9_9_0	2	0	    Album		yes
+101_0_9_9_0_0	3	10002	      Add a new album...		
+101_0_9_9_0_1	3	10003	      Edit album...		
+101_0_9_9_0_2	3	10004	      Delete album		
+101_0_9_9_0_3	3	0	      ---		
+101_0_9_9_0_4	3	10946	      Start instantly to play selected albums from menus		
+101_0_9_9_0_5	3	10410	      Open playlist storage folder		
+101_0_9_9_1	2	0	    Playlist		yes
+101_0_9_9_1_0	3	10000	      Open a playlist...		
+101_0_9_9_1_1	3	10206	      Save playlist as...		
+101_0_9_9_1_2	3	10411	      Remember default playlist/recent URL items		
+101_0_9_9_2	2	0	    Playback Queue		yes
+101_0_9_9_2_0	3	10005	      Add to playback queue		
+101_0_9_9_2_1	3	10006	      Clear playback queue		
+101_0_9_9_3	2	0	    Add && Edit		yes
+101_0_9_9_3_0	3	10196	      Add file(s)...		
+101_0_9_9_3_1	3	10197	      Add folder...		
+101_0_9_9_3_2	3	10198	      Add URL...		
+101_0_9_9_3_3	3	0	      ---		
+101_0_9_9_3_4	3	10211	      Edit title of selected items...		
+101_0_9_9_3_5	3	10207	      Open file location of selected item		
+101_0_9_9_3_6	3	10490	      Search title and filenames…		
+101_0_9_9_3_7	3	10583	      Rename filename of selected items...		
+101_0_9_9_3_8	3	0	      ---		
+101_0_9_9_3_9	3	10007	      Copy		
+101_0_9_9_3_10	3	10008	      Paste		
+101_0_9_9_3_11	3	10948	      Paste recent items list		
+101_0_9_9_4	2	0	    Remove		yes
+101_0_9_9_4_0	3	10200	      Remove selected items		
+101_0_9_9_4_1	3	10212	      Remove unselected items		
+101_0_9_9_4_2	3	10201	      Remove all items		
+101_0_9_9_4_3	3	10210	      Remove nonexistent items		
+101_0_9_9_4_4	3	0	      ---		
+101_0_9_9_4_5	3	10417	      Delete files	Shift+Del	
+101_0_9_9_4_6	3	10418	      Delete files (e.g. subtitles)	Shift+Ctrl+Del	
+101_0_9_9_5	2	0	    Sort by		yes
+101_0_9_9_5_0	3	10202	      Ascending order (A to Z)		
+101_0_9_9_5_1	3	10203	      Descending order (Z to A)		
+101_0_9_9_5_2	3	0	      ---		
+101_0_9_9_5_3	3	10980	      Title		
+101_0_9_9_5_4	3	10981	      Name		
+101_0_9_9_5_5	3	10982	      Extension		
+101_0_9_9_5_6	3	10983	      Size		
+101_0_9_9_5_7	3	10984	      Duration		
+101_0_9_9_5_8	3	10985	      Date		
+101_0_9_9_5_9	3	10988	      Randomly		
+101_0_9_9_5_10	3	0	      ---		
+101_0_9_9_5_11	3	10001	      Sort by folder		
+101_0_9_9_6	2	0	    Select		yes
+101_0_9_9_6_0	3	10204	      Select All		
+101_0_9_9_6_1	3	10205	      Invert Selection		
+101_0_9_9_7	2	0	    View as		yes
+101_0_9_9_7_0	3	10900	      List (Recommended)		
+101_0_9_9_7_1	3	10901	      Thumbnails (up to 2 rows) + Details		
+101_0_9_9_7_2	3	10902	      Thumbnails (up to 3 rows) + Details		
+101_0_9_9_7_3	3	10903	      Thumbnails (up to 4 rows) + Details		
+101_0_9_9_7_4	3	10904	      Thumbnails (up to 5 rows) + Details		
+101_0_9_9_7_5	3	10905	      Thumbnails (up to 6 rows) + Details		
+101_0_9_9_7_6	3	10906	      Thumbnails (up to 7 rows) + Details		
+101_0_9_9_7_7	3	0	      ---		
+101_0_9_9_7_8	3	10908	      Reload Thumbnails + Details		
+101_0_9_9_7_9	3	11075	      Use 16:9 Thumbnail Ratio		
+101_0_9_9_8	2	0	    ---		
+101_0_9_9_9	2	10759	    Playlist Settings...		
+101_0_9_10	1	0	  A-B Repeat	B	yes
+101_0_9_10_0	2	10249	    Set Starting Point (A)	[	
+101_0_9_10_1	2	10251	    Reset Point A	Shift+[	
+101_0_9_10_2	2	10533	    Move Point A 0.1 Sec. Backward	Ctrl+[	
+101_0_9_10_3	2	10535	    Move Point A 0.1 Sec. Forward	Alt+[	
+101_0_9_10_4	2	0	    ---		
+101_0_9_10_5	2	10250	    Set Ending Point (B)	]	
+101_0_9_10_6	2	10252	    Reset Point B	Shift+]	
+101_0_9_10_7	2	10537	    Move Point B 0.1 Sec. Backward	Ctrl+]	
+101_0_9_10_8	2	10539	    Move Point B 0.1 Sec. Forward	Alt+]	
+101_0_9_10_9	2	0	    ---		
+101_0_9_10_10	2	10541	    Move A-B Points 0.1 Sec. Backward	Ctrl+Alt+[	
+101_0_9_10_11	2	10543	    Move A-B Points 0.1 Sec. Forward	Ctrl+Alt+]	
+101_0_9_10_12	2	10592	    Repeat current subtitle section	Ctrl+\ or Insert	
+101_0_9_10_13	2	10746	    Repeat current marked section	Alt+\	
+101_0_9_10_14	2	10253	    Start/Stop A-B Section Repeat	\	
+101_0_9_10_15	2	10777	    Remember A-B Repeat List		
+101_0_9_10_16	2	0	    ---		
+101_0_9_10_17	2	10778	    A-B Repeat List Setup...	Shift+\	
+101_0_9_11	1	0	  Repeat Playback		yes
+101_0_9_11_0	2	10034	    Cycle Repeat Playback		
+101_0_9_11_1	2	10495	    Disable		
+101_0_9_11_2	2	10496	    Enable: Repeat playlist		
+101_0_9_11_3	2	10497	    Enable: Repeat playing item		
+101_0_9_12	1	0	  Seamless Playback		yes
+101_0_9_12_0	2	10602	    Disable (Recommended)		
+101_0_9_12_1	2	10603	    Enable: Preload Multiple Files		
+101_0_9_12_2	2	10604	    Enable: Preload && Combine Multiple Files		
+101_0_9_12_3	2	0	    ---		
+101_0_9_12_4	2	10605	    Seamless Playback Settings...		
+101_0_9_13	1	0	  ---		
+101_0_9_14	1	10069	  Use shuffle playback mode		
+101_0_9_15	1	10419	  Remember playback positions		
+101_0_9_16	1	10121	  Hide mouse cursor during playback		
+101_0_9_17	1	10122	  Prevent screen saver during playback		
+101_0_9_18	1	10445	  Close playback when playlist ends		
+101_0_9_19	1	10921	  Send played and related files to Recycle Bin		
+101_0_9_20	1	0	  ---		
+101_0_9_21	1	10812	  Show time info on tooltip when seeking		
+101_0_9_22	1	10813	  Show thumbnail previews on navigation bar		
+101_0_9_23	1	10814	  Show markers of bookmark/chapter on nav bar		
+101_0_9_24	1	0	  ---		
+101_0_9_25	1	10757	  Playback Settings...		
+101_0_10	0	0	Subtitles		yes
+101_0_10_0	1	0	  Add/Select Subtitles	L	yes
+101_0_10_0_0	2	10146	    Load Subtitle...	Alt+O	
+101_0_10_0_1	2	10147	    Add Subtitle...		
+101_0_10_0_2	2	10940	    Combine Subtitle...		
+101_0_10_0_3	2	0	    ---		
+101_0_10_0_4	2	29199	    Cycle Subtitle	Alt+L	
+101_0_10_1	1	10126	  Show/Hide Subtitles	Alt+H	
+101_0_10_2	1	10228	  Browse/Edit/Sync Subtitles...	Alt+E	
+101_0_10_3	1	10266	  Input Subtitles...	Alt+P	
+101_0_10_4	1	0	  ---		
+101_0_10_5	1	10220	  Display on Video (TV-OUT)	Alt+I	
+101_0_10_6	1	10221	  Display on Overlay/VMR/EVR Surface	Alt+I	
+101_0_10_7	1	0	  ---		
+101_0_10_8	1	0	  Subtitle Font Renderer		yes
+101_0_10_8_0	2	10817	    		
+101_0_10_9	1	0	  Subtitle Style		yes
+101_0_10_9_0	2	10136	    Use Bold Font	Alt+B	
+101_0_10_9_1	2	10137	    Increase Font Size	Alt+PGUP	
+101_0_10_9_2	2	10138	    Decrease Font Size	Alt+PGDN	
+101_0_10_9_3	2	10139	    Font Settings...	Alt+F	
+101_0_10_9_4	2	0	    ---		
+101_0_10_9_5	2	10143	    Align Left		
+101_0_10_9_6	2	10144	    Align Center		
+101_0_10_9_7	2	10145	    Align Right		
+101_0_10_9_8	2	0	    ---		
+101_0_10_9_9	2	10127	    Default Position	Alt+Home	
+101_0_10_9_10	2	10128	    Move Up 	Alt+Up	
+101_0_10_9_11	2	10129	    Move Down	Alt+Down	
+101_0_10_9_12	2	10130	    Move Left	Alt+Left	
+101_0_10_9_13	2	10131	    Move Right	Alt+Right	
+101_0_10_9_14	2	0	    ---		
+101_0_10_9_15	2	10132	    Increase Horizontal Spacing	Alt+Numpad 6	
+101_0_10_9_16	2	10133	    Decrease Horizontal Spacing	Alt+Numpad 4	
+101_0_10_9_17	2	10134	    Increase Vertical Spacing	Alt+Numpad 8	
+101_0_10_9_18	2	10135	    Decrease Vertical Spacing	Alt+Numpad 2	
+101_0_10_9_19	2	0	    ---		
+101_0_10_9_20	2	10761	    Subtitle Font Style Settings...		
+101_0_10_10	1	0	  Subtitle Sync		yes
+101_0_10_10_0	2	10865	    Adjust Subtitle Sync...		
+101_0_10_10_1	2	10140	    Increase Subtitle Sync by %s	> or .	
+101_0_10_10_2	2	10141	    Decrease Subtitle Sync by %s 	< or ,	
+101_0_10_10_3	2	10142	    Default Subtitle Sync	/	
+101_0_10_10_4	2	10629	    Keep subtitle sync changes over whole runtime		
+101_0_10_10_5	2	0	    ---		
+101_0_10_10_6	2	10844	    Convert Subtitle FPS : %g -> 12		
+101_0_10_10_7	2	10845	    Convert Subtitle FPS : %g -> 15		
+101_0_10_10_8	2	10846	    Convert Subtitle FPS : %g -> 23.976		
+101_0_10_10_9	2	10847	    Convert Subtitle FPS : %g -> 24		
+101_0_10_10_10	2	10848	    Convert Subtitle FPS : %g -> 25		
+101_0_10_10_11	2	10849	    Convert Subtitle FPS : %g -> 29.97		
+101_0_10_10_12	2	10850	    Convert Subtitle FPS : %g -> 30		
+101_0_10_10_13	2	10851	    Convert Subtitle FPS...		
+101_0_10_10_14	2	0	    ---		
+101_0_10_10_15	2	10762	    Subtitle Language/Sync/Other Settings...		
+101_0_10_11	1	0	  Subtitle Saving		yes
+101_0_10_11_0	2	10401	    Apply subtitle sync	Alt+S	
+101_0_10_11_1	2	10485	    Save subtitle as video filename	Ctrl+Shift+S	
+101_0_10_11_2	2	10362	    Save subtitle as...	Ctrl+Alt+S	
+101_0_10_11_3	2	0	    ---		
+101_0_10_11_4	2	11096	    Save translation when saving subtitles		
+101_0_10_12	1	0	  Stereo 3D Subtitle Mode		yes
+101_0_10_12_0	2	10633	    Disable		
+101_0_10_12_1	2	10634	    Enable : SBS (Side by Side)		
+101_0_10_12_2	2	10635	    Enable : TAB (Top and Bottom)		
+101_0_10_12_3	2	0	    ---		
+101_0_10_12_4	2	10570	    Scale subtitles after output		
+101_0_10_12_5	2	10571	    Scale subtitles before output		
+101_0_10_12_6	2	0	    ---		
+101_0_10_12_7	2	10572	    Move Up		
+101_0_10_12_8	2	10573	    Move Down		
+101_0_10_12_9	2	10574	    Move Left		
+101_0_10_12_10	2	10575	    Move Right		
+101_0_10_12_11	2	10576	    Default Position		
+101_0_10_12_12	2	0	    ---		
+101_0_10_12_13	2	10965	    Auto determine 3D subtitle mode		
+101_0_10_12_14	2	0	    ---		
+101_0_10_12_15	2	10966	    3D Subtitle Settings...		
+101_0_10_13	1	0	  Subtitle Searching		yes
+101_0_10_13_0	2	10864	    Upload Subtitles...		
+101_0_10_13_1	2	10863	    Download Subtitles...		
+101_0_10_13_2	2	0	    ---		
+101_0_10_13_3	2	45349	    Online Subtitle Search Settings...		
+101_0_10_14	1	0	  ---		
+101_0_10_15	1	10624	  Copy current subtitle to clipboard		
+101_0_10_16	1	10823	  Display bitmap subtitles outside the video		
+101_0_10_17	1	10822	  Display text subtitles inside the video		
+101_0_10_18	1	10824	  Force subtitles to display under the video		
+101_0_10_19	1	10825	  Enable ASS/SSA subtitle animations		
+101_0_10_20	1	10826	  Use opaque box border style		
+101_0_10_21	1	10827	  Use fade effect		
+101_0_10_22	1	0	  ---		
+101_0_10_23	1	10760	  Subtitle Processing Settings...		
+101_0_11	0	0	Video		yes
+101_0_11_0	1	0	  Select Video Stream	V	yes
+101_0_11_0_0	2	44699	    Cycle Video Stream	Alt+V	
+101_0_11_1	1	0	  Video Renderer		yes
+101_0_11_1_0	2	10294	    Auto select (Recommended)		
+101_0_11_1_1	2	10295	    Video Renderer		
+101_0_11_1_2	2	10296	    Overlay Mixer		
+101_0_11_1_3	2	10297	    VMR 7 Windowed		
+101_0_11_1_4	2	10298	    VMR 7 Renderless		
+101_0_11_1_5	2	10299	    VMR 9 Windowed		
+101_0_11_1_6	2	10300	    VMR 9 Renderless		
+101_0_11_1_7	2	10301	    EVR (Vista / .Net3)		
+101_0_11_1_8	2	10302	    EVR Custom Present		
+101_0_11_1_9	2	10303	    Haali Video Renderer		
+101_0_11_1_10	2	10304	    Madshi Video Renderer		
+101_0_11_1_11	2	10560	    Built-in Direct3D 9 Video Renderer		
+101_0_11_1_12	2	10561	    Built-in OpenGL Video Renderer		
+101_0_11_1_13	2	10562	    Null Video Renderer (Compressed)		
+101_0_11_1_14	2	10563	    Null Video Renderer (Uncompressed)		
+101_0_11_2	1	0	  Pixel Shaders	S	yes
+101_0_11_2_0	2	10290	    Use Pre-Resize Pixel Shaders	Shift+P	
+101_0_11_2_1	2	0	    Pre-Resize Pixel Shaders		yes
+101_0_11_2_1_0	3	37500	      Do not use		
+101_0_11_2_1_1	3	37501	      Enable Shader Stacker		
+101_0_11_2_1_2	3	0	      ---		
+101_0_11_2_1_3	3	10287	      Stack...		
+101_0_11_2_2	2	0	    ---		
+101_0_11_2_3	2	10654	    Use Post-Resize Pixel Shaders	Ctrl+Alt+P	
+101_0_11_2_4	2	0	    Post-Resize Pixel Shaders		yes
+101_0_11_2_4_0	3	39800	      Do not use		
+101_0_11_2_4_1	3	39801	      Enable Shader Stacker		
+101_0_11_2_4_2	3	0	      ---		
+101_0_11_2_4_3	3	10655	      Stack...		
+101_0_11_2_5	2	0	    ---		
+101_0_11_2_6	2	10289	    Reload Pixel Shader list		
+101_0_11_2_7	2	10288	    Open Pixel Shader folder		
+101_0_11_2_8	2	0	    ---		
+101_0_11_2_9	2	10917	    Enable Display ICC Color Gamut Correction		
+101_0_11_2_10	2	11025	    Enable YCgCo Colorspace Correction		
+101_0_11_2_11	2	11027	    Enable SMPTE ST 2084 HDR Correction		
+101_0_11_2_12	2	11026	    Enable SMPTE ST 2086 HDR Correction		
+101_0_11_3	1	0	  3D Video Mode	J	yes
+101_0_11_3_0	2	10682	    Disable 3D Video Mode		
+101_0_11_3_1	2	10683	    Enable 3D Video Mode		
+101_0_11_3_2	2	10684	    Auto enable 3D Video Mode		
+101_0_11_3_3	2	0	    ---		
+101_0_11_3_4	2	10714	    3D Video Input (Source) : SBS (Side by Side)		
+101_0_11_3_5	2	10715	    3D Video Input (Source) : TAB (Top and Bottom)		
+101_0_11_3_6	2	10716	    3D Video Input (Source) : Original Image		
+101_0_11_3_7	2	0	    ---		
+101_0_11_3_8	2	10717	    Full resolution		
+101_0_11_3_9	2	10718	    Swap left/right images		
+101_0_11_3_10	2	10743	    Auto detect 3D input format		
+101_0_11_3_11	2	0	    ---		
+101_0_11_3_12	2	0	    3D Video Output (Screen)		yes
+101_0_11_3_12_0	3	10719	      SBS (Side by Side)		
+101_0_11_3_12_1	3	10720	      TAB (Top and Bottom)		
+101_0_11_3_12_2	3	10721	      3D to 2D (Left or Top Image)		
+101_0_11_3_12_3	3	10722	      3D to 2D (Right or Bottom Image)		
+101_0_11_3_12_4	3	10723	      Row Interleave		
+101_0_11_3_12_5	3	10724	      Column Interleave		
+101_0_11_3_12_6	3	10725	      Anaglyph Red/Cyan Gray		
+101_0_11_3_12_7	3	10726	      Anaglyph Red/Cyan Half Colored		
+101_0_11_3_12_8	3	10727	      Anaglyph Red/Cyan Colored		
+101_0_11_3_12_9	3	10728	      Anaglyph Red/Cyan Dubois		
+101_0_11_3_12_10	3	10729	      Anaglyph Green/Magenta Gray		
+101_0_11_3_12_11	3	10730	      Anaglyph Green/Magenta Half colored		
+101_0_11_3_12_12	3	10731	      Anaglyph Green/Magenta Colored		
+101_0_11_3_12_13	3	10732	      Anaglyph Green/Magenta Dubois		
+101_0_11_3_12_14	3	10733	      Anaglyph Yellow/Blue Gray		
+101_0_11_3_12_15	3	10734	      Anaglyph Yellow/Blue Half Colored		
+101_0_11_3_12_16	3	10735	      Anaglyph Yellow/Blue Colored		
+101_0_11_3_12_17	3	10736	      Anaglyph Yellow/Blue Dubois		
+101_0_11_3_12_18	3	10737	      Anaglyph Red/Blue Gray		
+101_0_11_3_12_19	3	10738	      Anaglyph Red/Green Gray		
+101_0_11_3_12_20	3	10739	      Shutter Glasses (Page Flipping)		
+101_0_11_3_12_21	3	10740	      NVIDIA 3D Vision		
+101_0_11_3_12_22	3	10741	      Stereoscopic 3D (Windows 8 Native 3D)		
+101_0_11_3_13	2	0	    Stereo 3D Subtitle Mode		yes
+101_0_11_3_13_0	3	10633	      Disable		
+101_0_11_3_13_1	3	10634	      Enable : SBS (Side by Side)		
+101_0_11_3_13_2	3	10635	      Enable : TAB (Top and Bottom)		
+101_0_11_3_13_3	3	0	      ---		
+101_0_11_3_13_4	3	10570	      Scale subtitles after output		
+101_0_11_3_13_5	3	10571	      Scale subtitles before output		
+101_0_11_3_13_6	3	0	      ---		
+101_0_11_3_13_7	3	10572	      Move Up		
+101_0_11_3_13_8	3	10573	      Move Down		
+101_0_11_3_13_9	3	10574	      Move Left		
+101_0_11_3_13_10	3	10575	      Move Right		
+101_0_11_3_13_11	3	10576	      Default Position		
+101_0_11_3_13_12	3	0	      ---		
+101_0_11_3_13_13	3	10965	      Auto determine 3D subtitle mode		
+101_0_11_3_13_14	3	0	      ---		
+101_0_11_3_13_15	3	10966	      3D Subtitle Settings...		
+101_0_11_3_14	2	0	    ---		
+101_0_11_3_15	2	11065	    Default Right/Bottom Image Position		
+101_0_11_3_16	2	11066	    Move Right/Bottom Image from Up to Down		
+101_0_11_3_17	2	11067	    Move Right/Bottom Image from Down to Up		
+101_0_11_3_18	2	11068	    Move Right/Bottom Image from Left to Right		
+101_0_11_3_19	2	11069	    Move Right/Bottom Image from Right to Left		
+101_0_11_3_20	2	0	    ---		
+101_0_11_3_21	2	10742	    3D Video Mode Settings...		
+101_0_11_4	1	0	  Video Transform Filter		yes
+101_0_11_4_0	2	10306	    Cycle Built-in Video Transform Filter Usage 	Ctrl+X	
+101_0_11_4_1	2	10450	    Always Use (Recommended)		
+101_0_11_4_2	2	10451	    Disable with conditions		
+101_0_11_4_3	2	10452	    Disable		
+101_0_11_5	1	0	  ---		
+101_0_11_6	1	0	  Resize		yes
+101_0_11_6_0	2	10153	    Do nothing		
+101_0_11_6_1	2	10154	    Resize when input size is smaller than the specified size		
+101_0_11_6_2	2	10155	    Resize when input size is larger than the specified size		
+101_0_11_6_3	2	10156	    Resize always		
+101_0_11_6_4	2	0	    ---		
+101_0_11_6_5	2	10321	    Video Resizing Settings...		
+101_0_11_7	1	0	  Deinterlacing		yes
+101_0_11_7_0	2	10420	    Cycle Deinterlacing Mode	Ctrl+I	
+101_0_11_7_1	2	10421	    Auto		
+101_0_11_7_2	2	10422	    Enabled		
+101_0_11_7_3	2	10423	    Disabled		
+101_0_11_7_4	2	0	    ---		
+101_0_11_7_5	2	10424	    Deinterlacing Settings...		
+101_0_11_8	1	0	  Extend/Crop		yes
+101_0_11_8_0	2	10073	    Do nothing		
+101_0_11_8_1	2	10074	    4:3 Extending		
+101_0_11_8_2	2	10075	    16:9 Extending		
+101_0_11_8_3	2	10076	    16:10 Extending		
+101_0_11_8_4	2	10077	    1.85:1 Extending		
+101_0_11_8_5	2	10078	    2.35.1 Extending		
+101_0_11_8_6	2	10079	    4:3 Cropping		
+101_0_11_8_7	2	10080	    16:9 Cropping		
+101_0_11_8_8	2	10081	    16:10 Cropping		
+101_0_11_8_9	2	10082	    1.85:1 Cropping		
+101_0_11_8_10	2	10083	    2:35:1 Cropping		
+101_0_11_8_11	2	10084	    Extend/Crop by pixel		
+101_0_11_8_12	2	0	    ---		
+101_0_11_8_13	2	10148	    Reset Video Position		
+101_0_11_8_14	2	10149	    Move Left		
+101_0_11_8_15	2	10150	    Move Right		
+101_0_11_8_16	2	10151	    Move Up		
+101_0_11_8_17	2	10152	    Move Down		
+101_0_11_8_18	2	0	    ---		
+101_0_11_8_19	2	10323	    Extend/Crop Video...	Ctrl+Q	
+101_0_11_9	1	0	  Bottom Margin		yes
+101_0_11_9_0	2	10342	    Cycle Bottom Margin	Ctrl+Alt+B	
+101_0_11_9_1	2	10343	    No Margin		
+101_0_11_9_2	2	10344	    Margin by 05% of Video Area		
+101_0_11_9_3	2	10345	    Margin by 10% of Video Area		
+101_0_11_9_4	2	10346	    Margin by 15% of Video Area		
+101_0_11_9_5	2	10347	    Margin by 20% of Video Area		
+101_0_11_9_6	2	10348	    Margin by 25% of Video Area		
+101_0_11_9_7	2	10349	    Margin by 30% of Video Area		
+101_0_11_9_8	2	0	    ---		
+101_0_11_9_9	2	10350	    Operate only when subtitles exist		
+101_0_11_9_10	2	10577	    Use Pan&&Scan method when Transform Filter fails		
+101_0_11_10	1	0	  Video Effects		yes
+101_0_11_10_0	2	10070	    Flip Vertical	Ctrl+P	
+101_0_11_10_1	2	10071	    Flip Horizontal	Ctrl+Z	
+101_0_11_10_2	2	10072	    Rotation (Horizontal/Vertical)		
+101_0_11_10_3	2	10257	    Soften	Ctrl+B	
+101_0_11_10_4	2	10256	    Sharpen 	Ctrl+R	
+101_0_11_10_5	2	10260	    Auto Level Control		
+101_0_11_10_6	2	10352	    Level Control 	Ctrl+L	
+101_0_11_10_7	2	10218	    Deblock	Ctrl+H	
+101_0_11_10_8	2	10425	    Denoise 3D	Ctrl+N	
+101_0_11_10_9	2	10426	    Gradual Denoise		
+101_0_11_10_10	2	10427	    Temporary Denoise 	Ctrl+M	
+101_0_11_10_11	2	10428	    Luma && Chroma Offset		
+101_0_11_10_12	2	10429	    WarpSharp		
+101_0_11_10_13	2	10837	    Deband		
+101_0_11_10_14	2	10531	    Motion Blur		
+101_0_11_10_15	2	0	    ---		
+101_0_11_10_16	2	10529	    Video Effect Settings...		
+101_0_11_11	1	0	  Screen Rotation		yes
+101_0_11_11_0	2	10612	    Cycle Screen Rotation	Alt+K	
+101_0_11_11_1	2	10613	    Do nothing		
+101_0_11_11_2	2	10614	    90 degrees Rotation		
+101_0_11_11_3	2	10615	    180 degrees Rotation		
+101_0_11_11_4	2	10616	    270 degrees Rotation		
+101_0_11_11_5	2	10617	    Auto rotate 0/90 degrees according to AR		
+101_0_11_11_6	2	10618	    Auto rotate 180/270 degrees according to AR		
+101_0_11_12	1	0	  Video Capture 	K	yes
+101_0_11_12_0	2	10353	    Create Thumbnail Image...	Alt+N	
+101_0_11_12_1	2	0	    ---		
+101_0_11_12_2	2	10222	    Capture Consecutive Images...	Ctrl+G	
+101_0_11_12_3	2	10431	    Start/Stop Consecutive Image Capturing		
+101_0_11_12_4	2	10334	    Set Image Storage Folder...		
+101_0_11_12_5	2	10225	    Open Image Storage Folder		
+101_0_11_12_6	2	10913	    Store captured images into play folders (if available)		
+101_0_11_12_7	2	0	    ---		
+101_0_11_12_8	2	10223	    Copy Current Source Frame to Clipboard	Ctrl+C	
+101_0_11_12_9	2	10224	    Save Current Source Frame	Ctrl+E	
+101_0_11_12_10	2	10357	    Save Current Source Frame As...		
+101_0_11_12_11	2	0	    ---		
+101_0_11_12_12	2	10432	    Copy Current Screen Frame to Clipboard	Ctrl+Alt+C	
+101_0_11_12_13	2	10433	    Save Current Screen Frame	Ctrl+Alt+E	
+101_0_11_12_14	2	10434	    Save Current Screen Frame As...		
+101_0_11_12_15	2	0	    ---		
+101_0_11_12_16	2	10354	    Save images in BMP format		
+101_0_11_12_17	2	10355	    Save images in JPEG format		
+101_0_11_12_18	2	10356	    Save images in PNG format		
+101_0_11_12_19	2	0	    ---		
+101_0_11_12_20	2	10556	    Include system date and time in filename		
+101_0_11_12_21	2	10557	    Include file elapsed time in filename		
+101_0_11_12_22	2	0	    ---		
+101_0_11_12_23	2	10305	    Include message and subtitles in image		
+101_0_11_12_24	2	10587	    Correct aspect ratio when capturing		
+101_0_11_12_25	2	0	    ---		
+101_0_11_12_26	2	11046	    Delete the last saved frame		
+101_0_11_13	1	0	  Video Recording		yes
+101_0_11_13_0	2	10313	    Record Stream...	Ctrl+A	
+101_0_11_13_1	2	10502	    Start/Stop Stream Recording	Ctrl+Shift+A	
+101_0_11_13_2	2	0	    ---		
+101_0_11_13_3	2	10370	    Record Video...	Alt+C	
+101_0_11_13_4	2	10430	    Start/Stop Video Recording		
+101_0_11_13_5	2	10909	    Set Video Storage Folder...		
+101_0_11_13_6	2	10910	    Open Video Storage Folder		
+101_0_11_13_7	2	10912	    Store recorded videos into play folders (if available)		
+101_0_11_14	1	0	  AviSynth		yes
+101_0_11_14_0	2	10770	    Enable AviSynth processing		
+101_0_11_14_1	2	10775	    Open AviSynth preset folder		
+101_0_11_14_2	2	10773	    AviSynth Settings...		
+101_0_11_15	1	0	  ---		
+101_0_11_16	1	10085	  Disable/Last used Color Controls	Q	
+101_0_11_17	1	10086	  Decrease Brightness by 1% 	W	
+101_0_11_18	1	10087	  Increase Brightness by 1% 	E	
+101_0_11_19	1	10088	  Decrease Contrast by 1% 	R	
+101_0_11_20	1	10089	  Increase Contrast by 1% 	T	
+101_0_11_21	1	10090	  Decrease Saturation by 1% 	Y	
+101_0_11_22	1	10091	  Increase Saturation by 1% 	U	
+101_0_11_23	1	10092	  Decrease Hue by 1% 	I	
+101_0_11_24	1	10093	  Increase Hue by 1% 	O	
+101_0_11_25	1	0	  ---		
+101_0_11_26	1	10363	  Video Processing Settings...		
+101_0_12	0	0	Audio		yes
+101_0_12_0	1	0	  Select Audio Stream 	A	yes
+101_0_12_0_0	2	36799	    Cycle Audio Stream	Alt+A	
+101_0_12_0_1	2	0	    ---		
+101_0_12_0_2	2	37750	    Both		
+101_0_12_0_3	2	37751	    Left channel		
+101_0_12_0_4	2	37752	    Right channel		
+101_0_12_1	1	0	  Audio Renderer		yes
+101_0_12_1_0	2	37600	    Auto select (Recommended)		
+101_0_12_2	1	0	  Audio Renderer (Pass-through)		yes
+101_0_12_2_0	2	37650	    Default Audio Device (Recommended)		
+101_0_12_3	1	0	  Audio Renderer (2nd Device)		yes
+101_0_12_3_0	2	37700	    Disable (Recommended)		
+101_0_12_4	1	20005	  Output Speakers		
+101_0_12_5	1	20006	  Output Format/Resample		
+101_0_12_6	1	20007	  Output Mode		
+101_0_12_7	1	0	  ---		
+101_0_12_8	1	0	  Playback Volume		yes
+101_0_12_8_0	2	10393	    Default volume control (Recommended)		
+101_0_12_8_1	2	10394	    System Wave volume control		
+101_0_12_8_2	2	10395	    System Master volume control		
+101_0_12_8_3	2	0	    ---		
+101_0_12_8_4	2	10435	    Enable individual volume control		
+101_0_12_8_5	2	10520	    Increase master volume	Shift+Up	
+101_0_12_8_6	2	10521	    Decrease master volume	Shift+Down	
+101_0_12_8_7	2	0	    ---		
+101_0_12_8_8	2	10436	    Pre-amplify AC3/DTS Volume to proper level		
+101_0_12_8_9	2	10522	    Increase PreAmp		
+101_0_12_8_10	2	10523	    Decrease PreAmp		
+101_0_12_8_11	2	0	    ---		
+101_0_12_8_12	2	10437	    Volume control settings...		
+101_0_12_9	1	0	  System Volume		yes
+101_0_12_9_0	2	10267	    Increase Master Volume	Ctrl+Alt+Shift+Up	
+101_0_12_9_1	2	10268	    Decrease Master Volume	Ctrl+Alt+Shift+Down	
+101_0_12_9_2	2	10269	    Mute (Master)	Ctrl+Alt+Shift+M	
+101_0_12_9_3	2	0	    ---		
+101_0_12_9_4	2	10270	    Increase Wave Volume	Ctrl+Alt+Up	
+101_0_12_9_5	2	10271	    Decrease Wave Volume	Ctrl+Alt+Down	
+101_0_12_9_6	2	10272	    Mute (Wave)	Ctrl+Alt+M	
+101_0_12_10	1	10035	  Increase Volume	Up	
+101_0_12_11	1	10036	  Decrease Volume	Down	
+101_0_12_12	1	10037	  Mute	M	
+101_0_12_13	1	0	  ---		
+101_0_12_14	1	10095	  Use Equalizer	Shift+E	
+101_0_12_15	1	20008	  Equalizer Presets		
+101_0_12_16	1	0	  ---		
+101_0_12_17	1	0	  Audio Sync		yes
+101_0_12_17_0	2	10878	    Adjust Audio Sync...		
+101_0_12_17_1	2	10291	    Decrease audio sync by %s 	Shift+,	
+101_0_12_17_2	2	10292	    Increase audio sync by %s 	Shift+.	
+101_0_12_17_3	2	10293	    Default Audio Sync	Shift+/	
+101_0_12_17_4	2	0	    ---		
+101_0_12_17_5	2	10625	    Do not keep audio sync changes		
+101_0_12_17_6	2	10626	    Keep audio sync changes over whole runtime		
+101_0_12_17_7	2	10627	    Always keep audio sync changes		
+101_0_12_18	1	0	  Audio Effects		yes
+101_0_12_18_0	2	10009	    Normalizer	Shift+N	
+101_0_12_18_1	2	10389	    Crystality	Shift+C	
+101_0_12_18_2	2	10390	    Noise Reduction	Shift+D	
+101_0_12_18_3	2	10096	    Freeverb	Shift+R	
+101_0_12_18_4	2	10438	    Voice Removal	Shift+V	
+101_0_12_18_5	2	10439	    Voice Emphasis	Shift+A	
+101_0_12_18_6	2	10660	    Swap Stereo Channels	Shift+T	
+101_0_12_18_7	2	0	    ---		
+101_0_12_18_8	2	10756	    Audio Language/Sync/Other Settings...		
+101_0_12_19	1	0	  Audio Recording		yes
+101_0_12_19_0	2	10226	    Record Audio...	Shift+G	
+101_0_12_19_1	2	10798	    Start/Stop Audio Recording		
+101_0_12_19_2	2	10335	    Set Audio Storage Folder...		
+101_0_12_19_3	2	10227	    Open Audio Storage Folder		
+101_0_12_19_4	2	10915	    Store recorded audios into play folders (if available)		
+101_0_12_20	1	0	  ---		
+101_0_12_21	1	10454	  Use Built-in Audio Transform Filter	Shift+X	
+101_0_12_22	1	10391	  Audio Processing Settings...		
+101_0_13	0	0	Filters		yes
+101_0_13_0	1	10264	  Manage Filters...	Ctrl+F	
+101_0_14	0	0	Skins		yes
+101_0_14_0	1	0	  ---		
+101_0_14_1	1	0	  Logo (while playback is off)		yes
+101_0_14_1_0	2	0	    ---		
+101_0_14_1_1	2	10440	    Logo Settings...		
+101_0_14_2	1	0	  Logo (while starting playback)		yes
+101_0_14_2_0	2	0	    ---		
+101_0_14_2_1	2	10440	    Logo Settings...		
+101_0_14_3	1	0	  Color Themes		yes
+101_0_14_3_0	2	0	    ---		
+101_0_14_3_1	2	10387	    HSB color theme		
+101_0_14_3_2	2	10388	    RGB color theme		
+101_0_14_3_3	2	0	    ---		
+101_0_14_3_4	2	10527	    Customize...		
+101_0_14_4	1	0	  Opacity		yes
+101_0_14_4_0	2	20009	    Main Window		
+101_0_14_5	1	0	  On Screen Control		yes
+101_0_14_5_0	2	10514	    Disable		
+101_0_14_5_1	2	10515	    Enable: Direct3D9 Mode		
+101_0_14_5_2	2	10516	    Enable: Layered Window Mode		
+101_0_14_5_3	2	0	    ---		
+101_0_14_5_4	2	10519	    Skin Advanced Settings...		
+101_0_14_6	1	0	  ---		
+101_0_14_7	1	10369	  Auto hide main skin while video screen is active		
+101_0_14_8	1	10340	  Auto resize video depending on fullscreen pop-ups		
+101_0_14_9	1	10402	  Use video skin at program start		
+101_0_14_10	1	10578	  Disable switching between skin modes		
+101_0_14_11	1	10919	  Remember window pos. && size of each skin mode		
+101_0_14_12	1	0	  ---		
+101_0_14_13	1	10384	  Skin Settings...		
+101_0_15	0	0	Misc		yes
+101_0_15_0	1	10644	  Manage Presets...		
+101_0_15_1	1	0	  ---		
+101_0_15_2	1	0	  Interface Language	Shift+L	yes
+101_0_15_2_0	2	45100	    Auto select (recommended)		
+101_0_15_2_1	2	45101	    Built-in (Korean)		
+101_0_15_3	1	0	  Stay on Top		yes
+101_0_15_3_0	2	10337	    Cycle Stay on Top	Ctrl+T	
+101_0_15_3_1	2	10038	    Always		
+101_0_15_3_2	2	10039	    While playing		
+101_0_15_3_3	2	10968	    While playing in fullscreen mode		
+101_0_15_4	1	0	  When Playback Finished		yes
+101_0_15_4_0	2	10336	    Cycle Playback Finished Action	Ctrl+Alt+A	
+101_0_15_4_1	2	10116	    Exit PotPlayer when playback ends		
+101_0_15_4_2	2	10117	    Exit PotPlayer when playlist ends		
+101_0_15_4_3	2	10118	    Perform the action when playback ends		
+101_0_15_4_4	2	10119	    Perform the action when playlist ends		
+101_0_15_4_5	2	0	    ---		
+101_0_15_4_6	2	10766	    Action : Shut down		
+101_0_15_4_7	2	10767	    Action : Sleep		
+101_0_15_4_8	2	10768	    Action : Hibernate		
+101_0_15_4_9	2	0	    ---		
+101_0_15_4_10	2	10553	    Remember playback finished action		
+101_0_15_5	1	0	  When Files Opened		yes
+101_0_15_5_0	2	10277	    Add only selected files to playlist		
+101_0_15_5_1	2	10278	    Add together similar files to playlist		
+101_0_15_5_2	2	10279	    Add together all files to playlist		
+101_0_15_6	1	0	  Other		yes
+101_0_15_6_0	2	10926	    Copy current item's name to clipboard		
+101_0_15_6_1	2	10927	    Copy current item's path to clipboard		
+101_0_15_6_2	2	10928	    Copy current item's path && name to clipboard		
+101_0_15_6_3	2	0	    ---		
+101_0_15_6_4	2	10944	    Remove history of opened files from the OpenBox/Taskbar		
+101_0_15_7	1	0	  ---		
+101_0_15_8	1	10479	  Shutdown at %s		
+101_0_15_9	1	10784	  Shutdown in %s (if no time is specified)		
+101_0_15_10	1	10480	  Add a task to turn off PC or exit PotPlayer...		
+101_0_15_11	1	0	  ---		
+101_0_15_12	1	10339	  Disable default hotkeys		
+101_0_15_13	1	10807	  Store and show recent items in Album/Fav menu		
+101_0_15_14	1	10809	  Enable touch feature		
+101_0_15_15	1	0	  ---		
+101_0_15_16	1	10351	  Display Full Playback/Audio Tag Info on Screen 	Tab	
+101_0_15_17	1	10442	  Display Misc Info on Screen	Scroll Lock	
+101_0_15_18	1	10449	  Show Short Playback Info on Screen	Shift+Tab	
+101_0_15_19	1	0	  ---		
+101_0_15_20	1	10386	  Go to website...		
+101_0_15_21	1	10392	  Check for updates		
+101_0_15_22	1	0	  ---		
+101_0_15_23	1	10970	  General Settings...		
+101_0_16	0	0	---		
+101_0_17	0	0	Frame Size		yes
+101_0_17_0	1	0	  Presets		yes
+101_0_17_0_0	2	10229	    Add/Edit...		
+101_0_17_0_1	2	0	    ---		
+101_0_17_1	1	10058	  Actual/Last used size	Numpad 5	
+101_0_17_2	1	0	  ---		
+101_0_17_3	1	10047	  Zoom In	Numpad 9	
+101_0_17_4	1	10048	  Zoom Out	Numpad 1	
+101_0_17_5	1	10049	  Stretch Horizontally	Numpad 6	
+101_0_17_6	1	10050	  Compress Horizontally	Numpad 4	
+101_0_17_7	1	10051	  Stretch Vertically	Numpad 8	
+101_0_17_8	1	10052	  Compress Vertically	Numpad 2	
+101_0_17_9	1	0	  ---		
+101_0_17_10	1	10053	  Move Right	Ctrl+Numpad 6	
+101_0_17_11	1	10054	  Move Left	Ctrl+Numpad 4	
+101_0_17_12	1	10055	  Move Up	Ctrl+Numpad 8	
+101_0_17_13	1	10056	  Move Down	Ctrl+Numpad 2	
+101_0_17_14	1	10057	  Actual Position	Ctrl+Numpad 5	
+101_0_17_15	1	0	  ---		
+101_0_17_16	1	11030	  Decrease Top Margin		
+101_0_17_17	1	11031	  Increase Top Margin		
+101_0_17_18	1	11032	  Decrease Left Margin		
+101_0_17_19	1	11033	  Increase Left Margin		
+101_0_17_20	1	11034	  Decrease Bottom Margin		
+101_0_17_21	1	11035	  Increase Bottom Margin		
+101_0_17_22	1	11036	  Decrease Right Margin		
+101_0_17_23	1	11037	  Increase Right Margin		
+101_0_17_24	1	11038	  Operate margin changes only in fullscreen		
+101_0_17_25	1	10406	  Screen Margin Settings...		
+101_0_18	0	0	Aspect Ratio		yes
+101_0_18_0	1	10040	  Keep Aspect Ratio (Recommended)		
+101_0_18_1	1	10041	  Stretch by Keeping Aspect Ratio		
+101_0_18_2	1	10042	  Stretch		
+101_0_18_3	1	10043	  Keep Video Frame to 0.5x Output Size		
+101_0_18_4	1	10044	  Keep Video Frame to 1.0x Output Size		
+101_0_18_5	1	10045	  Keep Video Frame to 1.5x Output Size		
+101_0_18_6	1	10046	  Keep Video Frame to 2.0x Output Size		
+101_0_18_7	1	0	  ---		
+101_0_18_8	1	10261	  Cycle Aspect Ratio	Ctrl+F6	
+101_0_18_9	1	10015	  Default Display AR (Recommended)		
+101_0_18_10	1	10016	  Default Original DAR		
+101_0_18_11	1	10017	  4:3		
+101_0_18_12	1	10018	  16:9		
+101_0_18_13	1	10019	  16:10		
+101_0_18_14	1	10020	  1.85:1		
+101_0_18_15	1	10021	  2.35:1		
+101_0_18_16	1	10022	  Custom (%s)		
+101_0_18_17	1	10364	  Set Custom Aspect Ratio...		
+101_0_18_18	1	0	  ---		
+101_0_18_19	1	0	  Correct AR of Output Device		yes
+101_0_18_19_0	2	10273	    Monitor Output		
+101_0_18_19_1	2	10274	    TV-OUT 4:3		
+101_0_18_19_2	2	10275	    TV-OUT 16:9		
+101_0_18_19_3	2	10276	    Auto detect && correct		
+101_0_18_20	1	10341	  Adjust AR to Window Size		
+101_0_18_21	1	0	  ---		
+101_0_18_22	1	10500	  Provide Bottom Margin for Subtitles		
+101_0_18_23	1	0	  As Bottom Margin		yes
+101_0_18_23_0	2	10677	    Reserve 1 line		
+101_0_18_23_1	2	10678	    Reserve 2 lines		
+101_0_18_23_2	2	10679	    Reserve 3 lines		
+101_0_18_23_3	2	10680	    Reserve available space		
+101_0_18_23_4	2	10681	    Reserve available space even if no subtitles exist		
+101_0_18_24	1	0	  ---		
+101_0_18_25	1	10671	  Aspect Ratio Settings...		
+101_0_19	0	0	Window Size		yes
+101_0_19_0	1	10230	  Minimize (to Taskbar/Tray)		
+101_0_19_1	1	10231	  Minimum size	`	
+101_0_19_2	1	10232	  0.5x video output size	1	
+101_0_19_3	1	10233	  1.0x video output size	2	
+101_0_19_4	1	10234	  1.5x video output size	3	
+101_0_19_5	1	10235	  2.0x video output size	4	
+101_0_19_6	1	10236	  Maximum size	5	
+101_0_19_7	1	10841	  Fit to video aspect ratio	8	
+101_0_19_8	1	10664	  Custom size	9	
+101_0_19_9	1	10404	  Set Custom Window Size...	0	
+101_0_19_10	1	0	  ---		
+101_0_19_11	1	10237	  Maximize (to Desktop) / Restore	6	
+101_0_19_12	1	10238	  Maximize (to Screen) / Restore	7	
+101_0_19_13	1	0	  ---		
+101_0_19_14	1	10013	  Fullscreen (Keep AR)	Alt+Enter	
+101_0_19_15	1	10308	  Fullscreen (Stretch)	Ctrl+Enter	
+101_0_19_16	1	10309	  Fullscreen (Stretch by Keeping AR)	Ctrl+Alt+Enter	
+101_0_19_17	1	0	  ---		
+101_0_19_18	1	10033	  Desktop Mode	Shift+Enter	
+101_0_19_19	1	0	  ---		
+101_0_19_20	1	10371	  Increase Window Size	Ctrl+Alt+Numpad +	
+101_0_19_21	1	10372	  Decrease Window Size	Ctrl+Alt+Numpad -	
+101_0_19_22	1	0	  Move Window		yes
+101_0_19_22_0	2	10373	    Move Left 	Ctrl+Alt+Numpad 4	
+101_0_19_22_1	2	10374	    Move Right 	Ctrl+Alt+Numpad 6	
+101_0_19_22_2	2	10375	    Move Up	Ctrl+Alt+Numpad 8	
+101_0_19_22_3	2	10376	    Move Down	Ctrl+Alt+Numpad 2	
+101_0_19_22_4	2	0	    ---		
+101_0_19_22_5	2	10377	    Place on Screen Center	Ctrl+Alt+Numpad 5	
+101_0_19_22_6	2	10378	    Place on Top Left Corner	Ctrl+Alt+Numpad 7	
+101_0_19_22_7	2	10379	    Place on Top Right Corner	Ctrl+Alt+Numpad 9	
+101_0_19_22_8	2	10380	    Place on Bottom Left Corner	Ctrl+Alt+Numpad 1	
+101_0_19_22_9	2	10381	    Place on Bottom Right Corner	Ctrl+Alt+Numpad 3	
+101_0_19_23	1	0	  ---		
+101_0_19_24	1	11048	  Window Size Control...		
+101_0_20	0	10013	Fullscreen (Keep AR)	Enter	
+101_0_21	0	10308	Fullscreen (Stretch)	Ctrl+Enter	
+101_0_22	0	0	---		
+101_0_23	0	10010	Preferences... 	F5	
+101_0_24	0	10011	Playlist...	F6	
+101_0_25	0	10383	Control Panel... 	F7	
+101_0_26	0	10195	Playback/System Info...	Ctrl+F1	
+101_0_27	0	57664	About... 	F1	
+101_0_28	0	0	---		
+101_0_29	0	10187	Login...		
+101_0_30	0	57665	Exit 	Alt+F4	
