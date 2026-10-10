@@ -18,7 +18,7 @@ time; SVP's installation was not changed.
 | S2: VapourSynth inside libmpv with SVP's runtime | **PASS.** SVP 4.7.0.321's VapourSynth R73 and Python 3.12.11 (`~/SVP4`). As on Windows, the unchanged script fails on `vs.get_core()`; through the wrapper it interpolates 23.976 → 60.000 fps in real time (ratio 1.000), with mvtools v24 built by the kit | `docs/spikes/s2-vapoursynth.md` |
 | S1: SVP attaches | **PASS.** SVP 4.7.0.321 attached to the libmpv spike (process not named `mpv`) after 1.2 s through `/tmp/mpvsocket`, inserted its `@svp` filter and reached 59.94 fps from 23.976. The spike then crashed on exit with SVP's filter still active | `docs/spikes/s1-svp-attach.md` |
 | S3: shell on the GPU | **PASS.** Frameless window, BlackSpace painted from the owner's skin by the Rust item, mpv video item fed through the wakeup callback on the Qt thread, NVDEC (`nvdec-copy`), 1167 frames rendered where 1080 were required | `docs/spikes/s3-qt-shell.md` |
-| S3: 4K60 without dropped frames | **Not met; open item accepted by the owner.** 93 drops per 20 s with the kit's first libmpv, which played audio through the PulseAudio API; 6 after building libmpv with PipeWire. mpv's own output on the same desktop drops 3. Not caused by chrome repaints, the render loop, Xwayland, the decoder, display sync, GPU clocks, CoolerControl or ydotool (27 diagnostic runs) | `docs/spikes/s3-qt-shell.md` |
+| S3: 4K60 without dropped frames | **Not met; open item accepted by the owner.** 93 drops per 20 s with the kit's first libmpv, which played audio through the PulseAudio API; 6 after building libmpv with PipeWire. On the same desktop mpv's own output drops 3 through Xwayland, Ubuntu's mpv 10 on native Wayland and VLC 3 about 680. Not caused by chrome repaints, the render loop, Xwayland, the decoder, display sync, GPU clocks, CoolerControl or ydotool (29 diagnostic runs) | `docs/spikes/s3-qt-shell.md` |
 | S3: real input | **PASS.** Real pointer drags move (−80, 60) and resize (−100, −80) the frameless window; a right click on the 440x77 window opens a 200x401 menu window | `docs/spikes/s3-qt-shell.md` |
 | Linux kit | Ran on the Ubuntu boot; fixed with what this run found (below) | `docs/test-runs/2026-10-10-ubuntu-boot.md`, `tools/linux-kit/` |
 
@@ -33,7 +33,7 @@ stay open and are rechecked in M2's GPU check on this machine.
 | D1 libmpv via `libmpv2` | Confirmed, with a rule | S1 (SVP attaches through `/tmp/mpvsocket`), S2 (SVP's VapourSynth through `VSSCRIPT_PATH` and the `get_core` wrapper), S3 (render API). Rule: on Linux, libmpv is built with the PipeWire audio output |
 | D2 own skin engine for `.dsf` | Confirmed | The spike paints BlackSpace from the owner's `.dsf` on Linux (143 operations) |
 | D3 Qt 6 via cxx-qt, QML | Confirmed | Frameless move and resize and a menu beyond the window with real input on GNOME 51 Wayland with the NVIDIA GPU |
-| D4 OpenGL render API first | Confirmed, with an open item | 4K60 HEVC keeps up (1167 frames rendered); drops fell from 93 to 6 per 20 s with PipeWire. The remaining drops also hit mpv's own output (3), so no other output path does better on this desktop, and `wid` does not exist on Wayland |
+| D4 OpenGL render API first | Confirmed, with an open item | 4K60 HEVC keeps up (1167 frames rendered); drops fell from 93 to 6 per 20 s with PipeWire. The remaining drops also hit mpv's own output (3) and Ubuntu's mpv (10), so no other output path does better on this desktop, and `wid` does not exist on Wayland |
 | D5 display list painted with `QPainter` in a Rust `QQuickPaintedItem` | Confirmed | Whole 1920x1080 skin: 68 ms on the first paint (atlas decoding), about 1 ms after that; time label 2.5 ms on average |
 
 Rules that M2 inherits, in addition to goal C's four:
@@ -55,7 +55,9 @@ Rules that M2 inherits, in addition to goal C's four:
 
 About 6 dropped frames per 20 s at 4K60 in a 1920x1080 window on GNOME 51
 Wayland with NVIDIA 595.91.07, in bursts of one or two every 5-7 seconds;
-mpv's own `gpu-next` output drops 3. Ruled out: chrome repaints (none: 6),
+mpv's own `gpu-next` output drops 3 through Xwayland, Ubuntu's mpv 0.41 drops
+10 on native Wayland with the same bursts, and VLC 3.0.23 drops about 680
+(half the frames). Ruled out: chrome repaints (none: 6),
 the render loop (threaded: 5), display sync (`display-resample`: 6), the
 content rate (59.94 fps: 7), the decoder, GPU clocks, CoolerControl's daemon
 and ydotool's virtual device. M2's GPU check on this machine should try

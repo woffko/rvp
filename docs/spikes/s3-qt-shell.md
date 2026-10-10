@@ -22,7 +22,8 @@ On the owner's Ubuntu 26.10 boot (goal D, same RTX 30-series card) everything
 works with real input too, but the GPU check does not reach zero dropped
 frames. Most of the losses (93 per 20 s) came from mpv playing audio through
 the PulseAudio API; with libmpv built with PipeWire 6 remain, against 3 for
-mpv's own output on the same desktop. See the goal D section.
+mpv's own output and 10 for Ubuntu's mpv on the same desktop. See the goal D
+section.
 
 ## The spike
 
@@ -291,11 +292,21 @@ rebuild mpv picks `ao=pipewire` and `nvdec-copy` on its own:
 | 27 | CoolerControl's daemon stopped | 1166 | 6 |
 | kit `s3` | ydotoold stopped; drops after each second: 0,0,0,0,0,0,0,1,1,4,4,4,4,4,4,6,6,6,6,6 | 1167 | 6 |
 
+Other players on the same desktop, same clip, 1920x1080 window, about 20 s,
+each with its own throwaway configuration and cache directories:
+
+| Run | Player | Drops |
+|-----|--------|-------|
+| 28 | VLC 3.0.23 from Ubuntu (`cvlc --zoom 0.5`): VDPAU decoding, OpenGL output through Xwayland, PulseAudio; counted from its "picture is too late to be displayed" log lines | 684 (682 with `--aout=alsa`) |
+| 29 | mpv 0.41.0 from Ubuntu on native Wayland (`--no-config --vo=gpu-next --hwdec=auto-copy`: Vulkan, `vulkan-copy`, PipeWire); drops after each second: 0,0,0,0,0,0,1,3,3,3,3,3,5,5,5,5,5,6,10,10 | 10 |
+
 The remaining 5-9 drops come in bursts of one or two every 5-7 seconds. They
 do not depend on the chrome, the render loop, display sync, the content
-rate, CoolerControl's GPU polling or ydotool's virtual device, and mpv's own
-output on the same desktop loses 3. The cause was not found; it is below the
-choice of video output, so it does not argue for another output path.
+rate, CoolerControl's GPU polling or ydotool's virtual device. mpv's own
+output on the same desktop loses 3 through Xwayland, Ubuntu's mpv loses 10
+on native Wayland with the same bursts, and VLC 3 loses about half the
+frames. The cause was not found; it is below the choice of video output and
+player, so it does not argue for another output path.
 `RVP_REPORT_SWAP=1` gives mpv irregular swap times on Wayland (it estimated
 59.46-59.58 Hz for a 59.95 Hz display), so display-synced modes cannot rely
 on it there.
@@ -386,5 +397,6 @@ input_check_menu=PASS menu 200x401 main 440x77 class QQuickPopupWindow
     `libffmpeg-nvenc-dev`, FFmpeg has no NVDEC and `auto-copy` falls back to
     `vdpau-copy`. Both decoded 4K60 HEVC without decoder drops.
 16. **A residual drop rate remains on GNOME Wayland with NVIDIA.** About 6
-    frames per 20 s at 4K60 in a 1920x1080 window, 3 for mpv's own output.
-    Recheck in M2's GPU check (fullscreen, longer runs, film-rate content).
+    frames per 20 s at 4K60 in a 1920x1080 window, 3 for mpv's own output
+    through Xwayland and 10 for Ubuntu's mpv on native Wayland. Recheck in
+    M2's GPU check (fullscreen, longer runs, film-rate content).

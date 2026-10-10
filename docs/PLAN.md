@@ -287,7 +287,8 @@ VapourSynth inside libmpv.
   Goal D result (Linux, GNOME Wayland): window, menu, real-input move and
   resize, skin and video pass; libmpv must use the PipeWire audio output
   (93 dropped frames per 20 s through the PulseAudio API, 6 with PipeWire).
-  The remaining 6 (mpv's own output: 3) are an open item accepted by the owner.
+  The remaining 6 (Ubuntu's mpv on the same desktop: 10) are an open item
+  accepted by the owner.
 - **S4. Static skin render.** Parse BlackSpace `VideoSkin.xml` (classic area)
   and render the window frame to PNG at a fixed size. Compare with reference
   captures.
