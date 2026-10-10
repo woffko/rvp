@@ -40,6 +40,8 @@ fn potplayer_default_keys() {
         ("F3", Action::OpenFiles),
         ("Ctrl+O", Action::OpenFiles),
         ("F4", Action::CloseMedia),
+        ("F6", Action::TogglePlaylist),
+        ("Alt+H", Action::ToggleSubtitles),
     ] {
         assert_eq!(bindings.key(&chord(key)), Some(action), "{key}");
     }
@@ -193,6 +195,20 @@ impl Harness {
             Action::MaximizeRestore => {
                 assert_eq!(self.dispatch(action), Some(UiRequest::MaximizeRestore));
             }
+            Action::TogglePlaylist => {
+                assert_eq!(self.dispatch(action), Some(UiRequest::TogglePlaylist));
+            }
+            Action::ToggleSubtitles => {
+                let before = self.app.model.flag(PropertyId::SubVisibility);
+                self.dispatch(action);
+                self.wait("subtitles toggled", |m| {
+                    m.flag(PropertyId::SubVisibility) == before.map(|on| !on)
+                });
+                self.dispatch(action);
+                self.wait("subtitles back", |m| {
+                    m.flag(PropertyId::SubVisibility) == before
+                });
+            }
             Action::CloseMedia => {}
         }
     }
@@ -246,4 +262,33 @@ fn every_default_binding_triggers_its_action() {
         h.dispatch(Action::PlayPause),
         Some(UiRequest::OpenFileDialog)
     );
+}
+
+#[test]
+fn menu_shows_potplayer_texts_and_current_keys() {
+    let dir = std::env::temp_dir().join(format!("rvp-menu-{}", std::process::id()));
+    let app = App::new(Settings::default(), &dir).expect("app");
+    let entry = |action| app.menu_entry(action);
+    assert_eq!(
+        entry(Action::SeekBackward(SeekStep::Medium)),
+        ("30 Sec Backward".to_owned(), "Ctrl+Left".to_owned())
+    );
+    assert_eq!(
+        entry(Action::SeekForward(SeekStep::VeryLong)),
+        ("5 Min Forward".to_owned(), "Ctrl+Alt+Right".to_owned())
+    );
+    assert_eq!(
+        entry(Action::ToggleFullscreen),
+        ("Fullscreen (Keep AR)".to_owned(), "Alt+Enter".to_owned())
+    );
+    assert_eq!(
+        entry(Action::Exit),
+        ("Exit".to_owned(), "Alt+F4".to_owned())
+    );
+    // With PotPlayer's key unbound, the menu shows another bound key.
+    let mut settings = Settings::default();
+    settings.keys.insert("Alt+Enter".into(), String::new());
+    let rebound = App::new(settings, &dir).expect("app");
+    assert_eq!(rebound.menu_entry(Action::ToggleFullscreen).1, "Enter");
+    let _ = std::fs::remove_dir_all(&dir);
 }

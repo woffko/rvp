@@ -18,7 +18,10 @@
 //!   picks the cell (each `ImageWidth` wide) of the entry that matches the
 //!   value; entries are separated by `,`, alternatives by `;`.
 //! * `Slider` draws its back image (or `AltImage` when disabled), the fill
-//!   image up to the value and the thumb.
+//!   image up to the value and the thumb. With no media loaded the seek bar
+//!   (`CMD_TIMEBAR_CTRL`) draws nothing at all (R1 idle captures); the
+//!   `AltImage` track is for media that cannot be sought (the owner's
+//!   screenshot of a loaded, stopped file).
 
 use crate::geometry::Rect;
 use crate::layout::{Kind, Layout, Node};
@@ -459,6 +462,9 @@ fn paint_image(list: &mut DisplayList, node: &Node<'_>, data: &DataModel) {
 fn paint_slider(list: &mut DisplayList, node: &Node<'_>, state: &UiState, data: &DataModel) {
     let attrs = &node.element.attrs;
     let command = node.command().unwrap_or("");
+    if command == "CMD_TIMEBAR_CTRL" && !state.media_loaded {
+        return;
+    }
     let slider = data.sliders.get(command).copied().unwrap_or(SliderValue {
         value: 0.0,
         enabled: state.media_loaded,

@@ -76,6 +76,7 @@ properties! {
     VideoFilters = "vf", Text;
     CurrentAo = "current-ao", Text;
     HwdecCurrent = "hwdec-current", Text;
+    SubVisibility = "sub-visibility", Flag;
 }
 
 impl PropertyId {
@@ -152,8 +153,9 @@ impl PlayerModel {
         self.loaded_path.as_deref()
     }
 
-    /// Replaces the loaded path, returning the previous one.
-    pub(crate) fn set_loaded_path(&mut self, path: Option<String>) -> Option<String> {
+    /// Replaces the loaded path, returning the previous one. The engine sets
+    /// it from its events; previews and tests set it directly.
+    pub fn set_loaded_path(&mut self, path: Option<String>) -> Option<String> {
         std::mem::replace(&mut self.loaded_path, path)
     }
 

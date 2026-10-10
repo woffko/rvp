@@ -1,0 +1,383 @@
+//! The skin as the window shows it: the layout for the current size and
+//! mode, the display list, and its split into one static layer and small
+//! dynamic regions (goal C rule 1).
+//!
+//! Every control that can change (buttons, sliders, labels, the playlist)
+//! lies in a region; overlapping regions are merged so that no two regions
+//! overlap. A region item paints every operation that touches its region,
+//! backgrounds included, so it covers the static layer completely there.
+//! After a change [`Chrome::refresh`] compares each region's operations with
+//! the last painted ones and reports only the regions that differ; the
+//! static layer repaints only when an operation outside every region
+//! changes (window activation, a new size).
+
+use std::sync::Arc;
+
+use rvp_skin::hit::{Hit, hit_test};
+use rvp_skin::layout::Kind;
+use rvp_skin::paint::Op;
+use rvp_skin::{DataModel, DisplayList, Layout, Rect, Skin, SkinError, UiState, layout, paint};
+
+/// Which skin area the window shows.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Mode {
+    /// The classic window (`MainSkinArea`).
+    Window,
+    /// Fullscreen: the bars of `MainSkinAreaOscInside` over the video.
+    Fullscreen,
+}
+
+impl Mode {
+    #[must_use]
+    pub fn area(self) -> &'static str {
+        match self {
+            Mode::Window => "MainSkinArea",
+            Mode::Fullscreen => "MainSkinAreaOscInside",
+        }
+    }
+}
+
+/// What the painters need: the display list and the region rectangles,
+/// shared with the render thread.
+#[derive(Debug, Clone, Default)]
+pub struct Frame {
+    pub list: DisplayList,
+    pub regions: Vec<Rect>,
+}
+
+impl Frame {
+    /// Operations a region item paints: every operation that touches the
+    /// region (`None` = the static layer: every operation not inside a
+    /// region, since region items cover the rest).
+    pub fn ops_for(&self, region: Option<usize>) -> impl Iterator<Item = &Op> {
+        let area = region.and_then(|index| self.regions.get(index).copied());
+        let regions = &self.regions;
+        self.list.ops.iter().filter(move |op| {
+            let bounds = op_bounds(op);
+            match area {
+                Some(area) => !bounds.intersect(&area).is_empty(),
+                None => region.is_none() && !inside_any(regions, &bounds),
+            }
+        })
+    }
+}
+
+/// What has to be repainted after a change.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct Damage {
+    pub static_layer: bool,
+    /// Indexes into [`Frame::regions`].
+    pub regions: Vec<usize>,
+    /// The set of regions changed: the shell recreates its region items.
+    pub regions_changed: bool,
+}
+
+impl Damage {
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        !self.static_layer && self.regions.is_empty() && !self.regions_changed
+    }
+}
+
+/// The skin state of one window.
+pub struct Chrome {
+    skin: &'static Skin,
+    mode: Mode,
+    width: i32,
+    height: i32,
+    layout: Option<Layout<'static>>,
+    /// The state the layout was computed for, without hover and pressed.
+    layout_state: UiState,
+    pub state: UiState,
+    pub data: DataModel,
+    frame: Arc<Frame>,
+    painted_regions: Vec<Vec<Op>>,
+    painted_static: Vec<Op>,
+}
+
+/// Bounds of what an operation can touch.
+fn op_bounds(op: &Op) -> Rect {
+    match op {
+        Op::Image { dst, clip, .. } => dst.intersect(clip),
+        Op::Fill { rect, .. } => *rect,
+        Op::Text(text) => text.rect.intersect(&text.clip),
+    }
+}
+
+fn contains(outer: &Rect, inner: &Rect) -> bool {
+    inner.x >= outer.x
+        && inner.y >= outer.y
+        && inner.right() <= outer.right()
+        && inner.bottom() <= outer.bottom()
+}
+
+fn inside_any(regions: &[Rect], bounds: &Rect) -> bool {
+    bounds.is_empty() || regions.iter().any(|region| contains(region, bounds))
+}
+
+fn union(a: &Rect, b: &Rect) -> Rect {
+    let x = a.x.min(b.x);
+    let y = a.y.min(b.y);
+    Rect::new(
+        x,
+        y,
+        a.right().max(b.right()) - x,
+        a.bottom().max(b.bottom()) - y,
+    )
+}
+
+/// Merges overlapping rectangles until none overlap; reading order.
+fn merge(mut rects: Vec<Rect>) -> Vec<Rect> {
+    let mut merged = true;
+    while merged {
+        merged = false;
+        'outer: for i in 0..rects.len() {
+            for j in i + 1..rects.len() {
+                if !rects[i].intersect(&rects[j]).is_empty() {
+                    rects[i] = union(&rects[i], &rects[j]);
+                    rects.swap_remove(j);
+                    merged = true;
+                    break 'outer;
+                }
+            }
+        }
+    }
+    rects.sort_by_key(|rect| (rect.y, rect.x, rect.w, rect.h));
+    rects
+}
+
+/// The rectangles of everything that can change, merged until none
+/// overlap.
+fn dynamic_regions(layout: &Layout<'_>) -> Vec<Rect> {
+    merge(
+        layout
+            .nodes
+            .iter()
+            .filter(|node| match node.kind {
+                Kind::Button | Kind::Slider | Kind::Label | Kind::PicLabel => true,
+                Kind::Image => node.command().is_some(),
+                Kind::Static | Kind::Spacer => node.slot() == Some("CMD_PLAY_LIST_ALBUM_TAB"),
+            })
+            .map(|node| node.clip)
+            .filter(|rect| !rect.is_empty())
+            .collect(),
+    )
+}
+
+/// Interface state without the pointer: what the layout depends on.
+fn layout_key(state: &UiState) -> UiState {
+    UiState {
+        hover: None,
+        pressed: None,
+        ..state.clone()
+    }
+}
+
+impl Chrome {
+    #[must_use]
+    pub fn new(skin: &'static Skin) -> Self {
+        Self {
+            skin,
+            mode: Mode::Window,
+            width: 0,
+            height: 0,
+            layout: None,
+            layout_state: UiState::default(),
+            state: UiState::default(),
+            data: DataModel::default(),
+            frame: Arc::new(Frame::default()),
+            painted_regions: Vec::new(),
+            painted_static: Vec::new(),
+        }
+    }
+
+    #[must_use]
+    pub fn skin(&self) -> &'static Skin {
+        self.skin
+    }
+
+    #[must_use]
+    pub fn mode(&self) -> Mode {
+        self.mode
+    }
+
+    #[must_use]
+    pub fn size(&self) -> (i32, i32) {
+        (self.width, self.height)
+    }
+
+    /// Lays the skin out for a new size or mode; everything is repainted.
+    ///
+    /// # Errors
+    /// Fails when the skin lacks the mode's area; the old layout is kept.
+    pub fn resize(&mut self, mode: Mode, width: i32, height: i32) -> Result<Damage, SkinError> {
+        let placed = layout(self.skin, mode.area(), width, height, &self.state)?;
+        self.mode = mode;
+        self.width = width;
+        self.height = height;
+        self.layout = Some(placed);
+        self.layout_state = layout_key(&self.state);
+        self.painted_regions.clear();
+        self.painted_static.clear();
+        let mut damage = self.repaint();
+        damage.regions_changed = true;
+        damage.static_layer = true;
+        damage.regions = (0..self.frame.regions.len()).collect();
+        Ok(damage)
+    }
+
+    /// Repaints after `state` or `data` changed and reports what differs.
+    pub fn refresh(&mut self) -> Damage {
+        if self.layout.is_some() && layout_key(&self.state) != self.layout_state {
+            // Visibility depends on the state (Play/Pause, Maximize/Restore).
+            if let Ok(placed) = layout(
+                self.skin,
+                self.mode.area(),
+                self.width,
+                self.height,
+                &self.state,
+            ) {
+                self.layout = Some(placed);
+            }
+            self.layout_state = layout_key(&self.state);
+        }
+        self.repaint()
+    }
+
+    fn repaint(&mut self) -> Damage {
+        let Some(placed) = &self.layout else {
+            return Damage::default();
+        };
+        let list = paint(self.skin, placed, &self.state, &self.data);
+        let regions = dynamic_regions(placed);
+        let regions_changed = regions != self.frame.regions;
+        let frame = Frame { list, regions };
+        let mut damage = Damage {
+            regions_changed,
+            ..Damage::default()
+        };
+        let static_ops: Vec<Op> = frame.ops_for(None).cloned().collect();
+        if regions_changed || static_ops != self.painted_static {
+            damage.static_layer = true;
+            self.painted_static = static_ops;
+        }
+        if regions_changed {
+            self.painted_regions = vec![Vec::new(); frame.regions.len()];
+        }
+        for index in 0..frame.regions.len() {
+            let ops: Vec<Op> = frame.ops_for(Some(index)).cloned().collect();
+            if regions_changed || ops != self.painted_regions[index] {
+                damage.regions.push(index);
+                self.painted_regions[index] = ops;
+            }
+        }
+        self.frame = Arc::new(frame);
+        damage
+    }
+
+    /// The current frame for the painters.
+    #[must_use]
+    pub fn frame(&self) -> Arc<Frame> {
+        Arc::clone(&self.frame)
+    }
+
+    #[must_use]
+    pub fn layout(&self) -> Option<&Layout<'static>> {
+        self.layout.as_ref()
+    }
+
+    /// The control, title bar or slot under a point.
+    #[must_use]
+    pub fn hit(&self, x: i32, y: i32) -> Option<Hit<'static>> {
+        self.layout
+            .as_ref()
+            .and_then(|placed| hit_test(placed, x, y))
+    }
+
+    /// The rectangle of a layout node.
+    #[must_use]
+    pub fn node_rect(&self, node: usize) -> Option<Rect> {
+        self.layout
+            .as_ref()
+            .and_then(|placed| placed.nodes.get(node))
+            .map(|node| node.rect)
+    }
+
+    /// Where the video goes: the video slot in the window, everything in
+    /// fullscreen.
+    #[must_use]
+    pub fn video_rect(&self) -> Rect {
+        match (self.mode, &self.layout) {
+            (Mode::Window, Some(placed)) => placed
+                .slot("CMD_VIDEO_WINDOW")
+                .unwrap_or_else(|| Rect::new(0, 0, self.width, self.height)),
+            _ => Rect::new(0, 0, self.width, self.height),
+        }
+    }
+
+    /// The size of the chrome around the video slot: window size minus
+    /// video size (310x108 for BlackSpace with the playlist).
+    #[must_use]
+    pub fn chrome_size(&self) -> (i32, i32) {
+        let video = self.video_rect();
+        (self.width - video.w, self.height - video.h)
+    }
+
+    /// The bars' rectangles in fullscreen (where the pointer shows them).
+    #[must_use]
+    pub fn bar_rects(&self) -> Vec<Rect> {
+        let Some(placed) = &self.layout else {
+            return Vec::new();
+        };
+        placed
+            .nodes
+            .iter()
+            .filter(|node| node.parent.is_none() && !node.rect.is_empty())
+            .map(|node| node.rect)
+            .collect()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn regions_merge_until_none_overlap() {
+        let merged = merge(vec![
+            Rect::new(0, 0, 10, 10),
+            Rect::new(5, 5, 10, 10),
+            Rect::new(12, 12, 30, 2),
+            Rect::new(60, 0, 5, 5),
+            Rect::new(40, 20, 5, 5),
+        ]);
+        assert_eq!(
+            merged,
+            vec![
+                Rect::new(0, 0, 42, 15),
+                Rect::new(60, 0, 5, 5),
+                Rect::new(40, 20, 5, 5)
+            ]
+        );
+    }
+
+    #[test]
+    fn ops_split_between_static_layer_and_regions() {
+        let fill = |x, y, w, h| Op::Fill {
+            rect: Rect::new(x, y, w, h),
+            color: [1, 2, 3, 255],
+        };
+        let frame = Frame {
+            list: DisplayList {
+                width: 100,
+                height: 100,
+                ops: vec![fill(0, 0, 100, 100), fill(10, 10, 5, 5), fill(50, 50, 5, 5)],
+            },
+            regions: vec![Rect::new(8, 8, 10, 10)],
+        };
+        let region: Vec<&Op> = frame.ops_for(Some(0)).collect();
+        assert_eq!(region.len(), 2, "background and the control");
+        let static_layer: Vec<&Op> = frame.ops_for(None).collect();
+        assert_eq!(static_layer.len(), 2, "background and the op outside");
+    }
+}

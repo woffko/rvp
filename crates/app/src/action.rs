@@ -40,6 +40,10 @@ pub enum Action {
     Minimize,
     MaximizeRestore,
     ContextMenu,
+    /// Show or hide the attached playlist panel.
+    TogglePlaylist,
+    /// Show or hide subtitles.
+    ToggleSubtitles,
 }
 
 /// Every action with its stable name (settings files use the names).
@@ -75,6 +79,8 @@ const NAMES: &[(Action, &str)] = &[
     (Action::Minimize, "minimize"),
     (Action::MaximizeRestore, "maximize-restore"),
     (Action::ContextMenu, "context-menu"),
+    (Action::TogglePlaylist, "toggle-playlist"),
+    (Action::ToggleSubtitles, "toggle-subtitles"),
 ];
 
 impl Action {
@@ -125,13 +131,16 @@ impl Action {
             10124 | 10068 => Action::Next,
             10443 | 10158 => Action::OpenFiles,
             10167 => Action::CloseMedia,
+            10011 => Action::TogglePlaylist,
+            10237 | 10238 => Action::MaximizeRestore,
+            10126 => Action::ToggleSubtitles,
             57665 => Action::Exit,
             _ => return None,
         })
     }
 
-    /// The action of a skin control's `CmdID`. Sliders and labels are not
-    /// actions; the shell handles them directly.
+    /// The action of a skin control's `CmdID` or `AltCmdID` (right click).
+    /// Sliders and labels are not actions; the shell handles them directly.
     #[must_use]
     pub fn from_skin_command(command: &str) -> Option<Action> {
         Some(match command {
@@ -144,9 +153,49 @@ impl Action {
             "CMD_MAX_WINDOW" | "CMD_RESTORE_WINDOW" => Action::MaximizeRestore,
             "ID_APP_EXIT" => Action::Exit,
             "CMD_FULLSCREEN" | "ID_VIEW_FULLSCREEN" => Action::ToggleFullscreen,
-            "CMD_MEDIA_OPEN" | "ID_FILE_OPEN" => Action::OpenFiles,
+            "CMD_MEDIA_OPEN" | "ID_FILE_OPEN" | "ID_OPEN_FILE" => Action::OpenFiles,
+            "ID_PLAYBACK_30SEC_BACK" => Action::SeekBackward(SeekStep::Medium),
+            "ID_PLAYBACK_30SEC_FORW" => Action::SeekForward(SeekStep::Medium),
+            "ID_PLAYLIST_WINDOW"
+            | "CMD_ATTACH_WINDOW_OPEN"
+            | "CMD_ATTACH_WINDOW_CLOSE"
+            | "CMD_PLAYLIST_WINDOW_OPEN"
+            | "CMD_PLAYLIST_WINDOW_CLOSE" => Action::TogglePlaylist,
+            "ID_CAPTION_VISIBLE" => Action::ToggleSubtitles,
             _ => return None,
         })
+    }
+
+    /// PotPlayer's menu text (`docs/r1/menu-static.tsv`) and the shortcut
+    /// its menu shows; `%s` stands for the seek step's length.
+    #[must_use]
+    pub fn menu_text(self) -> (&'static str, Option<&'static str>) {
+        match self {
+            Action::OpenFiles => ("Open File(s)...", Some("F3")),
+            Action::CloseMedia => ("Close Playback", Some("F4")),
+            Action::Exit => ("Exit", Some("Alt+F4")),
+            Action::PlayPause => ("Play/Pause Playback", Some("Space")),
+            Action::Previous => ("Play Previous Item", Some("PgUp")),
+            Action::Next => ("Play Next Item", Some("PgDn")),
+            Action::SeekBackward(SeekStep::Short) => ("%s Backward", Some("Left")),
+            Action::SeekForward(SeekStep::Short) => ("%s Forward", Some("Right")),
+            Action::SeekBackward(SeekStep::Medium) => ("%s Backward", Some("Ctrl+Left")),
+            Action::SeekForward(SeekStep::Medium) => ("%s Forward", Some("Ctrl+Right")),
+            Action::SeekBackward(SeekStep::Long) => ("%s Backward", Some("Shift+Left")),
+            Action::SeekForward(SeekStep::Long) => ("%s Forward", Some("Shift+Right")),
+            Action::SeekBackward(SeekStep::VeryLong) => ("%s Backward", Some("Ctrl+Alt+Left")),
+            Action::SeekForward(SeekStep::VeryLong) => ("%s Forward", Some("Ctrl+Alt+Right")),
+            Action::VolumeUp => ("Increase Volume", Some("Up")),
+            Action::VolumeDown => ("Decrease Volume", Some("Down")),
+            Action::ToggleMute => ("Mute", Some("M")),
+            Action::ToggleFullscreen => ("Fullscreen (Keep AR)", Some("Alt+Enter")),
+            Action::ToggleFullscreenStretch => ("Fullscreen (Stretch)", Some("Ctrl+Enter")),
+            Action::Minimize => ("Minimize (to Taskbar/Tray)", None),
+            Action::MaximizeRestore => ("Maximize (to Desktop) / Restore", Some("6")),
+            Action::ContextMenu => ("Menu", None),
+            Action::TogglePlaylist => ("Playlist...", Some("F6")),
+            Action::ToggleSubtitles => ("Show/Hide Subtitles", Some("Alt+H")),
+        }
     }
 
     /// True for actions that a second invocation undoes (used when a single
@@ -161,6 +210,8 @@ impl Action {
                 | Action::ToggleFullscreen
                 | Action::ToggleFullscreenStretch
                 | Action::MaximizeRestore
+                | Action::TogglePlaylist
+                | Action::ToggleSubtitles
         )
     }
 }

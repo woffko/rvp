@@ -14,7 +14,7 @@ use rvp_engine::{
 };
 
 use crate::action::Action;
-use crate::input::Bindings;
+use crate::input::{Bindings, KeyChord};
 use crate::resume::{ResumeStore, WindowGeometry};
 use crate::settings::Settings;
 use crate::storage::{self, Dirs};
@@ -30,8 +30,28 @@ pub enum UiRequest {
     MaximizeRestore,
     Exit,
     ContextMenu,
+    TogglePlaylist,
     /// A non-blocking message (section 4: no modal interruptions).
     Message(String),
+}
+
+/// A seek step as PotPlayer's menu names it: `5 Sec`, `1 Min`.
+fn step_label(seconds: f64) -> String {
+    // Seek steps are whole seconds in practice; the fraction is shown when
+    // a setting has one.
+    if seconds >= 60.0 && seconds % 60.0 == 0.0 {
+        format!("{} Min", seconds / 60.0)
+    } else {
+        format!("{seconds} Sec")
+    }
+}
+
+/// What one drain of the engine produced.
+#[derive(Debug, Default)]
+pub struct Drained {
+    pub changes: Changes,
+    pub requests: Vec<UiRequest>,
+    pub events: Vec<EngineEvent>,
 }
 
 /// Resume-position tracking around file loads.
@@ -51,7 +71,6 @@ pub struct App {
     pub bindings: Bindings,
     pub model: PlayerModel,
     store: ResumeStore,
-    events: Vec<EngineEvent>,
     tracking: Tracking,
     /// Warnings from loading the settings, for the shell to show once.
     pub warnings: Vec<String>,
@@ -84,7 +103,6 @@ impl App {
             bindings,
             model: PlayerModel::new(),
             store: ResumeStore::open(state_dir)?,
-            events: Vec::new(),
             tracking: Tracking::On,
             warnings,
         })
@@ -143,6 +161,34 @@ impl App {
         Ok(())
     }
 
+    /// The context menu entry of an action: PotPlayer's text with the seek
+    /// step filled in, and the key shown next to it (PotPlayer's key while
+    /// it is still bound to the action, otherwise the simplest bound key).
+    #[must_use]
+    pub fn menu_entry(&self, action: Action) -> (String, String) {
+        let (text, shown) = action.menu_text();
+        let label = match action {
+            Action::SeekBackward(step) | Action::SeekForward(step) => {
+                text.replace("%s", &step_label(self.settings.seek_seconds(step)))
+            }
+            _ => text.to_owned(),
+        };
+        let shown = shown
+            .and_then(KeyChord::parse)
+            .filter(|chord| self.bindings.key(chord) == Some(action));
+        let shortcut = match (action, shown) {
+            // Alt+F4 is the window system's, never in the bindings.
+            (Action::Exit, _) => "Alt+F4".to_owned(),
+            (_, Some(chord)) => chord.to_string(),
+            (_, None) => self
+                .bindings
+                .key_for(action)
+                .map(|chord| chord.to_string())
+                .unwrap_or_default(),
+        };
+        (label, shortcut)
+    }
+
     /// Carries out an action; window-level actions come back as requests.
     pub fn dispatch(&mut self, engine: &Engine, action: Action) -> Option<UiRequest> {
         let result = match action {
@@ -157,6 +203,8 @@ impl App {
             Action::Minimize => return Some(UiRequest::Minimize),
             Action::MaximizeRestore => return Some(UiRequest::MaximizeRestore),
             Action::ContextMenu => return Some(UiRequest::ContextMenu),
+            Action::TogglePlaylist => return Some(UiRequest::TogglePlaylist),
+            Action::ToggleSubtitles => engine.toggle_subtitles(),
             Action::PlayPause => {
                 if !self.model.media_loaded() {
                     return Some(UiRequest::OpenFileDialog);
@@ -215,13 +263,14 @@ impl App {
         drop(engine.set_volume((fraction * 100.0).clamp(0.0, 100.0)));
     }
 
-    /// Handles everything libmpv has reported: updates the model, the resume
-    /// store and returns requests for the window.
-    pub fn drain(&mut self, engine: &Engine, now: Instant) -> (Changes, Vec<UiRequest>) {
-        let changes = engine.drain(&mut self.model, &mut self.events);
+    /// Handles everything libmpv has reported: updates the model and the
+    /// resume store, and returns the changes, requests for the window and
+    /// the events.
+    pub fn drain(&mut self, engine: &Engine, now: Instant) -> Drained {
+        let mut events = Vec::new();
+        let changes = engine.drain(&mut self.model, &mut events);
         let mut requests = Vec::new();
         let mut save_now = false;
-        let events = std::mem::take(&mut self.events);
         for event in &events {
             match event {
                 EngineEvent::StartFile => self.tracking = Tracking::Loading,
@@ -253,8 +302,6 @@ impl App {
                 EngineEvent::PlaybackRestart | EngineEvent::Shutdown => {}
             }
         }
-        self.events = events;
-        self.events.clear();
 
         let time = self.model.double(PropertyId::TimePos);
         if let (Tracking::Resuming(target), Some(time)) = (self.tracking, time)
@@ -294,7 +341,11 @@ impl App {
                 "Cannot save the playback state: {error}"
             )));
         }
-        (changes, requests)
+        Drained {
+            changes,
+            requests,
+            events,
+        }
     }
 
     /// Saves a pending change once the save interval has passed; call it

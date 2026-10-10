@@ -1,0 +1,35 @@
+[package]
+name = "rvp-shell"
+description = "The RVP window: Qt Quick, the skin painter and the libmpv video item (milestone M2)."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[[bin]]
+name = "rvp"
+path = "src/main.rs"
+
+[dependencies]
+cxx.workspace = true
+cxx-qt.workspace = true
+cxx-qt-lib.workspace = true
+rvp-app = { path = "../crates/app" }
+rvp-engine = { path = "../crates/engine" }
+rvp-skin = { path = "../crates/skin" }
+
+[build-dependencies]
+cxx-qt-build.workspace = true
+
+# Not the workspace lints: cxx-qt's generated bridge code needs `unsafe`
+# (owner decision 2026-10-10, AGENTS.md), so it is denied here instead of
+# forbidden and allowed only on the bridge modules and FFI points.
+[lints.rust]
+unsafe_code = "deny"
+unsafe_op_in_unsafe_fn = "deny"
+
+[lints.clippy]
+all = { level = "deny", priority = -1 }
+pedantic = { level = "deny", priority = -1 }

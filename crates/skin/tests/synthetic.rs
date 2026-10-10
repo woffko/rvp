@@ -298,7 +298,12 @@ fn button_states() {
 #[test]
 fn bitmap_labels_and_sliders() {
     let skin = skin();
-    let image = render(&skin, &UiState::default());
+    // The seek bar shows only with media loaded.
+    let loaded = UiState {
+        media_loaded: true,
+        ..UiState::default()
+    };
+    let image = render(&skin, &loaded);
     // "0:" uses cells 11 and 21 of the bitmap font, 2 pixels each.
     assert_eq!(image.pixel(2, 54), [110, 110, 110, 255]);
     assert_eq!(image.pixel(4, 54), [210, 210, 210, 255]);
@@ -318,7 +323,11 @@ fn bitmap_labels_and_sliders() {
             enabled: false,
         },
     );
-    let state = UiState::default();
+    // Loaded but not seekable: the AltImage track.
+    let state = UiState {
+        media_loaded: true,
+        ..UiState::default()
+    };
     let placed = layout(&skin, "MainSkinArea", 100, 60, &state).expect("layout");
     let image = rasterize(
         &paint(&skin, &placed, &state, &data),
@@ -326,6 +335,18 @@ fn bitmap_labels_and_sliders() {
         &mut Fonts::new(Vec::new()),
     );
     assert_eq!(image.pixel(10, 49), SLIDER_DISABLED);
+    // Nothing loaded: no seek bar at all.
+    let state = UiState::default();
+    let placed = layout(&skin, "MainSkinArea", 100, 60, &state).expect("layout");
+    let list = paint(&skin, &placed, &state, &data);
+    let seek_bar = placed
+        .find_command("CMD_TIMEBAR_CTRL")
+        .expect("seek bar")
+        .rect;
+    assert!(list.ops.iter().all(|op| match op {
+        rvp_skin::paint::Op::Image { dst, .. } => dst.intersect(&seek_bar) != *dst,
+        _ => true,
+    }));
 }
 
 #[test]

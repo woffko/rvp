@@ -104,6 +104,137 @@ impl KeyChord {
     }
 }
 
+/// Qt keyboard modifier bits (`Qt::KeyboardModifier`).
+const QT_SHIFT: i32 = 0x0200_0000;
+const QT_CONTROL: i32 = 0x0400_0000;
+const QT_ALT: i32 = 0x0800_0000;
+const QT_KEYPAD: i32 = 0x2000_0000;
+
+/// The unshifted key of a shifted character on a US keyboard, which is how
+/// PotPlayer names keys (`Shift+1`, not `!`).
+fn unshifted(c: char) -> Option<char> {
+    const PAIRS: [(char, char); 21] = [
+        ('!', '1'),
+        ('@', '2'),
+        ('#', '3'),
+        ('$', '4'),
+        ('%', '5'),
+        ('^', '6'),
+        ('&', '7'),
+        ('*', '8'),
+        ('(', '9'),
+        (')', '0'),
+        ('_', '-'),
+        ('+', '='),
+        ('{', '['),
+        ('}', ']'),
+        ('|', '\\'),
+        (':', ';'),
+        ('"', '\''),
+        ('<', ','),
+        ('>', '.'),
+        ('?', '/'),
+        ('~', '`'),
+    ];
+    PAIRS
+        .iter()
+        .find(|&&(shifted, _)| shifted == c)
+        .map(|&(_, base)| base)
+}
+
+fn qt_special_key(key: i32) -> Option<Key> {
+    Some(match key {
+        0x0100_0000 => Key::Escape,
+        0x0100_0001 | 0x0100_0002 => Key::Tab,
+        0x0100_0003 => Key::Backspace,
+        0x0100_0004 | 0x0100_0005 => Key::Enter,
+        0x0100_0006 => Key::Insert,
+        0x0100_0007 => Key::Delete,
+        0x0100_0008 => Key::Pause,
+        0x0100_0009 => Key::PrintScreen,
+        0x0100_0010 => Key::Home,
+        0x0100_0011 => Key::End,
+        0x0100_0012 => Key::Left,
+        0x0100_0013 => Key::Up,
+        0x0100_0014 => Key::Right,
+        0x0100_0015 => Key::Down,
+        0x0100_0016 => Key::PageUp,
+        0x0100_0017 => Key::PageDown,
+        0x0100_0026 => Key::ScrollLock,
+        0x0100_0070 => Key::VolumeDown,
+        0x0100_0071 => Key::VolumeMute,
+        0x0100_0072 => Key::VolumeUp,
+        0x0100_0080 | 0x0100_0085 | 0x0100_0086 => Key::MediaPlayPause,
+        0x0100_0081 => Key::MediaStop,
+        0x0100_0082 => Key::MediaPrevious,
+        0x0100_0083 => Key::MediaNext,
+        // F1..F24 (Qt numbers F1 as 0x01000030).
+        f if (0x0100_0030..0x0100_0030 + 24).contains(&f) => {
+            Key::F(u8::try_from(f - 0x0100_0030 + 1).ok()?)
+        }
+        _ => return None,
+    })
+}
+
+impl KeyChord {
+    /// Translates a Qt key event (`QKeyEvent::key()` and `modifiers()`) to
+    /// the chords to look up, best match first. A shifted character also
+    /// tries the character itself, because PotPlayer's table names some
+    /// keys by their shifted character (`<`). Modifier keys alone give none.
+    #[must_use]
+    pub fn from_qt(key: i32, modifiers: i32) -> Vec<KeyChord> {
+        let ctrl = modifiers & QT_CONTROL != 0;
+        let alt = modifiers & QT_ALT != 0;
+        let shift = modifiers & QT_SHIFT != 0;
+        let keypad = modifiers & QT_KEYPAD != 0;
+        let chord = |key, shift| KeyChord {
+            ctrl,
+            alt,
+            shift,
+            key,
+        };
+        if let Some(special) = qt_special_key(key) {
+            return vec![chord(special, shift)];
+        }
+        let Some(c) = u32::try_from(key).ok().and_then(char::from_u32) else {
+            return Vec::new();
+        };
+        if keypad {
+            let numpad = match c {
+                '0'..='9' => c
+                    .to_digit(10)
+                    .and_then(|d| u8::try_from(d).ok())
+                    .map(Key::Numpad),
+                '+' => Some(Key::NumpadAdd),
+                '-' => Some(Key::NumpadSubtract),
+                '*' => Some(Key::NumpadMultiply),
+                '/' => Some(Key::NumpadDivide),
+                '.' | ',' => Some(Key::NumpadDecimal),
+                _ => None,
+            };
+            if let Some(numpad) = numpad {
+                return vec![chord(numpad, shift)];
+            }
+        }
+        match c {
+            ' ' => vec![chord(Key::Space, shift)],
+            c if c.is_ascii_alphanumeric() => vec![chord(Key::Char(c.to_ascii_uppercase()), shift)],
+            c if c.is_ascii_punctuation() => match unshifted(c) {
+                Some(base) if shift => {
+                    let base_key = if base.is_ascii_digit() {
+                        Key::Char(base)
+                    } else {
+                        Key::Punct(base)
+                    };
+                    vec![chord(base_key, true), chord(Key::Punct(c), false)]
+                }
+                _ => vec![chord(Key::Punct(c), shift)],
+            },
+            _ => Vec::new(),
+        }
+    }
+}
+
 fn parse_key(name: &str) -> Option<Key> {
     let mut chars = name.chars();
     if let (Some(single), None) = (chars.next(), chars.next()) {
@@ -311,19 +442,71 @@ impl Bindings {
         self.mouse.get(&gesture).copied()
     }
 
-    /// The first key bound to `action`, for menus ("Play/Pause\tSpace").
+    /// The key a menu shows for `action` ("Play/Pause\tSpace"): the
+    /// simplest bound key, preferring keys without modifiers and keys on
+    /// the main keyboard over media and keypad keys.
     #[must_use]
     pub fn key_for(&self, action: Action) -> Option<KeyChord> {
         self.keys
             .iter()
-            .find(|&(_, &bound)| bound == action)
+            .filter(|&(_, &bound)| bound == action)
             .map(|(&chord, _)| chord)
+            .min_by_key(|chord| {
+                let unusual = matches!(
+                    chord.key,
+                    Key::Numpad(_)
+                        | Key::NumpadAdd
+                        | Key::NumpadSubtract
+                        | Key::NumpadMultiply
+                        | Key::NumpadDivide
+                        | Key::NumpadDecimal
+                        | Key::MediaPlayPause
+                        | Key::MediaStop
+                        | Key::MediaNext
+                        | Key::MediaPrevious
+                        | Key::VolumeUp
+                        | Key::VolumeDown
+                        | Key::VolumeMute
+                        | Key::Other(_)
+                );
+                let modifiers = u8::from(chord.ctrl) + u8::from(chord.alt) + u8::from(chord.shift);
+                (unusual, modifiers, *chord)
+            })
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn qt_keys_translate_to_potplayer_chords() {
+        const CTRL: i32 = 0x0400_0000;
+        const SHIFT: i32 = 0x0200_0000;
+        const KEYPAD: i32 = 0x2000_0000;
+        let first = |key, modifiers| KeyChord::from_qt(key, modifiers).first().copied();
+        assert_eq!(first(0x20, 0), Some(KeyChord::plain(Key::Space)));
+        assert_eq!(first(0x41, 0), Some(KeyChord::plain(Key::Char('A'))));
+        assert_eq!(first(0x0100_0012, CTRL), KeyChord::parse("Ctrl+Left"));
+        assert_eq!(first(0x0100_0004, 0), KeyChord::parse("Enter"));
+        assert_eq!(first(0x0100_0005, KEYPAD), KeyChord::parse("Enter"));
+        assert_eq!(first(0x0100_0032, 0), KeyChord::parse("F3"));
+        assert_eq!(first(0x35, KEYPAD), KeyChord::parse("Num5"));
+        assert_eq!(first(0x2b, KEYPAD), KeyChord::parse("Num+"));
+        assert_eq!(first(0x0100_0086, 0), KeyChord::parse("MediaPlayPause"));
+        // Shift+1 arrives as '!'.
+        assert_eq!(first(0x21, SHIFT), KeyChord::parse("Shift+1"));
+        // Shift+, arrives as '<', which PotPlayer's table also names.
+        assert_eq!(
+            KeyChord::from_qt(0x3c, SHIFT),
+            vec![
+                KeyChord::parse("Shift+,").expect("chord"),
+                KeyChord::parse("<").expect("chord")
+            ]
+        );
+        // A modifier key alone.
+        assert!(KeyChord::from_qt(0x0100_0021, CTRL).is_empty());
+    }
 
     #[test]
     fn parses_potplayer_key_names() {

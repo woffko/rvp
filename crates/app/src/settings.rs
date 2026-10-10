@@ -32,6 +32,9 @@ pub struct Settings {
     /// Without files on the command line, reopen the last file paused at
     /// its position.
     pub reopen_last_file: bool,
+    /// Resize the window to show a newly opened video at 100 %, within the
+    /// screen (PotPlayer's behaviour, R1 finding 2).
+    pub fit_window_to_video: bool,
     /// Key binding changes over PotPlayer's defaults: key (`Ctrl+Left`) to
     /// action name (`seek-backward-medium`); an empty name unbinds the key.
     pub keys: BTreeMap<String, String>,
@@ -49,6 +52,7 @@ impl Default for Settings {
             volume_step: 5.0,
             remember_positions: true,
             reopen_last_file: true,
+            fit_window_to_video: true,
             keys: BTreeMap::new(),
             mouse: BTreeMap::new(),
         }

@@ -368,6 +368,16 @@ impl Engine {
             .map_err(|e| error("mute", &e))
     }
 
+    /// Shows or hides subtitles (`sub-visibility`).
+    ///
+    /// # Errors
+    /// Fails when libmpv rejects the command.
+    pub fn toggle_subtitles(&self) -> Result<(), EngineError> {
+        self.mpv
+            .command("cycle", &["sub-visibility"])
+            .map_err(|e| error("cycle sub-visibility", &e))
+    }
+
     /// Next (`1`) or previous (`-1`) entry of mpv's playlist.
     ///
     /// # Errors
@@ -381,6 +391,31 @@ impl Engine {
         self.mpv
             .command(command, &["weak"])
             .map_err(|e| error(command, &e))
+    }
+
+    /// The entries of mpv's playlist (file names or URLs as loaded), in
+    /// order. Entries that disappear while reading are skipped.
+    #[must_use]
+    pub fn playlist(&self) -> Vec<String> {
+        let count = self.mpv.get_property::<i64>("playlist-count").unwrap_or(0);
+        (0..count)
+            .filter_map(|index| {
+                self.mpv
+                    .get_property::<String>(&format!("playlist/{index}/filename"))
+                    .ok()
+            })
+            .collect()
+    }
+
+    /// Keeps the video's aspect ratio (`true`) or stretches it to the
+    /// output (PotPlayer's "Fullscreen (Stretch)").
+    ///
+    /// # Errors
+    /// Fails when libmpv rejects the value.
+    pub fn set_keep_aspect(&self, keep: bool) -> Result<(), EngineError> {
+        self.mpv
+            .set_property("keepaspect", keep)
+            .map_err(|e| error("keepaspect", &e))
     }
 
     /// Stops playback and clears the playlist.

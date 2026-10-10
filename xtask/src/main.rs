@@ -3,9 +3,12 @@
 //! `cargo xtask ci` runs the same checks as the GitHub Actions workflow:
 //! formatting, clippy with warnings denied, the test suite and `cargo deny`.
 //!
-//! The engine links libmpv: when `MPV_LIB_DIR` is set (a libmpv outside the
-//! system paths), it is also added to the loader path for the tests.
+//! The engine links libmpv and the shell links Qt 6: when `MPV_LIB_DIR` is
+//! set (a libmpv outside the system paths), and when `QMAKE` names a Qt
+//! outside them, their library folders are added to the loader path for
+//! the tests.
 
+use std::path::PathBuf;
 use std::process::{Command, ExitCode};
 
 fn main() -> ExitCode {
@@ -31,17 +34,37 @@ fn main() -> ExitCode {
     }
 }
 
+/// The folder `qmake -query` reports for `property` (`QT_INSTALL_LIBS`).
+fn qt_folder(property: &str) -> Option<PathBuf> {
+    let qmake = std::env::var_os("QMAKE")?;
+    let output = Command::new(qmake)
+        .args(["-query", property])
+        .output()
+        .ok()?;
+    let text = String::from_utf8(output.stdout).ok()?;
+    Some(PathBuf::from(text.trim())).filter(|path| !path.as_os_str().is_empty())
+}
+
 fn run(program: &str, args: &[&str]) -> Result<(), String> {
     println!("+ {program} {}", args.join(" "));
     let mut command = Command::new(program);
     command.args(args);
-    if let Some(dir) = std::env::var_os("MPV_LIB_DIR") {
+    let mut paths: Vec<PathBuf> = std::env::var_os("MPV_LIB_DIR")
+        .map(PathBuf::from)
+        .into_iter()
+        .collect();
+    // Qt's DLLs are in bin on Windows, its shared libraries in lib.
+    paths.extend(qt_folder(if cfg!(windows) {
+        "QT_INSTALL_BINS"
+    } else {
+        "QT_INSTALL_LIBS"
+    }));
+    if !paths.is_empty() {
         let variable = if cfg!(windows) {
             "PATH"
         } else {
             "LD_LIBRARY_PATH"
         };
-        let mut paths = vec![std::path::PathBuf::from(dir)];
         if let Some(existing) = std::env::var_os(variable) {
             paths.extend(std::env::split_paths(&existing));
         }
