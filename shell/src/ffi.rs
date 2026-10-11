@@ -69,8 +69,8 @@ pub mod bridge {
 
     extern "Rust" {
         /// Renders mpv's current frame into the video item's framebuffer
-        /// (render thread).
-        fn rvp_video_render(fbo: i32, width: i32, height: i32);
+        /// (render thread); false when nothing was drawn.
+        fn rvp_video_render(fbo: i32, width: i32, height: i32) -> bool;
         /// Frees the render context (render thread, the video item's
         /// renderer is going away).
         fn rvp_video_release();
@@ -79,8 +79,8 @@ pub mod bridge {
     }
 }
 
-fn rvp_video_render(fbo: i32, width: i32, height: i32) {
-    crate::video::render(fbo, width, height);
+fn rvp_video_render(fbo: i32, width: i32, height: i32) -> bool {
+    crate::video::render(fbo, width, height)
 }
 
 fn rvp_video_release() {
@@ -88,5 +88,6 @@ fn rvp_video_release() {
 }
 
 fn rvp_frame_swapped() {
+    crate::video::presented();
     crate::metrics::frame_swapped();
 }

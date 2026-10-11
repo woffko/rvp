@@ -5,7 +5,8 @@
 //! paths differently per platform (goal E engine tests). The store is written
 //! atomically ([`crate::storage`]) on important changes and at most every
 //! [`SAVE_INTERVAL`] while playing, so a killed process loses less than that
-//! (section 4 asks for at most 5 s).
+//! (section 4 asks for at most 5 s). The writing happens on the storage
+//! writer's thread; [`ResumeStore::save_and_wait`] waits for it.
 
 use std::collections::BTreeMap;
 use std::io;
@@ -77,6 +78,7 @@ pub struct ResumeStore {
     state: ResumeState,
     dirty: bool,
     last_save: Option<Instant>,
+    writer: storage::Writer,
 }
 
 impl ResumeStore {
@@ -84,7 +86,8 @@ impl ResumeStore {
     /// (a damaged file is kept as `state.json.bad`).
     ///
     /// # Errors
-    /// Fails on I/O errors other than a missing file.
+    /// Fails on I/O errors other than a missing file, or when the writer
+    /// thread cannot start.
     pub fn open(dir: &Path) -> io::Result<Self> {
         let path = dir.join("state.json");
         let state = storage::read_json(&path)?.unwrap_or_default();
@@ -93,6 +96,7 @@ impl ResumeStore {
             state,
             dirty: false,
             last_save: None,
+            writer: storage::Writer::new()?,
         })
     }
 
@@ -185,17 +189,39 @@ impl ResumeStore {
         self.dirty
     }
 
-    /// Writes the file if anything changed.
+    /// Queues the file for writing if anything changed. Write errors
+    /// surface later through [`ResumeStore::take_error`].
     ///
     /// # Errors
-    /// Fails on I/O errors; the store stays dirty and is retried later.
+    /// Fails when the state cannot be serialized.
     pub fn save(&mut self, now: Instant) -> io::Result<()> {
         if self.dirty {
-            storage::write_json(&self.path, &self.state)?;
+            let mut bytes = serde_json::to_vec_pretty(&self.state).map_err(io::Error::other)?;
+            bytes.push(b'\n');
+            self.writer.write(&self.path, bytes);
             self.dirty = false;
             self.last_save = Some(now);
         }
         Ok(())
+    }
+
+    /// Saves and waits until the file is on disk (shutdown, tests).
+    ///
+    /// # Errors
+    /// Fails on serialization or I/O errors.
+    pub fn save_and_wait(&mut self, now: Instant) -> io::Result<()> {
+        self.save(now)?;
+        self.writer.flush();
+        match self.writer.take_error() {
+            Some(error) => Err(io::Error::other(error)),
+            None => Ok(()),
+        }
+    }
+
+    /// A write error from the background writer, once.
+    #[must_use]
+    pub fn take_error(&self) -> Option<String> {
+        self.writer.take_error()
     }
 
     /// Writes the file if it changed and [`SAVE_INTERVAL`] has passed since
@@ -235,7 +261,7 @@ mod tests {
             height: 908,
             maximized: false,
         });
-        store.save(Instant::now()).expect("save");
+        store.save_and_wait(Instant::now()).expect("save");
         let reopened = ResumeStore::open(&dir).expect("reopen");
         assert_eq!(reopened.position("/films/a.mkv"), Some(125.5));
         assert_eq!(reopened.state().last_file.as_deref(), Some("/films/a.mkv"));

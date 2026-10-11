@@ -150,7 +150,7 @@ impl Harness {
             }
             Action::VolumeUp => {
                 self.dispatch(action);
-                self.wait("volume up", |m| m.double(PropertyId::Volume) == Some(55.0));
+                self.wait("volume up", |m| m.double(PropertyId::Volume) == Some(51.0));
             }
             Action::VolumeDown => {
                 self.dispatch(action);

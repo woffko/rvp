@@ -4,9 +4,6 @@
 // wires Qt Quick to it.
 import QtQuick
 import QtQuick.Window
-import QtQuick.Controls
-import QtQuick.Layouts
-import QtQuick.Dialogs
 import Rvp
 import RvpNative
 
@@ -136,7 +133,8 @@ Window {
     function handleRequest(kind, argument) {
         switch (kind) {
         case requestOpenFiles:
-            fileDialog.open()
+            dialogLoader.active = true
+            dialogLoader.item.dialog.open()
             break
         case requestFullscreen:
             root.fullscreenRequested = Date.now()
@@ -158,7 +156,9 @@ Window {
             root.close()
             break
         case requestContextMenu:
-            contextMenu.popup()
+            menuLoader.active = true
+            menuLoader.item.logWindows = root.logGeometry
+            menuLoader.item.menu.popup()
             break
         case requestStartMove:
             root.startSystemMove()
@@ -296,12 +296,14 @@ Window {
             root.pointerIdle = false
             idleTimer.restart()
             tipTimer.restart()
-            tip.close()
+            if (tipLoader.item)
+                tipLoader.item.tip.close()
             player.mouse_move(mouse.x, mouse.y)
         }
         onWheel: (wheel) => player.mouse_wheel(wheel.angleDelta.y)
         onExited: {
-            tip.close()
+            if (tipLoader.item)
+                tipLoader.item.tip.close()
             player.mouse_leave()
         }
     }
@@ -319,18 +321,34 @@ Window {
         interval: 600
         onTriggered: {
             if (player.tooltip !== "") {
+                tipLoader.active = true
+                const tip = tipLoader.item.tip
+                tip.text = player.tooltip
                 tip.x = Math.min(pointer.mouseX + 12, root.width - tip.implicitWidth)
                 tip.y = pointer.mouseY + 20
                 tip.open()
             }
         }
     }
-    ToolTip {
-        id: tip
-        text: player.tooltip
-        popupType: Popup.Window
-        delay: 0
-        timeout: 5000
+
+    // The tooltip, menu and file dialog load on first use: Qt Quick
+    // Controls and Dialogs are not needed to show the window.
+    Loader {
+        id: tipLoader
+        anchors.fill: parent
+        active: false
+        source: "Tip.qml"
+    }
+    Loader {
+        id: menuLoader
+        anchors.fill: parent
+        active: false
+        Component.onCompleted: setSource("ContextMenu.qml", { player: player })
+    }
+    Loader {
+        id: dialogLoader
+        active: false
+        Component.onCompleted: setSource("OpenDialog.qml", { player: player })
     }
 
     DropArea {
@@ -343,18 +361,6 @@ Window {
                 paths.push(Tools.local_file(url))
             player.open_files(paths.join("\n"), false)
             drop.accept()
-        }
-    }
-
-    FileDialog {
-        id: fileDialog
-        title: "Open File(s)"
-        fileMode: FileDialog.OpenFiles
-        onAccepted: {
-            const paths = []
-            for (const url of selectedFiles)
-                paths.push(Tools.local_file(url))
-            player.open_files(paths.join("\n"), false)
         }
     }
 
@@ -381,69 +387,6 @@ Window {
             interval: 5000
             onTriggered: player.message = ""
         }
-    }
-
-    // A menu entry for an action: PotPlayer's text and the bound key.
-    component ActionItem: MenuItem {
-        id: entry
-        property string actionName
-        text: player.menu_label(actionName)
-        onTriggered: player.run_action(actionName)
-        contentItem: RowLayout {
-            spacing: 24
-            Label {
-                text: entry.text
-                Layout.fillWidth: true
-            }
-            Label {
-                text: player.menu_shortcut(entry.actionName)
-                opacity: 0.7
-            }
-        }
-    }
-
-    // The menu's window maps after `opened`; list the windows a little later.
-    Timer {
-        id: menuLog
-        interval: 400
-        onTriggered: Tools.log("menu_windows=" + Tools.windows_json())
-    }
-
-    Menu {
-        id: contextMenu
-        popupType: Popup.Window
-        onOpened: if (root.logGeometry) menuLog.restart()
-        ActionItem { actionName: "open-files" }
-        ActionItem { actionName: "close-media" }
-        MenuSeparator {}
-        ActionItem { actionName: "play-pause" }
-        ActionItem { actionName: "previous" }
-        ActionItem { actionName: "next" }
-        Menu {
-            title: "Seek"
-            popupType: Popup.Window
-            ActionItem { actionName: "seek-backward-short" }
-            ActionItem { actionName: "seek-forward-short" }
-            ActionItem { actionName: "seek-backward-medium" }
-            ActionItem { actionName: "seek-forward-medium" }
-            ActionItem { actionName: "seek-backward-long" }
-            ActionItem { actionName: "seek-forward-long" }
-            ActionItem { actionName: "seek-backward-very-long" }
-            ActionItem { actionName: "seek-forward-very-long" }
-        }
-        MenuSeparator {}
-        ActionItem { actionName: "volume-up" }
-        ActionItem { actionName: "volume-down" }
-        ActionItem { actionName: "toggle-mute" }
-        ActionItem { actionName: "toggle-subtitles" }
-        MenuSeparator {}
-        ActionItem { actionName: "toggle-fullscreen" }
-        ActionItem { actionName: "toggle-fullscreen-stretch" }
-        ActionItem { actionName: "maximize-restore" }
-        ActionItem { actionName: "minimize" }
-        ActionItem { actionName: "toggle-playlist" }
-        MenuSeparator {}
-        ActionItem { actionName: "exit" }
     }
 
     // --selftest: a scripted check that prints check=PASS/FAIL lines and the

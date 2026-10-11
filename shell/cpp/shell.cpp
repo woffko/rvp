@@ -16,6 +16,7 @@
 #include <QtGui/QGuiApplication>
 #include <QtGui/QImage>
 #include <QtGui/QOpenGLContext>
+#include <QtGui/QOpenGLFunctions>
 #include <QtGui/QScreen>
 #include <QtGui/QWindow>
 #include <QtOpenGL/QOpenGLFramebufferObject>
@@ -75,7 +76,13 @@ public:
     void render() override
     {
         QOpenGLFramebufferObject *fbo = framebufferObject();
-        rvp_video_render(static_cast<std::int32_t>(fbo->handle()), fbo->width(), fbo->height());
+        if (!rvp_video_render(static_cast<std::int32_t>(fbo->handle()), fbo->width(),
+                              fbo->height())) {
+            // Nothing drawn yet (mpv starts after the first frame): black.
+            QOpenGLFunctions *gl = QOpenGLContext::currentContext()->functions();
+            gl->glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+            gl->glClear(GL_COLOR_BUFFER_BIT);
+        }
         QQuickOpenGLUtils::resetOpenGLState();
     }
 };

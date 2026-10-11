@@ -12,7 +12,7 @@
 use std::cell::RefCell;
 use std::ffi::c_void;
 use std::sync::OnceLock;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 
 use libmpv2::render::{OpenGLInitParams, RenderContext, RenderParam, RenderParamApiType};
 use rvp_engine::{Engine, libmpv2};
@@ -27,6 +27,10 @@ pub static READY: AtomicBool = AtomicBool::new(false);
 /// Set when the window closes: only then may the video item's renderer
 /// free the render context.
 pub static CLOSING: AtomicBool = AtomicBool::new(false);
+/// Set once the window presented its first frame.
+static PRESENTED: AtomicBool = AtomicBool::new(false);
+/// Renders attempted without a render context.
+static WAITED: AtomicU32 = AtomicU32::new(0);
 /// Called on the render thread once the render context exists.
 static ON_READY: OnceLock<Box<dyn Fn() + Send + Sync>> = OnceLock::new();
 
@@ -65,28 +69,46 @@ fn create(engine: &'static Engine) -> Option<RenderContext<'static>> {
     }
 }
 
-/// Draws mpv's current frame into the framebuffer object `fbo`.
-pub fn render(fbo: i32, width: i32, height: i32) {
+/// The window presented a frame (render thread).
+pub fn presented() {
+    PRESENTED.store(true, Ordering::Release);
+}
+
+/// Draws mpv's current frame into the framebuffer object `fbo`; false when
+/// nothing was drawn (the caller clears the framebuffer).
+///
+/// The render context is created only after the window presented its first
+/// frame, so the skin shows before libmpv sets up OpenGL. Windows that are
+/// never presented (grabbed while hidden, Windows session 0) get it on the
+/// third attempt.
+pub fn render(fbo: i32, width: i32, height: i32) -> bool {
     let Some(engine) = ENGINE.get() else {
-        return;
+        return false;
     };
     CONTEXT.with(|slot| {
         let mut slot = slot.borrow_mut();
         if slot.is_none() {
+            if !PRESENTED.load(Ordering::Acquire) && WAITED.fetch_add(1, Ordering::AcqRel) < 2 {
+                rvp_video_request_update();
+                return false;
+            }
             *slot = create(engine);
             if slot.is_some() {
+                crate::metrics::mark("render_context_ms");
                 READY.store(true, Ordering::Release);
                 if let Some(callback) = ON_READY.get() {
                     callback();
                 }
             }
         }
-        if let Some(context) = slot.as_ref()
-            && context.render::<()>(fbo, width, height, false).is_ok()
-        {
+        let rendered = slot
+            .as_ref()
+            .is_some_and(|context| context.render::<()>(fbo, width, height, false).is_ok());
+        if rendered {
             crate::metrics::video_rendered();
         }
-    });
+        rendered
+    })
 }
 
 /// The video item's renderer is going away. Qt also builds and drops

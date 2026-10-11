@@ -65,6 +65,23 @@ fn started() -> Instant {
     *START.get_or_init(Instant::now)
 }
 
+/// Records how long after the process start a startup phase ended
+/// (`qml_loaded_ms`, `skin_loaded_ms`, ...).
+pub fn mark(name: &str) {
+    let elapsed = started().elapsed();
+    with_state(|state| state.results.push((name.to_owned(), elapsed)));
+}
+
+/// Like [`mark`], for the first time only.
+pub fn mark_once(name: &str) {
+    let elapsed = started().elapsed();
+    with_state(|state| {
+        if !state.results.iter().any(|(existing, _)| existing == name) {
+            state.results.push((name.to_owned(), elapsed));
+        }
+    });
+}
+
 /// A file was opened from the command line: measure to its first frame.
 pub fn first_frame_pending() {
     probe("first_frame_ms", started(), Stage::Restart);

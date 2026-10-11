@@ -29,6 +29,7 @@ use rvp_engine::EngineEvent;
 
 fn main() {
     metrics::start();
+    player::preload_skin();
     ffi::bridge::rvp_setup_graphics();
     let mut app = QGuiApplication::new();
     ffi::bridge::rvp_set_c_numeric_locale();
@@ -37,6 +38,7 @@ fn main() {
     if let Some(engine) = engine.as_mut() {
         engine.load(&QUrl::from("qrc:/qt/qml/Rvp/qml/Main.qml"));
     }
+    metrics::mark("qml_loaded_ms");
     if !ffi::bridge::rvp_has_windows() {
         eprintln!("rvp: the window could not be created (see the QML errors above)");
         std::process::exit(2);

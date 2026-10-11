@@ -14,7 +14,12 @@ fn main() {
             std::path::Path::new(&out).join("qt-build-utils/qml_modules/Rvp/plugin.qmltypes");
         let _ = std::fs::remove_file(stale);
     }
-    CxxQtBuilder::new_qml_module(QmlModule::new("Rvp").qml_file("qml/Main.qml"))
+    let module = QmlModule::new("Rvp")
+        .qml_file("qml/Main.qml")
+        .qml_file("qml/ContextMenu.qml")
+        .qml_file("qml/OpenDialog.qml")
+        .qml_file("qml/Tip.qml");
+    CxxQtBuilder::new_qml_module(module)
         .qt_module("Gui")
         .qt_module("Qml")
         .qt_module("Quick")

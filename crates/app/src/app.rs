@@ -336,7 +336,11 @@ impl App {
         } else {
             self.store.save_if_due(now)
         };
-        if let Err(error) = saved {
+        let failed = saved
+            .err()
+            .map(|error| error.to_string())
+            .or_else(|| self.store.take_error());
+        if let Some(error) = failed {
             requests.push(UiRequest::Message(format!(
                 "Cannot save the playback state: {error}"
             )));
@@ -354,7 +358,11 @@ impl App {
     /// # Errors
     /// Fails on I/O errors.
     pub fn tick(&mut self, now: Instant) -> io::Result<()> {
-        self.store.save_if_due(now)
+        self.store.save_if_due(now)?;
+        match self.store.take_error() {
+            Some(error) => Err(io::Error::other(error)),
+            None => Ok(()),
+        }
     }
 
     /// The window moved, resized or changed state.
@@ -369,6 +377,6 @@ impl App {
     /// Fails on I/O errors.
     pub fn shutdown(&mut self, engine: &Engine, now: Instant) -> io::Result<()> {
         drop(engine.stop());
-        self.store.save(now)
+        self.store.save_and_wait(now)
     }
 }

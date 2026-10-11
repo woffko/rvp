@@ -21,10 +21,11 @@ pub struct Settings {
     /// mpv `input-ipc-server` for SVP; empty turns it off.
     pub ipc_server: String,
     /// Seek steps in seconds: Left/Right, Ctrl, Shift, Ctrl+Alt. PotPlayer's
-    /// defaults are assumed to be 5 s, 30 s, 1 min and 5 min (to confirm
-    /// against the owner's PotPlayer).
+    /// menu shows them only as `%s`; 5 s, 30 s, 1 min and 5 min were kept
+    /// by the owner (2026-10-11).
     pub seek_seconds: [f64; 4],
-    /// Volume step for Up/Down and the wheel, in percent.
+    /// Volume step for Up/Down and the wheel, in percent (1 %, owner
+    /// decision 2026-10-11, matching the owner's `AudioVolumeUnit=1`).
     pub volume_step: f64,
     /// Resume every file at its last position (PotPlayer
     /// `RememberPosition=1`).
@@ -49,7 +50,7 @@ impl Default for Settings {
             hwdec: "auto-copy".to_owned(),
             ipc_server: rvp_engine::default_ipc_server().to_owned(),
             seek_seconds: [5.0, 30.0, 60.0, 300.0],
-            volume_step: 5.0,
+            volume_step: 1.0,
             remember_positions: true,
             reopen_last_file: true,
             fit_window_to_video: true,

@@ -160,8 +160,49 @@ fn skin_path(cli: &Cli, settings: &Settings) -> Option<PathBuf> {
         })
 }
 
+type SkinLoad = std::thread::JoinHandle<Result<Skin, String>>;
+
+/// The skin being loaded since the process started, and its path.
+static PRELOAD: Mutex<Option<(PathBuf, SkinLoad)>> = Mutex::new(None);
+
+fn open_skin(path: &Path) -> Result<Skin, String> {
+    Skin::open(path).map_err(|error| format!("{}: {error}", path.display()))
+}
+
+/// Starts loading the skin on a thread while Qt and QML start (called first
+/// in `main`). The settings are read here and again in `start`; both are
+/// cheap.
+pub fn preload_skin() {
+    let cli = Cli::parse(std::env::args().skip(1));
+    let settings = Dirs::from_env()
+        .ok()
+        .and_then(|dirs| rvp_app::read_json::<Settings>(&dirs.config.join("settings.json")).ok())
+        .flatten()
+        .unwrap_or_default();
+    let Some(path) = skin_path(&cli, &settings) else {
+        return;
+    };
+    let thread_path = path.clone();
+    let spawned = std::thread::Builder::new()
+        .name("rvp-skin".to_owned())
+        .spawn(move || open_skin(&thread_path));
+    if let (Ok(handle), Ok(mut slot)) = (spawned, PRELOAD.lock()) {
+        *slot = Some((path, handle));
+    }
+}
+
 fn load_skin(path: &Path) -> Result<&'static Skin, String> {
-    let skin = Skin::open(path).map_err(|error| format!("{}: {error}", path.display()))?;
+    let preloaded = PRELOAD
+        .lock()
+        .ok()
+        .and_then(|mut slot| slot.take())
+        .filter(|(preloaded_path, _)| preloaded_path == path);
+    let skin = match preloaded {
+        Some((_, handle)) => handle
+            .join()
+            .map_err(|_| "the skin loader stopped".to_owned())??,
+        None => open_skin(path)?,
+    };
     // The skin lives for the whole process: the layout borrows it and the
     // render thread paints from it.
     let skin: &'static Skin = Box::leak(Box::new(skin));
@@ -256,6 +297,7 @@ impl qobject::Player {
             }
         };
         messages.extend(app.warnings.iter().cloned());
+        crate::metrics::mark("settings_loaded_ms");
         let chrome = match load_chrome(&cli, &app.settings) {
             Ok(chrome) => Some(chrome),
             Err(error) => {
@@ -263,6 +305,7 @@ impl qobject::Player {
                 None
             }
         };
+        crate::metrics::mark("skin_loaded_ms");
 
         crate::ffi::bridge::rvp_set_c_numeric_locale();
         let mut options = app.engine_options();
@@ -286,6 +329,7 @@ impl qobject::Player {
         if ENGINE.set(engine).is_err() {
             return;
         }
+        crate::metrics::mark("engine_ready_ms");
         let Some(engine) = ENGINE.get() else {
             return;
         };
@@ -363,9 +407,11 @@ impl qobject::Player {
         for event in &drained.events {
             match event {
                 EngineEvent::PlaybackRestart => crate::metrics::playback_restarted(),
-                EngineEvent::StartFile | EngineEvent::FileLoaded { .. } => {
+                EngineEvent::FileLoaded { .. } => {
+                    crate::metrics::mark_once("file_loaded_ms");
                     playlist_changed = true;
                 }
+                EngineEvent::StartFile => playlist_changed = true,
                 _ => {}
             }
         }
