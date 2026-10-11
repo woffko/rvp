@@ -96,12 +96,32 @@ struct Core {
     height: i32,
     maximized: bool,
     stretch: bool,
-    /// Resize the window when the next video's size is known.
-    fit_pending: bool,
+    /// Resizing the window to the next file's video (`fit-window-to-video`).
+    fit: Fit,
     /// True while a drain is queued (coalesces wakeups).
     drain_queued: Arc<AtomicBool>,
     /// Playback updates of the chrome held back by [`CHROME_INTERVAL`].
     throttle: Throttle,
+}
+
+/// Fitting the window to a video the user opened: requested, then the new
+/// file loaded (only its video size counts, not the one still playing).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Fit {
+    No,
+    Requested,
+    Loaded,
+}
+
+impl Core {
+    /// A file the user opens is about to play: fit the window to it.
+    fn request_fit(&mut self) {
+        self.fit = if self.app.settings.fit_window_to_video {
+            Fit::Requested
+        } else {
+            Fit::No
+        };
+    }
 }
 
 /// When playback last updated the chrome, and whether an update waits.
@@ -424,7 +444,7 @@ impl qobject::Player {
             height: 0,
             maximized: false,
             stretch: false,
-            fit_pending: false,
+            fit: Fit::No,
             drain_queued,
             throttle: Throttle::default(),
         });
@@ -446,11 +466,11 @@ impl qobject::Player {
         };
         let plays = request.mode == rvp_app::instance::Mode::Play && !request.files.is_empty();
         if plays {
-            core.fit_pending = core.app.settings.fit_window_to_video;
+            core.request_fit();
             crate::metrics::first_frame_pending();
         } else {
             // Reopening the last file keeps the restored window size.
-            core.fit_pending = false;
+            core.fit = Fit::No;
         }
         // `/add` and `/insert` at start: the last state first, then theirs.
         let result = if plays || request.files.is_empty() {
@@ -475,18 +495,23 @@ impl qobject::Player {
         for event in &drained.events {
             match event {
                 EngineEvent::PlaybackRestart => crate::metrics::playback_restarted(),
-                EngineEvent::FileLoaded { .. } => crate::metrics::mark_once("file_loaded_ms"),
+                EngineEvent::FileLoaded { .. } => {
+                    crate::metrics::mark_once("file_loaded_ms");
+                    if core.fit == Fit::Requested {
+                        core.fit = Fit::Loaded;
+                    }
+                }
                 _ => {}
             }
         }
-        let new_aspect = drained.changes.contains(PropertyId::VideoAspect) && !core.fit_pending;
-        let fit = if core.fit_pending
+        let new_aspect = drained.changes.contains(PropertyId::VideoAspect) && core.fit == Fit::No;
+        let fit = if core.fit == Fit::Loaded
             && !core.maximized
             && let (Some(width), Some(height)) = (
                 core.app.model.int(PropertyId::VideoWidth),
                 core.app.model.int(PropertyId::VideoHeight),
             ) {
-            core.fit_pending = false;
+            core.fit = Fit::No;
             let (chrome_width, chrome_height) =
                 core.chrome.as_ref().map_or((0, 0), Chrome::chrome_size);
             match (i32::try_from(width), i32::try_from(height)) {
@@ -845,7 +870,7 @@ impl qobject::Player {
             effect => {
                 if matches!(effect, ListEffect::Play(_)) {
                     crate::metrics::input("input_ms");
-                    core.fit_pending = core.app.settings.fit_window_to_video;
+                    core.request_fit();
                 }
                 let visible = Self::visible_rows(core);
                 if let Some(request) = core.app.list_effect(core.engine, effect, visible) {
@@ -862,7 +887,7 @@ impl qobject::Player {
             return;
         };
         if action == ListAction::Play {
-            core.fit_pending = core.app.settings.fit_window_to_video;
+            core.request_fit();
         }
         let visible = Self::visible_rows(core);
         if let Some(request) = core.app.list_action(core.engine, action, extend, visible) {
@@ -1036,7 +1061,7 @@ impl qobject::Player {
             crate::metrics::seek_issued();
         }
         if matches!(action, Action::Previous | Action::Next) {
-            core.fit_pending = core.app.settings.fit_window_to_video;
+            core.request_fit();
         }
         let Some(request) = core.app.dispatch(core.engine, action) else {
             return;
@@ -1129,7 +1154,10 @@ impl qobject::Player {
             pending.files.extend(files);
             return;
         }
-        core.fit_pending = core.app.settings.fit_window_to_video;
+        // Appended files do not play: the window keeps its size.
+        if !append {
+            core.request_fit();
+        }
         let result = core.app.open(core.engine, &files, append);
         if let Err(error) = result {
             self.show_message(&format!("cannot open: {error}"));
@@ -1207,7 +1235,7 @@ impl qobject::Player {
             return;
         }
         if request.mode == rvp_app::instance::Mode::Play && !request.files.is_empty() {
-            core.fit_pending = core.app.settings.fit_window_to_video;
+            core.request_fit();
             self.as_mut().ui_request(request::RAISE, 0);
         }
         let Some(core) = self.as_mut().core_mut() else {
