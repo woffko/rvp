@@ -535,7 +535,10 @@ Window {
         }
         function status() { return JSON.parse(player.status()) }
         function check(name, ok, detail) {
-            Tools.log("check " + name + "=" + (ok ? "PASS" : "FAIL") + (detail ? " " + detail : ""))
+            // The dropped frames so far: which step costs frames.
+            const drops = status().frame_drop_count
+            Tools.log("check " + name + "=" + (ok ? "PASS" : "FAIL") + (detail ? " " + detail : "")
+                      + " [drops " + (drops === null ? 0 : drops) + "]")
             if (!ok)
                 failures += 1
         }
