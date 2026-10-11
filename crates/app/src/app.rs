@@ -694,6 +694,11 @@ impl App {
 
     fn normalizer_changed(&mut self, engine: &Engine) -> UiRequest {
         self.apply_normalizer(engine);
+        // The new chain lost the audio mpv had decoded ahead for the old
+        // one (the normalizer looks ten seconds ahead): play on from here.
+        if self.model.media_loaded() {
+            drop(engine.seek(Seek::Relative(0.0)));
+        }
         self.save_settings();
         let normalizer = self.settings.normalizer;
         let on_off = |on: bool| if on { "On" } else { "Off" };

@@ -70,19 +70,23 @@ fn owner_playlists_import() {
         );
         let mut kinds: BTreeMap<&str, usize> = BTreeMap::new();
         for entry in &album.entries {
-            let kind = if entry.path.starts_with("/mnt/media/") {
-                "mapped V:"
-            } else if entry.path.contains("://") {
+            let url = rvp_app::playlist::is_url(&entry.path);
+            let kind = if url {
                 "URL"
-            } else if entry.path.get(1..3) == Some(":\\") {
+            } else if entry.path.starts_with("/mnt/media/") {
+                "mapped V:"
+            } else if entry.path.starts_with('/') {
                 "other drive"
             } else {
-                "other"
+                "Windows path"
             };
             *kinds.entry(kind).or_default() += 1;
-            // No Windows separators survive a mapping.
-            if entry.path.starts_with("/mnt/media/") {
-                assert!(!entry.path.contains('\\'), "album {number}: mapped path");
+            // Paths follow the system: on Linux no Windows path is left.
+            if !cfg!(windows) && !url {
+                assert!(
+                    entry.path.starts_with('/') && !entry.path.contains('\\'),
+                    "album {number}: a Windows path on Linux"
+                );
             }
         }
         let played = album.entries.iter().filter(|e| e.played).count();

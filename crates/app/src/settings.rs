@@ -47,7 +47,8 @@ pub struct Settings {
     /// The audio normalizer (S5).
     pub normalizer: Normalizer,
     /// Windows drive letters in imported PotPlayer playlists and the Linux
-    /// folders they stand for (`"V:": "/mnt/media"`).
+    /// folders they stand for (`"V:": "/mnt/media"`); other drives become
+    /// `/mnt/<letter>`. Not used on Windows, where paths stay as they are.
     pub drive_map: BTreeMap<String, String>,
     /// Where PotPlayer keeps its playlists; on Windows the default is
     /// `%APPDATA%\PotPlayerMini64\Playlist`.

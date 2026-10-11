@@ -9,6 +9,16 @@
 //! map to the target peak and the frame length around those defaults; the
 //! owner's blind A/B test (`tools/s5/ab_test.py`) decides whether the
 //! defaults are close enough.
+//!
+//! In a player, two things differ from S5's offline measurement. mpv
+//! restarts the filter at every seek, and `dynaudnorm` assumes a gain of 1
+//! for the frames it has not seen, so the level climbed from the raw level
+//! for about ten seconds after each seek; `b=1` (its alternative boundary
+//! mode) starts at the computed gain instead. And the filter looks about
+//! ten seconds ahead: mpv decodes that much audio before playing on after a
+//! seek (about 50 ms more per seek on a local file), and changing the chain
+//! during playback dropped that audio, so a toggle seeks to the current
+//! position (`App`).
 
 use serde::{Deserialize, Serialize};
 
@@ -52,7 +62,7 @@ impl Normalizer {
         // Release time 10 is S5's 5000 ms frame; the frame scales with it.
         let frame = (self.release.clamp(1.0, 50.0) * 500.0).round();
         let max_gain = if self.boost { 5 } else { 1 };
-        format!("dynaudnorm=f={frame:.0}:g=3:p={peak:.2}:m={max_gain}")
+        format!("dynaudnorm=f={frame:.0}:g=3:p={peak:.2}:m={max_gain}:b=1")
     }
 
     /// The `af` entry: label and filter.
@@ -70,22 +80,25 @@ mod tests {
     fn defaults_are_the_s5_chain() {
         assert_eq!(
             Normalizer::default().filter(),
-            "dynaudnorm=f=5000:g=3:p=1.00:m=5"
+            "dynaudnorm=f=5000:g=3:p=1.00:m=5:b=1"
         );
         let without_boost = Normalizer {
             boost: false,
             ..Normalizer::default()
         };
-        assert_eq!(without_boost.filter(), "dynaudnorm=f=5000:g=3:p=1.00:m=1");
+        assert_eq!(
+            without_boost.filter(),
+            "dynaudnorm=f=5000:g=3:p=1.00:m=1:b=1"
+        );
         let quieter = Normalizer {
             level: 50.0,
             release: 4.0,
             ..Normalizer::default()
         };
-        assert_eq!(quieter.filter(), "dynaudnorm=f=2000:g=3:p=0.67:m=5");
+        assert_eq!(quieter.filter(), "dynaudnorm=f=2000:g=3:p=0.67:m=5:b=1");
         assert_eq!(
             Normalizer::default().chain_entry(),
-            "@rvpnorm:lavfi=[dynaudnorm=f=5000:g=3:p=1.00:m=5]"
+            "@rvpnorm:lavfi=[dynaudnorm=f=5000:g=3:p=1.00:m=5:b=1]"
         );
     }
 }

@@ -22,6 +22,14 @@
 //! their files and follow it in alphabetical order, as PotPlayer shows them.
 //! Folder albums (`basefolder=`) have no entries and import empty. Nothing
 //! is ever written back.
+//!
+//! Paths follow the system (owner decision 2026-10-11): on Windows they stay
+//! as PotPlayer wrote them; on Linux every Windows path becomes a Linux path,
+//! so that no `C:\...` appears there. A drive in `drive-map` becomes its
+//! folder (`V:\Films\a.mkv` → `/mnt/media/Films/a.mkv`), any other drive
+//! `/mnt/<letter>` (`C:\x.mkv` → `/mnt/c/x.mkv`), and a network path its
+//! mount point (`\\nas\Media\a.mkv` → `/mnt/nas/Media/a.mkv`).
+//! URLs stay as they are.
 
 use std::collections::BTreeMap;
 use std::io;
@@ -29,11 +37,13 @@ use std::path::Path;
 
 use crate::playlist::{Album, Entry};
 
-/// Drive letters and the folders they stand for (`V:` → `/mnt/media`). The
-/// default maps nothing (Windows keeps its paths).
+/// How Windows paths become Linux paths (see the module comment). The
+/// default maps nothing: Windows keeps its paths.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct DriveMap {
     drives: BTreeMap<char, String>,
+    /// Linux: every Windows path becomes a Linux path.
+    linux: bool,
 }
 
 impl DriveMap {
@@ -55,23 +65,35 @@ impl DriveMap {
                 }
             })
             .collect();
-        Self { drives }
+        Self {
+            drives,
+            linux: true,
+        }
     }
 
-    /// The path RVP opens for a path in a PotPlayer playlist. URLs and
-    /// paths on drives without a mapping stay as they are.
+    /// The path RVP opens for a path in a PotPlayer playlist.
     #[must_use]
     pub fn map(&self, path: &str) -> String {
-        let mut chars = path.chars();
-        let (Some(letter), Some(':'), Some('\\' | '/')) =
-            (chars.next(), chars.next(), chars.next())
-        else {
+        if !self.linux {
             return path.to_owned();
-        };
-        match self.drives.get(&letter.to_ascii_uppercase()) {
-            Some(folder) => format!("{folder}/{}", path[3..].replace('\\', "/")),
-            None => path.to_owned(),
         }
+        let mut chars = path.chars();
+        if let (Some(letter), Some(':'), Some('\\' | '/')) =
+            (chars.next(), chars.next(), chars.next())
+            && letter.is_ascii_alphabetic()
+        {
+            let rest = path[3..].replace('\\', "/");
+            return match self.drives.get(&letter.to_ascii_uppercase()) {
+                Some(folder) => format!("{folder}/{rest}"),
+                None => format!("/mnt/{}/{rest}", letter.to_ascii_lowercase()),
+            };
+        }
+        // A network path: `\\server\share\...` is mounted at
+        // `/mnt/server/share`.
+        if let Some(unc) = path.strip_prefix("\\\\") {
+            return format!("/mnt/{}", unc.replace('\\', "/"));
+        }
+        path.to_owned()
     }
 }
 
@@ -228,7 +250,12 @@ mod tests {
             map.map(r"A:\Series\s01\e01.mkv"),
             "/mnt/archive/Series/s01/e01.mkv"
         );
-        assert_eq!(map.map(r"C:\Users\x.mkv"), r"C:\Users\x.mkv");
+        // Unmapped drives and network paths still become Linux paths.
+        assert_eq!(map.map(r"C:\Users\x.mkv"), "/mnt/c/Users/x.mkv");
+        assert_eq!(
+            map.map(r"\\nas\Media\Films\a.mkv"),
+            "/mnt/nas/Media/Films/a.mkv"
+        );
         assert_eq!(
             map.map("https://example.org/v.mkv"),
             "https://example.org/v.mkv"

@@ -36,7 +36,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from analyze import duration, find_offset  # noqa: E402
 
 # RVP's chain for PotPlayer's defaults (crates/app/src/normalizer.rs).
-RVP_CHAIN = "dynaudnorm=f=5000:g=3:p=1.00:m=5"
+RVP_CHAIN = "dynaudnorm=f=5000:g=3:p=1.00:m=5:b=1"
 RATE = 48000
 # Loudness both versions are brought to, lowered when a peak would clip.
 TARGET_LUFS = -18.0
