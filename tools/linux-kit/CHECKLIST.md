@@ -143,10 +143,12 @@ What appears on screen:
   drags its title bar and its bottom-right corner, double-clicks the video
   (fullscreen) and double-clicks again (back), then right-clicks for the
   menu. Only the mouse is used.
-- `m2gpu` (about 2 minutes, GPU machines only): the 4K60 clip plays for 60
-  seconds in fullscreen, then 60 seconds in a 1920x1080 window. This
+- `m2gpu` (about a minute, GPU machines only): the 4K60 clip plays for 25
+  seconds in fullscreen, then 25 seconds in a 1920x1080 window. This
   rechecks goal D's open item (about 6 dropped frames per 20 seconds in a
-  window). `RVP_M2_SECONDS` changes the length.
+  window). `RVP_M2_SECONDS` changes the length; keep it below the clip's
+  30 seconds (or use a longer `RVP_VIDEO`): after mpv loops a file the
+  drop counts are not comparable (see goal E's status).
 - `m2svp` (about 45 seconds): start SVP 4 Manager first. RVP plays the
   23.976 fps clip with SVP attached, then exits; the step passes when RVP
   exits cleanly with SVP's filter active (goal D rule 6).

@@ -727,6 +727,30 @@ Window {
                 player.run_action("toggle-playlist")
             break
         case 29:
+            // The menu, dialog and tooltip load on first use.
+            menuLoader.active = true
+            dialogLoader.active = true
+            tipLoader.active = true
+            t.before = s
+            t.next()
+            break
+        case 30: {
+            t.check("menu_dialog_tooltip_load", menuLoader.status === Loader.Ready
+                    && dialogLoader.status === Loader.Ready && tipLoader.status === Loader.Ready,
+                    "status " + menuLoader.status + "," + dialogLoader.status + "," + tipLoader.status)
+            // What a drop or the file dialog does with a file URL: append
+            // the playing file once more.
+            const path = String(s.path).replace(/\\/g, "/")
+            const url = path.startsWith("/") ? "file://" + path : "file:///" + path
+            player.open_files(Tools.local_file(url), true)
+            t.next()
+            break
+        }
+        case 31:
+            t.waitFor("dropped_file_appended", () => s.playlist_count === t.before.playlist_count + 1, 3000,
+                      () => "playlist " + t.before.playlist_count + " -> " + s.playlist_count)
+            break
+        case 32:
             // Let a few seconds of playback run for the measurements.
             if (Date.now() - t.stepStarted > 2000)
                 t.finish()

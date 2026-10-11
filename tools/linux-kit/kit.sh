@@ -23,7 +23,7 @@
 #           last file paused at its position
 #   m2input drag, resize, double-click and right-click the RVP window with
 #           injected mouse input (needs ydotool, like input)
-#   m2gpu   RVP plays the test video for RVP_M2_SECONDS (default 60) in
+#   m2gpu   RVP plays the test video for RVP_M2_SECONDS (default 25) in
 #           fullscreen and in a 1920x1080 window and counts dropped frames
 #           (goal D's open item; GPU machines only)
 #   m2svp   RVP plays the film-rate clip with SVP attached, then exits
@@ -46,7 +46,8 @@
 #                   (default /tmp/.ydotool_socket)
 #   RVP_GPU_CHECKS  1 or 0 to override GPU detection
 #   RVP_KIT_REBUILD 1 to rebuild libmpv even if this commit is already built
-#   RVP_M2_SECONDS  playback length of the m2gpu runs (default 60)
+#   RVP_M2_SECONDS  playback length of the m2gpu runs (default 25; the
+#                   generated clip is 30 s long and must not loop)
 set -u
 
 KIT_SCRIPT=$(readlink -f "${BASH_SOURCE[0]}")
@@ -650,7 +651,7 @@ step_m2input() {
 }
 
 step_m2gpu() {
-    local log=$LOG_DIR/m2gpu.log out=$LOG_DIR/m2-grabs seconds=${RVP_M2_SECONDS:-60}
+    local log=$LOG_DIR/m2gpu.log out=$LOG_DIR/m2-grabs seconds=${RVP_M2_SECONDS:-25}
     m2_ready m2gpu || return 0
     if ! gpu_checks; then
         record m2gpu SKIPPED "no hardware GPU"

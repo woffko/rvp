@@ -60,6 +60,24 @@ each goal writes `docs/goals/goal-<letter>-status.md`.
 - `cargo run --release -p rvp-skin --example compare_reference -- RENDER REF OUT`
   aligns a render with a scaled screenshot and writes side-by-side crops.
 
+## Shell notes
+
+- `rvp --selftest` (also `=playback` and `=resume`, see `shell/qml/Main.qml`)
+  is the functional check for the VMs, the kit and the host. It drives RVP
+  through its own input handlers, never through the window system, and
+  prints `check`, `metric` and `status` lines.
+- Keep the GUI thread free during playback: no blocking mpv calls in loops
+  (`Player::diagnostics` is for rare reads), no disk flushes (use
+  `storage::Writer`), and chrome updates through `Player::damaged` only.
+- `shell/qml/Main.qml` imports only Qt Quick: Qt Quick Controls and Dialogs
+  live in files loaded on first use, which keeps the window's start fast.
+- `shell/build.rs` deletes cxx-qt-build's stale `plugin.qmltypes` before each
+  build; if an incremental build still crashes at start after a bridge
+  change, run `cargo clean -p rvp-shell`.
+- Windows host runs use `C:\Users\<user>\rvp-test\run-m2.cmd`, which keeps
+  RVP's settings and state in that folder. Every run needs the owner's
+  permission first.
+
 ## Test environments
 
 - WSL (this machine): builds, unit and headless tests.

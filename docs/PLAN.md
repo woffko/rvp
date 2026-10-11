@@ -1,6 +1,7 @@
 # RVP (Rust Video Player): project plan
 
-Status: draft, 2026-10-09. No product code exists yet.
+Status: in progress. Goals A-E are done (M1 skin engine, the gates, M2
+player window); results are in `docs/goals/`.
 
 ## 1. Goal
 
@@ -358,6 +359,8 @@ side-by-side with PotPlayer at the same size shows no visible layout difference.
 - Audio normalizer with boost from S5, volume above 100%, toggles and settings.
 - Input binding editor for keyboard and mouse (wheel, clicks, double click,
   middle and side buttons), with conflict detection and reset to defaults.
+- The window keeps the video's aspect ratio while it is resized during
+  playback (R1 finding 1; not in M2).
 
 Exit: the owner uses RVP instead of PotPlayer for a week of normal viewing on
 one system without losing a position or a playlist.
