@@ -44,6 +44,197 @@ pub enum Action {
     TogglePlaylist,
     /// Show or hide subtitles.
     ToggleSubtitles,
+    /// The audio normalizer on or off (PotPlayer: Shift+N).
+    ToggleNormalizer,
+    /// The normalizer's "Boost audio" on or off.
+    ToggleBoost,
+    /// The key and mouse editor (F5, PotPlayer's Preferences, until the
+    /// settings window of M5).
+    KeysAndMouse,
+    /// Import PotPlayer's playlists as albums.
+    ImportPlaylists,
+}
+
+/// An action of the playlist panel while it has the keyboard (PotPlayer's
+/// playlist accelerators, table 118 in `docs/r1/hotkeys.tsv`, plus undo,
+/// redo and the cursor keys).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub enum ListAction {
+    Play,
+    SelectAll,
+    InvertSelection,
+    RemoveSelected,
+    RemoveUnselected,
+    RemoveAll,
+    RemoveMissing,
+    AddFiles,
+    AddFolder,
+    AddAlbum,
+    RenameAlbum,
+    DeleteAlbum,
+    SortAscending,
+    SortDescending,
+    Shuffle,
+    MoveUp,
+    MoveDown,
+    MoveTop,
+    MoveBottom,
+    Undo,
+    Redo,
+    CursorUp,
+    CursorDown,
+    CursorHome,
+    CursorEnd,
+    PageUp,
+    PageDown,
+    /// Hide the attached playlist (F6).
+    Close,
+}
+
+/// Every playlist action with its settings name and PotPlayer's menu text.
+const LIST_NAMES: &[(ListAction, &str, &str)] = &[
+    (ListAction::Play, "play", "Play"),
+    (ListAction::SelectAll, "select-all", "Select All"),
+    (
+        ListAction::InvertSelection,
+        "invert-selection",
+        "Invert Selection",
+    ),
+    (
+        ListAction::RemoveSelected,
+        "remove-selected",
+        "Remove selected items",
+    ),
+    (
+        ListAction::RemoveUnselected,
+        "remove-unselected",
+        "Remove unselected items",
+    ),
+    (ListAction::RemoveAll, "remove-all", "Remove all items"),
+    (
+        ListAction::RemoveMissing,
+        "remove-missing",
+        "Remove nonexistent items",
+    ),
+    (ListAction::AddFiles, "add-files", "Add file(s)..."),
+    (ListAction::AddFolder, "add-folder", "Add folder..."),
+    (ListAction::AddAlbum, "add-album", "Add a new album..."),
+    (ListAction::RenameAlbum, "rename-album", "Edit album..."),
+    (ListAction::DeleteAlbum, "delete-album", "Delete album"),
+    (
+        ListAction::SortAscending,
+        "sort-ascending",
+        "Ascending order (A to Z)",
+    ),
+    (
+        ListAction::SortDescending,
+        "sort-descending",
+        "Descending order (Z to A)",
+    ),
+    (ListAction::Shuffle, "shuffle", "Randomly"),
+    (ListAction::MoveUp, "move-up", "Move Up"),
+    (ListAction::MoveDown, "move-down", "Move Down"),
+    (ListAction::MoveTop, "move-top", "Move Top"),
+    (ListAction::MoveBottom, "move-bottom", "Move End"),
+    (ListAction::Undo, "undo", "Undo"),
+    (ListAction::Redo, "redo", "Redo"),
+    (ListAction::CursorUp, "cursor-up", "Select previous item"),
+    (ListAction::CursorDown, "cursor-down", "Select next item"),
+    (ListAction::CursorHome, "cursor-home", "Select first item"),
+    (ListAction::CursorEnd, "cursor-end", "Select last item"),
+    (ListAction::PageUp, "page-up", "Page up"),
+    (ListAction::PageDown, "page-down", "Page down"),
+    (ListAction::Close, "close", "Close Playlist"),
+];
+
+impl ListAction {
+    pub fn all() -> impl Iterator<Item = ListAction> {
+        LIST_NAMES.iter().map(|&(action, _, _)| action)
+    }
+
+    /// The stable name used in settings files (`playlist-keys`).
+    #[must_use]
+    pub fn name(self) -> &'static str {
+        LIST_NAMES
+            .iter()
+            .find(|&&(action, _, _)| action == self)
+            .map_or("", |&(_, name, _)| name)
+    }
+
+    #[must_use]
+    pub fn from_name(name: &str) -> Option<ListAction> {
+        LIST_NAMES
+            .iter()
+            .find(|&&(_, candidate, _)| candidate == name)
+            .map(|&(action, _, _)| action)
+    }
+
+    /// PotPlayer's menu text.
+    #[must_use]
+    pub fn label(self) -> &'static str {
+        LIST_NAMES
+            .iter()
+            .find(|&&(action, _, _)| action == self)
+            .map_or("", |&(_, _, label)| label)
+    }
+
+    /// The action of a command ID from PotPlayer's playlist accelerators.
+    #[must_use]
+    pub fn from_potplayer_id(id: u32) -> Option<ListAction> {
+        Some(match id {
+            10199 => ListAction::Play,
+            10204 => ListAction::SelectAll,
+            10205 => ListAction::InvertSelection,
+            10200 => ListAction::RemoveSelected,
+            10212 => ListAction::RemoveUnselected,
+            10201 => ListAction::RemoveAll,
+            10210 => ListAction::RemoveMissing,
+            10196 => ListAction::AddFiles,
+            10197 => ListAction::AddFolder,
+            10002 => ListAction::AddAlbum,
+            10003 => ListAction::RenameAlbum,
+            10004 => ListAction::DeleteAlbum,
+            10202 => ListAction::SortAscending,
+            10203 => ListAction::SortDescending,
+            10988 => ListAction::Shuffle,
+            // Unnamed in the menus; Ctrl+Up/Down/Home/End move the selected
+            // items, like the panel's Move buttons.
+            27020 => ListAction::MoveUp,
+            27021 => ListAction::MoveDown,
+            27022 => ListAction::MoveTop,
+            27023 => ListAction::MoveBottom,
+            10446 => ListAction::Close,
+            _ => return None,
+        })
+    }
+
+    /// The action of a playlist panel button's `CmdID`.
+    #[must_use]
+    pub fn from_skin_command(command: &str) -> Option<ListAction> {
+        Some(match command {
+            "CMD_PLAYLIST_TOP" => ListAction::MoveTop,
+            "CMD_PLAYLIST_UP" => ListAction::MoveUp,
+            "CMD_PLAYLIST_DOWN" => ListAction::MoveDown,
+            "CMD_PLAYLIST_BOTTOM" => ListAction::MoveBottom,
+            "CMD_PLAYLIST_ADD" => ListAction::AddFiles,
+            "CMD_PLAYLIST_DEL" => ListAction::RemoveSelected,
+            _ => return None,
+        })
+    }
+
+    /// Cursor movements, which Shift turns into extending the selection.
+    #[must_use]
+    pub fn is_cursor(self) -> bool {
+        matches!(
+            self,
+            ListAction::CursorUp
+                | ListAction::CursorDown
+                | ListAction::CursorHome
+                | ListAction::CursorEnd
+                | ListAction::PageUp
+                | ListAction::PageDown
+        )
+    }
 }
 
 /// Every action with its stable name (settings files use the names).
@@ -81,6 +272,10 @@ const NAMES: &[(Action, &str)] = &[
     (Action::ContextMenu, "context-menu"),
     (Action::TogglePlaylist, "toggle-playlist"),
     (Action::ToggleSubtitles, "toggle-subtitles"),
+    (Action::ToggleNormalizer, "toggle-normalizer"),
+    (Action::ToggleBoost, "toggle-boost"),
+    (Action::KeysAndMouse, "keys-and-mouse"),
+    (Action::ImportPlaylists, "import-playlists"),
 ];
 
 impl Action {
@@ -133,6 +328,8 @@ impl Action {
             10167 => Action::CloseMedia,
             10011 => Action::TogglePlaylist,
             10237 | 10238 => Action::MaximizeRestore,
+            10009 => Action::ToggleNormalizer,
+            10010 => Action::KeysAndMouse,
             10126 => Action::ToggleSubtitles,
             57665 => Action::Exit,
             _ => return None,
@@ -195,6 +392,10 @@ impl Action {
             Action::ContextMenu => ("Menu", None),
             Action::TogglePlaylist => ("Playlist...", Some("F6")),
             Action::ToggleSubtitles => ("Show/Hide Subtitles", Some("Alt+H")),
+            Action::ToggleNormalizer => ("Normalizer", Some("Shift+N")),
+            Action::ToggleBoost => ("Normalizer: Boost audio", None),
+            Action::KeysAndMouse => ("Keys and Mouse...", Some("F5")),
+            Action::ImportPlaylists => ("Import PotPlayer Playlists...", None),
         }
     }
 
@@ -212,6 +413,8 @@ impl Action {
                 | Action::MaximizeRestore
                 | Action::TogglePlaylist
                 | Action::ToggleSubtitles
+                | Action::ToggleNormalizer
+                | Action::ToggleBoost
         )
     }
 }

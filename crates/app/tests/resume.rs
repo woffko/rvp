@@ -1,6 +1,8 @@
 //! Resume tests (docs/PLAN.md section 7): kill the player at pseudo-random
 //! points during playback and check that the saved position is within 5 s
-//! of the last one it reached, and that the next start resumes there.
+//! of the last one it reached, and that the next start resumes there; kill
+//! it during playlist edits and check that the albums on disk are those
+//! after the last edit it reported (or the one it was making).
 
 use std::io::{BufRead, BufReader};
 use std::path::{Path, PathBuf};
@@ -8,6 +10,7 @@ use std::process::{Command, Stdio};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
+use rvp_app::playlist::{Library, Playlists};
 use rvp_app::{App, EDGE_SECONDS, ResumeState, SAVE_INTERVAL, Settings, read_json};
 use rvp_engine::{Engine, EngineOptions, PropertyId};
 
@@ -15,6 +18,11 @@ const FIXTURE: &str = concat!(
     env!("CARGO_MANIFEST_DIR"),
     "/../../testdata/media/fixture-60s.mkv"
 );
+const SHORT: &str = concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/../../testdata/media/fixture-3s.mkv"
+);
+const PROBE: &str = env!("CARGO_BIN_EXE_rvp-resume-probe");
 
 fn scratch(name: &str) -> PathBuf {
     let dir = std::env::temp_dir().join(format!("rvp-resume-test-{name}-{}", std::process::id()));
@@ -45,27 +53,39 @@ impl Delays {
     }
 }
 
-/// Runs the probe until it has played `play_ms` after reaching `resume`,
-/// kills it and returns (first position after resuming, last position seen).
-fn play_and_kill(dir: &Path, resume: Option<f64>, play_ms: u64) -> (f64, f64) {
-    let mut child = Command::new(env!("CARGO_BIN_EXE_rvp-resume-probe"))
-        .arg(dir)
-        .arg(FIXTURE)
+/// Starts the probe and collects the values of its `prefix=` lines.
+fn spawn_probe(
+    args: &[&std::ffi::OsStr],
+    prefix: &'static str,
+) -> (
+    std::process::Child,
+    Arc<Mutex<Vec<f64>>>,
+    std::thread::JoinHandle<()>,
+) {
+    let mut child = Command::new(PROBE)
+        .args(args)
         .stdout(Stdio::piped())
         .spawn()
         .expect("probe starts");
-    let times = Arc::new(Mutex::new(Vec::<f64>::new()));
+    let values = Arc::new(Mutex::new(Vec::<f64>::new()));
     let reader = {
-        let times = Arc::clone(&times);
+        let values = Arc::clone(&values);
         let stdout = child.stdout.take().expect("stdout");
         std::thread::spawn(move || {
             for line in BufReader::new(stdout).lines().map_while(Result::ok) {
-                if let Some(value) = line.strip_prefix("time=").and_then(|t| t.parse().ok()) {
-                    times.lock().expect("lock").push(value);
+                if let Some(value) = line.strip_prefix(prefix).and_then(|t| t.parse().ok()) {
+                    values.lock().expect("lock").push(value);
                 }
             }
         })
     };
+    (child, values, reader)
+}
+
+/// Runs the probe until it has played `play_ms` after reaching `resume`,
+/// kills it and returns (first position after resuming, last position seen).
+fn play_and_kill(args: &[&std::ffi::OsStr], resume: Option<f64>, play_ms: u64) -> (f64, f64) {
+    let (mut child, times, reader) = spawn_probe(args, "time=");
     // Wait until playback has reached the resume point (or any position).
     let start_deadline = Instant::now() + Duration::from_secs(20);
     let resumed_at = loop {
@@ -109,7 +129,8 @@ fn positions_survive_killed_processes() {
         } else {
             delays.next_ms(1500, 5000)
         };
-        let (resumed_at, last) = play_and_kill(&dir, stored, play_ms);
+        let (resumed_at, last) =
+            play_and_kill(&[dir.as_os_str(), FIXTURE.as_ref()], stored, play_ms);
         if let Some(previous) = stored {
             assert!(
                 (resumed_at - previous).abs() < 1.5,
@@ -182,5 +203,104 @@ fn clean_restart_resumes_paused_at_the_last_file() {
         Some(37.0),
         "volume restored"
     );
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// The albums the scripted edits leave after `count` edits.
+fn expected_after(count: usize) -> Playlists {
+    let dir = scratch(&format!("expected-{count}"));
+    let status = Command::new(PROBE)
+        .arg("--edits")
+        .arg(&dir)
+        .arg(count.to_string())
+        .status()
+        .expect("probe runs");
+    assert!(status.success());
+    let lists = Library::open(&dir).expect("open").lists().clone();
+    let _ = std::fs::remove_dir_all(&dir);
+    lists
+}
+
+#[test]
+fn playlists_survive_killed_processes() {
+    let mut delays = Delays(0x504c_4159_4c49_5354);
+    for run in 0..5 {
+        let dir = scratch(&format!("edits-{run}"));
+        // An edit every 100 ms, killed after 0.6 to 3 s.
+        let (mut child, edits, reader) = spawn_probe(
+            &[
+                "--edits".as_ref(),
+                dir.as_os_str(),
+                "400".as_ref(),
+                "100".as_ref(),
+            ],
+            "edit=",
+        );
+        std::thread::sleep(Duration::from_millis(delays.next_ms(600, 3000)));
+        child.kill().expect("kill");
+        let _ = child.wait();
+        let _ = reader.join();
+        // Reported edits are whole numbers.
+        #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+        let last = edits
+            .lock()
+            .expect("lock")
+            .last()
+            .map_or(0, |n| *n as usize);
+        assert!(last > 0, "run {run}: no edit was reported");
+        // The file is whole (written atomically) and holds the albums after
+        // one of the edits of the last second: the writer may still have
+        // been writing, or already the edit after the last reported one.
+        let saved = Library::open(&dir).expect("readable").lists().clone();
+        let found = (last.saturating_sub(10)..=last + 1)
+            .rev()
+            .find(|&n| saved == expected_after(n));
+        assert!(
+            found.is_some(),
+            "run {run}: the albums on disk are not those of edits {}..={}",
+            last.saturating_sub(10),
+            last + 1
+        );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+}
+
+#[test]
+fn album_entry_and_position_survive_a_kill() {
+    let dir = scratch("album");
+    let (_, last) = play_and_kill(
+        &[
+            "--album".as_ref(),
+            dir.as_os_str(),
+            SHORT.as_ref(),
+            FIXTURE.as_ref(),
+        ],
+        Some(8.0),
+        1500,
+    );
+    // The next start shows the second album with its second entry, paused
+    // where the killed process was.
+    let mut app = App::new(Settings::default(), &dir).expect("app");
+    let engine = Engine::new(&EngineOptions::headless()).expect("engine");
+    app.start(&engine, &[]).expect("start");
+    let lists = app.library().lists();
+    assert_eq!(lists.playing, Some(1), "the second album plays");
+    assert_eq!(lists.albums[1].name, "Second");
+    assert_eq!(lists.albums[1].current, Some(1));
+    let deadline = Instant::now() + Duration::from_secs(20);
+    loop {
+        assert!(Instant::now() < deadline, "did not resume: {:?}", app.model);
+        std::thread::sleep(Duration::from_millis(20));
+        app.drain(&engine, Instant::now());
+        let time = app.model.double(PropertyId::TimePos).unwrap_or_default();
+        if app.model.loaded_path() == Some(FIXTURE) && time > 1.0 {
+            assert!(
+                time <= last + 0.5 && last - time <= 5.0,
+                "resumed at {time}, killed at {last}"
+            );
+            break;
+        }
+    }
+    assert_eq!(app.model.flag(PropertyId::Pause), Some(true));
     let _ = std::fs::remove_dir_all(&dir);
 }

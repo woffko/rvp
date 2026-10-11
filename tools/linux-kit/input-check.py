@@ -3,7 +3,9 @@
 title bar moves it, dragging the corner resizes it and a right click opens
 a menu window. For the S3 spike the window is first shrunk to 440x77 and
 the menu must be larger than it; for RVP (`--rvp`) a double click on the
-video must also enter fullscreen and a second one leave it. Only mouse
+video must also enter fullscreen and a second one leave it. RVP keeps the
+window at the video's shape (M3), so after the corner drag one side may
+shrink further than dragged; the other must follow the drag. Only mouse
 input is injected (it reaches the window under the pointer); keyboard
 input could reach the terminal that runs the check.
 
@@ -166,21 +168,29 @@ def check_move(pointer: Pointer, origin, size, drag) -> bool:
     return ok
 
 
-def check_resize(pointer: Pointer, origin, size, inset: int = 6) -> bool:
+def check_resize(pointer: Pointer, origin, size, inset: int = 6, aspect_lock: bool = False):
     """`inset`: where the corner is grabbed (S3 has a 16 px grip, RVP's
-    resize border is 5 px wide)."""
+    resize border is 5 px wide). With `aspect_lock` the window may then
+    narrow one side to the video's shape. Returns whether the check passed
+    and the window size afterwards."""
     pointer.drag((origin[0] + size[0] - inset, origin[1] + size[1] - inset), RESIZE)
+    if aspect_lock:
+        time.sleep(1.0)  # RVP fits the window 300 ms after the resize settles
     report = pointer.probe(origin[0] + 20, origin[1] + 40) or last_pointer(pointer.log_path)
     if report is None:
         print("input_check_resize=FAIL no pointer report")
-        return False
+        return False, size
     resized = (report[2] - size[0], report[3] - size[1])
-    ok = abs(resized[0] - RESIZE[0]) <= 3 and abs(resized[1] - RESIZE[1]) <= 3
+    followed = [abs(resized[axis] - RESIZE[axis]) <= 3 for axis in (0, 1)]
+    if aspect_lock:
+        ok = any(followed) and all(resized[axis] <= RESIZE[axis] + 3 for axis in (0, 1))
+    else:
+        ok = all(followed)
     print(
         f"input_check_resize={'PASS' if ok else 'FAIL'} resized={resized[0]},{resized[1]} "
-        f"expected={RESIZE[0]},{RESIZE[1]}"
+        f"expected={RESIZE[0]},{RESIZE[1]}{' or narrower (aspect lock)' if aspect_lock else ''}"
     )
-    return ok
+    return ok, (report[2], report[3])
 
 
 def check_menu(pointer: Pointer, origin, size) -> bool:
@@ -301,8 +311,8 @@ def main() -> int:
         )
         failures += 0 if check_move(pointer, origin, (width, height), drag) else 1
         origin = (origin[0] + drag[0], origin[1] + drag[1])
-        failures += 0 if check_resize(pointer, origin, (width, height), 2 if rvp else 6) else 1
-        resized = (width + RESIZE[0], height + RESIZE[1])
+        ok, resized = check_resize(pointer, origin, (width, height), 2 if rvp else 6, rvp)
+        failures += 0 if ok else 1
         if rvp:
             failures += 0 if check_fullscreen(pointer, origin, resized, screen) else 1
             failures += 0 if check_rvp_menu(pointer, origin, resized) else 1

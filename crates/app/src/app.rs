@@ -1,11 +1,17 @@
 //! The application core: turns actions into engine commands and window
-//! requests, and keeps the resume store in step with playback.
+//! requests, plays the albums, and keeps the resume store and the albums'
+//! file in step with playback.
 //!
 //! It has no Qt dependency; the shell owns the [`Engine`], forwards input as
-//! [`Action`]s and carries out the [`UiRequest`]s it gets back.
+//! [`Action`]s and [`ListAction`]s and carries out the [`UiRequest`]s it gets
+//! back.
+//!
+//! mpv plays one album entry at a time: Next, Previous and the end of a file
+//! move through the album that plays, skipping entries that could not be
+//! opened, which are marked `<Can't open>`.
 
 use std::io;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::time::Instant;
 
 use rvp_engine::{
@@ -13,9 +19,13 @@ use rvp_engine::{
     Seek,
 };
 
-use crate::action::Action;
+use crate::action::{Action, ListAction};
+use crate::dpl::{self, DriveMap};
 use crate::input::{Bindings, KeyChord};
-use crate::resume::{ResumeStore, WindowGeometry};
+use crate::instance::{Mode, Request};
+use crate::playlist::{Library, Move, Order, Select};
+use crate::pointer::ListEffect;
+use crate::resume::{EDGE_SECONDS, ResumeStore, WindowGeometry};
 use crate::settings::Settings;
 use crate::storage::{self, Dirs};
 
@@ -31,6 +41,21 @@ pub enum UiRequest {
     Exit,
     ContextMenu,
     TogglePlaylist,
+    /// Open the key and mouse editor.
+    KeysAndMouse,
+    /// Ask for PotPlayer's playlist folder to import.
+    ImportPlaylists,
+    /// Ask for files to add to the shown album.
+    AddFilesDialog,
+    /// Ask for a folder to add to the shown album.
+    AddFolderDialog,
+    /// Ask for an album name: a new album, or a new name for the shown one.
+    AlbumName {
+        rename: bool,
+        current: String,
+    },
+    /// A short notice over the video (volume, normalizer).
+    Osd(String),
     /// A non-blocking message (section 4: no modal interruptions).
     Message(String),
 }
@@ -65,20 +90,35 @@ enum Tracking {
     On,
 }
 
+/// File extensions "Add folder" picks up.
+const MEDIA_EXTENSIONS: &[&str] = &[
+    "3gp", "aac", "ac3", "aiff", "ape", "asf", "avi", "dts", "flac", "flv", "m2ts", "m4a", "m4v",
+    "mka", "mkv", "mov", "mp3", "mp4", "mpeg", "mpg", "mts", "ogg", "ogm", "ogv", "opus", "rm",
+    "rmvb", "ts", "vob", "wav", "webm", "wma", "wmv", "wv",
+];
+
 /// The application core.
 pub struct App {
     pub settings: Settings,
     pub bindings: Bindings,
     pub model: PlayerModel,
     store: ResumeStore,
+    library: Library,
     tracking: Tracking,
+    /// The end of the file that plays was handled (moved on or stayed).
+    end_handled: bool,
+    /// Where settings changed from the window (normalizer) are saved.
+    settings_path: Option<PathBuf>,
+    writer: storage::Writer,
+    /// The albums' file did not exist: nothing was restored.
+    first_start: bool,
     /// Warnings from loading the settings, for the shell to show once.
     pub warnings: Vec<String>,
 }
 
 impl App {
-    /// Loads `settings.json` (writing the defaults when it is missing) and
-    /// the resume store.
+    /// Loads `settings.json` (writing the defaults when it is missing), the
+    /// resume store and the albums.
     ///
     /// # Errors
     /// Fails on I/O errors other than missing files.
@@ -91,19 +131,27 @@ impl App {
             storage::write_json(&settings_path, &settings)?;
             settings
         };
-        Self::new(settings, &dirs.state)
+        let mut app = Self::new(settings, &dirs.state)?;
+        app.settings_path = Some(settings_path);
+        Ok(app)
     }
 
     /// # Errors
-    /// Fails when the resume store cannot be read.
+    /// Fails when the resume store or the albums cannot be read.
     pub fn new(settings: Settings, state_dir: &Path) -> io::Result<Self> {
         let (bindings, warnings) = settings.bindings();
+        let first_start = !state_dir.join("playlists.json").exists();
         Ok(Self {
             settings,
             bindings,
             model: PlayerModel::new(),
             store: ResumeStore::open(state_dir)?,
+            library: Library::open(state_dir)?,
             tracking: Tracking::On,
+            end_handled: false,
+            settings_path: None,
+            writer: storage::Writer::new()?,
+            first_start,
             warnings,
         })
     }
@@ -115,6 +163,10 @@ impl App {
         options.hwdec.clone_from(&self.settings.hwdec);
         options.ipc_server =
             Some(self.settings.ipc_server.clone()).filter(|server| !server.is_empty());
+        options.extra.push((
+            "volume-max".to_owned(),
+            format!("{:.0}", self.settings.volume_max.max(100.0)),
+        ));
         options
     }
 
@@ -123,8 +175,21 @@ impl App {
         &self.store
     }
 
-    /// Restores volume and mute, then opens `files`, or without files the
-    /// last file paused at its position (`reopen-last-file`).
+    #[must_use]
+    pub fn library(&self) -> &Library {
+        &self.library
+    }
+
+    /// Changes to the albums that the panel makes directly (selection,
+    /// scrolling, tabs, dropped rows).
+    pub fn library_mut(&mut self) -> &mut Library {
+        &mut self.library
+    }
+
+    /// Restores volume, mute and the normalizer, then opens `files`, or
+    /// without files the entry that played last, paused at its position
+    /// (`reopen-last-file`). On the first start, PotPlayer's playlists are
+    /// imported when their folder is known.
     ///
     /// # Errors
     /// Fails when libmpv rejects a command.
@@ -132,20 +197,39 @@ impl App {
         let state = self.store.state();
         engine.set_volume(state.volume.unwrap_or(100.0))?;
         engine.set_mute(state.mute)?;
+        let last_file = state.last_file.clone();
+        self.apply_normalizer(engine);
+        if self.first_start
+            && let Some(folder) = self.potplayer_folder()
+            && let Ok(count) = self.import_playlists(&folder)
+            && count > 0
+        {
+            self.warnings
+                .push(format!("Imported {count} albums from PotPlayer"));
+        }
         if !files.is_empty() {
             return self.open(engine, files, false);
         }
-        if self.settings.reopen_last_file
-            && let Some(last) = state.last_file.clone()
+        if !self.settings.reopen_last_file {
+            return Ok(());
+        }
+        if let (Some(album), Some((index, _))) =
+            (self.library.lists().playing, self.library.playing())
         {
-            engine.set_pause(true)?;
-            return self.open(engine, &[last], false);
+            return self.play_entry(engine, album, index, true);
+        }
+        // From M2's state: the last file without an album.
+        if let Some(last) = last_file {
+            let shown = self.library.lists().shown;
+            if let Some(index) = self.library.insert(shown, None, &[last]) {
+                return self.play_entry(engine, shown, index, true);
+            }
         }
         Ok(())
     }
 
-    /// Opens files: the first replaces what plays (or is appended with
-    /// `append`), the rest are appended to mpv's playlist.
+    /// Opens files: they are added to the shown album and the first one
+    /// plays, or with `append` they are only added.
     ///
     /// # Errors
     /// Fails when libmpv rejects a command.
@@ -155,10 +239,136 @@ impl App {
         files: &[String],
         append: bool,
     ) -> Result<(), EngineError> {
-        for (index, file) in files.iter().enumerate() {
-            engine.load(file, append || index > 0)?;
+        let shown = self.library.lists().shown;
+        let Some(first) = self.library.insert(shown, None, files) else {
+            return Ok(());
+        };
+        if append {
+            Ok(())
+        } else {
+            self.play_entry(engine, shown, first, false)
         }
-        Ok(())
+    }
+
+    /// Adds files after the entry that plays (PotPlayer's `/insert`).
+    pub fn insert_after_current(&mut self, files: &[String]) {
+        let lists = self.library.lists();
+        let (album, at) = match (lists.playing, self.library.playing()) {
+            (Some(album), Some((index, _))) => (album, Some(index + 1)),
+            _ => (lists.shown, None),
+        };
+        self.library.insert(album, at, files);
+    }
+
+    /// Carries out a second instance's request (or this one's own `/add`
+    /// or `/insert` at start).
+    ///
+    /// # Errors
+    /// Fails when libmpv rejects a command.
+    pub fn remote(&mut self, engine: &Engine, request: &Request) -> Result<(), EngineError> {
+        match request.mode {
+            Mode::Play => self.open(engine, &request.files, false),
+            Mode::Add => self.open(engine, &request.files, true),
+            Mode::Insert => {
+                self.insert_after_current(&request.files);
+                Ok(())
+            }
+        }
+    }
+
+    /// Carries out what the pointer did in the playlist panel; `visible`
+    /// is the number of rows the panel shows. The drop marker and the menu
+    /// are the window's.
+    pub fn list_effect(
+        &mut self,
+        engine: &Engine,
+        effect: ListEffect,
+        visible: usize,
+    ) -> Option<UiRequest> {
+        let album = self.library.lists().shown;
+        match effect {
+            ListEffect::Select { index, how } => {
+                self.library.select(album, index, how);
+            }
+            ListEffect::Play(index) => {
+                self.library.select(album, index, Select::Only);
+                if let Err(error) = self.play_entry(engine, album, index, false) {
+                    return Some(UiRequest::Message(format!("Cannot play: {error}")));
+                }
+            }
+            ListEffect::ShowAlbum(target) => {
+                self.library.show_album(target);
+            }
+            ListEffect::DeleteAlbum(target) => {
+                self.library.remove_album(target);
+            }
+            ListEffect::ScrollBy(rows) => {
+                let top = self.library.shown().top;
+                let top = if rows < 0 {
+                    top.saturating_sub(rows.unsigned_abs() as usize)
+                } else {
+                    top.saturating_add(rows.unsigned_abs() as usize)
+                };
+                self.library.scroll_to(album, top, visible);
+            }
+            ListEffect::ScrollTo(top) => {
+                self.library.scroll_to(album, top, visible);
+            }
+            ListEffect::MoveBefore(index) => {
+                self.library.move_selected(album, Move::Before(index));
+            }
+            ListEffect::Action(action) => return self.list_action(engine, action, false, visible),
+            ListEffect::DropMarker(_) | ListEffect::Menu => {}
+        }
+        None
+    }
+
+    /// Plays an album entry; `paused` opens it paused (reopening at start).
+    ///
+    /// # Errors
+    /// Fails when libmpv rejects a command.
+    pub fn play_entry(
+        &mut self,
+        engine: &Engine,
+        album: usize,
+        index: usize,
+        paused: bool,
+    ) -> Result<(), EngineError> {
+        let Some(path) = self
+            .library
+            .lists()
+            .albums
+            .get(album)
+            .and_then(|target| target.entries.get(index))
+            .map(|entry| entry.path.clone())
+        else {
+            return Ok(());
+        };
+        self.library.set_playing(album, index);
+        self.end_handled = false;
+        self.tracking = Tracking::Loading;
+        engine.set_pause(paused)?;
+        engine.load(&path, false)
+    }
+
+    /// Moves to the next (`1`) or previous (`-1`) playable entry.
+    fn step(&mut self, engine: &Engine, step: i32) -> Result<(), EngineError> {
+        match self.library.neighbour(step) {
+            Some((album, index)) => self.play_entry(engine, album, index, false),
+            None => Ok(()),
+        }
+    }
+
+    /// Whether an action's menu entry shows a check mark, and if so its
+    /// state.
+    #[must_use]
+    pub fn checked(&self, action: Action) -> Option<bool> {
+        match action {
+            Action::ToggleNormalizer => Some(self.settings.normalizer.enabled),
+            Action::ToggleBoost => Some(self.settings.normalizer.boost),
+            Action::ToggleMute => Some(self.model.flag(PropertyId::Mute) == Some(true)),
+            _ => None,
+        }
     }
 
     /// The context menu entry of an action: PotPlayer's text with the seek
@@ -189,6 +399,21 @@ impl App {
         (label, shortcut)
     }
 
+    /// The playlist menu entry of a playlist action and its bound key.
+    #[must_use]
+    pub fn list_menu_entry(&self, action: ListAction) -> (String, String) {
+        let shortcut = self
+            .bindings
+            .list_keys
+            .iter()
+            .filter(|&(_, &bound)| bound == action)
+            .map(|(chord, _)| *chord)
+            .min_by_key(|chord| (u8::from(chord.ctrl) + u8::from(chord.alt), *chord))
+            .map(|chord| chord.to_string())
+            .unwrap_or_default();
+        (action.label().to_owned(), shortcut)
+    }
+
     /// Carries out an action; window-level actions come back as requests.
     pub fn dispatch(&mut self, engine: &Engine, action: Action) -> Option<UiRequest> {
         let result = match action {
@@ -204,10 +429,20 @@ impl App {
             Action::MaximizeRestore => return Some(UiRequest::MaximizeRestore),
             Action::ContextMenu => return Some(UiRequest::ContextMenu),
             Action::TogglePlaylist => return Some(UiRequest::TogglePlaylist),
+            Action::KeysAndMouse => return Some(UiRequest::KeysAndMouse),
+            Action::ImportPlaylists => return Some(UiRequest::ImportPlaylists),
             Action::ToggleSubtitles => engine.toggle_subtitles(),
+            Action::ToggleNormalizer => {
+                self.settings.normalizer.enabled = !self.settings.normalizer.enabled;
+                return Some(self.normalizer_changed(engine));
+            }
+            Action::ToggleBoost => {
+                self.settings.normalizer.boost = !self.settings.normalizer.boost;
+                return Some(self.normalizer_changed(engine));
+            }
             Action::PlayPause => {
                 if !self.model.media_loaded() {
-                    return Some(UiRequest::OpenFileDialog);
+                    return self.play_shown(engine);
                 }
                 if self.model.flag(PropertyId::EofReached) == Some(true) {
                     // At the end (keep-open), Play starts the file again.
@@ -219,22 +454,275 @@ impl App {
                 }
             }
             Action::CloseMedia => engine.stop(),
-            Action::Previous => engine.playlist_step(-1),
-            Action::Next => engine.playlist_step(1),
+            Action::Previous => self.step(engine, -1),
+            Action::Next => self.step(engine, 1),
             Action::SeekBackward(step) => {
                 self.seek(engine, Seek::Relative(-self.settings.seek_seconds(step)))
             }
             Action::SeekForward(step) => {
                 self.seek(engine, Seek::Relative(self.settings.seek_seconds(step)))
             }
-            Action::VolumeUp => self.change_volume(engine, self.settings.volume_step),
-            Action::VolumeDown => self.change_volume(engine, -self.settings.volume_step),
-            Action::ToggleMute => engine.set_mute(self.model.flag(PropertyId::Mute) != Some(true)),
+            Action::VolumeUp => return self.change_volume(engine, self.settings.volume_step),
+            Action::VolumeDown => return self.change_volume(engine, -self.settings.volume_step),
+            Action::ToggleMute => {
+                let mute = self.model.flag(PropertyId::Mute) != Some(true);
+                return engine
+                    .set_mute(mute)
+                    .ok()
+                    .map(|()| UiRequest::Osd(if mute { "Mute" } else { "Sound on" }.to_owned()));
+            }
         };
-        // Commands that do not apply (no next file, nothing to seek) are
-        // ignored, as PotPlayer does.
+        // Commands that do not apply (nothing to seek) are ignored, as
+        // PotPlayer does.
         drop(result);
         None
+    }
+
+    /// Play with nothing loaded: the shown album's selected or current
+    /// entry, else the file dialog.
+    fn play_shown(&mut self, engine: &Engine) -> Option<UiRequest> {
+        let shown = self.library.lists().shown;
+        let target = self
+            .library
+            .cursor(shown)
+            .or_else(|| (!self.library.shown().entries.is_empty()).then_some(0));
+        match target {
+            Some(index) => {
+                drop(self.play_entry(engine, shown, index, false));
+                None
+            }
+            None => Some(UiRequest::OpenFileDialog),
+        }
+    }
+
+    /// Carries out a playlist action on the shown album. `extend` (Shift)
+    /// turns cursor moves into selecting; `visible` is the number of rows
+    /// the panel shows (for paging and scrolling).
+    pub fn list_action(
+        &mut self,
+        engine: &Engine,
+        action: ListAction,
+        extend: bool,
+        visible: usize,
+    ) -> Option<UiRequest> {
+        let album = self.library.lists().shown;
+        let len = self.library.shown().entries.len();
+        let cursor = self.library.cursor(album);
+        let page = visible.max(1);
+        let target = match action {
+            ListAction::CursorUp => Some(cursor.map_or(0, |c| c.saturating_sub(1))),
+            ListAction::CursorDown => Some(cursor.map_or(0, |c| c + 1)),
+            ListAction::CursorHome => Some(0),
+            ListAction::CursorEnd => Some(len.saturating_sub(1)),
+            ListAction::PageUp => Some(cursor.map_or(0, |c| c.saturating_sub(page))),
+            ListAction::PageDown => Some(cursor.map_or(0, |c| c + page)),
+            _ => None,
+        };
+        if let Some(index) = target {
+            if len > 0 {
+                let index = index.min(len - 1);
+                let how = if extend { Select::Range } else { Select::Only };
+                self.library.select(album, index, how);
+                self.library.reveal(album, index, visible);
+            }
+            return None;
+        }
+        // Whether the album changed is already in the library's state.
+        let _changed = match action {
+            ListAction::Play => {
+                cursor.is_some_and(|index| self.play_entry(engine, album, index, false).is_ok())
+            }
+            ListAction::SelectAll => self.library.select_all(album),
+            ListAction::InvertSelection => self.library.invert_selection(album),
+            ListAction::RemoveSelected => self.library.remove_selected(album),
+            ListAction::RemoveUnselected => self.library.remove_unselected(album),
+            ListAction::RemoveAll => self.library.clear(album),
+            ListAction::RemoveMissing => self.library.remove_missing(album),
+            ListAction::SortAscending => self.library.sort(album, Order::Ascending),
+            ListAction::SortDescending => self.library.sort(album, Order::Descending),
+            ListAction::Shuffle => {
+                let seed = std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .map_or(0, |elapsed| elapsed.as_secs());
+                self.library.sort(album, Order::Random(seed))
+            }
+            ListAction::MoveUp => self.library.move_selected(album, Move::Up),
+            ListAction::MoveDown => self.library.move_selected(album, Move::Down),
+            ListAction::MoveTop => self.library.move_selected(album, Move::Top),
+            ListAction::MoveBottom => self.library.move_selected(album, Move::Bottom),
+            ListAction::Undo => self.library.undo(),
+            ListAction::Redo => self.library.redo(),
+            ListAction::DeleteAlbum => self.library.remove_album(album),
+            ListAction::AddFiles => return Some(UiRequest::AddFilesDialog),
+            ListAction::AddFolder => return Some(UiRequest::AddFolderDialog),
+            ListAction::AddAlbum => {
+                return Some(UiRequest::AlbumName {
+                    rename: false,
+                    current: String::new(),
+                });
+            }
+            ListAction::RenameAlbum => {
+                return Some(UiRequest::AlbumName {
+                    rename: true,
+                    current: self.library.shown().name.clone(),
+                });
+            }
+            ListAction::Close => return Some(UiRequest::TogglePlaylist),
+            ListAction::CursorUp
+            | ListAction::CursorDown
+            | ListAction::CursorHome
+            | ListAction::CursorEnd
+            | ListAction::PageUp
+            | ListAction::PageDown => false,
+        };
+        None
+    }
+
+    /// Names a new album, or renames the shown one.
+    pub fn name_album(&mut self, name: &str, rename: bool) {
+        let name = name.trim();
+        if name.is_empty() {
+            return;
+        }
+        if rename {
+            let shown = self.library.lists().shown;
+            self.library.rename_album(shown, name);
+        } else {
+            self.library.add_album(name);
+        }
+    }
+
+    /// Adds the media files in `folder` and its subfolders to the shown
+    /// album, sorted by path.
+    pub fn add_folder(&mut self, folder: &Path) -> usize {
+        let mut files = Vec::new();
+        collect_media(folder, 0, &mut files);
+        files.sort();
+        let shown = self.library.lists().shown;
+        self.library.insert(shown, None, &files);
+        files.len()
+    }
+
+    /// Where PotPlayer's playlists are: the setting, else on Windows
+    /// `%APPDATA%\PotPlayerMini64\Playlist`.
+    #[must_use]
+    pub fn potplayer_folder(&self) -> Option<PathBuf> {
+        self.settings
+            .potplayer_playlists
+            .clone()
+            .filter(|folder| folder.is_dir())
+            .or_else(dpl::potplayer_folder)
+    }
+
+    /// Imports PotPlayer's playlists from `folder` (read-only) as albums,
+    /// with their resume positions; returns how many albums came in.
+    ///
+    /// # Errors
+    /// Fails when the folder cannot be read.
+    pub fn import_playlists(&mut self, folder: &Path) -> io::Result<usize> {
+        // Windows opens PotPlayer's paths as they are.
+        let map = if cfg!(windows) {
+            DriveMap::default()
+        } else {
+            DriveMap::new(&self.settings.drive_map)
+        };
+        let imported = dpl::import_dir(folder, &map)?;
+        let count = imported.len();
+        let mut first = None;
+        for item in imported {
+            let mut album = item.album;
+            let fills_empty = self
+                .library
+                .lists()
+                .albums
+                .iter()
+                .any(|existing| existing.name == album.name && existing.entries.is_empty());
+            if !fills_empty {
+                album.name = self.unique_album_name(&album.name);
+            }
+            let index = self.library.import_album(album);
+            first.get_or_insert(index);
+            for (path, seconds) in item.positions {
+                if seconds >= EDGE_SECONDS {
+                    self.store.set_position(&path, seconds, None);
+                }
+            }
+        }
+        if let Some(first) = first {
+            self.library.show_album(first);
+        }
+        drop(self.store.save(Instant::now()));
+        Ok(count)
+    }
+
+    fn unique_album_name(&self, name: &str) -> String {
+        let taken = |candidate: &str| {
+            self.library
+                .lists()
+                .albums
+                .iter()
+                .any(|album| album.name == candidate)
+        };
+        if !taken(name) {
+            return name.to_owned();
+        }
+        // There are fewer albums than numbers to try.
+        let albums = self.library.lists().albums.len();
+        (2..=albums + 1)
+            .map(|n| format!("{name} ({n})"))
+            .find(|candidate| !taken(candidate))
+            .unwrap_or_else(|| name.to_owned())
+    }
+
+    /// Applies the normalizer settings to mpv's audio filters.
+    pub fn apply_normalizer(&self, engine: &Engine) {
+        let entry = self
+            .settings
+            .normalizer
+            .enabled
+            .then(|| self.settings.normalizer.chain_entry());
+        if let Err(error) = engine.set_audio_filter(crate::normalizer::LABEL, entry.as_deref()) {
+            eprintln!("rvp: cannot set the normalizer: {error}");
+        }
+    }
+
+    fn normalizer_changed(&mut self, engine: &Engine) -> UiRequest {
+        self.apply_normalizer(engine);
+        self.save_settings();
+        let normalizer = self.settings.normalizer;
+        let on_off = |on: bool| if on { "On" } else { "Off" };
+        UiRequest::Osd(format!(
+            "Normalizer: {}, Boost: {}",
+            on_off(normalizer.enabled),
+            on_off(normalizer.boost)
+        ))
+    }
+
+    /// Writes `settings.json` (on the writer thread) after a change made in
+    /// the window.
+    pub fn save_settings(&self) {
+        let Some(path) = &self.settings_path else {
+            return;
+        };
+        match serde_json::to_vec_pretty(&self.settings) {
+            Ok(mut bytes) => {
+                bytes.push(b'\n');
+                self.writer.write(path, bytes);
+            }
+            Err(error) => eprintln!("rvp: cannot serialize the settings: {error}"),
+        }
+    }
+
+    /// Replaces the bindings (from the key and mouse editor) and saves them
+    /// as changes over PotPlayer's defaults.
+    pub fn set_bindings(&mut self, bindings: Bindings) {
+        let defaults = Bindings::potplayer_defaults();
+        let (keys, list_keys, mouse) = crate::binding_editor::overrides(&defaults, &bindings);
+        self.settings.keys = keys;
+        self.settings.playlist_keys = list_keys;
+        self.settings.mouse = mouse;
+        self.bindings = bindings;
+        self.save_settings();
     }
 
     fn seek(&mut self, engine: &Engine, target: Seek) -> Result<(), EngineError> {
@@ -248,9 +736,13 @@ impl App {
         engine.seek(target)
     }
 
-    fn change_volume(&mut self, engine: &Engine, delta: f64) -> Result<(), EngineError> {
+    fn change_volume(&mut self, engine: &Engine, delta: f64) -> Option<UiRequest> {
         let current = self.model.double(PropertyId::Volume).unwrap_or(100.0);
-        engine.set_volume((current + delta).clamp(0.0, 100.0))
+        let volume = (current + delta).clamp(0.0, self.settings.volume_max.max(100.0));
+        engine
+            .set_volume(volume)
+            .ok()
+            .map(|()| UiRequest::Osd(format!("Volume: {volume:.0} %")))
     }
 
     /// The seek bar was clicked or dragged to `fraction` (0.0 to 1.0).
@@ -263,14 +755,15 @@ impl App {
         drop(engine.set_volume((fraction * 100.0).clamp(0.0, 100.0)));
     }
 
-    /// Handles everything libmpv has reported: updates the model and the
-    /// resume store, and returns the changes, requests for the window and
-    /// the events.
+    /// Handles everything libmpv has reported: updates the model, the
+    /// albums and the resume store, moves on at the end of a file, and
+    /// returns the changes, requests for the window and the events.
     pub fn drain(&mut self, engine: &Engine, now: Instant) -> Drained {
         let mut events = Vec::new();
         let changes = engine.drain(&mut self.model, &mut events);
         let mut requests = Vec::new();
         let mut save_now = false;
+        let mut failed = false;
         for event in &events {
             match event {
                 EngineEvent::StartFile => self.tracking = Tracking::Loading,
@@ -295,6 +788,13 @@ impl App {
                     self.store.clear_position(path);
                     save_now = true;
                 }
+                EngineEvent::EndFile {
+                    reason: EndReason::Error,
+                    ..
+                } => {
+                    failed = true;
+                    save_now = true;
+                }
                 EngineEvent::EndFile { .. } => save_now = true,
                 EngineEvent::Error(message) => {
                     requests.push(UiRequest::Message(format!("Cannot play: {message}")));
@@ -302,23 +802,18 @@ impl App {
                 EngineEvent::PlaybackRestart | EngineEvent::Shutdown => {}
             }
         }
+        if failed {
+            // `<Can't open>`, then the next playable entry.
+            self.library.update_current(None, false);
+            drop(self.step(engine, 1));
+        }
+        if changes.contains(PropertyId::Duration)
+            && let Some(duration) = self.model.double(PropertyId::Duration).filter(|d| *d > 0.0)
+        {
+            self.library.update_current(Some(duration), true);
+        }
 
-        let time = self.model.double(PropertyId::TimePos);
-        if let (Tracking::Resuming(target), Some(time)) = (self.tracking, time)
-            && (time - target).abs() < 2.0
-        {
-            self.tracking = Tracking::On;
-        }
-        if self.tracking == Tracking::On
-            && let (Some(path), Some(time)) = (self.model.loaded_path(), time)
-        {
-            if self.model.flag(PropertyId::EofReached) == Some(true) {
-                self.store.clear_position(path);
-            } else {
-                let duration = self.model.double(PropertyId::Duration);
-                self.store.set_position(path, time, duration);
-            }
-        }
+        self.track_position(engine);
         if changes.contains(PropertyId::Volume)
             && let Some(volume) = self.model.double(PropertyId::Volume)
         {
@@ -336,11 +831,13 @@ impl App {
         } else {
             self.store.save_if_due(now)
         };
-        let failed = saved
+        let failure = saved
             .err()
             .map(|error| error.to_string())
-            .or_else(|| self.store.take_error());
-        if let Some(error) = failed {
+            .or_else(|| self.store.take_error())
+            .or_else(|| self.library.take_error())
+            .or_else(|| self.writer.take_error());
+        if let Some(error) = failure {
             requests.push(UiRequest::Message(format!(
                 "Cannot save the playback state: {error}"
             )));
@@ -349,6 +846,32 @@ impl App {
             changes,
             requests,
             events,
+        }
+    }
+
+    /// Records the position of the playing file and moves on at its end.
+    fn track_position(&mut self, engine: &Engine) {
+        let time = self.model.double(PropertyId::TimePos);
+        if let (Tracking::Resuming(target), Some(time)) = (self.tracking, time)
+            && (time - target).abs() < 2.0
+        {
+            self.tracking = Tracking::On;
+        }
+        let at_end = self.model.flag(PropertyId::EofReached) == Some(true);
+        if self.tracking == Tracking::On
+            && let (Some(path), Some(time)) = (self.model.loaded_path(), time)
+        {
+            if at_end {
+                self.store.clear_position(path);
+            } else {
+                let duration = self.model.double(PropertyId::Duration);
+                self.store.set_position(path, time, duration);
+            }
+        }
+        if at_end && !self.end_handled && self.model.media_loaded() {
+            // keep-open stops on the last frame; the album moves on.
+            self.end_handled = true;
+            drop(self.step(engine, 1));
         }
     }
 
@@ -377,6 +900,29 @@ impl App {
     /// Fails on I/O errors.
     pub fn shutdown(&mut self, engine: &Engine, now: Instant) -> io::Result<()> {
         drop(engine.stop());
+        self.writer.flush();
+        self.library.flush()?;
         self.store.save_and_wait(now)
+    }
+}
+
+/// Media files under `folder`, at most eight levels deep.
+fn collect_media(folder: &Path, depth: usize, files: &mut Vec<String>) {
+    let Ok(entries) = std::fs::read_dir(folder) else {
+        return;
+    };
+    for entry in entries.filter_map(Result::ok) {
+        let path = entry.path();
+        if path.is_dir() {
+            if depth < 8 {
+                collect_media(&path, depth + 1, files);
+            }
+        } else if path.extension().is_some_and(|ext| {
+            MEDIA_EXTENSIONS
+                .iter()
+                .any(|known| ext.eq_ignore_ascii_case(known))
+        }) {
+            files.push(path.to_string_lossy().into_owned());
+        }
     }
 }

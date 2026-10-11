@@ -372,6 +372,23 @@ impl Engine {
             .map_err(|e| error("mute", &e))
     }
 
+    /// Sets RVP's audio filter with this label (`Some("@label:filter")`) or
+    /// removes it (`None`). Other filters in the chain are left alone.
+    ///
+    /// # Errors
+    /// Fails when libmpv rejects the filter.
+    pub fn set_audio_filter(&self, label: &str, entry: Option<&str>) -> Result<(), EngineError> {
+        // Removing a filter that is not there fails; that is fine.
+        drop(self.mpv.command("af", &["remove", &format!("@{label}")]));
+        match entry {
+            Some(entry) => self
+                .mpv
+                .command("af", &["add", entry])
+                .map_err(|e| error("af add", &e)),
+            None => Ok(()),
+        }
+    }
+
     /// Shows or hides subtitles (`sub-visibility`).
     ///
     /// # Errors

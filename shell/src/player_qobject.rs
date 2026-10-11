@@ -40,6 +40,8 @@ pub mod qobject {
         #[qproperty(i32, restore_height)]
         #[qproperty(bool, restore_position)]
         #[qproperty(bool, restore_maximized)]
+        #[qproperty(QString, osd)]
+        #[qproperty(QString, album_name)]
         type Player = super::PlayerRust;
 
         /// Loads settings, the skin and libmpv; sets the `restore_*`
@@ -72,8 +74,10 @@ pub mod qobject {
             has_position: bool,
         );
 
+        /// `modifiers`: `Qt::KeyboardModifiers` (Ctrl and Shift select in
+        /// the playlist).
         #[qinvokable]
-        fn mouse_press(self: Pin<&mut Self>, x: f64, y: f64, button: i32);
+        fn mouse_press(self: Pin<&mut Self>, x: f64, y: f64, button: i32, modifiers: i32);
         #[qinvokable]
         fn mouse_double(self: Pin<&mut Self>, x: f64, y: f64, button: i32);
         #[qinvokable]
@@ -81,7 +85,7 @@ pub mod qobject {
         #[qinvokable]
         fn mouse_move(self: Pin<&mut Self>, x: f64, y: f64);
         #[qinvokable]
-        fn mouse_wheel(self: Pin<&mut Self>, delta: i32);
+        fn mouse_wheel(self: Pin<&mut Self>, x: f64, y: f64, delta: i32);
         #[qinvokable]
         fn mouse_leave(self: Pin<&mut Self>);
 
@@ -101,14 +105,114 @@ pub mod qobject {
         #[qinvokable]
         fn menu_shortcut(self: &Self, name: &QString) -> QString;
 
+        /// Whether a menu entry shows a check mark: -1 none, 0 off, 1 on.
+        #[qinvokable]
+        fn menu_checked(self: &Self, name: &QString) -> i32;
+
+        /// Runs a playlist action by its settings name (the playlist menu).
+        #[qinvokable]
+        fn run_list_action(self: Pin<&mut Self>, name: &QString);
+
+        /// PotPlayer's text of a playlist action.
+        #[qinvokable]
+        fn list_menu_label(self: &Self, name: &QString) -> QString;
+
+        /// The key shown next to a playlist action.
+        #[qinvokable]
+        fn list_menu_shortcut(self: &Self, name: &QString) -> QString;
+
         /// Opens files (one path or URL per line).
         #[qinvokable]
         fn open_files(self: Pin<&mut Self>, paths: &QString, append: bool);
+
+        /// Adds a folder's media files to the shown album.
+        #[qinvokable]
+        fn add_folder(self: Pin<&mut Self>, path: &QString);
+
+        /// Names a new album, or renames the shown one.
+        #[qinvokable]
+        fn name_album(self: Pin<&mut Self>, name: &QString, rename: bool);
+
+        /// Imports PotPlayer's `.dpl` playlists from a folder (read-only).
+        #[qinvokable]
+        fn import_playlists(self: Pin<&mut Self>, folder: &QString);
+
+        /// A request from another instance (one JSON line).
+        #[qinvokable]
+        fn remote_message(self: Pin<&mut Self>, message: &QString);
+
+        /// The window was resized: keep the video's aspect ratio (R1
+        /// finding 1) by asking for a size that fits it (`fitWindow`).
+        #[qinvokable]
+        fn fit_aspect(self: Pin<&mut Self>);
+
+        /// The key and mouse editor: starts editing a copy of the bindings.
+        #[qinvokable]
+        fn editor_open(self: Pin<&mut Self>);
+
+        /// Every action with its keys and gestures, as JSON.
+        #[qinvokable]
+        fn editor_rows(self: &Self) -> QString;
+
+        /// The mouse gesture names, as JSON.
+        #[qinvokable]
+        fn editor_gestures(self: &Self) -> QString;
+
+        /// The action a pressed key belongs to in a scope: JSON with the
+        /// key's text and the owner's settings name and label (empty when
+        /// free). Pure modifier keys give `{}`.
+        #[qinvokable]
+        fn editor_key_owner(self: &Self, scope: &QString, key: i32, modifiers: i32) -> QString;
+
+        /// The label of the action a gesture is bound to (empty when free).
+        #[qinvokable]
+        fn editor_gesture_owner(self: &Self, gesture: &QString) -> QString;
+
+        /// Binds the pressed key to an action; returns JSON with the key's
+        /// text and the action that lost it (empty when none).
+        #[qinvokable]
+        fn editor_bind_key(
+            self: Pin<&mut Self>,
+            scope: &QString,
+            action: &QString,
+            key: i32,
+            modifiers: i32,
+        ) -> QString;
+
+        #[qinvokable]
+        fn editor_unbind_key(self: Pin<&mut Self>, scope: &QString, key: &QString);
+
+        /// Binds a gesture; returns the action that lost it (empty when
+        /// none).
+        #[qinvokable]
+        fn editor_bind_gesture(
+            self: Pin<&mut Self>,
+            action: &QString,
+            gesture: &QString,
+        ) -> QString;
+
+        #[qinvokable]
+        fn editor_unbind_gesture(self: Pin<&mut Self>, gesture: &QString);
+
+        #[qinvokable]
+        fn editor_reset(self: Pin<&mut Self>, scope: &QString, action: &QString);
+
+        #[qinvokable]
+        fn editor_reset_all(self: Pin<&mut Self>);
+
+        /// Ends editing; `save` applies and stores the bindings.
+        #[qinvokable]
+        fn editor_close(self: Pin<&mut Self>, save: bool);
 
         /// Rectangle of a dynamic region; `serial` only makes QML bindings
         /// re-evaluate after a new layout.
         #[qinvokable]
         fn region_rect(self: &Self, index: i32, serial: i32) -> QRectF;
+
+        /// A playlist panel rectangle (self-test): `what` is "row" or
+        /// "tab" with its index, or "area".
+        #[qinvokable]
+        fn list_rect(self: &Self, what: &QString, index: i32) -> QRectF;
 
         /// Seeks to a fraction of the duration (self-test).
         #[qinvokable]

@@ -1,8 +1,12 @@
-//! RVP, the player window (milestone M2).
+//! RVP, the player window (milestones M2 and M3).
 //!
 //! ```text
-//! rvp [--skin=PATH] [--mpv-options=name=value,...] [--selftest] [--out=DIR] [FILE|URL]...
+//! rvp [/add | /insert | /current | /new] [--skin=PATH] [--mpv-options=name=value,...]
+//!     [--selftest] [--instance=NAME] [--out=DIR] [FILE|URL]...
 //! ```
+//!
+//! A running RVP takes the files of a second one (single instance,
+//! `rvp_app::instance`): the second one hands them over and exits.
 //!
 //! Shutdown order (goal D rule 6): closing the window stops playback and
 //! waits for mpv to go idle (`Player::shutdown`); the scene graph then frees
@@ -25,6 +29,8 @@ mod video;
 use std::time::{Duration, Instant};
 
 use cxx_qt_lib::{QGuiApplication, QQmlApplicationEngine, QUrl};
+use rvp_app::Cli;
+use rvp_app::instance::{self, Request};
 use rvp_engine::EngineEvent;
 
 fn main() {
@@ -33,6 +39,7 @@ fn main() {
     ffi::bridge::rvp_setup_graphics();
     let mut app = QGuiApplication::new();
     metrics::mark("gui_application_ms");
+    single_instance(&Cli::parse(std::env::args().skip(1)));
     ffi::bridge::rvp_set_c_numeric_locale();
     ffi::bridge::rvp_register_native_types();
     let mut engine = QQmlApplicationEngine::new();
@@ -52,6 +59,26 @@ fn main() {
     finish();
     drop(app);
     std::process::exit(code);
+}
+
+/// Hands the command line to a running instance and exits, or becomes the
+/// instance others hand theirs to.
+fn single_instance(cli: &Cli) {
+    let Some(channel) = instance::channel(cli) else {
+        return;
+    };
+    // `/new` runs on its own and leaves the channel to the running one.
+    if !instance::forwards(cli) {
+        return;
+    }
+    let cwd = std::env::current_dir().unwrap_or_default();
+    let request = Request::from_cli(cli, &cwd);
+    if ffi::bridge::rvp_instance_send(&channel, &request.encode()) {
+        std::process::exit(0);
+    }
+    if !ffi::bridge::rvp_instance_listen(&channel) {
+        eprintln!("rvp: cannot listen for other instances on {channel}");
+    }
 }
 
 /// Lets the mpv core shut down after playback stopped.

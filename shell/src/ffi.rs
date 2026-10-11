@@ -26,6 +26,11 @@ pub mod bridge {
         fn rvp_register_native_types();
         /// True when QML created a window (false when Main.qml failed).
         fn rvp_has_windows() -> bool;
+        /// Sends one request line to the instance listening on `name`; true
+        /// when it took the request.
+        fn rvp_instance_send(name: &str, message: &str) -> bool;
+        /// Listens for other instances on `name`; false when that failed.
+        fn rvp_instance_listen(name: &str) -> bool;
         /// libmpv needs `LC_NUMERIC=C`; Qt sets the user locale on Unix.
         fn rvp_set_c_numeric_locale();
         /// `QOpenGLContext::getProcAddress` of the current context.

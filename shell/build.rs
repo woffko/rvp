@@ -18,12 +18,17 @@ fn main() {
         .qml_file("qml/Main.qml")
         .qml_file("qml/ContextMenu.qml")
         .qml_file("qml/OpenDialog.qml")
-        .qml_file("qml/Tip.qml");
+        .qml_file("qml/Tip.qml")
+        .qml_file("qml/ListMenu.qml")
+        .qml_file("qml/AlbumName.qml")
+        .qml_file("qml/FolderDialog.qml")
+        .qml_file("qml/KeysAndMouse.qml");
     CxxQtBuilder::new_qml_module(module)
         .qt_module("Gui")
         .qt_module("Qml")
         .qt_module("Quick")
         .qt_module("OpenGL")
+        .qt_module("Network")
         .files([
             "src/ffi.rs",
             "src/player_qobject.rs",

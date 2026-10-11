@@ -309,6 +309,17 @@ impl Chrome {
         (self.width - video.w, self.height - video.h)
     }
 
+    /// The playlist panel's list geometry, when the panel shows.
+    #[must_use]
+    pub fn list_geometry(&self) -> Option<rvp_skin::playlist::Geometry> {
+        let placed = self.layout.as_ref()?;
+        let node = placed
+            .nodes
+            .iter()
+            .find(|node| node.slot() == Some("CMD_PLAY_LIST_ALBUM_TAB"))?;
+        Some(rvp_skin::playlist::geometry(node, &self.data.playlist))
+    }
+
     /// The bars' rectangles in fullscreen (where the pointer shows them).
     #[must_use]
     pub fn bar_rects(&self) -> Vec<Rect> {
@@ -321,6 +332,32 @@ impl Chrome {
             .filter(|node| node.parent.is_none() && !node.rect.is_empty())
             .map(|node| node.rect)
             .collect()
+    }
+}
+
+/// The largest window size within `window` whose video area (the window
+/// minus `chrome`) has the video's aspect ratio (R1 finding 1: PotPlayer
+/// keeps the window at the video's shape while a video plays).
+#[must_use]
+pub fn fit_aspect(window: (i32, i32), chrome: (i32, i32), aspect: f64) -> (i32, i32) {
+    let (video_w, video_h) = (window.0 - chrome.0, window.1 - chrome.1);
+    if !(aspect.is_finite() && aspect > 0.0) || video_w <= 0 || video_h <= 0 {
+        return window;
+    }
+    // Within a pixel of the shape already: refitting a fitted window must
+    // not shrink it pixel by pixel.
+    let (w, h) = (f64::from(video_w), f64::from(video_h));
+    if (w - h * aspect).abs() <= 1.0 || (h - w / aspect).abs() <= 1.0 {
+        return window;
+    }
+    // Window sizes are far inside i32.
+    #[allow(clippy::cast_possible_truncation)]
+    if f64::from(video_w) / f64::from(video_h) > aspect {
+        let width = (f64::from(video_h) * aspect).round() as i32;
+        (width + chrome.0, window.1)
+    } else {
+        let height = (f64::from(video_w) / aspect).round() as i32;
+        (window.0, height + chrome.1)
     }
 }
 
@@ -352,6 +389,30 @@ mod tests {
             layered(&[Rect::new(0, 0, 20, 20), Rect::new(2, 2, 3, 3)]),
             vec![Rect::new(0, 0, 20, 20), Rect::new(2, 2, 3, 3)]
         );
+    }
+
+    #[test]
+    fn fitting_keeps_the_video_shape_inside_the_window() {
+        // R1: BlackSpace with the playlist, 16:9, 1280 wide: 1280x654.
+        assert_eq!(fit_aspect((1280, 720), (310, 108), 16.0 / 9.0), (1280, 654));
+        // Too wide for 4:3: the width shrinks.
+        assert_eq!(fit_aspect((1000, 400), (100, 100), 4.0 / 3.0), (500, 400));
+        assert_eq!(fit_aspect((1000, 400), (100, 100), 0.0), (1000, 400));
+        // Refitting a fitted window changes nothing, portrait videos too.
+        for (window, aspect) in [
+            ((1280, 720), 16.0 / 9.0),
+            ((900, 1000), 9.0 / 16.0),
+            ((777, 555), 0.4),
+            ((640, 999), 2.39),
+        ] {
+            let once = fit_aspect(window, (310, 108), aspect);
+            assert!(once.0 <= window.0 && once.1 <= window.1);
+            assert_eq!(
+                fit_aspect(once, (310, 108), aspect),
+                once,
+                "{window:?} {aspect}"
+            );
+        }
     }
 
     #[test]

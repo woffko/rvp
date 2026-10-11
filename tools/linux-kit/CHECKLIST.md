@@ -171,6 +171,69 @@ anything odd in the report or tell the session):
 - [ ] Close RVP while a video plays and start it again: it reopens the file
       paused at the same place, with the same volume and window size.
 
+## 6. Milestone M3: daily-use essentials (goal F)
+
+Same preparation as section 5. From a terminal inside the GNOME session:
+
+```sh
+cd ~/rvp && git pull
+tools/linux-kit/kit.sh m3all
+```
+
+`m3all` runs `check deps mpv m2build m2 m3 m2input m2gpu m2svp report`:
+section 5's steps on the new build, plus `m3`. Settings and state stay in
+the kit's log directory. Again, do not touch the mouse or keyboard while
+RVP's windows are open.
+
+What `m3` shows (about two minutes):
+
+- The functional self-test of section 5, then the playlist panel: rows are
+  clicked, selected with Ctrl+A, deleted and brought back with Ctrl+Z, the
+  first row is dragged to the end and double-clicked, an album "Selftest"
+  is added and the first tab clicked. Shift+N turns the normalizer off and
+  on, the volume goes to 101 %, F5 opens the Keys and Mouse window for a
+  moment, a second RVP hands a file to the first one (`/add`), and the
+  window is resized to 900x760 and must snap to the video's shape.
+- Three kill tests: RVP plays the second entry of a two-file album and is
+  killed (`kill -9`) after 12, 16 and 20 seconds; each restart must reopen
+  that entry paused within 5 s of where it was.
+
+Optional: `tools/linux-kit/kit.sh m3desktop` adds "RVP (kit)" to the
+applications (`~/.local/share/applications/rvp-kit.desktop`), so that
+Files can open videos with the running RVP ("Open With"). Delete that file
+to undo it.
+
+Then the one-week trial: use RVP instead of PotPlayer for daily viewing and
+note anything that differs or annoys. `docs/goals/goal-f-status.md` lists
+what to try; in short:
+
+- [ ] Playlist (F6 or the skin's button): add files and folders (Ctrl+I,
+      Ctrl+O, drag and drop), remove (Del, Ctrl+Del, Alt+Del), reorder
+      (Ctrl+Up/Down/Home/End or by dragging rows), sort (Ctrl+1, Ctrl+2,
+      Ctrl+9), undo and redo (Ctrl+Z, Ctrl+Y), double click or Enter to
+      play, right-click for the playlist menu.
+- [ ] Albums: Ctrl+N adds one, Ctrl+R renames, Ctrl+D or the mark on the
+      tab deletes; the arrow at the tabs' end shows the next album.
+- [ ] Close RVP, or end it with `kill -9`, and start it again: the album,
+      the file and the position come back.
+- [ ] PotPlayer's playlists: the playlist menu's "Import PotPlayer
+      Playlists..." and the Windows `Playlist` folder (for example on the
+      mounted Windows partition). `V:\` maps to `/mnt/media`; set
+      `"drive-map": { "V:": "/mnt/nas/Media" }` in
+      `~/.config/rvp/settings.json` for the NAS mount.
+- [ ] Normalizer: Shift+N toggles it, the context menu has "Boost audio";
+      the volume goes above 100 % (up to `volume-max`, 200 %).
+- [ ] The blind A/B test of the normalizer: `tools/s5/ab_test.py` (its
+      header explains it; the trials stay outside the repository).
+- [ ] F5 opens Keys and Mouse: rebind a key and a mouse button (wheel,
+      middle, side buttons, double click); a key already in use asks
+      first; Reset and Reset All bring PotPlayer's defaults back.
+- [ ] Open a second file from a terminal (`rvp FILE`, `rvp /add FILE`,
+      `rvp /insert FILE`) while RVP runs: it goes to the running window;
+      `rvp /new FILE` opens a second window.
+- [ ] Resize the window while a video plays: once you let go, it takes the
+      video's shape.
+
 ## Steps and what they record
 
 | Step | Needs | PASS means |
@@ -189,6 +252,8 @@ anything odd in the report or tell the session):
 | `m2input` | ydotool, `ydotoold`, `m2` | the RVP window moved and resized by the dragged distance, a double click entered fullscreen at the screen size and a second one restored the window, and a right click opened the menu window |
 | `m2gpu` | hardware GPU | no dropped frames over `RVP_M2_SECONDS` in fullscreen and in a 1920x1080 window (the counts and a per-second timeline are in the log) |
 | `m2svp` | SVP 4 Manager running | SVP's `@svp` filter appeared and RVP exited with status 0 |
+| `m3` | graphical session | the functional self-test including M3's checks passes (playlist panel, albums, normalizer, volume above 100 %, key editor, second instance, aspect lock), and all three kill tests reopen the album's second entry paused within 5 s of the last position |
+| `m3desktop` | `m2build` | the desktop entry was written |
 | `report` | — | the Markdown report was written |
 
 GPU checks run when an NVIDIA, AMD or Intel GPU is detected; set

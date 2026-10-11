@@ -5,6 +5,7 @@
 // * Tools: helpers for QML (the frame-synced chrome repaint, file URLs,
 //   window grabs for the self-test).
 // * The atlas cache and painting helpers the Rust SkinView draws with.
+// * The single-instance channel (QLocalServer; crates/app/src/instance.rs).
 #pragma once
 
 #include <array>
@@ -15,6 +16,7 @@
 #include <QtCore/QObject>
 #include <QtCore/QPointer>
 #include <QtCore/QString>
+#include <QtCore/QStringList>
 #include <QtCore/QUrl>
 #include <QtGui/QPainter>
 #include <QtQuick/QQuickFramebufferObject>
@@ -60,12 +62,19 @@ public:
     // The top-level windows (class, title, geometry, popup) for the input
     // check.
     Q_INVOKABLE QString windows_json() const;
+    // Hands requests from other instances to `receiver`'s
+    // remote_message(QString), the ones that came before it first.
+    Q_INVOKABLE void instance_receiver(QObject *receiver) const;
+    // Starts this program again (the self-test's second instance).
+    Q_INVOKABLE bool run_self(const QStringList &arguments) const;
 };
 
 // Called from Rust (declared in src/ffi.rs).
 void rvp_setup_graphics();
 void rvp_register_native_types();
 bool rvp_has_windows();
+bool rvp_instance_send(rust::Str name, rust::Str message);
+bool rvp_instance_listen(rust::Str name);
 void rvp_set_c_numeric_locale();
 std::size_t rvp_gl_get_proc_address(rust::Str name);
 void rvp_video_request_update();

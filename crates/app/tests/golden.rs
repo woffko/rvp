@@ -78,7 +78,10 @@ fn idle_window_matches_potplayer_captures() {
     for (width, height) in SIZES {
         for state in ["", "-hover", "-pressed"] {
             let mut chrome = Chrome::new(skin);
-            chrome.data = view::data_model(&PlayerModel::new(), &[]);
+            chrome.data = view::data_model(
+                &PlayerModel::new(),
+                &rvp_app::playlist::Playlists::default(),
+            );
             view::apply_playback_state(&mut chrome.state, &PlayerModel::new());
             chrome.resize(Mode::Window, width, height).expect("layout");
             let play = chrome

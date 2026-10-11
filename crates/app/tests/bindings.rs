@@ -70,6 +70,10 @@ fn potplayer_default_keys() {
     assert!(bindings.left_click_video_only);
 }
 
+fn audio_filters(model: &PlayerModel) -> &str {
+    model.text(PropertyId::AudioFilters).unwrap_or_default()
+}
+
 struct Harness {
     app: App,
     engine: Engine,
@@ -164,18 +168,36 @@ impl Harness {
                 self.dispatch(action);
                 self.wait("unmuted", |m| m.flag(PropertyId::Mute) == Some(false));
             }
+            // RVP's album is the playlist; mpv plays one entry at a time.
             Action::Next => {
                 self.dispatch(action);
-                self.wait("next file", |m| m.int(PropertyId::PlaylistPos) == Some(1));
+                self.wait("next file", |m| m.loaded_path() == Some(SHORT));
             }
             Action::Previous => {
                 self.dispatch(Action::Next);
-                self.wait("next file", |m| m.int(PropertyId::PlaylistPos) == Some(1));
+                self.wait("next file", |m| m.loaded_path() == Some(SHORT));
                 self.dispatch(action);
-                self.wait("previous file", |m| {
-                    m.int(PropertyId::PlaylistPos) == Some(0)
+                self.wait("previous file", |m| m.loaded_path() == Some(LONG));
+            }
+            Action::ToggleSubtitles => {
+                let before = self.app.model.flag(PropertyId::SubVisibility);
+                self.dispatch(action);
+                self.wait("subtitles toggled", |m| {
+                    m.flag(PropertyId::SubVisibility) == before.map(|on| !on)
+                });
+                self.dispatch(action);
+                self.wait("subtitles back", |m| {
+                    m.flag(PropertyId::SubVisibility) == before
                 });
             }
+            Action::CloseMedia => {}
+            _ => self.check_request(action),
+        }
+    }
+
+    /// Actions that ask the window for something or change the normalizer.
+    fn check_request(&mut self, action: Action) {
+        match action {
             Action::OpenFiles => assert_eq!(self.dispatch(action), Some(UiRequest::OpenFileDialog)),
             Action::Exit => assert_eq!(self.dispatch(action), Some(UiRequest::Exit)),
             Action::ToggleFullscreen => {
@@ -198,18 +220,31 @@ impl Harness {
             Action::TogglePlaylist => {
                 assert_eq!(self.dispatch(action), Some(UiRequest::TogglePlaylist));
             }
-            Action::ToggleSubtitles => {
-                let before = self.app.model.flag(PropertyId::SubVisibility);
+            Action::ToggleNormalizer => {
+                assert_eq!(
+                    self.dispatch(action),
+                    Some(UiRequest::Osd("Normalizer: Off, Boost: On".into()))
+                );
+                self.wait("normalizer off", |m| !audio_filters(m).contains("rvpnorm"));
                 self.dispatch(action);
-                self.wait("subtitles toggled", |m| {
-                    m.flag(PropertyId::SubVisibility) == before.map(|on| !on)
-                });
-                self.dispatch(action);
-                self.wait("subtitles back", |m| {
-                    m.flag(PropertyId::SubVisibility) == before
-                });
+                self.wait("normalizer on", |m| audio_filters(m).contains("rvpnorm"));
             }
-            Action::CloseMedia => {}
+            Action::ToggleBoost => {
+                assert_eq!(
+                    self.dispatch(action),
+                    Some(UiRequest::Osd("Normalizer: On, Boost: Off".into()))
+                );
+                self.wait("boost off", |m| audio_filters(m).contains("m=1"));
+                self.dispatch(action);
+                self.wait("boost on", |m| audio_filters(m).contains("m=5"));
+            }
+            Action::KeysAndMouse => {
+                assert_eq!(self.dispatch(action), Some(UiRequest::KeysAndMouse));
+            }
+            Action::ImportPlaylists => {
+                assert_eq!(self.dispatch(action), Some(UiRequest::ImportPlaylists));
+            }
+            _ => unreachable!("{action:?} is checked in check()"),
         }
     }
 }
@@ -239,6 +274,7 @@ fn every_default_binding_triggers_its_action() {
     h.wait("loaded", |m| {
         m.media_loaded() && m.double(PropertyId::Duration).is_some()
     });
+    h.app.apply_normalizer(&h.engine);
     h.engine.set_pause(true).expect("pause");
     h.engine.set_volume(50.0).expect("volume");
     h.wait("paused at 50 %", |m| {
@@ -257,7 +293,14 @@ fn every_default_binding_triggers_its_action() {
     // Close Playback last: it unloads the file.
     h.dispatch(Action::CloseMedia);
     h.wait("idle", |m| !m.media_loaded());
-    // With nothing loaded, Play asks for files.
+    // With nothing loaded, Play plays the album's selected entry ...
+    assert_eq!(h.dispatch(Action::PlayPause), None);
+    h.wait("playing again", PlayerModel::media_loaded);
+    h.dispatch(Action::CloseMedia);
+    h.wait("idle again", |m| !m.media_loaded());
+    // ... and asks for files when the album is empty.
+    h.app
+        .list_action(&h.engine, rvp_app::ListAction::RemoveAll, false, 10);
     assert_eq!(
         h.dispatch(Action::PlayPause),
         Some(UiRequest::OpenFileDialog)

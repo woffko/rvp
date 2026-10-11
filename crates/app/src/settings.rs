@@ -6,10 +6,13 @@ use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
 
-use crate::action::{Action, SeekStep};
+use crate::action::{Action, ListAction, SeekStep};
 use crate::input::{Bindings, KeyChord, MouseGesture};
+use crate::normalizer::Normalizer;
 
 /// RVP's settings.
+// Each flag is an independent option as the settings file stores it.
+#[allow(clippy::struct_excessive_bools)]
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(default, rename_all = "kebab-case")]
 pub struct Settings {
@@ -36,11 +39,27 @@ pub struct Settings {
     /// Resize the window to show a newly opened video at 100 %, within the
     /// screen (PotPlayer's behaviour, R1 finding 2).
     pub fit_window_to_video: bool,
+    /// While a video plays, resizing keeps the video's aspect ratio (R1
+    /// finding 1).
+    pub keep_aspect_window: bool,
+    /// The highest volume in percent; above 100 the sound is amplified.
+    pub volume_max: f64,
+    /// The audio normalizer (S5).
+    pub normalizer: Normalizer,
+    /// Windows drive letters in imported PotPlayer playlists and the Linux
+    /// folders they stand for (`"V:": "/mnt/media"`).
+    pub drive_map: BTreeMap<String, String>,
+    /// Where PotPlayer keeps its playlists; on Windows the default is
+    /// `%APPDATA%\PotPlayerMini64\Playlist`.
+    pub potplayer_playlists: Option<PathBuf>,
     /// Key binding changes over PotPlayer's defaults: key (`Ctrl+Left`) to
     /// action name (`seek-backward-medium`); an empty name unbinds the key.
     pub keys: BTreeMap<String, String>,
     /// Mouse binding changes: gesture name (`left-click`) to action name.
     pub mouse: BTreeMap<String, String>,
+    /// Playlist key changes (while the panel has the keyboard): key to
+    /// playlist action name (`select-all`).
+    pub playlist_keys: BTreeMap<String, String>,
 }
 
 impl Default for Settings {
@@ -54,8 +73,14 @@ impl Default for Settings {
             remember_positions: true,
             reopen_last_file: true,
             fit_window_to_video: true,
+            keep_aspect_window: true,
+            volume_max: 200.0,
+            normalizer: Normalizer::default(),
+            drive_map: BTreeMap::from([("V:".to_owned(), "/mnt/media".to_owned())]),
+            potplayer_playlists: None,
             keys: BTreeMap::new(),
             mouse: BTreeMap::new(),
+            playlist_keys: BTreeMap::new(),
         }
     }
 }
@@ -89,6 +114,19 @@ impl Settings {
                 bindings.keys.insert(chord, action);
             } else {
                 warnings.push(format!("unknown action {name:?} for key {key}"));
+            }
+        }
+        for (key, name) in &self.playlist_keys {
+            let Some(chord) = KeyChord::parse(key) else {
+                warnings.push(format!("unknown key {key:?} in playlist-keys"));
+                continue;
+            };
+            if name.is_empty() {
+                bindings.list_keys.remove(&chord);
+            } else if let Some(action) = ListAction::from_name(name) {
+                bindings.list_keys.insert(chord, action);
+            } else {
+                warnings.push(format!("unknown playlist action {name:?} for key {key}"));
             }
         }
         for (gesture, name) in &self.mouse {

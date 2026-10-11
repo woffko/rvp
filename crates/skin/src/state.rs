@@ -115,6 +115,9 @@ pub struct Playlist {
     pub selected: BTreeSet<usize>,
     /// Scroll position of the list.
     pub scroll: ListScroll,
+    /// While rows are dragged: the entry they will be inserted before
+    /// (`entries.len()` for the end).
+    pub drop_before: Option<usize>,
 }
 
 /// Scroll position of the playlist.

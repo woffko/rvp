@@ -17,9 +17,14 @@ use std::time::Instant;
 
 use cxx_qt::{CxxQtType, Threading};
 use cxx_qt_lib::{QRectF, QString};
+use rvp_app::binding_editor::{Editor, Scope};
 use rvp_app::chrome::{Chrome, Damage, Frame, Mode};
-use rvp_app::pointer::{Button, Context, Cursor, Effect, Pointer};
-use rvp_app::{Action, App, Cli, Dirs, KeyChord, Settings, UiRequest, WindowGeometry, view};
+use rvp_app::instance::Request;
+use rvp_app::pointer::{Button, Context, Cursor, Effect, Focus, ListEffect, Modifiers, Pointer};
+use rvp_app::{
+    Action, App, Cli, Dirs, KeyChord, ListAction, MouseGesture, Settings, UiRequest,
+    WindowGeometry, view,
+};
 use rvp_engine::{Engine, EngineEvent, PropertyId};
 use rvp_skin::Skin;
 
@@ -38,6 +43,18 @@ pub mod request {
     pub const START_MOVE: i32 = 7;
     /// Argument: `Qt::Edges` bits.
     pub const START_RESIZE: i32 = 8;
+    pub const KEYS_AND_MOUSE: i32 = 9;
+    /// The file dialog, adding to the shown album.
+    pub const ADD_FILES: i32 = 10;
+    pub const ADD_FOLDER: i32 = 11;
+    /// A folder dialog for PotPlayer's playlists.
+    pub const IMPORT_PLAYLISTS: i32 = 12;
+    pub const LIST_MENU: i32 = 13;
+    /// Another instance opened files: bring the window up.
+    pub const RAISE: i32 = 14;
+    /// The album name dialog (`album_name` holds the current name);
+    /// argument 1 renames the shown album.
+    pub const ALBUM_NAME: i32 = 15;
 }
 
 /// The skin, loaded once for the process (the painters read it on the
@@ -66,10 +83,15 @@ struct Core {
     engine: &'static Engine,
     chrome: Option<Chrome>,
     pointer: Pointer,
-    /// Files to open once the video item is ready; `None` once started.
-    pending: Option<Vec<String>>,
-    /// mpv's playlist entries.
-    playlist: Vec<String>,
+    /// The command line's request, opened once the video item is ready;
+    /// `None` once started.
+    pending: Option<Request>,
+    /// Which part of the window has the keyboard.
+    focus: Focus,
+    /// While playlist rows are dragged: where they would land.
+    drop_before: Option<usize>,
+    /// The key and mouse editor's copy of the bindings while it is open.
+    editor: Option<Editor>,
     width: i32,
     height: i32,
     maximized: bool,
@@ -127,6 +149,8 @@ pub struct PlayerRust {
     pub(crate) restore_height: i32,
     pub(crate) restore_position: bool,
     pub(crate) restore_maximized: bool,
+    pub(crate) osd: QString,
+    pub(crate) album_name: QString,
     /// The command line, parsed by `start`.
     cli: Cli,
     core: Option<Core>,
@@ -163,6 +187,10 @@ fn to_rectf(rect: rvp_skin::Rect) -> QRectF {
         f64::from(rect.h),
     )
 }
+
+/// `Qt::KeyboardModifier` bits.
+const QT_SHIFT: i32 = 0x0200_0000;
+const QT_CONTROL: i32 = 0x0400_0000;
 
 /// Window coordinates from QML (fractional on scaled screens) to pixels.
 fn pixel(value: f64) -> i32 {
@@ -377,14 +405,17 @@ impl qobject::Player {
         }
         self.as_mut().set_has_skin(chrome.is_some());
         self.as_mut().set_window_title(QString::from("RVP"));
-        let files = cli.files.clone();
+        let cwd = std::env::current_dir().unwrap_or_default();
+        let request = Request::from_cli(&cli, &cwd);
         self.as_mut().rust_mut().get_mut().core = Some(Core {
             app,
             engine,
             chrome,
             pointer: Pointer::default(),
-            pending: Some(files),
-            playlist: Vec::new(),
+            pending: Some(request),
+            focus: Focus::Window,
+            drop_before: None,
+            editor: None,
             width: 0,
             height: 0,
             maximized: false,
@@ -406,17 +437,25 @@ impl qobject::Player {
         let Some(core) = self.as_mut().core_mut() else {
             return;
         };
-        let Some(files) = core.pending.take() else {
+        let Some(request) = core.pending.take() else {
             return;
         };
-        if files.is_empty() {
-            // Reopening the last file keeps the restored window size.
-            core.fit_pending = false;
-        } else {
+        let plays = request.mode == rvp_app::instance::Mode::Play && !request.files.is_empty();
+        if plays {
             core.fit_pending = core.app.settings.fit_window_to_video;
             crate::metrics::first_frame_pending();
+        } else {
+            // Reopening the last file keeps the restored window size.
+            core.fit_pending = false;
         }
-        let result = core.app.start(core.engine, &files);
+        // `/add` and `/insert` at start: the last state first, then theirs.
+        let result = if plays || request.files.is_empty() {
+            core.app.start(core.engine, &request.files)
+        } else {
+            core.app
+                .start(core.engine, &[])
+                .and_then(|()| core.app.remote(core.engine, &request))
+        };
         if let Err(error) = result {
             self.show_message(&format!("cannot open: {error}"));
         }
@@ -429,21 +468,14 @@ impl qobject::Player {
         };
         core.drain_queued.store(false, Ordering::Release);
         let drained = core.app.drain(core.engine, Instant::now());
-        let mut playlist_changed = drained.changes.contains(PropertyId::PlaylistCount);
         for event in &drained.events {
             match event {
                 EngineEvent::PlaybackRestart => crate::metrics::playback_restarted(),
-                EngineEvent::FileLoaded { .. } => {
-                    crate::metrics::mark_once("file_loaded_ms");
-                    playlist_changed = true;
-                }
-                EngineEvent::StartFile => playlist_changed = true,
+                EngineEvent::FileLoaded { .. } => crate::metrics::mark_once("file_loaded_ms"),
                 _ => {}
             }
         }
-        if playlist_changed {
-            core.playlist = core.engine.playlist();
-        }
+        let new_aspect = drained.changes.contains(PropertyId::VideoAspect) && !core.fit_pending;
         let fit = if core.fit_pending
             && !core.maximized
             && let (Some(width), Some(height)) = (
@@ -480,15 +512,8 @@ impl qobject::Player {
             };
         }
         let has_video = core.app.model.int(PropertyId::VideoWidth).is_some();
-        let title = view::title(&core.app.model);
-        let messages: Vec<String> = drained
-            .requests
-            .into_iter()
-            .filter_map(|request| match request {
-                UiRequest::Message(text) => Some(text),
-                _ => None,
-            })
-            .collect();
+        let title = view::title(&core.app.model, core.app.library().lists());
+        let requests = drained.requests;
         self.as_mut().set_has_video(has_video);
         self.as_mut()
             .set_window_title(QString::from(if title.is_empty() {
@@ -496,13 +521,15 @@ impl qobject::Player {
             } else {
                 title.as_str()
             }));
-        for message in messages {
-            self.as_mut().show_message(&message);
+        for request in requests {
+            self.as_mut().handle_request(request);
         }
         if let Some((width, height)) = fit
             && !*self.fullscreen()
         {
             self.as_mut().fit_window(width, height);
+        } else if new_aspect {
+            self.as_mut().fit_aspect();
         }
         if !throttle {
             self.sync_chrome();
@@ -535,7 +562,8 @@ impl qobject::Player {
         let Some(chrome) = core.chrome.as_mut() else {
             return;
         };
-        let data = view::data_model(&core.app.model, &core.playlist);
+        let mut data = view::data_model(&core.app.model, core.app.library().lists());
+        data.playlist.drop_before = core.drop_before;
         if data != chrome.data {
             chrome.data = data;
         }
@@ -681,7 +709,7 @@ impl qobject::Player {
         core.app.set_window(geometry);
     }
 
-    fn pointer_context(&self) -> Option<Context> {
+    fn pointer_context(&self, modifiers: Modifiers) -> Option<Context> {
         let core = self.core()?;
         let fullscreen = *self.fullscreen();
         Some(Context {
@@ -689,27 +717,45 @@ impl qobject::Player {
             height: core.height,
             movable: !fullscreen && !core.maximized,
             chrome_shown: core.chrome.is_some() && (!fullscreen || *self.chrome_shown()),
+            modifiers,
         })
     }
 
-    pub(crate) fn mouse_press(self: Pin<&mut Self>, x: f64, y: f64, button_value: i32) {
-        self.pointer_event(x, y, button_value, 0);
+    pub(crate) fn mouse_press(
+        self: Pin<&mut Self>,
+        x: f64,
+        y: f64,
+        button_value: i32,
+        modifiers: i32,
+    ) {
+        let modifiers = Modifiers {
+            ctrl: modifiers & QT_CONTROL != 0,
+            shift: modifiers & QT_SHIFT != 0,
+        };
+        self.pointer_event(x, y, button_value, 0, modifiers);
     }
 
     pub(crate) fn mouse_double(self: Pin<&mut Self>, x: f64, y: f64, button_value: i32) {
-        self.pointer_event(x, y, button_value, 1);
+        self.pointer_event(x, y, button_value, 1, Modifiers::default());
     }
 
     pub(crate) fn mouse_release(self: Pin<&mut Self>, x: f64, y: f64, button_value: i32) {
-        self.pointer_event(x, y, button_value, 2);
+        self.pointer_event(x, y, button_value, 2, Modifiers::default());
     }
 
     /// `phase`: 0 press, 1 double click, 2 release.
-    fn pointer_event(mut self: Pin<&mut Self>, x: f64, y: f64, button_value: i32, phase: u8) {
+    fn pointer_event(
+        mut self: Pin<&mut Self>,
+        x: f64,
+        y: f64,
+        button_value: i32,
+        phase: u8,
+        modifiers: Modifiers,
+    ) {
         let Some(button) = button(button_value) else {
             return;
         };
-        let Some(ctx) = self.pointer_context() else {
+        let Some(ctx) = self.pointer_context(modifiers) else {
             return;
         };
         let Some(core) = self.as_mut().core_mut() else {
@@ -767,7 +813,56 @@ impl qobject::Player {
                 Effect::StartResize(edges) => {
                     self.as_mut().ui_request(request::START_RESIZE, edges);
                 }
+                Effect::List(effect) => self.as_mut().list_effect(effect),
+                Effect::Focus(focus) => {
+                    if let Some(core) = self.as_mut().core_mut() {
+                        core.focus = focus;
+                    }
+                }
             }
+        }
+    }
+
+    /// The rows the playlist panel shows (paging, scrolling).
+    fn visible_rows(core: &Core) -> usize {
+        core.chrome
+            .as_ref()
+            .and_then(Chrome::list_geometry)
+            .map_or(1, |geometry| geometry.visible.max(1))
+    }
+
+    fn list_effect(mut self: Pin<&mut Self>, effect: ListEffect) {
+        let Some(core) = self.as_mut().core_mut() else {
+            return;
+        };
+        match effect {
+            ListEffect::DropMarker(marker) => core.drop_before = marker,
+            ListEffect::Menu => self.ui_request(request::LIST_MENU, 0),
+            effect => {
+                if matches!(effect, ListEffect::Play(_)) {
+                    crate::metrics::input("input_ms");
+                    core.fit_pending = core.app.settings.fit_window_to_video;
+                }
+                let visible = Self::visible_rows(core);
+                if let Some(request) = core.app.list_effect(core.engine, effect, visible) {
+                    self.handle_request(request);
+                }
+            }
+        }
+    }
+
+    /// Carries out a playlist action; `extend` (Shift) selects while the
+    /// cursor moves.
+    fn perform_list(mut self: Pin<&mut Self>, action: ListAction, extend: bool) {
+        let Some(core) = self.as_mut().core_mut() else {
+            return;
+        };
+        if action == ListAction::Play {
+            core.fit_pending = core.app.settings.fit_window_to_video;
+        }
+        let visible = Self::visible_rows(core);
+        if let Some(request) = core.app.list_action(core.engine, action, extend, visible) {
+            self.handle_request(request);
         }
     }
 
@@ -779,7 +874,7 @@ impl qobject::Player {
     }
 
     pub(crate) fn mouse_move(mut self: Pin<&mut Self>, x: f64, y: f64) {
-        let Some(ctx) = self.pointer_context() else {
+        let Some(ctx) = self.pointer_context(Modifiers::default()) else {
             return;
         };
         let fullscreen = *self.fullscreen();
@@ -805,11 +900,32 @@ impl qobject::Player {
         self.sync_chrome();
     }
 
-    pub(crate) fn mouse_wheel(mut self: Pin<&mut Self>, delta: i32) {
+    pub(crate) fn mouse_wheel(mut self: Pin<&mut Self>, x: f64, y: f64, delta: i32) {
+        let Some(ctx) = self.pointer_context(Modifiers::default()) else {
+            return;
+        };
         let Some(core) = self.as_mut().core_mut() else {
             return;
         };
-        let effects = core.pointer.wheel(&core.app.bindings, delta);
+        let effects = match core.chrome.as_ref() {
+            Some(chrome) => {
+                core.pointer
+                    .wheel(chrome, &core.app.bindings, ctx, (pixel(x), pixel(y)), delta)
+            }
+            // Without a skin the whole window is video.
+            None => core
+                .app
+                .bindings
+                .mouse(if delta > 0 {
+                    MouseGesture::WheelUp
+                } else {
+                    MouseGesture::WheelDown
+                })
+                .filter(|_| delta != 0)
+                .map(Effect::Action)
+                .into_iter()
+                .collect(),
+        };
         self.as_mut().apply_effects(&effects);
         self.sync_chrome();
     }
@@ -834,6 +950,36 @@ impl qobject::Player {
             return false;
         };
         let chords = KeyChord::from_qt(key, modifiers);
+        // The playlist's keys while it has the keyboard; Shift with a cursor
+        // key selects as the cursor moves.
+        let list_shown = core
+            .chrome
+            .as_ref()
+            .is_some_and(|chrome| chrome.state.playlist_attached);
+        if core.focus == Focus::Playlist && list_shown {
+            let list_keys = &core.app.bindings.list_keys;
+            let list_action = chords.iter().find_map(|chord| {
+                list_keys
+                    .get(chord)
+                    .map(|action| (*action, false))
+                    .or_else(|| {
+                        let plain = KeyChord {
+                            shift: false,
+                            ..*chord
+                        };
+                        list_keys
+                            .get(&plain)
+                            .filter(|action| chord.shift && action.is_cursor())
+                            .map(|action| (*action, true))
+                    })
+            });
+            if let Some((action, extend)) = list_action {
+                crate::metrics::input("input_ms");
+                self.as_mut().perform_list(action, extend);
+                self.sync_chrome();
+                return true;
+            }
+        }
         let action = chords.iter().find_map(|chord| core.app.bindings.key(chord));
         match action {
             Some(action) => {
@@ -879,7 +1025,6 @@ impl qobject::Player {
 
     /// Carries out an action and the window request it may produce.
     fn perform(mut self: Pin<&mut Self>, action: Action) {
-        let fullscreen = *self.fullscreen();
         let Some(core) = self.as_mut().core_mut() else {
             return;
         };
@@ -890,6 +1035,15 @@ impl qobject::Player {
             core.fit_pending = core.app.settings.fit_window_to_video;
         }
         let Some(request) = core.app.dispatch(core.engine, action) else {
+            return;
+        };
+        self.handle_request(request);
+    }
+
+    /// Carries out what the core asks the window for.
+    fn handle_request(mut self: Pin<&mut Self>, request: UiRequest) {
+        let fullscreen = *self.fullscreen();
+        let Some(core) = self.as_mut().core_mut() else {
             return;
         };
         match request {
@@ -920,8 +1074,33 @@ impl qobject::Player {
                 }
                 self.relayout();
             }
+            UiRequest::KeysAndMouse => self.ui_request(request::KEYS_AND_MOUSE, 0),
+            UiRequest::ImportPlaylists => match core.app.potplayer_folder() {
+                Some(folder) => self.import_from(&folder),
+                None => self.ui_request(request::IMPORT_PLAYLISTS, 0),
+            },
+            UiRequest::AddFilesDialog => self.ui_request(request::ADD_FILES, 0),
+            UiRequest::AddFolderDialog => self.ui_request(request::ADD_FOLDER, 0),
+            UiRequest::AlbumName { rename, current } => {
+                self.as_mut().set_album_name(QString::from(&current));
+                self.ui_request(request::ALBUM_NAME, i32::from(rename));
+            }
+            UiRequest::Osd(text) => self.set_osd(QString::from(&text)),
             UiRequest::Message(text) => self.show_message(&text),
         }
+    }
+
+    fn import_from(mut self: Pin<&mut Self>, folder: &Path) {
+        let Some(core) = self.as_mut().core_mut() else {
+            return;
+        };
+        let text = match core.app.import_playlists(folder) {
+            Ok(0) => format!("No PotPlayer playlists in {}", folder.display()),
+            Ok(count) => format!("Imported {count} albums from PotPlayer"),
+            Err(error) => format!("Cannot import {}: {error}", folder.display()),
+        };
+        self.as_mut().show_message(&text);
+        self.sync_chrome();
     }
 
     pub(crate) fn open_files(mut self: Pin<&mut Self>, paths: &QString, append: bool) {
@@ -941,15 +1120,308 @@ impl qobject::Player {
         if let Some(pending) = core.pending.as_mut() {
             // Not ready yet: open them with the start.
             if !append {
-                pending.clear();
+                pending.files.clear();
             }
-            pending.extend(files);
+            pending.files.extend(files);
             return;
         }
         core.fit_pending = core.app.settings.fit_window_to_video;
         let result = core.app.open(core.engine, &files, append);
         if let Err(error) = result {
             self.show_message(&format!("cannot open: {error}"));
+        }
+    }
+
+    pub(crate) fn menu_checked(&self, name: &QString) -> i32 {
+        let (Some(core), Some(action)) = (self.core(), Action::from_name(&name.to_string())) else {
+            return -1;
+        };
+        core.app.checked(action).map_or(-1, i32::from)
+    }
+
+    pub(crate) fn run_list_action(mut self: Pin<&mut Self>, name: &QString) {
+        if let Some(action) = ListAction::from_name(&name.to_string()) {
+            crate::metrics::input("input_ms");
+            self.as_mut().perform_list(action, false);
+            self.sync_chrome();
+        }
+    }
+
+    pub(crate) fn list_menu_label(&self, name: &QString) -> QString {
+        let (Some(core), Some(action)) = (self.core(), ListAction::from_name(&name.to_string()))
+        else {
+            return QString::default();
+        };
+        QString::from(&core.app.list_menu_entry(action).0)
+    }
+
+    pub(crate) fn list_menu_shortcut(&self, name: &QString) -> QString {
+        let (Some(core), Some(action)) = (self.core(), ListAction::from_name(&name.to_string()))
+        else {
+            return QString::default();
+        };
+        QString::from(&core.app.list_menu_entry(action).1)
+    }
+
+    pub(crate) fn add_folder(mut self: Pin<&mut Self>, path: &QString) {
+        let Some(core) = self.as_mut().core_mut() else {
+            return;
+        };
+        let folder = PathBuf::from(path.to_string());
+        let count = core.app.add_folder(&folder);
+        if count == 0 {
+            let text = format!("No media files in {}", folder.display());
+            self.as_mut().show_message(&text);
+        }
+        self.sync_chrome();
+    }
+
+    pub(crate) fn name_album(mut self: Pin<&mut Self>, name: &QString, rename: bool) {
+        if let Some(core) = self.as_mut().core_mut() {
+            core.app.name_album(&name.to_string(), rename);
+        }
+        self.sync_chrome();
+    }
+
+    pub(crate) fn import_playlists(self: Pin<&mut Self>, folder: &QString) {
+        let folder = folder.to_string();
+        if !folder.is_empty() {
+            self.import_from(Path::new(&folder));
+        }
+    }
+
+    pub(crate) fn remote_message(mut self: Pin<&mut Self>, message: &QString) {
+        let Some(request) = Request::decode(&message.to_string()) else {
+            return;
+        };
+        let Some(core) = self.as_mut().core_mut() else {
+            return;
+        };
+        if let Some(pending) = core.pending.as_mut() {
+            // Not started yet: the files join the command line's.
+            pending.files.extend(request.files);
+            return;
+        }
+        if request.mode == rvp_app::instance::Mode::Play && !request.files.is_empty() {
+            core.fit_pending = core.app.settings.fit_window_to_video;
+            self.as_mut().ui_request(request::RAISE, 0);
+        }
+        let Some(core) = self.as_mut().core_mut() else {
+            return;
+        };
+        if let Err(error) = core.app.remote(core.engine, &request) {
+            self.as_mut().show_message(&format!("cannot open: {error}"));
+        }
+        self.sync_chrome();
+    }
+
+    pub(crate) fn fit_aspect(mut self: Pin<&mut Self>) {
+        if *self.fullscreen() {
+            return;
+        }
+        let Some(core) = self.core() else {
+            return;
+        };
+        let aspect = core.app.model.double(PropertyId::VideoAspect);
+        let (Some(chrome), Some(aspect)) = (core.chrome.as_ref(), aspect) else {
+            return;
+        };
+        if core.maximized || !core.app.settings.keep_aspect_window || !core.app.model.media_loaded()
+        {
+            return;
+        }
+        let window = (core.width, core.height);
+        let fitted = rvp_app::chrome::fit_aspect(window, chrome.chrome_size(), aspect);
+        if fitted != window {
+            self.as_mut().fit_window(fitted.0, fitted.1);
+        }
+    }
+
+    pub(crate) fn editor_open(mut self: Pin<&mut Self>) {
+        if let Some(core) = self.as_mut().core_mut() {
+            core.editor = Some(Editor::new(&core.app.bindings));
+        }
+    }
+
+    pub(crate) fn editor_rows(&self) -> QString {
+        let Some(core) = self.core() else {
+            return QString::from("[]");
+        };
+        let Some(editor) = core.editor.as_ref() else {
+            return QString::from("[]");
+        };
+        let rows: Vec<String> = editor
+            .rows()
+            .iter()
+            .map(|row| {
+                let label = Self::action_label(core, row.scope, &row.name);
+                let keys: Vec<String> = row
+                    .keys
+                    .iter()
+                    .map(|chord| json_string(&chord.to_string()))
+                    .collect();
+                let gestures: Vec<String> = row
+                    .gestures
+                    .iter()
+                    .map(|gesture| json_string(gesture.name()))
+                    .collect();
+                format!(
+                    "{{\"scope\":{},\"name\":{},\"label\":{},\"keys\":[{}],\"gestures\":[{}]}}",
+                    json_string(row.scope.name()),
+                    json_string(&row.name),
+                    json_string(&label),
+                    keys.join(","),
+                    gestures.join(",")
+                )
+            })
+            .collect();
+        QString::from(&format!("[{}]", rows.join(",")))
+    }
+
+    // A QML invokable, so a method even though the list is fixed.
+    #[allow(clippy::unused_self)]
+    pub(crate) fn editor_gestures(&self) -> QString {
+        let names: Vec<String> = MouseGesture::all()
+            .map(|gesture| json_string(gesture.name()))
+            .collect();
+        QString::from(&format!("[{}]", names.join(",")))
+    }
+
+    /// PotPlayer's label of an action of a scope.
+    fn action_label(core: &Core, scope: Scope, name: &str) -> String {
+        match scope {
+            Scope::Window => Action::from_name(name)
+                .map(|action| core.app.menu_entry(action).0)
+                .unwrap_or_default(),
+            Scope::Playlist => ListAction::from_name(name)
+                .map(|action| core.app.list_menu_entry(action).0)
+                .unwrap_or_default(),
+        }
+    }
+
+    pub(crate) fn editor_key_owner(&self, scope: &QString, key: i32, modifiers: i32) -> QString {
+        let (Some(core), Some(scope)) = (self.core(), Scope::from_name(&scope.to_string())) else {
+            return QString::from("{}");
+        };
+        let (Some(editor), Some(chord)) = (
+            core.editor.as_ref(),
+            KeyChord::from_qt(key, modifiers).into_iter().next(),
+        ) else {
+            return QString::from("{}");
+        };
+        let owner = editor.key_owner(scope, &chord).unwrap_or("");
+        QString::from(&format!(
+            "{{\"key\":{},\"owner\":{},\"label\":{}}}",
+            json_string(&chord.to_string()),
+            json_string(owner),
+            json_string(&Self::action_label(core, scope, owner))
+        ))
+    }
+
+    pub(crate) fn editor_gesture_owner(&self, gesture: &QString) -> QString {
+        let Some(core) = self.core() else {
+            return QString::default();
+        };
+        let owner = core.editor.as_ref().and_then(|editor| {
+            editor.gesture_owner(MouseGesture::from_name(&gesture.to_string())?)
+        });
+        owner.map_or_else(QString::default, |name| {
+            QString::from(&Self::action_label(core, Scope::Window, name))
+        })
+    }
+
+    fn editor_mut(self: Pin<&mut Self>) -> Option<&mut Editor> {
+        self.core_mut().and_then(|core| core.editor.as_mut())
+    }
+
+    pub(crate) fn editor_bind_key(
+        self: Pin<&mut Self>,
+        scope: &QString,
+        action: &QString,
+        key: i32,
+        modifiers: i32,
+    ) -> QString {
+        let (Some(scope), Some(chord)) = (
+            Scope::from_name(&scope.to_string()),
+            KeyChord::from_qt(key, modifiers).into_iter().next(),
+        ) else {
+            return QString::from("{}");
+        };
+        let Some(editor) = self.editor_mut() else {
+            return QString::from("{}");
+        };
+        let displaced = editor
+            .bind_key(scope, &action.to_string(), chord)
+            .unwrap_or("");
+        QString::from(&format!(
+            "{{\"key\":{},\"displaced\":{}}}",
+            json_string(&chord.to_string()),
+            json_string(displaced)
+        ))
+    }
+
+    pub(crate) fn editor_unbind_key(self: Pin<&mut Self>, scope: &QString, key: &QString) {
+        let (Some(scope), Some(chord)) = (
+            Scope::from_name(&scope.to_string()),
+            KeyChord::parse(&key.to_string()),
+        ) else {
+            return;
+        };
+        if let Some(editor) = self.editor_mut() {
+            editor.unbind_key(scope, &chord);
+        }
+    }
+
+    pub(crate) fn editor_bind_gesture(
+        self: Pin<&mut Self>,
+        action: &QString,
+        gesture: &QString,
+    ) -> QString {
+        let Some(gesture) = MouseGesture::from_name(&gesture.to_string()) else {
+            return QString::default();
+        };
+        let Some(editor) = self.editor_mut() else {
+            return QString::default();
+        };
+        QString::from(
+            editor
+                .bind_gesture(gesture, &action.to_string())
+                .unwrap_or(""),
+        )
+    }
+
+    pub(crate) fn editor_unbind_gesture(self: Pin<&mut Self>, gesture: &QString) {
+        let Some(gesture) = MouseGesture::from_name(&gesture.to_string()) else {
+            return;
+        };
+        if let Some(editor) = self.editor_mut() {
+            editor.unbind_gesture(gesture);
+        }
+    }
+
+    pub(crate) fn editor_reset(self: Pin<&mut Self>, scope: &QString, action: &QString) {
+        let Some(scope) = Scope::from_name(&scope.to_string()) else {
+            return;
+        };
+        if let Some(editor) = self.editor_mut() {
+            editor.reset(scope, &action.to_string());
+        }
+    }
+
+    pub(crate) fn editor_reset_all(self: Pin<&mut Self>) {
+        if let Some(editor) = self.editor_mut() {
+            editor.reset_all();
+        }
+    }
+
+    pub(crate) fn editor_close(mut self: Pin<&mut Self>, save: bool) {
+        let Some(core) = self.as_mut().core_mut() else {
+            return;
+        };
+        if let Some(editor) = core.editor.take()
+            && save
+        {
+            core.app.set_bindings(editor.bindings);
         }
     }
 
@@ -966,6 +1438,23 @@ impl qobject::Player {
                     .and_then(|frame| frame.regions.get(index).copied())
             })
             .unwrap_or_default();
+        to_rectf(rect)
+    }
+
+    pub(crate) fn list_rect(&self, what: &QString, index: i32) -> QRectF {
+        let geometry = self
+            .core()
+            .and_then(|core| core.chrome.as_ref())
+            .and_then(Chrome::list_geometry);
+        let (Some(geometry), Ok(index)) = (geometry, usize::try_from(index)) else {
+            return QRectF::default();
+        };
+        let rect = match what.to_string().as_str() {
+            "row" => geometry.row(index),
+            "tab" => geometry.tabs.get(index).copied().unwrap_or_default(),
+            "area" => geometry.area,
+            _ => rvp_skin::Rect::default(),
+        };
         to_rectf(rect)
     }
 
@@ -1028,11 +1517,6 @@ impl qobject::Player {
             ("loaded", model.media_loaded().to_string()),
             ("volume", number(model.double(PropertyId::Volume))),
             ("mute", flag(model.flag(PropertyId::Mute))),
-            ("playlist_pos", integer(model.int(PropertyId::PlaylistPos))),
-            (
-                "playlist_count",
-                integer(model.int(PropertyId::PlaylistCount)),
-            ),
             ("video_width", integer(model.int(PropertyId::VideoWidth))),
             (
                 "frame_drop_count",
@@ -1069,10 +1553,71 @@ impl qobject::Player {
             ("state_file", text(core.app.store().path().to_str())),
         ];
         let body: Vec<String> = fields
-            .iter()
+            .into_iter()
+            .chain(self.playlist_status(core))
             .map(|(name, value)| format!("\"{name}\":{value}"))
             .collect();
         QString::from(&format!("{{{}}}", body.join(",")))
+    }
+
+    /// The albums, the panel and the M3 settings for [`Self::status`].
+    fn playlist_status(&self, core: &Core) -> Vec<(&'static str, String)> {
+        let model = &core.app.model;
+        let number =
+            |value: Option<f64>| value.map_or_else(|| "null".to_owned(), |v| format!("{v:.3}"));
+        let integer =
+            |value: Option<i64>| value.map_or_else(|| "null".to_owned(), |v| v.to_string());
+        let text = |value: Option<&str>| value.map_or_else(|| "null".to_owned(), json_string);
+        let index = |value: usize| i64::try_from(value).ok();
+        let lists = core.app.library().lists();
+        let shown = core.app.library().shown();
+        let playing = lists.playing.and_then(|album| lists.albums.get(album));
+        vec![
+            // The album that plays is the playlist (M3).
+            (
+                "playlist_pos",
+                integer(playing.and_then(|a| a.current).and_then(index)),
+            ),
+            (
+                "playlist_count",
+                integer(playing.and_then(|a| index(a.entries.len()))),
+            ),
+            ("albums", integer(index(lists.albums.len()))),
+            ("shown_album", integer(index(lists.shown))),
+            ("playing_album", integer(lists.playing.and_then(index))),
+            ("shown_entries", integer(index(shown.entries.len()))),
+            ("selected", integer(index(shown.selected.len()))),
+            (
+                "cursor",
+                integer(core.app.library().cursor(lists.shown).and_then(index)),
+            ),
+            (
+                "shown_first",
+                text(shown.entries.first().map(rvp_app::playlist::Entry::label)),
+            ),
+            ("top", integer(index(shown.top))),
+            ("can_undo", core.app.library().can_undo().to_string()),
+            (
+                "focus",
+                text(Some(match core.focus {
+                    Focus::Window => "window",
+                    Focus::Playlist => "playlist",
+                })),
+            ),
+            ("drop_before", integer(core.drop_before.and_then(index))),
+            (
+                "normalizer",
+                core.app.settings.normalizer.enabled.to_string(),
+            ),
+            ("boost", core.app.settings.normalizer.boost.to_string()),
+            ("af", text(model.text(PropertyId::AudioFilters))),
+            (
+                "video_aspect",
+                number(model.double(PropertyId::VideoAspect)),
+            ),
+            ("editor_open", core.editor.is_some().to_string()),
+            ("osd", text(Some(&self.osd().to_string()))),
+        ]
     }
 
     /// Reads mpv's properties synchronously: call it rarely (each read waits

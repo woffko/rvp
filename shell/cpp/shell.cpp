@@ -11,6 +11,8 @@
 #include <QtCore/QJsonObject>
 #include <QtCore/QMetaObject>
 #include <QtCore/QMutex>
+#include <QtCore/QPointer>
+#include <QtCore/QProcess>
 #include <QtCore/QTimer>
 #include <QtGui/QFontMetrics>
 #include <QtGui/QGuiApplication>
@@ -19,6 +21,8 @@
 #include <QtGui/QOpenGLFunctions>
 #include <QtGui/QScreen>
 #include <QtGui/QWindow>
+#include <QtNetwork/QLocalServer>
+#include <QtNetwork/QLocalSocket>
 #include <QtOpenGL/QOpenGLFramebufferObject>
 #include <QtQml/QQmlEngine>
 #include <QtQuick/QQuickOpenGLUtils>
@@ -50,6 +54,38 @@ QString fromStr(rust::Str text)
 QRect toRect(const std::array<std::int32_t, 4> &r)
 {
     return QRect(r[0], r[1], r[2], r[3]);
+}
+
+// The single-instance channel: requests (one JSON line each) go to the
+// Player once QML attached it; earlier ones wait.
+QLocalServer *instanceServer = nullptr;
+QPointer<QObject> instanceReceiver;
+QStringList instanceQueue;
+
+void deliverRequest(const QString &line)
+{
+    if (instanceReceiver)
+        QMetaObject::invokeMethod(instanceReceiver, "remote_message", Qt::QueuedConnection,
+                                  Q_ARG(QString, line));
+    else
+        instanceQueue.append(line);
+}
+
+void acceptInstances()
+{
+    while (QLocalSocket *socket = instanceServer->nextPendingConnection()) {
+        QObject::connect(socket, &QLocalSocket::disconnected, socket, &QObject::deleteLater);
+        QObject::connect(socket, &QLocalSocket::readyRead, socket, [socket] {
+            while (socket->canReadLine()) {
+                const QString line = QString::fromUtf8(socket->readLine()).trimmed();
+                if (line.isEmpty())
+                    continue;
+                deliverRequest(line);
+                socket->write("ok\n");
+                socket->flush();
+            }
+        });
+    }
 }
 
 // Atlas images by name, shared by every SkinView (render thread).
@@ -237,6 +273,60 @@ QString Tools::windows_json() const
         });
     }
     return QString::fromUtf8(QJsonDocument(windows).toJson(QJsonDocument::Compact));
+}
+
+void Tools::instance_receiver(QObject *receiver) const
+{
+    instanceReceiver = receiver;
+    const QStringList waiting = std::exchange(instanceQueue, {});
+    for (const QString &line : waiting)
+        deliverRequest(line);
+}
+
+bool Tools::run_self(const QStringList &arguments) const
+{
+    return QProcess::startDetached(QCoreApplication::applicationFilePath(), arguments);
+}
+
+bool rvp_instance_send(rust::Str name, rust::Str message)
+{
+    QLocalSocket socket;
+    socket.connectToServer(fromStr(name));
+    if (!socket.waitForConnected(1000))
+        return false;
+    QByteArray line(message.data(), static_cast<qsizetype>(message.size()));
+    line.append('\n');
+    socket.write(line);
+    if (!socket.waitForBytesWritten(1000))
+        return false;
+    while (!socket.canReadLine()) {
+        if (!socket.waitForReadyRead(3000))
+            return false;
+    }
+    return socket.readLine().trimmed() == "ok";
+}
+
+bool rvp_instance_listen(rust::Str name)
+{
+    if (instanceServer)
+        return true;
+    auto *server = new QLocalServer(QCoreApplication::instance());
+    server->setSocketOptions(QLocalServer::UserAccessOption);
+    const QString channel = fromStr(name);
+    bool listening = server->listen(channel);
+    if (!listening && server->serverError() == QAbstractSocket::AddressInUseError) {
+        // Nobody answered on the channel just before: a socket file left
+        // by a process that died (Unix).
+        QLocalServer::removeServer(channel);
+        listening = server->listen(channel);
+    }
+    if (!listening) {
+        delete server;
+        return false;
+    }
+    instanceServer = server;
+    QObject::connect(server, &QLocalServer::newConnection, server, acceptInstances);
+    return true;
 }
 
 void rvp_setup_graphics()

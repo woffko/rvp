@@ -28,9 +28,18 @@
 #           (goal D's open item; GPU machines only)
 #   m2svp   RVP plays the film-rate clip with SVP attached, then exits
 #           (goal D rule 6; start SVP first)
+#   m3      milestone M3: the functional self-test with the playlist panel,
+#           albums, normalizer, key editor, a second instance (/add) and the
+#           aspect lock, then three kill tests (kill -9 while the second
+#           album entry plays; the restart must reopen it paused within
+#           5 s of where it was)
+#   m3desktop  optional, not in m3all: an "RVP (kit)" entry in
+#           ~/.local/share/applications so that Files can open videos in
+#           the running RVP (single instance); delete the file to undo
 #   report  write docs/test-runs/<date>-<host>.md from the logs
 #   all     check deps mpv mvtools build s2 s3 input s1 report
 #   m2all   check deps mpv m2build m2 m2input m2gpu m2svp report
+#   m3all   check deps mpv m2build m2 m3 m2input m2gpu m2svp report
 #
 # environment:
 #   RVP_KIT_DIR     build and download directory (default ~/.cache/rvp-kit)
@@ -708,6 +717,71 @@ step_m2svp() {
     fi
 }
 
+step_m3() {
+    local log=$LOG_DIR/m3.log out=$LOG_DIR/m3-grabs run_log functional pid time
+    local kills=0 resumed=0 run wait_s summary
+    m2_ready m3 || return 0
+    m2_env
+    export RVP_CONFIG_DIR=$LOG_DIR/m3-config RVP_STATE_DIR=$LOG_DIR/m3-state
+    rm -rf "$RVP_CONFIG_DIR" "$RVP_STATE_DIR" "$out"
+    : > "$log"
+    echo "== functional (M3)" >> "$log"
+    "$(rvp_bin)" --selftest --instance=kit-m3 "--out=$out" "--skin=${RVP_SKIN:-}" \
+        "--mpv-options=hwdec=$(m2_hwdec)" "$(test_video)" "$(s1_video)" >> "$log" 2>&1
+    functional=$?
+    # Kill tests: the second entry of an album plays, RVP is killed with
+    # SIGKILL at a different point each time and must reopen that entry
+    # paused within 5 s of the last position it reported.
+    for run in 1 2 3; do
+        rm -rf "$RVP_STATE_DIR"
+        run_log=$LOG_DIR/m3-kill-$run.log
+        wait_s=$((8 + run * 4))
+        "$(rvp_bin)" --selftest=playback --next --play-seconds=90 "--out=$out" \
+            "--skin=${RVP_SKIN:-}" "--mpv-options=hwdec=$(m2_hwdec)" \
+            "$(test_video)" "$(s1_video)" > "$run_log" 2>&1 &
+        pid=$!
+        sleep "$wait_s"
+        kill -9 "$pid" 2> /dev/null
+        wait "$pid" 2> /dev/null
+        time=$(grep '^time=' "$run_log" | tail -1 | sed 's/^time=\([0-9.]*\).*/\1/')
+        {
+            echo "== kill run $run after $wait_s s, last $(grep '^time=' "$run_log" | tail -1)"
+            echo "== restart (expect $time s, entry 1 of 2)"
+        } >> "$log"
+        "$(rvp_bin)" --selftest=resume "--expect-time=${time:-0}" --expect-tolerance=5 \
+            --expect-entry=1 --expect-entries=2 "--out=$out" "--skin=${RVP_SKIN:-}" \
+            "--mpv-options=hwdec=$(m2_hwdec)" >> "$log" 2>&1 && resumed=$((resumed + 1))
+        kills=$((kills + 1))
+    done
+    summary="functional=$functional kills=$kills resumed=$resumed $(grep -E '^metric ' "$log" | sed 's/^metric //' | tr '\n' ' ')"
+    if [ "$functional" -eq 0 ] && [ "$resumed" -eq "$kills" ]; then
+        record m3 PASS "$summary"
+    else
+        record m3 FAIL "$summary $(grep -E '=FAIL' "$log" | tr '\n' ' ')"
+        return 1
+    fi
+}
+
+step_m3desktop() {
+    local file=$HOME/.local/share/applications/rvp-kit.desktop
+    if [ ! -x "$(rvp_bin)" ]; then
+        record m3desktop SKIPPED "run m2build first"
+        return 0
+    fi
+    mkdir -p "$(dirname "$file")"
+    {
+        echo "[Desktop Entry]"
+        echo "Type=Application"
+        echo "Name=RVP (kit)"
+        echo "Comment=RVP test build from $REPO"
+        echo "Exec=env LD_LIBRARY_PATH=$(mpv_lib_dir):$(qt_dir)/lib ${RVP_SKIN:+RVP_SKIN=$RVP_SKIN} $(rvp_bin) %F"
+        echo "Terminal=false"
+        echo "Categories=AudioVideo;Video;Player;"
+        echo "MimeType=video/x-matroska;video/mp4;video/webm;video/x-msvideo;video/quicktime;video/mpeg;video/mp2t;audio/flac;audio/mpeg;audio/x-wav;"
+    } > "$file"
+    record m3desktop PASS "$file (delete it to undo)"
+}
+
 step_report() {
     local file
     file=$REPO/docs/test-runs/$(date +%Y-%m-%d)-$(hostname).md
@@ -728,7 +802,7 @@ step_report() {
         echo "| Time | Step | Result | Detail |"
         echo "|------|------|--------|--------|"
         awk -F'\t' '{ printf "| %s | %s | %s | %s |\n", $1, $2, $3, $4 }' "$RESULTS" 2> /dev/null
-        for step in s2 s3 input s1 m2 m2input m2gpu m2svp; do
+        for step in s2 s3 input s1 m2 m3 m2input m2gpu m2svp; do
             [ -s "$LOG_DIR/$step.log" ] || continue
             echo
             echo "## $step output"
@@ -742,22 +816,23 @@ step_report() {
 }
 
 if [ "$#" -eq 0 ]; then
-    sed -n '2,49p' "$KIT_SCRIPT"
+    sed -n '2,59p' "$KIT_SCRIPT"
     exit 2
 fi
 for step in "$@"; do
     case $step in
         all) set -- check deps mpv mvtools build s2 s3 input s1 report ;;
         m2all) set -- check deps mpv m2build m2 m2input m2gpu m2svp report ;;
+        m3all) set -- check deps mpv m2build m2 m3 m2input m2gpu m2svp report ;;
     esac
 done
 overall=0
 for step in "$@"; do
     case $step in
-        check | deps | mpv | mvtools | build | s1 | s2 | s3 | input | m2build | m2 | m2input | m2gpu | m2svp | report)
+        check | deps | mpv | mvtools | build | s1 | s2 | s3 | input | m2build | m2 | m2input | m2gpu | m2svp | m3 | m3desktop | report)
             "step_$step" || overall=1
             ;;
-        all | m2all) ;;
+        all | m2all | m3all) ;;
         *) say "unknown step $step"; exit 2 ;;
     esac
 done

@@ -3,7 +3,8 @@
 //! after changes, and what mouse input does.
 
 use rvp_app::chrome::{Chrome, Mode};
-use rvp_app::pointer::{Button, Context, EDGE_LEFT, Effect, Pointer};
+use rvp_app::playlist::Playlists;
+use rvp_app::pointer::{Button, Context, EDGE_LEFT, Effect, Modifiers, Pointer};
 use rvp_app::{Action, Bindings, view};
 use rvp_engine::{PlayerModel, PropertyId, Value};
 use rvp_skin::{Image, Rect, Skin, SkinArchive};
@@ -89,7 +90,7 @@ fn chrome() -> Chrome {
     let skin = Skin::load(archive, "VideoSkin.xml").expect("load synthetic skin");
     assert!(skin.warnings().is_empty(), "{:?}", skin.warnings());
     let mut chrome = Chrome::new(Box::leak(Box::new(skin)));
-    chrome.data = view::data_model(&PlayerModel::new(), &[]);
+    chrome.data = view::data_model(&PlayerModel::new(), &Playlists::default());
     chrome.resize(Mode::Window, WIDTH, HEIGHT).expect("layout");
     chrome
 }
@@ -120,6 +121,7 @@ fn window() -> Context {
         height: HEIGHT,
         movable: true,
         chrome_shown: true,
+        modifiers: Modifiers::default(),
     }
 }
 
@@ -135,7 +137,7 @@ fn playing_model(seconds: f64) -> PlayerModel {
 }
 
 fn show(chrome: &mut Chrome, model: &PlayerModel) -> rvp_app::chrome::Damage {
-    chrome.data = view::data_model(model, &[]);
+    chrome.data = view::data_model(model, &Playlists::default());
     view::apply_playback_state(&mut chrome.state, model);
     chrome.refresh()
 }

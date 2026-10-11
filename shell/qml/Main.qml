@@ -27,6 +27,13 @@ Window {
     readonly property int requestContextMenu: 6
     readonly property int requestStartMove: 7
     readonly property int requestStartResize: 8
+    readonly property int requestKeysAndMouse: 9
+    readonly property int requestAddFiles: 10
+    readonly property int requestAddFolder: 11
+    readonly property int requestImportPlaylists: 12
+    readonly property int requestListMenu: 13
+    readonly property int requestRaise: 14
+    readonly property int requestAlbumName: 15
 
     property bool wasMaximized: false
     // The window state RVP last asked for and when (see applyVisibility).
@@ -49,6 +56,8 @@ Window {
 
     Component.onCompleted: {
         player.start()
+        // Requests from other instances (rvp /add ...) go to the player.
+        Tools.instance_receiver(player)
         if (player.restore_width > 0 && player.restore_height > 0) {
             width = player.restore_width
             height = player.restore_height
@@ -81,13 +90,26 @@ Window {
 
     onWidthChanged: {
         player.resized(width, height)
+        aspectTimer.restart()
         if (logGeometry)
             Tools.log("window_size=" + width + "x" + height)
     }
     onHeightChanged: {
         player.resized(width, height)
+        aspectTimer.restart()
         if (logGeometry)
             Tools.log("window_size=" + width + "x" + height)
+    }
+
+    // Once a resize settles, the window takes the video's shape (R1
+    // finding 1); during a drag the size changes faster than this.
+    Timer {
+        id: aspectTimer
+        interval: 300
+        onTriggered: {
+            if (root.visibility === Window.Windowed)
+                player.fit_aspect()
+        }
     }
     onVisibilityChanged: {
         player.window_state(root.visibility === Window.Maximized, root.active)
@@ -140,8 +162,32 @@ Window {
     function handleRequest(kind, argument) {
         switch (kind) {
         case requestOpenFiles:
+        case requestAddFiles:
             dialogLoader.active = true
-            dialogLoader.item.dialog.open()
+            dialogLoader.item.ask(kind === requestAddFiles)
+            break
+        case requestAddFolder:
+        case requestImportPlaylists:
+            folderLoader.active = true
+            folderLoader.item.ask(kind === requestImportPlaylists ? "import" : "add")
+            break
+        case requestListMenu:
+            listMenuLoader.active = true
+            listMenuLoader.item.menu.popup()
+            break
+        case requestAlbumName:
+            albumLoader.active = true
+            albumLoader.item.ask(argument === 1, player.album_name)
+            break
+        case requestKeysAndMouse:
+            keysLoader.active = true
+            keysLoader.item.begin()
+            break
+        case requestRaise:
+            if (root.visibility === Window.Minimized)
+                root.showNormal()
+            root.raise()
+            root.requestActivate()
             break
         case requestFullscreen:
             if (argument) {
@@ -297,7 +343,7 @@ Window {
         cursorShape: root.pointerIdle && player.fullscreen ? Qt.BlankCursor : player.cursor_shape
         onPressed: (mouse) => {
             keys.forceActiveFocus()
-            player.mouse_press(mouse.x, mouse.y, mouse.button)
+            player.mouse_press(mouse.x, mouse.y, mouse.button, mouse.modifiers)
         }
         onReleased: (mouse) => player.mouse_release(mouse.x, mouse.y, mouse.button)
         onDoubleClicked: (mouse) => player.mouse_double(mouse.x, mouse.y, mouse.button)
@@ -312,7 +358,7 @@ Window {
                 tipLoader.item.tip.close()
             player.mouse_move(mouse.x, mouse.y)
         }
-        onWheel: (wheel) => player.mouse_wheel(wheel.angleDelta.y)
+        onWheel: (wheel) => player.mouse_wheel(wheel.x, wheel.y, wheel.angleDelta.y)
         onExited: {
             if (tipLoader.item)
                 tipLoader.item.tip.close()
@@ -362,6 +408,29 @@ Window {
         active: false
         Component.onCompleted: setSource("OpenDialog.qml", { player: player })
     }
+    Loader {
+        id: folderLoader
+        active: false
+        Component.onCompleted: setSource("FolderDialog.qml", { player: player })
+    }
+    Loader {
+        id: listMenuLoader
+        anchors.fill: parent
+        active: false
+        Component.onCompleted: setSource("ListMenu.qml", { player: player })
+    }
+    Loader {
+        id: albumLoader
+        anchors.fill: parent
+        z: 30
+        active: false
+        Component.onCompleted: setSource("AlbumName.qml", { player: player })
+    }
+    Loader {
+        id: keysLoader
+        active: false
+        Component.onCompleted: setSource("KeysAndMouse.qml", { player: player })
+    }
 
     DropArea {
         anchors.fill: parent
@@ -373,6 +442,27 @@ Window {
                 paths.push(Tools.local_file(url))
             player.open_files(paths.join("\n"), false)
             drop.accept()
+        }
+    }
+
+    // The OSD: short notices over the video (volume, normalizer), as
+    // PotPlayer shows them at the top left.
+    Text {
+        id: osdText
+        visible: player.osd !== ""
+        z: 20
+        x: player.video_rect.x + 16
+        y: player.video_rect.y + 12
+        text: player.osd
+        color: "#f0f0f0"
+        style: Text.Outline
+        styleColor: "#000000"
+        font.pixelSize: 20
+        onTextChanged: if (text !== "") osdTimer.restart()
+        Timer {
+            id: osdTimer
+            interval: 2000
+            onTriggered: player.osd = ""
         }
     }
 
@@ -409,9 +499,15 @@ Window {
     //   --selftest=playback   plays --play-seconds=N (default 20), with
     //                         --fullscreen in fullscreen; --gpu-checks
     //                         fails on dropped frames; --svp waits for
-    //                         SVP's @svp filter
-    //   --selftest=resume     expects the last file reopened paused near
-    //                         --expect-time=SECONDS
+    //                         SVP's @svp filter; --next plays the album's
+    //                         second entry; logs time= every second (the
+    //                         kit's kill test)
+    //   --selftest=resume     expects the last file reopened paused within
+    //                         --expect-tolerance (default 2.5) seconds of
+    //                         --expect-time=SECONDS; with --expect-entry=I
+    //                         and --expect-entries=N also the album entry
+    //   --instance=NAME       the functional check also starts a second
+    //                         RVP with /add on this channel
     QtObject {
         id: selftest
         // Read in begin(): the command line is parsed by Player.start().
@@ -426,6 +522,8 @@ Window {
         property real stepStarted: 0
         property int failures: 0
         property var before: ({})
+        property var dragTo: ({})
+        property bool nextSent: false
         property string outDir: "rvp-selftest"
 
         function begin() {
@@ -510,13 +608,20 @@ Window {
             t.waitFor("last_file_reopened", () => s.loaded && s.time !== null, 15000,
                       () => "path " + s.path)
             break
-        case 2:
+        case 2: {
             // The resume seek follows the load.
-            t.waitFor("resumed_at_position", () => Math.abs(s.time - expected) < 2.5, 5000,
-                      () => "time " + s.time + " expected " + expected)
+            const tolerance = Number(player.option("expect-tolerance") || "2.5")
+            t.waitFor("resumed_at_position", () => Math.abs(s.time - expected) <= tolerance, 5000,
+                      () => "time " + s.time + " expected " + expected + " within " + tolerance)
             break
+        }
         case 3:
             t.check("reopened_paused", s.pause === true, "pause " + s.pause)
+            if (player.option("expect-entry") !== "")
+                t.check("reopened_album_entry",
+                        s.playlist_pos === Number(player.option("expect-entry"))
+                            && s.playlist_count === Number(player.option("expect-entries")),
+                        "entry " + s.playlist_pos + " of " + s.playlist_count)
             t.finish()
             break
         }
@@ -531,8 +636,14 @@ Window {
             t.next()
             break
         case 1:
-            t.waitFor("file_playing", () => s.loaded && s.video_width > 0 && s.time > 0.5, 20000,
-                      () => "time " + s.time)
+            // --next: once the first entry plays, the second one.
+            if (player.has_option("next") && !t.nextSent && s.loaded && s.playlist_pos === 0) {
+                player.run_action("next")
+                t.nextSent = true
+            }
+            t.waitFor("file_playing", () => s.loaded && s.video_width > 0 && s.time > 0.5
+                          && (!player.has_option("next") || s.playlist_pos === 1), 20000,
+                      () => "time " + s.time + " entry " + s.playlist_pos)
             break
         case 2:
             if (player.has_option("fullscreen"))
@@ -563,8 +674,10 @@ Window {
             t.decoderTotal += decoder >= t.decoderLast ? decoder - t.decoderLast : decoder
             t.decoderLast = decoder
             const elapsed = (Date.now() - t.stepStarted) / 1000
-            if (Math.floor(elapsed) > t.drops.length)
+            if (Math.floor(elapsed) > t.drops.length) {
                 t.drops.push(t.dropTotal)
+                Tools.log("time=" + s.time + " entry=" + s.playlist_pos)
+            }
             if (t.svpSeen < 0 && s.vf !== null && s.vf.indexOf("@svp") >= 0)
                 t.svpSeen = elapsed
             if (elapsed >= seconds)
@@ -630,7 +743,9 @@ Window {
             break
         case 8:
             t.before = s
-            player.mouse_wheel(-120)
+            // Over the video: over the playlist the wheel scrolls the list.
+            player.mouse_wheel(player.video_rect.x + player.video_rect.width / 2,
+                               player.video_rect.y + player.video_rect.height / 2, -120)
             t.next()
             break
         case 9:
@@ -731,13 +846,17 @@ Window {
             menuLoader.active = true
             dialogLoader.active = true
             tipLoader.active = true
+            listMenuLoader.active = true
+            folderLoader.active = true
             t.before = s
             t.next()
             break
         case 30: {
             t.check("menu_dialog_tooltip_load", menuLoader.status === Loader.Ready
-                    && dialogLoader.status === Loader.Ready && tipLoader.status === Loader.Ready,
-                    "status " + menuLoader.status + "," + dialogLoader.status + "," + tipLoader.status)
+                    && dialogLoader.status === Loader.Ready && tipLoader.status === Loader.Ready
+                    && listMenuLoader.status === Loader.Ready && folderLoader.status === Loader.Ready,
+                    "status " + menuLoader.status + "," + dialogLoader.status + "," + tipLoader.status
+                    + "," + listMenuLoader.status + "," + folderLoader.status)
             // What a drop or the file dialog does with a file URL: append
             // the playing file once more.
             const path = String(s.path).replace(/\\/g, "/")
@@ -751,6 +870,212 @@ Window {
                       () => "playlist " + t.before.playlist_count + " -> " + s.playlist_count)
             break
         case 32:
+            // M3: the playlist panel, albums, normalizer, editor, instance.
+            t.step = 100
+            t.stepStarted = Date.now()
+            break
+        default:
+            m3Tick()
+        }
+    }
+
+    function middle(r) { return { x: r.x + r.width / 2, y: r.y + r.height / 2 } }
+    function clickAt(p, modifiers) {
+        player.mouse_press(p.x, p.y, Qt.LeftButton, modifiers)
+        player.mouse_release(p.x, p.y, Qt.LeftButton)
+    }
+
+    function m3Tick() {
+        const t = selftest
+        const s = t.status()
+        switch (t.step) {
+        case 100:
+            if (!player.has_skin || !s.playlist_attached) {
+                Tools.log("check playlist_panel=SKIPPED no panel")
+                t.step = 117
+                break
+            }
+            // A click selects the row and gives the panel the keyboard.
+            clickAt(middle(player.list_rect("row", 1)), 0)
+            t.next()
+            break
+        case 101:
+            t.waitFor("list_click_selects", () => s.cursor === 1 && s.selected === 1
+                          && s.focus === "playlist", 2000,
+                      () => "cursor " + s.cursor + " selected " + s.selected + " focus " + s.focus)
+            break
+        case 102:
+            player.key(Qt.Key_A, Qt.ControlModifier)
+            t.next()
+            break
+        case 103:
+            t.waitFor("list_ctrl_a_selects_all", () => s.selected === s.shown_entries, 2000,
+                      () => s.selected + " of " + s.shown_entries)
+            break
+        case 104:
+            t.before = s
+            player.key(Qt.Key_Delete, 0)
+            t.next()
+            break
+        case 105:
+            t.waitFor("list_del_removes", () => s.shown_entries === 0, 2000,
+                      () => "entries " + s.shown_entries)
+            break
+        case 106:
+            player.key(Qt.Key_Z, Qt.ControlModifier)
+            t.next()
+            break
+        case 107:
+            t.waitFor("list_ctrl_z_undoes", () => s.shown_entries === t.before.shown_entries, 2000,
+                      () => "entries " + s.shown_entries)
+            break
+        case 108:
+            // Only the first row selected, then dragged below the last one.
+            clickAt(middle(player.list_rect("row", 0)), 0)
+            t.next()
+            break
+        case 109: {
+            t.before = s
+            const from = middle(player.list_rect("row", 0))
+            const last = player.list_rect("row", s.shown_entries - 1)
+            t.dragTo = { x: from.x, y: last.y + last.height - 2 }
+            player.mouse_press(from.x, from.y, Qt.LeftButton, 0)
+            player.mouse_move(from.x, from.y + 8)
+            player.mouse_move(t.dragTo.x, t.dragTo.y)
+            t.next()
+            break
+        }
+        case 110:
+            t.check("list_drag_marks_drop", s.drop_before === s.shown_entries,
+                    "drop before " + s.drop_before)
+            player.mouse_release(t.dragTo.x, t.dragTo.y, Qt.LeftButton)
+            t.next()
+            break
+        case 111:
+            t.waitFor("list_drag_reorders", () => s.shown_first !== t.before.shown_first
+                          && s.drop_before === null, 2000,
+                      () => t.before.shown_first + " -> " + s.shown_first)
+            break
+        case 112:
+            t.before = s
+            player.mouse_double(middle(player.list_rect("row", 0)).x,
+                                middle(player.list_rect("row", 0)).y, Qt.LeftButton)
+            t.next()
+            break
+        case 113:
+            t.waitFor("list_double_click_plays", () => s.playlist_pos === 0 && s.loaded
+                          && String(s.path).endsWith(t.before.shown_first), 5000,
+                      () => "entry " + s.playlist_pos + " path " + s.path)
+            break
+        case 114:
+            t.before = s
+            player.run_list_action("add-album")
+            t.next()
+            break
+        case 115:
+            if (albumLoader.status === Loader.Ready && albumLoader.item.dialog.opened) {
+                albumLoader.item.text = "Selftest"
+                albumLoader.item.dialog.accept()
+                t.next()
+            } else if (Date.now() - t.stepStarted > 3000) {
+                t.check("album_added", false, "no album name dialog")
+                t.step = 117
+            }
+            break
+        case 116:
+            if (t.waitFor("album_added", () => s.albums === t.before.albums + 1
+                              && s.shown_album === t.before.shown_album + 1 && s.shown_entries === 0,
+                          2000, () => "albums " + s.albums + " shown " + s.shown_album))
+                clickAt(middle(player.list_rect("tab", 0)), 0)
+            break
+        case 117:
+            t.waitFor("tab_click_shows_album", () => s.shown_album === 0 || !player.has_skin, 2000,
+                      () => "shown " + s.shown_album)
+            break
+        case 118:
+            player.key(Qt.Key_N, Qt.ShiftModifier)
+            t.next()
+            break
+        case 119:
+            if (t.waitFor("shift_n_normalizer_off", () => s.normalizer === false
+                              && (s.af === null || s.af.indexOf("rvpnorm") < 0), 2000,
+                          () => "af " + s.af))
+                player.key(Qt.Key_N, Qt.ShiftModifier)
+            break
+        case 120:
+            t.waitFor("shift_n_normalizer_on", () => s.normalizer === true && s.af !== null
+                          && s.af.indexOf("rvpnorm") >= 0, 2000, () => "af " + s.af)
+            break
+        case 121:
+            // Volume goes past 100 % (up to volume-max, 200 %).
+            if (s.volume !== null && s.volume > 100.5) {
+                t.check("volume_above_100", true, "volume " + s.volume + " osd " + s.osd)
+                t.next()
+            } else if (Date.now() - t.stepStarted > 5000) {
+                t.check("volume_above_100", false, "volume " + s.volume)
+                t.next()
+            } else {
+                player.run_action("volume-up")
+            }
+            break
+        case 122:
+            player.key(Qt.Key_F5, 0)
+            t.next()
+            break
+        case 123:
+            t.waitFor("f5_opens_keys_and_mouse", () => s.editor_open && keysLoader.status === Loader.Ready
+                          && keysLoader.item.visible, 3000)
+            break
+        case 124: {
+            if (keysLoader.status === Loader.Ready) {
+                const rows = JSON.parse(player.editor_rows())
+                const owner = JSON.parse(player.editor_key_owner("window", Qt.Key_Space, 0))
+                t.check("keys_editor_rows", rows.length > 50, rows.length + " actions")
+                t.check("keys_editor_finds_owner", owner.owner === "play-pause",
+                        owner.key + " -> " + owner.owner)
+                Tools.grab(t.outDir, "keys")
+                keysLoader.item.finish(false)
+            }
+            t.next()
+            break
+        }
+        case 125:
+            t.waitFor("keys_editor_closes", () => !s.editor_open, 2000)
+            break
+        case 126: {
+            const name = player.option("instance")
+            if (name === "") {
+                Tools.log("check second_instance_adds=SKIPPED no --instance")
+                t.step = 128
+                break
+            }
+            t.before = s
+            Tools.run_self(["--instance=" + name, "/add", String(s.path)])
+            t.next()
+            break
+        }
+        case 127:
+            t.waitFor("second_instance_adds", () => s.shown_entries === t.before.shown_entries + 1,
+                      20000, () => "entries " + t.before.shown_entries + " -> " + s.shown_entries)
+            break
+        case 128:
+            if (root.visibility !== Window.Windowed || !s.video_aspect) {
+                Tools.log("check window_keeps_aspect=SKIPPED")
+                t.step = 130
+                break
+            }
+            root.width = 900
+            root.height = 760
+            t.next()
+            break
+        case 129:
+            t.waitFor("window_keeps_aspect", () => root.height < 760 && player.video_rect.height > 0
+                          && Math.abs(player.video_rect.width / player.video_rect.height
+                                      - s.video_aspect) < 0.03, 4000,
+                      () => "video " + player.video_rect.width + "x" + player.video_rect.height
+                          + " aspect " + s.video_aspect + " window " + root.width + "x" + root.height)
+            break
+        case 130:
             // Let a few seconds of playback run for the measurements.
             if (Date.now() - t.stepStarted > 2000)
                 t.finish()

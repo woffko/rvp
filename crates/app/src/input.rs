@@ -9,7 +9,7 @@
 use std::collections::BTreeMap;
 use std::fmt;
 
-use crate::action::{Action, SeekStep};
+use crate::action::{Action, ListAction, SeekStep};
 
 /// A key, independent of modifiers.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -364,6 +364,11 @@ const GESTURE_NAMES: &[(MouseGesture, &str)] = &[
 ];
 
 impl MouseGesture {
+    /// Every gesture, in the editor's order.
+    pub fn all() -> impl Iterator<Item = MouseGesture> {
+        GESTURE_NAMES.iter().map(|&(gesture, _)| gesture)
+    }
+
     /// The name used in settings files.
     #[must_use]
     pub fn name(self) -> &'static str {
@@ -386,6 +391,8 @@ impl MouseGesture {
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct Bindings {
     pub keys: BTreeMap<KeyChord, Action>,
+    /// Keys while the playlist panel has the keyboard.
+    pub list_keys: BTreeMap<KeyChord, ListAction>,
     pub mouse: BTreeMap<MouseGesture, Action>,
     /// PotPlayer: "Operate the action 'Left Button - Single Click' in the
     /// video area only" (on for the owner).
@@ -401,19 +408,44 @@ impl Bindings {
     #[must_use]
     pub fn potplayer_defaults() -> Self {
         let mut keys = BTreeMap::new();
+        let mut list_keys = BTreeMap::new();
         for line in HOTKEYS.lines().skip(1) {
             let mut cells = line.split('\t');
-            let (Some("157"), Some(key), Some(id)) = (cells.next(), cells.next(), cells.next())
+            let (Some(table), Some(key), Some(id)) = (cells.next(), cells.next(), cells.next())
             else {
                 continue;
             };
-            let (Some(chord), Some(action)) = (
-                KeyChord::parse(key),
-                id.parse().ok().and_then(Action::from_potplayer_id),
-            ) else {
+            let (Some(chord), Ok(id)) = (KeyChord::parse(key), id.parse::<u32>()) else {
                 continue;
             };
-            keys.insert(chord, action);
+            match table {
+                "157" => {
+                    if let Some(action) = Action::from_potplayer_id(id) {
+                        keys.insert(chord, action);
+                    }
+                }
+                "118" => {
+                    if let Some(action) = ListAction::from_potplayer_id(id) {
+                        list_keys.insert(chord, action);
+                    }
+                }
+                _ => {}
+            }
+        }
+        // Not in PotPlayer's table: undo, redo and moving the selection.
+        for (key, action) in [
+            ("Ctrl+Z", ListAction::Undo),
+            ("Ctrl+Y", ListAction::Redo),
+            ("Up", ListAction::CursorUp),
+            ("Down", ListAction::CursorDown),
+            ("Home", ListAction::CursorHome),
+            ("End", ListAction::CursorEnd),
+            ("PgUp", ListAction::PageUp),
+            ("PgDn", ListAction::PageDown),
+        ] {
+            if let Some(chord) = KeyChord::parse(key) {
+                list_keys.entry(chord).or_insert(action);
+            }
         }
         let mouse = BTreeMap::from([
             (MouseGesture::LeftClick, Action::PlayPause),
@@ -427,6 +459,7 @@ impl Bindings {
         ]);
         Self {
             keys,
+            list_keys,
             mouse,
             left_click_video_only: true,
         }

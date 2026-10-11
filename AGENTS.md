@@ -77,6 +77,16 @@ each goal writes `docs/goals/goal-<letter>-status.md`.
 - Windows host runs use `C:\Users\<user>\rvp-test\run-m2.cmd`, which keeps
   RVP's settings and state in that folder. Every run needs the owner's
   permission first.
+- RVP's albums are the playlist (`crates/app/src/playlist.rs`); mpv plays
+  one entry at a time, so never use mpv's playlist for Next, Previous or the
+  end of a file. Undoable changes go through `Library::edit`, the rest
+  (selection, scrolling, playback marks) through `Library::update`.
+- A running `rvp` takes the files of the next one (`rvp_app::instance`, a
+  `QLocalServer` channel `rvp-<user>`). The self-test neither forwards nor
+  listens unless `--instance=NAME` names a separate channel, so test runs
+  never reach the owner's player.
+- The Windows test VM's M3 checks are `tools/windows-vm/m3-all.ps1` (copy
+  it and `run.ps1` to `C:\rvp-test` with the bundle).
 
 ## Test environments
 

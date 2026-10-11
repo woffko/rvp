@@ -13,6 +13,10 @@
 //!   skin area or the video moves it ("prevent window from being dragged
 //!   outside of the title bar" is off). The move starts once the pointer
 //!   travels a few pixels, so clicks and double clicks stay clicks.
+//! * In the playlist panel a click selects (Ctrl adds, Shift extends), a
+//!   double click plays, dragging selected rows moves them (a line marks
+//!   where they land), the wheel scrolls, tabs switch albums and the mark on
+//!   the shown tab deletes it; the panel then has the keyboard.
 //! * In the video area the bound gestures apply; with
 //!   `left_click_video_only` the left click acts nowhere else. A single
 //!   click acts at once (section 4: reaction under 50 ms). When it turns into
@@ -21,9 +25,12 @@
 
 use rvp_skin::hit::Hit;
 
-use crate::action::Action;
+use rvp_skin::playlist::ListHit;
+
+use crate::action::{Action, ListAction};
 use crate::chrome::Chrome;
 use crate::input::{Bindings, MouseGesture};
+use crate::playlist::Select;
 
 /// Mouse buttons.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -74,6 +81,40 @@ pub enum Effect {
     StartMove,
     /// Let the window system resize the window at these edges.
     StartResize(i32),
+    /// Something in the playlist panel.
+    List(ListEffect),
+    /// Which part of the window gets the keyboard.
+    Focus(Focus),
+}
+
+/// What the playlist panel does.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ListEffect {
+    Select {
+        index: usize,
+        how: Select,
+    },
+    Play(usize),
+    ShowAlbum(usize),
+    DeleteAlbum(usize),
+    /// Scroll by rows (negative: up).
+    ScrollBy(i32),
+    /// Make this row the first one shown.
+    ScrollTo(usize),
+    /// Where dragged rows would land, or none.
+    DropMarker(Option<usize>),
+    /// Move the selected rows before this entry.
+    MoveBefore(usize),
+    Action(ListAction),
+    /// The playlist's context menu.
+    Menu,
+}
+
+/// Which part of the window gets the keyboard.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Focus {
+    Window,
+    Playlist,
 }
 
 /// The window's state as far as the pointer is concerned.
@@ -85,6 +126,15 @@ pub struct Context {
     pub movable: bool,
     /// False in fullscreen while the bars are hidden: everything is video.
     pub chrome_shown: bool,
+    /// Modifiers held with the button (playlist selection).
+    pub modifiers: Modifiers,
+}
+
+/// Keyboard modifiers held with a mouse button.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct Modifiers {
+    pub ctrl: bool,
+    pub shift: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -104,6 +154,18 @@ enum Drag {
         x: i32,
         y: i32,
         click: bool,
+    },
+    /// A press on a playlist row: a drag moves the selection; without one,
+    /// the release selects only this row (`select_on_release`).
+    Rows {
+        y: i32,
+        index: usize,
+        moving: bool,
+        select_on_release: bool,
+    },
+    /// The scroll bar thumb, grabbed this far below its top.
+    Thumb {
+        grab: i32,
     },
 }
 
@@ -177,6 +239,7 @@ enum Target {
     Control(Hit<'static>),
     TitleBar,
     Video,
+    List(ListHit),
     /// Skin without a control (frame, bar backgrounds, playlist).
     Background,
 }
@@ -198,6 +261,15 @@ fn target(chrome: &Chrome, ctx: Context, x: i32, y: i32) -> Target {
             name: "CMD_VIDEO_WINDOW",
             ..
         }) => Target::Video,
+        Some(Hit::Slot {
+            name: "CMD_PLAY_LIST_ALBUM_TAB",
+            ..
+        }) => chrome
+            .list_geometry()
+            .and_then(|geometry| {
+                rvp_skin::playlist::hit(&geometry, chrome.data.playlist.entries.len(), x, y)
+            })
+            .map_or(Target::Background, Target::List),
         // Fullscreen bars cover only part of the screen: the rest is video.
         None if chrome.mode() == crate::chrome::Mode::Fullscreen => Target::Video,
         _ => Target::Background,
@@ -282,8 +354,99 @@ impl Pointer {
             Target::Control(_) => Vec::new(),
             Target::Video => {
                 self.drag = Drag::Press { x, y, click: true };
-                Vec::new()
+                vec![Effect::Focus(Focus::Window)]
             }
+            Target::List(hit) => {
+                let mut effects = vec![Effect::Focus(Focus::Playlist)];
+                effects.extend(self.press_list(chrome, ctx, hit, y));
+                effects
+            }
+        }
+    }
+
+    fn press_list(&mut self, chrome: &Chrome, ctx: Context, hit: ListHit, y: i32) -> Vec<Effect> {
+        let list = &chrome.data.playlist;
+        let visible = chrome
+            .list_geometry()
+            .map_or(1, |geometry| geometry.visible.max(1));
+        let page = i32::try_from(visible).unwrap_or(1);
+        let effect = match hit {
+            ListHit::Row(index) => {
+                let plain = ctx.modifiers == Modifiers::default();
+                let selected = list.selected.contains(&index);
+                self.drag = Drag::Rows {
+                    y,
+                    index,
+                    moving: false,
+                    select_on_release: plain && selected,
+                };
+                if plain && selected {
+                    // Keep a multiple selection for dragging; the release
+                    // narrows it to this row.
+                    return Vec::new();
+                }
+                let how = if ctx.modifiers.shift {
+                    Select::Range
+                } else if ctx.modifiers.ctrl {
+                    Select::Toggle
+                } else {
+                    Select::Only
+                };
+                ListEffect::Select { index, how }
+            }
+            ListHit::Tab(album) => ListEffect::ShowAlbum(album),
+            ListHit::TabDelete(album) => ListEffect::DeleteAlbum(album),
+            ListHit::TabOverflow => {
+                ListEffect::ShowAlbum((list.current_album + 1) % list.albums.len().max(1))
+            }
+            ListHit::ScrollUp => ListEffect::ScrollBy(-1),
+            ListHit::ScrollDown => ListEffect::ScrollBy(1),
+            ListHit::TrackAbove => ListEffect::ScrollBy(-page),
+            ListHit::TrackBelow => ListEffect::ScrollBy(page),
+            ListHit::ScrollThumb => {
+                let top = chrome
+                    .list_geometry()
+                    .and_then(|geometry| geometry.scrollbar)
+                    .map_or(y, |bar| bar.thumb.y);
+                self.drag = Drag::Thumb { grab: y - top };
+                return Vec::new();
+            }
+            ListHit::TabBar | ListHit::Empty => return Vec::new(),
+        };
+        vec![Effect::List(effect)]
+    }
+
+    fn move_list(&mut self, chrome: &Chrome, y: i32) -> Vec<Effect> {
+        let Some(geometry) = chrome.list_geometry() else {
+            return Vec::new();
+        };
+        let total = chrome.data.playlist.entries.len();
+        match &mut self.drag {
+            Drag::Rows {
+                y: start, moving, ..
+            } => {
+                if !*moving && (y - *start).abs() < DRAG_DISTANCE {
+                    return Vec::new();
+                }
+                *moving = true;
+                vec![Effect::List(ListEffect::DropMarker(Some(
+                    geometry.insertion_index(y, total),
+                )))]
+            }
+            Drag::Thumb { grab } => {
+                let Some(bar) = geometry.scrollbar else {
+                    return Vec::new();
+                };
+                let travel = (bar.track.h - bar.thumb.h).max(1);
+                let rows = total.saturating_sub(geometry.visible);
+                let offset = (y - *grab - bar.track.y).clamp(0, travel);
+                let rows_i = i64::try_from(rows).unwrap_or(0);
+                let top = rows_i * i64::from(offset) / i64::from(travel);
+                vec![Effect::List(ListEffect::ScrollTo(
+                    usize::try_from(top).unwrap_or(0),
+                ))]
+            }
+            _ => Vec::new(),
         }
     }
 
@@ -313,6 +476,19 @@ impl Pointer {
                     effects.push(Effect::Action(action));
                 }
                 effects
+            }
+            Target::List(ListHit::Row(index)) if button == Button::Left => {
+                self.swallow_release = true;
+                self.drag = Drag::Idle;
+                vec![Effect::List(ListEffect::Play(index))]
+            }
+            Target::List(ListHit::Empty) if button == Button::Left => {
+                self.swallow_release = true;
+                vec![Effect::List(ListEffect::Action(ListAction::AddFiles))]
+            }
+            Target::List(ListHit::TabBar) if button == Button::Left => {
+                self.swallow_release = true;
+                vec![Effect::List(ListEffect::Action(ListAction::AddAlbum))]
             }
             // Controls take the second click as another click.
             _ => self.press(chrome, ctx, x, y, button),
@@ -344,6 +520,7 @@ impl Pointer {
                 }
                 return Vec::new();
             }
+            Drag::Rows { .. } | Drag::Thumb { .. } => return self.move_list(chrome, y),
             Drag::Idle => {}
         }
         let (hover, tooltip, cursor) = match target(chrome, ctx, x, y) {
@@ -381,9 +558,42 @@ impl Pointer {
                         chrome.hit(x, y),
                         Some(Hit::Control { element: e, .. }) if e == element
                     );
-                    match Action::from_skin_command(command) {
-                        Some(action) if over => vec![Effect::Action(action)],
-                        _ => Vec::new(),
+                    if !over {
+                        return Vec::new();
+                    }
+                    if let Some(action) = Action::from_skin_command(command) {
+                        vec![Effect::Action(action)]
+                    } else if let Some(action) = ListAction::from_skin_command(command) {
+                        vec![
+                            Effect::Focus(Focus::Playlist),
+                            Effect::List(ListEffect::Action(action)),
+                        ]
+                    } else {
+                        Vec::new()
+                    }
+                }
+                Drag::Rows {
+                    index,
+                    moving,
+                    select_on_release,
+                    ..
+                } => {
+                    if moving {
+                        let total = chrome.data.playlist.entries.len();
+                        let to = chrome
+                            .list_geometry()
+                            .map_or(index, |geometry| geometry.insertion_index(y, total));
+                        vec![
+                            Effect::List(ListEffect::DropMarker(None)),
+                            Effect::List(ListEffect::MoveBefore(to)),
+                        ]
+                    } else if select_on_release {
+                        vec![Effect::List(ListEffect::Select {
+                            index,
+                            how: Select::Only,
+                        })]
+                    } else {
+                        Vec::new()
                     }
                 }
                 Drag::Slider { node, command } => slider_effect(chrome, node, command, x)
@@ -394,16 +604,33 @@ impl Pointer {
                     self.undo = action.filter(|action| action.is_toggle());
                     action.map(Effect::Action).into_iter().collect()
                 }
-                Drag::Press { click: false, .. } | Drag::Idle => Vec::new(),
+                Drag::Press { click: false, .. } | Drag::Thumb { .. } | Drag::Idle => Vec::new(),
             },
-            Button::Right => {
-                if let Target::Control(Hit::Control { alt_command, .. }) = target(chrome, ctx, x, y)
-                    && let Some(action) = alt_command.and_then(Action::from_skin_command)
+            Button::Right => match target(chrome, ctx, x, y) {
+                Target::Control(Hit::Control { alt_command, .. })
+                    if alt_command.and_then(Action::from_skin_command).is_some() =>
                 {
-                    return vec![Effect::Action(action)];
+                    alt_command
+                        .and_then(Action::from_skin_command)
+                        .map(Effect::Action)
+                        .into_iter()
+                        .collect()
                 }
-                Self::gesture(chrome, bindings, ctx, x, y, button)
-            }
+                Target::List(hit) => {
+                    let mut effects = vec![Effect::Focus(Focus::Playlist)];
+                    if let ListHit::Row(index) = hit
+                        && !chrome.data.playlist.selected.contains(&index)
+                    {
+                        effects.push(Effect::List(ListEffect::Select {
+                            index,
+                            how: Select::Only,
+                        }));
+                    }
+                    effects.push(Effect::List(ListEffect::Menu));
+                    effects
+                }
+                _ => Self::gesture(chrome, bindings, ctx, x, y, button),
+            },
             _ => Self::gesture(chrome, bindings, ctx, x, y, button),
         }
     }
@@ -427,9 +654,20 @@ impl Pointer {
             .collect()
     }
 
-    /// The wheel turned; `delta` is positive away from the user.
+    /// The wheel turned at `(x, y)`; `delta` is positive away from the
+    /// user. Over the playlist it scrolls the list.
     #[must_use]
-    pub fn wheel(&self, bindings: &Bindings, delta: i32) -> Vec<Effect> {
+    pub fn wheel(
+        &self,
+        chrome: &Chrome,
+        bindings: &Bindings,
+        ctx: Context,
+        (x, y): (i32, i32),
+        delta: i32,
+    ) -> Vec<Effect> {
+        if delta != 0 && matches!(target(chrome, ctx, x, y), Target::List(_)) {
+            return vec![Effect::List(ListEffect::ScrollBy(-3 * delta.signum()))];
+        }
         let gesture = match delta.signum() {
             1 => MouseGesture::WheelUp,
             -1 => MouseGesture::WheelDown,
@@ -484,17 +722,9 @@ mod tests {
     }
 
     #[test]
-    fn wheel_follows_bindings() {
-        let bindings = Bindings::potplayer_defaults();
-        let pointer = Pointer::default();
-        assert_eq!(
-            pointer.wheel(&bindings, 120),
-            vec![Effect::Action(Action::VolumeUp)]
-        );
-        assert_eq!(
-            pointer.wheel(&bindings, -120),
-            vec![Effect::Action(Action::VolumeDown)]
-        );
-        assert!(pointer.wheel(&bindings, 0).is_empty());
+    fn gestures_map_buttons_and_clicks() {
+        assert_eq!(gesture(Button::Left, true), MouseGesture::LeftDoubleClick);
+        assert_eq!(gesture(Button::Forward, false), MouseGesture::X2Click);
+        assert_eq!(gesture(Button::Middle, false), MouseGesture::MiddleClick);
     }
 }

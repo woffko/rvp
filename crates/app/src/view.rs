@@ -8,7 +8,10 @@
 //! nothing, as PotPlayer does for unknown values.
 
 use rvp_engine::{PlayerModel, PropertyId};
-use rvp_skin::{DataModel, PlaylistEntry, SliderValue, UiState};
+use rvp_skin::state::ListScroll;
+use rvp_skin::{DataModel, Playlist, PlaylistEntry, SliderValue, UiState};
+
+use crate::playlist::Playlists;
 
 /// `HH:MM:SS`, as PotPlayer's time labels.
 #[must_use]
@@ -35,20 +38,23 @@ pub fn file_name(path: &str) -> &str {
     trimmed.rsplit(['/', '\\']).next().unwrap_or(trimmed)
 }
 
-/// The window title: `[index/count] name` with several files, the name
-/// alone with one, empty when idle.
+/// The window title: `[index/count] name` for the entry that plays in an
+/// album of several, the name alone otherwise, empty when idle.
 #[must_use]
-pub fn title(model: &PlayerModel) -> String {
+pub fn title(model: &PlayerModel, lists: &Playlists) -> String {
     let Some(path) = model.loaded_path().or_else(|| model.text(PropertyId::Path)) else {
         return String::new();
     };
-    let name = file_name(path);
-    let count = model.int(PropertyId::PlaylistCount).unwrap_or(0);
-    match model.int(PropertyId::PlaylistPos) {
-        Some(position) if count > 1 && position >= 0 => {
-            format!("[{}/{count}] {name}", position + 1)
-        }
-        _ => name.to_owned(),
+    let playing = lists.playing.and_then(|album| {
+        let album = lists.albums.get(album)?;
+        let index = album.current?;
+        let entry = album.entries.get(index)?;
+        (entry.path == path).then_some((index, album.entries.len(), entry.label()))
+    });
+    match playing {
+        Some((index, count, label)) if count > 1 => format!("[{}/{count}] {label}", index + 1),
+        Some((_, _, label)) => label.to_owned(),
+        None => file_name(path).to_owned(),
     }
 }
 
@@ -147,15 +153,15 @@ fn channels(count: i64) -> String {
     }
 }
 
-/// The skin's data model for the current playback state; `playlist` holds
-/// mpv's playlist entries (file names or URLs).
+/// The skin's data model for the current playback state and the albums
+/// (the panel shows the shown album).
 #[must_use]
-pub fn data_model(model: &PlayerModel, playlist: &[String]) -> DataModel {
+pub fn data_model(model: &PlayerModel, lists: &Playlists) -> DataModel {
     let mut data = DataModel::default();
     let loaded = model.media_loaded();
     let time = model.double(PropertyId::TimePos).unwrap_or(0.0);
     let duration = model.double(PropertyId::Duration).filter(|d| *d > 0.0);
-    data.set_text("CMD_TITLE_MESSAGE", title(model));
+    data.set_text("CMD_TITLE_MESSAGE", title(model, lists));
     data.set_text("CMD_CURRENTTIME_MESSAGE", format_time(time));
     data.set_text(
         "CMD_TOTALTIME_MESSAGE",
@@ -191,25 +197,40 @@ pub fn data_model(model: &PlayerModel, playlist: &[String]) -> DataModel {
             enabled: true,
         },
     );
-    data.playlist.albums = vec!["Default".to_owned()];
-    data.playlist.entries = playlist
-        .iter()
-        .map(|entry| PlaylistEntry {
-            title: file_name(entry).to_owned(),
-            duration: None,
-            playable: true,
-            played: false,
-        })
-        .collect();
-    data.playlist.current = model
-        .int(PropertyId::PlaylistPos)
-        .and_then(|position| usize::try_from(position).ok())
-        .filter(|&position| position < data.playlist.entries.len());
-    if let Some(current) = data.playlist.current {
-        data.playlist.selected.insert(current);
-    }
-    data.playlist.scroll = rvp_skin::state::ListScroll::Entry(0);
+    data.playlist = panel(lists);
     data
+}
+
+/// The playlist panel's content: the shown album.
+#[must_use]
+pub fn panel(lists: &Playlists) -> Playlist {
+    let shown = &lists.albums[lists.shown.min(lists.albums.len().saturating_sub(1))];
+    Playlist {
+        albums: lists
+            .albums
+            .iter()
+            .map(|album| album.name.clone())
+            .collect(),
+        current_album: lists.shown,
+        entries: shown
+            .entries
+            .iter()
+            .map(|entry| PlaylistEntry {
+                title: entry.label().to_owned(),
+                // Whole seconds of at most days.
+                #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+                duration: entry
+                    .duration
+                    .map(|seconds| seconds.max(0.0).round() as u32),
+                playable: entry.playable,
+                played: entry.played,
+            })
+            .collect(),
+        current: shown.current.filter(|_| lists.playing == Some(lists.shown)),
+        selected: shown.selected.clone(),
+        scroll: ListScroll::Entry(shown.top),
+        drop_before: None,
+    }
 }
 
 fn set_info_strip(data: &mut DataModel, model: &PlayerModel, time: f64, duration: Option<f64>) {
@@ -277,7 +298,28 @@ pub fn apply_playback_state(state: &mut UiState, model: &PlayerModel) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::playlist::{Album, Entry};
     use rvp_engine::Value;
+
+    /// `count` entries in one album; entry `index` (path `path`) plays.
+    fn lists_playing(path: &str, index: usize, count: usize) -> Playlists {
+        let mut album = Album::new("Default");
+        album.entries = (0..count)
+            .map(|n| {
+                if n == index {
+                    Entry::new(path)
+                } else {
+                    Entry::new(&format!("/films/other {n}.mkv"))
+                }
+            })
+            .collect();
+        album.current = Some(index);
+        Playlists {
+            albums: vec![album],
+            playing: Some(0),
+            ..Playlists::default()
+        }
+    }
 
     fn playing_model() -> PlayerModel {
         let mut model = PlayerModel::new();
@@ -321,7 +363,10 @@ mod tests {
 
     #[test]
     fn info_strip_matches_blackspace_tables() {
-        let data = data_model(&playing_model(), &[]);
+        let data = data_model(
+            &playing_model(),
+            &lists_playing("/films/Sample Film.mkv", 11, 12),
+        );
         for (command, text) in [
             ("CMD_TITLE_MESSAGE", "[12/12] Sample Film.mkv"),
             ("CMD_CURRENTTIME_MESSAGE", "01:02:05"),
@@ -350,7 +395,7 @@ mod tests {
 
     #[test]
     fn idle_shows_zero_times_and_a_disabled_seek_bar() {
-        let data = data_model(&PlayerModel::new(), &[]);
+        let data = data_model(&PlayerModel::new(), &Playlists::default());
         assert_eq!(data.text("CMD_TITLE_MESSAGE"), Some(""));
         assert_eq!(data.text("CMD_CURRENTTIME_MESSAGE"), Some("00:00:00"));
         assert_eq!(data.text("CMD_PLAY_FILE_TYPE"), None);
@@ -366,10 +411,18 @@ mod tests {
         );
         model.set(PropertyId::PlaylistPos, Some(Value::Int(1)));
         model.set(PropertyId::PlaylistCount, Some(Value::Int(2)));
-        let data = data_model(&model, &["/a/one.mkv".into(), "/a/two.mkv".into()]);
+        let mut lists = lists_playing("/films/Sample Film.mkv", 1, 2);
+        lists.albums[0].entries[0] = Entry::new("/a/one.mkv");
+        lists.albums[0].entries[1].played = true;
+        let data = data_model(&model, &lists);
         assert_eq!(data.text("CMD_VIDEO_OUT_FOURCC_MESSAGE"), Some("DXVA"));
-        assert_eq!(data.playlist.entries[1].title, "two.mkv");
+        assert_eq!(data.playlist.entries[0].title, "one.mkv");
         assert_eq!(data.playlist.current, Some(1));
+        assert!(data.playlist.entries[1].played);
+        assert_eq!(
+            data.text("CMD_TITLE_MESSAGE"),
+            Some("[2/2] Sample Film.mkv")
+        );
         let mut state = UiState::default();
         model.set(PropertyId::Mute, Some(Value::Flag(true)));
         apply_playback_state(&mut state, &model);

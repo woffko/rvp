@@ -79,6 +79,8 @@ properties! {
     SubVisibility = "sub-visibility", Flag;
     FrameDropCount = "frame-drop-count", Int;
     DecoderFrameDropCount = "decoder-frame-drop-count", Int;
+    AudioFilters = "af", Text;
+    VideoAspect = "video-params/aspect", Double;
 }
 
 impl PropertyId {

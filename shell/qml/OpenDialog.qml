@@ -9,6 +9,14 @@ Item {
     id: holder
     required property Player player
     readonly property alias dialog: fileDialog
+    // Add to the shown album instead of playing.
+    property bool append: false
+
+    function ask(adding) {
+        holder.append = adding
+        fileDialog.title = adding ? "Add File(s)" : "Open File(s)"
+        fileDialog.open()
+    }
 
     FileDialog {
         id: fileDialog
@@ -18,7 +26,7 @@ Item {
             const paths = []
             for (const url of selectedFiles)
                 paths.push(Tools.local_file(url))
-            holder.player.open_files(paths.join("\n"), false)
+            holder.player.open_files(paths.join("\n"), holder.append)
         }
     }
 }
