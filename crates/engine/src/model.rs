@@ -77,6 +77,8 @@ properties! {
     CurrentAo = "current-ao", Text;
     HwdecCurrent = "hwdec-current", Text;
     SubVisibility = "sub-visibility", Flag;
+    FrameDropCount = "frame-drop-count", Int;
+    DecoderFrameDropCount = "decoder-frame-drop-count", Int;
 }
 
 impl PropertyId {

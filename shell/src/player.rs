@@ -78,7 +78,32 @@ struct Core {
     fit_pending: bool,
     /// True while a drain is queued (coalesces wakeups).
     drain_queued: Arc<AtomicBool>,
+    /// Playback updates of the chrome held back by [`CHROME_INTERVAL`].
+    throttle: Throttle,
 }
+
+/// When playback last updated the chrome, and whether an update waits.
+#[derive(Default)]
+struct Throttle {
+    last: Option<Instant>,
+    pending: bool,
+}
+
+/// Playback (the time and the seek bar) updates the chrome at most this
+/// often; input and state changes update it at once. Repainting the bottom
+/// bar with every frame of a 60 fps video cost 4K60 frames on the owner's
+/// desktop.
+const CHROME_INTERVAL: std::time::Duration = std::time::Duration::from_millis(100);
+
+/// Properties that change with every frame or second of playback.
+const TICKING: &[PropertyId] = &[
+    PropertyId::TimePos,
+    PropertyId::EstimatedVfFps,
+    PropertyId::VideoBitrate,
+    PropertyId::AudioBitrate,
+    PropertyId::FrameDropCount,
+    PropertyId::DecoderFrameDropCount,
+];
 
 /// The Rust state of [`qobject::Player`]; the fields are the properties.
 // Each flag is a separate QML property.
@@ -366,6 +391,7 @@ impl qobject::Player {
             stretch: false,
             fit_pending: false,
             drain_queued,
+            throttle: Throttle::default(),
         });
         if let Some(message) = messages.first() {
             self.as_mut().show_message(message);
@@ -434,6 +460,25 @@ impl qobject::Player {
         } else {
             None
         };
+        let ticking_only = drained.events.is_empty()
+            && PropertyId::ALL
+                .iter()
+                .filter(|id| drained.changes.contains(**id))
+                .all(|id| TICKING.contains(id));
+        let now = Instant::now();
+        let throttle = ticking_only
+            && core
+                .throttle
+                .last
+                .is_some_and(|last| now.duration_since(last) < CHROME_INTERVAL);
+        if throttle {
+            core.throttle.pending = true;
+        } else {
+            core.throttle = Throttle {
+                last: Some(now),
+                pending: false,
+            };
+        }
         let has_video = core.app.model.int(PropertyId::VideoWidth).is_some();
         let title = view::title(&core.app.model);
         let messages: Vec<String> = drained
@@ -459,6 +504,24 @@ impl qobject::Player {
         {
             self.as_mut().fit_window(width, height);
         }
+        if !throttle {
+            self.sync_chrome();
+        }
+    }
+
+    /// About ten times a second: a playback update held back by
+    /// [`CHROME_INTERVAL`] is shown.
+    pub(crate) fn flush_chrome(mut self: Pin<&mut Self>) {
+        let Some(core) = self.as_mut().core_mut() else {
+            return;
+        };
+        if !core.throttle.pending {
+            return;
+        }
+        core.throttle = Throttle {
+            last: Some(Instant::now()),
+            pending: false,
+        };
         self.sync_chrome();
     }
 
@@ -971,6 +1034,14 @@ impl qobject::Player {
                 integer(model.int(PropertyId::PlaylistCount)),
             ),
             ("video_width", integer(model.int(PropertyId::VideoWidth))),
+            (
+                "frame_drop_count",
+                integer(model.int(PropertyId::FrameDropCount)),
+            ),
+            (
+                "decoder_frame_drop_count",
+                integer(model.int(PropertyId::DecoderFrameDropCount)),
+            ),
             ("path", text(model.loaded_path())),
             ("current_ao", text(model.text(PropertyId::CurrentAo))),
             ("hwdec_current", text(model.text(PropertyId::HwdecCurrent))),
@@ -1004,6 +1075,8 @@ impl qobject::Player {
         QString::from(&format!("{{{}}}", body.join(",")))
     }
 
+    /// Reads mpv's properties synchronously: call it rarely (each read waits
+    /// for mpv's core, and on the GUI thread that costs video frames).
     pub(crate) fn diagnostics(&self) -> QString {
         let Some(core) = self.core() else {
             return QString::from("{}");

@@ -3,13 +3,17 @@
 //! dynamic regions (goal C rule 1).
 //!
 //! Every control that can change (buttons, sliders, labels, the playlist)
-//! lies in a region; overlapping regions are merged so that no two regions
-//! overlap. A region item paints every operation that touches its region,
-//! backgrounds included, so it covers the static layer completely there.
-//! After a change [`Chrome::refresh`] compares each region's operations with
-//! the last painted ones and reports only the regions that differ; the
-//! static layer repaints only when an operation outside every region
-//! changes (window activation, a new size).
+//! has its own region. A region item paints every operation that touches
+//! its region, backgrounds included, so it covers the static layer
+//! completely there. Regions may overlap (BlackSpace's Play button reaches
+//! one pixel into the seek bar): their items stack in drawing order, and a
+//! region whose neighbour changes inside their overlap has changed
+//! operations itself, so it repaints too. After a change
+//! [`Chrome::refresh`] compares each region's operations with the last
+//! painted ones and reports only the regions that differ; the static layer
+//! repaints only when an operation outside every region changes (window
+//! activation, a new size). Small regions keep repaints small: merged into
+//! one, the whole bottom bar repainted with every video frame.
 
 use std::sync::Arc;
 
@@ -115,53 +119,35 @@ fn inside_any(regions: &[Rect], bounds: &Rect) -> bool {
     bounds.is_empty() || regions.iter().any(|region| contains(region, bounds))
 }
 
-fn union(a: &Rect, b: &Rect) -> Rect {
-    let x = a.x.min(b.x);
-    let y = a.y.min(b.y);
-    Rect::new(
-        x,
-        y,
-        a.right().max(b.right()) - x,
-        a.bottom().max(b.bottom()) - y,
-    )
-}
-
-/// Merges overlapping rectangles until none overlap; reading order.
-fn merge(mut rects: Vec<Rect>) -> Vec<Rect> {
-    let mut merged = true;
-    while merged {
-        merged = false;
-        'outer: for i in 0..rects.len() {
-            for j in i + 1..rects.len() {
-                if !rects[i].intersect(&rects[j]).is_empty() {
-                    rects[i] = union(&rects[i], &rects[j]);
-                    rects.swap_remove(j);
-                    merged = true;
-                    break 'outer;
-                }
-            }
+/// The rectangles of everything that can change, one per control, in
+/// drawing order (later ones lie above earlier ones). A region inside a
+/// later one is dropped: the later one covers it completely.
+fn layered(candidates: &[Rect]) -> Vec<Rect> {
+    let mut regions: Vec<Rect> = Vec::new();
+    for (index, rect) in candidates.iter().enumerate() {
+        let covered = candidates[index + 1..]
+            .iter()
+            .any(|later| contains(later, rect));
+        if !covered && !regions.contains(rect) {
+            regions.push(*rect);
         }
     }
-    rects.sort_by_key(|rect| (rect.y, rect.x, rect.w, rect.h));
-    rects
+    regions
 }
 
-/// The rectangles of everything that can change, merged until none
-/// overlap.
 fn dynamic_regions(layout: &Layout<'_>) -> Vec<Rect> {
-    merge(
-        layout
-            .nodes
-            .iter()
-            .filter(|node| match node.kind {
-                Kind::Button | Kind::Slider | Kind::Label | Kind::PicLabel => true,
-                Kind::Image => node.command().is_some(),
-                Kind::Static | Kind::Spacer => node.slot() == Some("CMD_PLAY_LIST_ALBUM_TAB"),
-            })
-            .map(|node| node.clip)
-            .filter(|rect| !rect.is_empty())
-            .collect(),
-    )
+    let candidates: Vec<Rect> = layout
+        .nodes
+        .iter()
+        .filter(|node| match node.kind {
+            Kind::Button | Kind::Slider | Kind::Label | Kind::PicLabel => true,
+            Kind::Image => node.command().is_some(),
+            Kind::Static | Kind::Spacer => node.slot() == Some("CMD_PLAY_LIST_ALBUM_TAB"),
+        })
+        .map(|node| node.clip)
+        .filter(|rect| !rect.is_empty())
+        .collect();
+    layered(&candidates)
 }
 
 /// Interface state without the pointer: what the layout depends on.
@@ -343,21 +329,28 @@ mod tests {
     use super::*;
 
     #[test]
-    fn regions_merge_until_none_overlap() {
-        let merged = merge(vec![
+    fn regions_keep_drawing_order_and_drop_covered_ones() {
+        let regions = layered(&[
             Rect::new(0, 0, 10, 10),
             Rect::new(5, 5, 10, 10),
-            Rect::new(12, 12, 30, 2),
-            Rect::new(60, 0, 5, 5),
-            Rect::new(40, 20, 5, 5),
+            Rect::new(6, 6, 2, 2),
+            Rect::new(5, 5, 10, 10),
+            Rect::new(40, 0, 5, 5),
         ]);
+        // (0,0) stays below the later (5,5); (6,6) and the first (5,5) lie
+        // inside the second (5,5), which is drawn after them.
         assert_eq!(
-            merged,
+            regions,
             vec![
-                Rect::new(0, 0, 42, 15),
-                Rect::new(60, 0, 5, 5),
-                Rect::new(40, 20, 5, 5)
+                Rect::new(0, 0, 10, 10),
+                Rect::new(5, 5, 10, 10),
+                Rect::new(40, 0, 5, 5)
             ]
+        );
+        // A small region drawn after a large one stays above it.
+        assert_eq!(
+            layered(&[Rect::new(0, 0, 20, 20), Rect::new(2, 2, 3, 3)]),
+            vec![Rect::new(0, 0, 20, 20), Rect::new(2, 2, 3, 3)]
         );
     }
 

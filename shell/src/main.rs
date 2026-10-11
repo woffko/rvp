@@ -32,9 +32,11 @@ fn main() {
     player::preload_skin();
     ffi::bridge::rvp_setup_graphics();
     let mut app = QGuiApplication::new();
+    metrics::mark("gui_application_ms");
     ffi::bridge::rvp_set_c_numeric_locale();
     ffi::bridge::rvp_register_native_types();
     let mut engine = QQmlApplicationEngine::new();
+    metrics::mark("qml_engine_ms");
     if let Some(engine) = engine.as_mut() {
         engine.load(&QUrl::from("qrc:/qt/qml/Rvp/qml/Main.qml"));
     }

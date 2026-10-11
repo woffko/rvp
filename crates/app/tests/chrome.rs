@@ -103,13 +103,14 @@ fn center(chrome: &Chrome, command: &str) -> (i32, i32) {
     (rect.x + rect.w / 2, rect.y + rect.h / 2)
 }
 
+/// The topmost region at a control's centre.
 fn region_of(chrome: &Chrome, command: &str) -> usize {
     let (x, y) = center(chrome, command);
     chrome
         .frame()
         .regions
         .iter()
-        .position(|region| region.contains(x, y))
+        .rposition(|region| region.contains(x, y))
         .expect("control lies in a region")
 }
 
@@ -140,14 +141,9 @@ fn show(chrome: &mut Chrome, model: &PlayerModel) -> rvp_app::chrome::Damage {
 }
 
 #[test]
-fn regions_cover_every_control_and_never_overlap() {
+fn regions_cover_every_control() {
     let chrome = chrome();
     let frame = chrome.frame();
-    for (i, a) in frame.regions.iter().enumerate() {
-        for b in &frame.regions[i + 1..] {
-            assert!(a.intersect(b).is_empty(), "{a} overlaps {b}");
-        }
-    }
     let placed = chrome.layout().expect("layout");
     for node in &placed.nodes {
         if node.command().is_some() && node.slot().is_none() {

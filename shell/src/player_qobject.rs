@@ -114,6 +114,10 @@ pub mod qobject {
         #[qinvokable]
         fn seek_fraction(self: Pin<&mut Self>, fraction: f64);
 
+        /// About ten times a second: shows a held-back playback update.
+        #[qinvokable]
+        fn flush_chrome(self: Pin<&mut Self>);
+
         /// About once a second: saves pending state.
         #[qinvokable]
         fn tick(self: Pin<&mut Self>);

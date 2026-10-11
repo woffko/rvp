@@ -29,8 +29,9 @@ Window {
     readonly property int requestStartResize: 8
 
     property bool wasMaximized: false
-    // When RVP last asked for fullscreen or back (see applyFullscreen).
-    property real fullscreenRequested: 0
+    // The window state RVP last asked for and when (see applyVisibility).
+    property int desiredVisibility: Window.Windowed
+    property real stateRequested: 0
     // --log-pointer and --log-geometry: report pointer positions, window
     // sizes and the menu's windows for the kit's input check.
     property bool logPointer: false
@@ -90,8 +91,8 @@ Window {
     }
     onVisibilityChanged: {
         player.window_state(root.visibility === Window.Maximized, root.active)
-        if (Date.now() - root.fullscreenRequested < 2000)
-            fullscreenCheck.restart()
+        if (Date.now() - root.stateRequested < 2000)
+            stateCheck.restart()
         else if (root.isFullscreen !== player.fullscreen && root.visibility !== Window.Minimized
                  && root.visibility !== Window.Hidden)
             player.window_fullscreen(root.isFullscreen)
@@ -122,6 +123,12 @@ Window {
         running: true
         onTriggered: player.tick()
     }
+    Timer {
+        interval: 100
+        repeat: true
+        running: true
+        onTriggered: player.flush_chrome()
+    }
 
     onClosing: (close) => {
         if (!root.closing) {
@@ -137,20 +144,18 @@ Window {
             dialogLoader.item.dialog.open()
             break
         case requestFullscreen:
-            root.fullscreenRequested = Date.now()
-            if (argument)
+            if (argument) {
                 root.wasMaximized = root.visibility === Window.Maximized
-            root.applyFullscreen()
-            fullscreenCheck.restart()
+                root.requestVisibility(Window.FullScreen)
+            } else {
+                root.requestVisibility(root.wasMaximized ? Window.Maximized : Window.Windowed)
+            }
             break
         case requestMinimize:
             root.showMinimized()
             break
         case requestMaximizeRestore:
-            if (root.visibility === Window.Maximized)
-                root.showNormal()
-            else
-                root.showMaximized()
+            root.requestVisibility(root.visibility === Window.Maximized ? Window.Windowed : Window.Maximized)
             break
         case requestExit:
             root.close()
@@ -169,28 +174,35 @@ Window {
         }
     }
 
-    // Brings the window to the player's fullscreen state. On Wayland a
-    // request made before the compositor applied the previous one is lost
-    // (seen on GNOME: leaving fullscreen right after entering it), so for a
-    // short time after RVP's own request the state is checked again.
-    function applyFullscreen() {
-        if (player.fullscreen && !root.isFullscreen)
+    // Window states RVP asks for. On Wayland a state request made before
+    // the compositor applied the previous one is lost (seen on GNOME:
+    // leaving fullscreen right after entering it, restoring right after
+    // maximizing), so for two seconds after RVP's own request the state is
+    // checked and asked for again. Later changes come from the window
+    // system and are followed (onVisibilityChanged).
+    function requestVisibility(state) {
+        root.desiredVisibility = state
+        root.stateRequested = Date.now()
+        root.applyVisibility()
+        stateCheck.restart()
+    }
+    function applyVisibility() {
+        if (root.visibility === root.desiredVisibility)
+            return
+        if (root.desiredVisibility === Window.FullScreen)
             root.showFullScreen()
-        else if (!player.fullscreen && root.isFullscreen) {
-            if (root.wasMaximized)
-                root.showMaximized()
-            else
-                root.showNormal()
-        }
+        else if (root.desiredVisibility === Window.Maximized)
+            root.showMaximized()
+        else
+            root.showNormal()
     }
     Timer {
-        id: fullscreenCheck
+        id: stateCheck
         interval: 300
         onTriggered: {
-            if (Date.now() - root.fullscreenRequested < 2000) {
-                root.applyFullscreen()
-                if (root.isFullscreen !== player.fullscreen)
-                    restart()
+            if (Date.now() - root.stateRequested < 2000 && root.visibility !== root.desiredVisibility) {
+                root.applyVisibility()
+                restart()
             }
         }
     }
@@ -406,6 +418,10 @@ Window {
         property string mode: ""
         property int step: 0
         property var drops: []
+        property int dropTotal: 0
+        property int dropLast: 0
+        property int decoderTotal: 0
+        property int decoderLast: 0
         property real svpSeen: -1
         property real stepStarted: 0
         property int failures: 0
@@ -527,7 +543,8 @@ Window {
             if (!player.has_option("fullscreen") || (root.isFullscreen && Date.now() - t.stepStarted > 1500)) {
                 // Count from here: the start-up and the mode switch are not
                 // steady playback.
-                t.before = JSON.parse(player.diagnostics())
+                t.dropLast = s.frame_drop_count === null ? 0 : s.frame_drop_count
+                t.decoderLast = s.decoder_frame_drop_count === null ? 0 : s.decoder_frame_drop_count
                 Tools.log("diagnostics_start=" + player.diagnostics())
                 t.next()
             } else if (Date.now() - t.stepStarted > 5000) {
@@ -536,11 +553,19 @@ Window {
             }
             break
         case 4: {
-            const d = JSON.parse(player.diagnostics())
+            // Counts come from the status (observed properties); reading
+            // mpv's properties directly every tick would itself drop frames.
+            // A looping file restarts the counter: count increments only.
+            const count = s.frame_drop_count === null ? 0 : s.frame_drop_count
+            t.dropTotal += count >= t.dropLast ? count - t.dropLast : count
+            t.dropLast = count
+            const decoder = s.decoder_frame_drop_count === null ? 0 : s.decoder_frame_drop_count
+            t.decoderTotal += decoder >= t.decoderLast ? decoder - t.decoderLast : decoder
+            t.decoderLast = decoder
             const elapsed = (Date.now() - t.stepStarted) / 1000
             if (Math.floor(elapsed) > t.drops.length)
-                t.drops.push(d.frame_drop_count - t.before.frame_drop_count)
-            if (t.svpSeen < 0 && d.vf !== null && d.vf.indexOf("@svp") >= 0)
+                t.drops.push(t.dropTotal)
+            if (t.svpSeen < 0 && s.vf !== null && s.vf.indexOf("@svp") >= 0)
                 t.svpSeen = elapsed
             if (elapsed >= seconds)
                 t.next()
@@ -548,8 +573,8 @@ Window {
         }
         case 5: {
             const d = JSON.parse(player.diagnostics())
-            const dropped = d.frame_drop_count - t.before.frame_drop_count
-            const decoderDropped = d.decoder_frame_drop_count - t.before.decoder_frame_drop_count
+            const dropped = t.dropTotal
+            const decoderDropped = t.decoderTotal
             Tools.log("diagnostics_end=" + player.diagnostics())
             Tools.log("frame_drop_timeline=" + t.drops.join(","))
             Tools.log("frames_dropped=" + dropped + " decoder_dropped=" + decoderDropped
@@ -663,7 +688,7 @@ Window {
                       () => "visibility " + root.visibility)
             break
         case 22:
-            root.showNormal()
+            root.requestVisibility(Window.Windowed)
             t.next()
             break
         case 23:
