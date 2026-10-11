@@ -90,7 +90,11 @@ each goal writes `docs/goals/goal-<letter>-status.md`.
 
 ## Test environments
 
-- WSL (this machine): builds, unit and headless tests.
+- WSL (this machine): builds, unit and headless tests. GUI programs
+  started here open on the owner's Windows desktop through WSLg, with
+  sound: they count as host runs (advance notice and permission every
+  time). Silent tests (no window, no sound) need no permission (owner,
+  2026-10-11).
 - Ubuntu 22.04 VM shared with another project (`<ubuntu-vm>`, see
   the other project's notes): Linux builds and GNOME Wayland
   behaviour. It has no real GPU.

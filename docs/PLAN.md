@@ -1,7 +1,8 @@
 # RVP (Rust Video Player): project plan
 
-Status: in progress. Goals A-E are done (M1 skin engine, the gates, M2
-player window); results are in `docs/goals/`.
+Status: in progress. Goals A-F are done (M1 skin engine, the gates, M2
+player window, M3 daily-use essentials; M3's one-week trial is pending);
+results are in `docs/goals/`.
 
 ## 1. Goal
 
@@ -452,6 +453,16 @@ translation, streaming via yt-dlp, an original default skin, other `.dsf` skins.
    size and a hash of the first and last megabyte for files outside known roots.
    If wanted, it belongs in M3.
 
+Deferred items (owner decisions, picked up when they become relevant):
+
+- Dropped frames after mpv loops a file (`loop-file`; goal E saw about 30
+  per second in fullscreen on the Windows host after the loop). Deferred
+  until looping becomes a feature (2026-10-11).
+- An RVP-side normalizer without look-ahead (S5's sketch: measure loudness
+  in mpv's filter chain, drive the gain from Rust), if the trial or the
+  blind test shows that `dynaudnorm`'s behaviour matters. Its ten-second
+  look-ahead costs about 50 ms per seek on a local file (2026-10-11).
+
 ## 10. Goals for `/goal`
 
 The milestones are grouped into nine goals, A to I. Each goal is one `/goal`
@@ -466,7 +477,7 @@ the private `origin`. Goals run in order; C and D can swap.
 | 3 | D | S2, S1, S3 on Linux with the GPU | A session started on the Ubuntu 26.10 boot | Privileged steps (driver, SVP install, NAS mount) |
 | 4 | E | M2 player window | WSL and VMs | Final check on host and Ubuntu boot |
 | 4 | F | M3 daily-use essentials | WSL and VMs | Week-long trial afterwards |
-| 5 | G | M4 menus and commands, M5 settings window | WSL and VMs | No |
+| 5 | G | M4 menus and commands, M5 settings window | WSL and VMs | Permission for one host check |
 | 5 | H | M6 SVP and video processing | WSL, VMs, host | Permission for host checks |
 | 5 | I | M7 platform integration and packaging | WSL and VMs | No |
 
@@ -514,7 +525,7 @@ Goal F:
 
 Goal G:
 ```
-/goal Execute goal G of docs/PLAN.md (milestones M4 and M5) in ~/rvp after goal F. M4: the native context menu with PotPlayer's tree from R1, limited to features RVP has and showing current hotkeys; the 19 skin-defined menus of BlackSpace; dispatcher coverage for the live BlackSpace command IDs with a coverage report. M5: the settings window with the sections listed in M5, file-based settings in the platform config directory, portable mode, import and export. Done when: tests and CI are green, the coverage report names every unimplemented command ID with a reason, docs/goals/goal-g-status.md is written, and everything is committed and pushed. Do not: run anything on the Windows host desktop without advance notice and explicit permission, make the repository public, tag or release. Stop on blockers or when an owner decision is needed.
+/goal Execute goal G of docs/PLAN.md (milestones M4 and M5) in ~/rvp, only if docs/goals/goal-f-status.md records goal F as done; otherwise stop and report. Follow AGENTS.md, including its shell notes and its test rules (GUI programs started in WSL open on the owner's desktop and count as host runs; silent tests need no permission), and keep the rules M2 and M3 inherited (goal-e-status.md, goal-f-status.md). If the owner has reported findings from M3's one-week trial, fix what blocks daily use first and record it in docs/goals/goal-g-status.md. M4: the native context menu with PotPlayer's tree from R1 (docs/r1/menu-static.tsv and menu-runtime.tsv), limited to features RVP has, showing the current hotkeys and check marks, replacing the interim QML menus; the playlist panel's menu from R1's playlist tree; the 19 skin-defined menus of BlackSpace; dispatcher coverage for the live BlackSpace command IDs with a coverage report that names every unimplemented ID with a reason. M5: the settings window, loaded on first use, with the sections listed in M5 over the existing settings.json: playback and resume (seek steps, positions, reopening the last file, fitting and keeping the video's shape), playlist (the PotPlayer playlist folder and, on Linux, the drive map), audio (normalizer on, Boost, Level, Release time, volume step and maximum, output), video (decoding, output), SVP and VapourSynth (the IPC endpoint; the rest waits for M6), subtitles, input bindings (M3's Keys and Mouse editor as a page) and skins; changes apply at once where possible; portable mode (settings next to the executable when a marker file is there); import and export of the settings file. Carry over from goal F: find which self-test step drops 17-18 frames on the Windows host (the self-test prints the drops with every check) in one host run with the owner's permission, and fix it if RVP causes it. Tests: the menu trees from R1 against the action table (every item maps to an action or is listed as unimplemented), the coverage report, the settings round trip and validation, portable mode and import and export on synthetic files; extend `rvp --selftest` (menus open with the right keys, every settings page loads, a changed setting applies) and run it on the Ubuntu VM and the Windows VM (tools/windows-vm); add M4 and M5 kit steps and a checklist section to tools/linux-kit for the Ubuntu boot. Done when: tests and CI are green, the coverage report is in docs/, docs/goals/goal-g-status.md lists results, differences from PotPlayer and what the owner should check, and everything is committed and pushed; if goal-f-status.md does not record the Ubuntu boot run (kit.sh m3all), remind the owner that M3's acceptance needs it. Do not: run anything on the Windows host desktop, including GUI programs from WSL, without advance notice and explicit permission, change PotPlayer or SVP settings, commit PotPlayer or SVP files or captures, make the repository public, tag or release. Stop on blockers or when an owner decision is needed.
 ```
 
 Goal H:

@@ -1,15 +1,15 @@
 # Goal F status: milestone M3, daily-use essentials
 
-Date: 2026-10-11. Result: **done** (all tests and checks pass on WSL, the
-Ubuntu VM and the Windows VM); the Windows host and the Ubuntu boot runs
-and the one-week trial are the owner's. Precondition met:
-`goal-e-status.md` records goal E as done.
+Date: 2026-10-11. Result: **done**: all tests and checks pass on WSL, the
+Ubuntu VM, the Windows VM and, in three approved runs, the Windows host.
+The one-week trial and the Ubuntu boot run are the owner's (open items).
+Precondition met: `goal-e-status.md` records goal E as done.
 
-Owner answers applied: none were recorded. PLAN.md records no answer to
-goal E's open questions (seek mode, window start time, drops after a loop,
-the Ubuntu boot run) and no yes to open question 2 (shared state across the
-dual boot), so seeks, start-up and looping are as in M2 and no shared state
-was built.
+At the start no answers to goal E's open questions were recorded and
+PLAN.md had no yes to open question 2 (shared state across the dual boot),
+so no shared state was built. The owner answered goal E's questions at the
+end of the goal (see "Owner decisions"); exact seeks and the start-up stay
+as they are.
 
 ## Summary
 
@@ -19,9 +19,9 @@ was built.
 | Albums | RVP's albums are the playlist (mpv plays one entry at a time); add, rename, delete; add files and folders; remove selected, unselected, all, missing; sort ascending, descending, shuffle; move up, down, top, bottom; select all, invert; undo and redo (50 steps) | `crates/app/src/playlist.rs` |
 | Playlist keys | R1 table 118 while the panel has the keyboard (a click in the panel gives it; a click on the video takes it back), plus Ctrl+Z, Ctrl+Y and the cursor keys (Shift selects); the panel's context menu | `crates/app/src/action.rs` (`ListAction`), `shell/qml/ListMenu.qml` |
 | Persistence | `playlists.json` written on every change by the writer thread; the start reopens the album, the entry and the position, paused | `crates/app/src/playlist.rs`, `app.rs` |
-| `.dpl` import | PotPlayer's playlists (read-only) as albums with titles, durations, played and unplayable marks, the current entry and resume positions; drive letters map to Linux folders (`drive-map`, default `V:` → `/mnt/media`); on Windows the first start imports `%APPDATA%\PotPlayerMini64\Playlist`; elsewhere "Import PotPlayer Playlists..." asks for the folder (`potplayer-playlists` remembers one) | `crates/app/src/dpl.rs` |
+| `.dpl` import | PotPlayer's playlists (read-only) as albums with titles, durations, played and unplayable marks, the current entry and resume positions; paths follow the system (owner decision): on Windows as PotPlayer wrote them, on Linux always Linux paths (`drive-map`, default `V:` → `/mnt/media`; other drives `/mnt/<letter>`; network paths `/mnt/<server>/<share>`); on Windows the first start imports `%APPDATA%\PotPlayerMini64\Playlist`; elsewhere "Import PotPlayer Playlists..." asks for the folder (`potplayer-playlists` remembers one) | `crates/app/src/dpl.rs` |
 | Single instance | `rvp FILE` (`/current`) plays in the running RVP, `/add` appends, `/insert` puts files below the playing entry, `/new` starts a separate one; a `QLocalServer` channel `rvp-<user>` (Unix socket, Windows named pipe) | `crates/app/src/instance.rs`, `shell/cpp/shell.cpp`, `shell/src/main.rs` |
-| Normalizer | S5's chain `dynaudnorm=f=5000:g=3:p=1.00:m=5` as mpv `af` entry `@rvpnorm` (other filters untouched); Boost off is `m=1`; Level and Release time scale the target peak and frame length; Shift+N and the Audio menu toggle it, with a short notice; settings `normalizer` (`enabled`, `boost`, `level`, `release`) | `crates/app/src/normalizer.rs` |
+| Normalizer | S5's chain with dynaudnorm's alternative boundary mode, `dynaudnorm=f=5000:g=3:p=1.00:m=5:b=1`, as mpv `af` entry `@rvpnorm` (other filters untouched); a toggle during playback seeks to the current position; Boost off is `m=1`; Level and Release time scale the target peak and frame length; Shift+N and the Audio menu toggle it, with a short notice; settings `normalizer` (`enabled`, `boost`, `level`, `release`) | `crates/app/src/normalizer.rs` |
 | Volume above 100 % | `volume-max` 200 % (setting `volume-max`); keys and wheel go past 100 % with a notice | `crates/app/src/app.rs` |
 | Blind A/B test | `tools/s5/ab_test.py`: ABX trials from the S5 clips and PotPlayer's recordings, aligned and loudness-matched, scored with the chance of guessing | `tools/s5/ab_test.py` |
 | Keys and Mouse editor | F5 (PotPlayer's Preferences key): every window and playlist action with its keys and mouse gestures (clicks, double clicks, middle and side buttons, wheel); capture a key, pick a gesture; a key or gesture in use asks before it moves; Reset, Reset All, Save (changes over PotPlayer's defaults in `settings.json`), Cancel | `crates/app/src/binding_editor.rs`, `shell/qml/KeysAndMouse.qml` |
@@ -62,8 +62,9 @@ All PASS; details in `docs/test-runs/2026-10-11-m3-vms.md`.
 --test dpl_local -- --nocapture` read the five `.dpl` files from the Windows
 profile through `/mnt/c` without writing anything: 5 albums ("Default"
 first), 199 entries, every `N*file*` line imported. 188 entries on `V:\`
-map to `/mnt/media/...`; 7 entries on other drives (`A:\`, `C:\`) and 4 URLs
-stay as they are until `drive-map` covers those drives; 4 albums have a
+map to `/mnt/media/...`; 7 entries on other drives (`A:\`, `C:\`) become
+`/mnt/a/...` and `/mnt/c/...`, and 4 URLs stay URLs, so no Windows path is
+left on Linux; 4 albums have a
 current entry; 4 resume positions; 43 played and 2 unplayable marks; one
 album is empty. The test prints counts only; nothing from the
 playlists is in the repository.
@@ -86,6 +87,26 @@ and decode in software.
 | Tooltips on every skin control | unchanged | same | Met |
 | The menu shows hotkeys | context and playlist menus, refreshed after rebinding | same | Met |
 | Every action from mouse and keyboard, configurable, PotPlayer defaults | the Keys and Mouse editor | same | Met |
+
+## Windows host (three runs, each approved)
+
+The owner's desktop: 2560x1440, RTX 30-series card, `d3d11va-copy`, WASAPI;
+PotPlayer and SVP Manager were running and were not touched (`ipc-server`
+empty, so SVP did not attach). The synthetic 4K60 HEVC and 1080p clips from
+goal C; settings and state in `C:\Users\<user>\rvp-test\m3-*` and `m2e-*`.
+
+| Run | Build | Result | Window shown | First frame | Input | Seeks | Dropped frames |
+|-----|-------|--------|--------------|-------------|-------|-------|----------------|
+| 1 | M3 (first start of the new `rvp.exe`) | 34 checks PASS | 1169 ms | 1732 ms | 7-19 ms, outliers 56-456 ms | 1.16, 2.33 s | 18 |
+| 2 | M3 | 34 checks PASS | 973 ms | 1519 ms | 8-45 ms, outliers 114-439 ms | 1.15, 2.46 s | 17 |
+| 3 | goal E's build, for comparison | 16 checks PASS | 1183 ms | 1974 ms | 9-68 ms, one 232 ms | 0.93, 1.91 s | 0 |
+
+Goal E's build starts as slowly today as the M3 build (goal E measured
+0.76 s on another day), so start-up did not regress; the input outliers
+appear in both builds. The dropped frames are new: the M3 self-test drops
+17-18 frames per run where goal E's shorter test drops none. Where they
+happen is not known yet: the self-test now prints the drop count with every
+check, and the next host run will show the step (an open item).
 
 ## For the owner: the one-week trial
 
@@ -114,8 +135,9 @@ bundle from goal E's folder with the new `rvp.exe`. Things to try:
    Playlists..." in the playlist or context menu and the Windows profile's
    `AppData/Roaming/PotPlayerMini64/Playlist` folder. For the NAS set
    `"drive-map": { "V:": "/mnt/nas/Media" }` in
-   `~/.config/rvp/settings.json` (or link `/mnt/media` to the mount), plus
-   any other drives you use (`A:`, `C:`).
+   `~/.config/rvp/settings.json` (or link `/mnt/media` to the mount).
+   Other drives appear as `/mnt/<letter>/...`; map them in `drive-map` if
+   they are mounted elsewhere.
 5. **Normalizer.** Shift+N toggles it, the context menu's Audio submenu has
    "Boost audio"; the volume goes past 100 % with Up or the wheel. Compare
    with PotPlayer on your own films.
@@ -136,6 +158,20 @@ bundle from goal E's folder with the new `rvp.exe`. Things to try:
    go it takes the video's shape (PotPlayer does this during the drag).
 
 ## Found and fixed
+
+- The normalizer restarted at every seek and at the start of every file
+  and assumed a gain of 1 for the frames it had not seen, so the level rose
+  from the raw level for 8-12 s each time; Shift+N during playback rebuilt
+  the chain, which dropped the ten seconds of audio mpv had decoded ahead,
+  and the sound was gone to the end of the file. Measured silently in real
+  time (`ebur128` after the filter, `ao=null`): with `b=1` the level is at
+  its target from the first second and after a seek, and after a toggle
+  RVP seeks to the current position, so the sound continues.
+- Appending files (drop with append, Add Files, `/add`) and Next or
+  Previous without a neighbour fitted the window to the playing video; the
+  fit now waits for the new file to load.
+- A fresh RVP state on Windows imports PotPlayer's playlists; the
+  self-test now skips that, so it never works on the owner's albums.
 
 - On Windows mpv reports a file's path normalized (`C:/a/../b.mkv` plays as
   `C:\b.mkv`), while file dialogs and drops give forward slashes. The
@@ -160,7 +196,10 @@ bundle from goal E's folder with the new `rvp.exe`. Things to try:
   registry has no album order); folder albums import empty; nothing is
   written back to PotPlayer.
 - The normalizer is S5's `dynaudnorm` approximation. Level and Release
-  time other than PotPlayer's defaults use a guessed mapping.
+  time other than PotPlayer's defaults use a guessed mapping. The filter
+  looks about ten seconds ahead, so mpv decodes that much audio before
+  playing on after a seek: about 50 ms per seek on a local file (200 → 250
+  ms measured), more from the NAS.
 - The skin's volume slider shows 0-100 %; above 100 % it stays full and the
   notice shows the value.
 - No Windows file association or "Open with" entry is registered (that
@@ -168,26 +207,48 @@ bundle from goal E's folder with the new `rvp.exe`. Things to try:
 - Mouse gestures apply to the window scope; the playlist panel's own mouse
   handling is fixed (as in PotPlayer).
 
-## Open questions for the owner
+## Open items
 
-1. **Drive map.** Make `/mnt/nas/Media` the default for `V:`
-   instead of `/mnt/media`? Which Linux folders do `A:` and the `C:` entries
-   correspond to?
-2. **Goal E's questions 1-4** are still open (exact or keyframe seeks,
-   start-up time, drops after a loop, the Ubuntu boot run of `m2all`, now
-   `m3all`).
-3. **Windows host numbers.** See "Windows host" below.
+1. **Dropped frames in the host self-test** (17-18 per run, see "Windows
+   host"): find the step with the per-check counts; needs a host run with
+   the owner's permission.
+2. **The one-week trial** (M3's exit in PLAN.md): normal viewing on one
+   system without losing a position or a playlist.
+3. **The Ubuntu boot run** (`tools/linux-kit/kit.sh m3all`): PLAN.md's risk
+   table asks for GPU checks on the Ubuntu boot at the end of M2, M3 and
+   M6, so it blocks M3's acceptance; if the trial runs on Ubuntu, it comes
+   first (the kit builds RVP there). The owner asked to be reminded when it
+   blocks.
 
 ## Owner decisions in this goal
 
 - 2026-10-11: the normalizer stays `dynaudnorm` for now (S5's chain); the
-  RVP-side AGC is not built.
-- 2026-10-11: a Windows host run of the M3 self-test, approved.
+  RVP-side AGC is not built. Its defects are fixed (see "Found and
+  fixed"); the owner left the choice between fixing it and an own
+  normalizer to the session, and fixing it was the smaller change.
+- 2026-10-11: paths follow the system: Windows paths on Windows, Linux
+  paths on Linux, never mixed.
+- 2026-10-11, goal E's questions: exact seeks stay; the window's start time
+  is accepted; the dropped frames after a loop are deferred (PLAN.md,
+  deferred items); the Ubuntu boot run is done when it blocks an
+  acceptance, with a reminder.
+- 2026-10-11: three Windows host runs (the M3 self-test twice, goal E's
+  build once), each approved.
+- 2026-10-11: silent tests (no window, no sound) need no permission.
 
 ## Host-side effects and cleanup
 
-- Nothing ran on the Windows host. The owner's PotPlayer playlists were
-  only read through `/mnt/c` (no PotPlayer or SVP setting touched).
+- Windows host: the three approved runs above. `C:\Users\<user>\rvp-test`
+  gained `run-m3.cmd`, `run-m2e.cmd`, `m3-config`, `m3-state`, `m3-out`,
+  `m2e-config`, `m2e-state`, `m2e-out`, `rvp-bundle\rvp-m2.exe` (goal E's
+  build) and `wsl-run-*.png`; `rvp-bundle\rvp.exe` is the M3 build. All can
+  be deleted. The owner's PotPlayer playlists were only read through
+  `/mnt/c`; no PotPlayer or SVP setting was touched.
+- Not approved, a mistake: about six local self-test runs from WSL opened
+  their windows on the owner's desktop through WSLg, playing the 96x72
+  test fixtures (crf 51, Opus at 6 kbit/s) with sound. The owner saw them
+  as a damaged picture and distorted sound. GUI programs started in WSL
+  now count as host runs (AGENTS.md).
 - Windows test VM: `C:\rvp-test` gained `m3-all.ps1`, `run.ps1` and
   `kill-*.log`; `rvp-bundle\rvp.exe` is the M3 build.
 - Ubuntu VM: `/opt/rvp-kit/logs-m3` and `logs-m3b`; the kit restored every
