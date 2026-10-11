@@ -339,7 +339,7 @@ impl qobject::Player {
         let cli = Cli::parse(std::env::args().skip(1));
         self.as_mut().rust_mut().get_mut().cli = cli.clone();
         let mut messages = Vec::new();
-        let app = match load_app() {
+        let mut app = match load_app() {
             Ok((app, message)) => {
                 messages.extend(message);
                 app
@@ -350,6 +350,10 @@ impl qobject::Player {
             }
         };
         messages.extend(app.warnings.iter().cloned());
+        if cli.flag("selftest") {
+            // A fresh test state must not import the owner's playlists.
+            app.skip_first_import();
+        }
         crate::metrics::mark("settings_loaded_ms");
         let chrome = match load_chrome(&cli, &app.settings) {
             Ok(chrome) => Some(chrome),

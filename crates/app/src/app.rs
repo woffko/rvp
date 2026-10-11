@@ -175,6 +175,12 @@ impl App {
         &self.store
     }
 
+    /// No import of PotPlayer's playlists at this start (the self-test
+    /// must not work on the owner's albums).
+    pub fn skip_first_import(&mut self) {
+        self.first_start = false;
+    }
+
     #[must_use]
     pub fn library(&self) -> &Library {
         &self.library

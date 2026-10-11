@@ -170,17 +170,19 @@ bundle from goal E's folder with the new `rvp.exe`. Things to try:
 
 ## Open questions for the owner
 
-1. **Normalizer verdict.** After the blind test: keep `dynaudnorm`, or
-   build the RVP-side AGC that S5 sketched (faster release)?
-2. **Drive map.** Make `/mnt/nas/Media` the default for `V:`
+1. **Drive map.** Make `/mnt/nas/Media` the default for `V:`
    instead of `/mnt/media`? Which Linux folders do `A:` and the `C:` entries
    correspond to?
-3. **Goal E's questions 1-4** are still open (exact or keyframe seeks,
+2. **Goal E's questions 1-4** are still open (exact or keyframe seeks,
    start-up time, drops after a loop, the Ubuntu boot run of `m2all`, now
    `m3all`).
-4. **Windows host run.** The numbers above come from the VMs. A host run of
-   the M3 self-test (about two minutes, the RVP window on the desktop)
-   would remeasure on real hardware; it needs your permission.
+3. **Windows host numbers.** See "Windows host" below.
+
+## Owner decisions in this goal
+
+- 2026-10-11: the normalizer stays `dynaudnorm` for now (S5's chain); the
+  RVP-side AGC is not built.
+- 2026-10-11: a Windows host run of the M3 self-test, approved.
 
 ## Host-side effects and cleanup
 
