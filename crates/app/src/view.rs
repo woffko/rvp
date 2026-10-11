@@ -307,7 +307,11 @@ mod tests {
         album.entries = (0..count)
             .map(|n| {
                 if n == index {
-                    Entry::new(path)
+                    // As mpv reports it (`playing_model` sets that form).
+                    Entry {
+                        path: path.to_owned(),
+                        ..Entry::default()
+                    }
                 } else {
                     Entry::new(&format!("/films/other {n}.mkv"))
                 }

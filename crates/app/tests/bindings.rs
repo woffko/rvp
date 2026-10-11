@@ -3,6 +3,7 @@
 
 use std::time::{Duration, Instant};
 
+use rvp_app::playlist::local_path;
 use rvp_app::{Action, App, Bindings, Key, KeyChord, MouseGesture, SeekStep, Settings, UiRequest};
 use rvp_engine::{Engine, EngineOptions, PlayerModel, PropertyId};
 
@@ -70,6 +71,11 @@ fn potplayer_default_keys() {
     assert!(bindings.left_click_video_only);
 }
 
+/// Whether `path` plays (mpv reports it in [`local_path`]'s form).
+fn is_file(model: &PlayerModel, path: &str) -> bool {
+    model.loaded_path() == Some(local_path(path).as_str())
+}
+
 fn audio_filters(model: &PlayerModel) -> &str {
     model.text(PropertyId::AudioFilters).unwrap_or_default()
 }
@@ -98,7 +104,12 @@ impl Harness {
     fn wait(&mut self, what: &str, done: impl Fn(&PlayerModel) -> bool) {
         let deadline = Instant::now() + Duration::from_secs(10);
         while !done(&self.app.model) {
-            assert!(Instant::now() < deadline, "timed out waiting for {what}");
+            assert!(
+                Instant::now() < deadline,
+                "timed out waiting for {what}: loaded {:?}, path {:?}",
+                self.app.model.loaded_path(),
+                self.app.model.text(PropertyId::Path)
+            );
             std::thread::sleep(Duration::from_millis(10));
             self.app.drain(&self.engine, Instant::now());
         }
@@ -171,13 +182,13 @@ impl Harness {
             // RVP's album is the playlist; mpv plays one entry at a time.
             Action::Next => {
                 self.dispatch(action);
-                self.wait("next file", |m| m.loaded_path() == Some(SHORT));
+                self.wait("next file", |m| is_file(m, SHORT));
             }
             Action::Previous => {
                 self.dispatch(Action::Next);
-                self.wait("next file", |m| m.loaded_path() == Some(SHORT));
+                self.wait("next file", |m| is_file(m, SHORT));
                 self.dispatch(action);
-                self.wait("previous file", |m| m.loaded_path() == Some(LONG));
+                self.wait("previous file", |m| is_file(m, LONG));
             }
             Action::ToggleSubtitles => {
                 let before = self.app.model.flag(PropertyId::SubVisibility);

@@ -72,10 +72,7 @@ impl Request {
 
 /// URLs and absolute paths stay; anything else is joined to `cwd`.
 fn absolute(file: &str, cwd: &Path) -> String {
-    let is_url = file
-        .split_once("://")
-        .is_some_and(|(scheme, _)| scheme.len() > 1 && scheme.chars().all(char::is_alphanumeric));
-    if is_url || Path::new(file).is_absolute() {
+    if crate::playlist::is_url(file) || Path::new(file).is_absolute() {
         file.to_owned()
     } else {
         cwd.join(file).display().to_string()

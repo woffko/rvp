@@ -8,7 +8,7 @@
 
 use std::collections::BTreeSet;
 use std::io;
-use std::path::{Path, PathBuf};
+use std::path::{Component, Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 
@@ -44,11 +44,49 @@ impl Default for Entry {
     }
 }
 
+/// True for `scheme://...` (a URL, not a file path).
+#[must_use]
+pub fn is_url(text: &str) -> bool {
+    text.split_once("://")
+        .is_some_and(|(scheme, _)| scheme.len() > 1 && scheme.chars().all(char::is_alphanumeric))
+}
+
+/// A local path as mpv's `path` property reports it, so that the entry
+/// that plays can be recognised by it. On Windows mpv turns `/` into `\`
+/// and drops `.` and `..` (`C:/a/../b.mkv` plays as `C:\b.mkv`); file
+/// dialogs and drops give forward slashes. Elsewhere, and for URLs, the
+/// path stays as it is.
+#[must_use]
+pub fn local_path(path: &str) -> String {
+    if !cfg!(windows) || is_url(path) {
+        return path.to_owned();
+    }
+    let unified = path.replace('/', "\\");
+    let mut prefix = String::new();
+    let mut parts: Vec<String> = Vec::new();
+    for component in Path::new(&unified).components() {
+        match component {
+            Component::Prefix(drive) => prefix.push_str(&drive.as_os_str().to_string_lossy()),
+            Component::RootDir => prefix.push('\\'),
+            Component::CurDir => {}
+            Component::ParentDir => {
+                if parts.pop().is_none() && prefix.is_empty() {
+                    parts.push("..".to_owned());
+                }
+            }
+            Component::Normal(part) => parts.push(part.to_string_lossy().into_owned()),
+        }
+    }
+    format!("{prefix}{}", parts.join("\\"))
+}
+
 impl Entry {
+    /// An entry for a path or URL (local paths in mpv's form, see
+    /// [`local_path`]).
     #[must_use]
     pub fn new(path: &str) -> Self {
         Self {
-            path: path.to_owned(),
+            path: local_path(path),
             ..Self::default()
         }
     }
@@ -919,6 +957,26 @@ mod tests {
         assert_eq!(library.shown().top, 1);
         assert_eq!(library.undo.len(), 1, "only the insert is an edit");
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn local_paths_take_mpvs_form() {
+        assert_eq!(
+            local_path("https://x.org/a/../v.ts"),
+            "https://x.org/a/../v.ts"
+        );
+        if cfg!(windows) {
+            assert_eq!(local_path("C:/Films/a/../b.mkv"), r"C:\Films\b.mkv");
+            assert_eq!(local_path(r"C:\Films\.\b.mkv"), r"C:\Films\b.mkv");
+            assert_eq!(
+                local_path("/home/u/rvp/crates/app/../../t/f.mkv"),
+                r"\home\u\rvp\t\f.mkv"
+            );
+            assert_eq!(local_path(r"\\nas\Media\x\..\y.mkv"), r"\\nas\Media\y.mkv");
+        } else {
+            assert_eq!(local_path("/a/../b.mkv"), "/a/../b.mkv");
+        }
+        assert_eq!(Entry::new("C:/x.mkv").path, local_path("C:/x.mkv"));
     }
 
     #[test]

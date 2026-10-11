@@ -293,7 +293,8 @@ fn album_entry_and_position_survive_a_kill() {
         std::thread::sleep(Duration::from_millis(20));
         app.drain(&engine, Instant::now());
         let time = app.model.double(PropertyId::TimePos).unwrap_or_default();
-        if app.model.loaded_path() == Some(FIXTURE) && time > 1.0 {
+        let fixture = rvp_app::playlist::local_path(FIXTURE);
+        if app.model.loaded_path() == Some(fixture.as_str()) && time > 1.0 {
             assert!(
                 time <= last + 0.5 && last - time <= 5.0,
                 "resumed at {time}, killed at {last}"

@@ -135,6 +135,17 @@ bundle from goal E's folder with the new `rvp.exe`. Things to try:
 9. **Window shape.** Resize the window while a video plays; when you let
    go it takes the video's shape (PotPlayer does this during the drag).
 
+## Found and fixed
+
+- On Windows mpv reports a file's path normalized (`C:/a/../b.mkv` plays as
+  `C:\b.mkv`), while file dialogs and drops give forward slashes. The
+  album entry then did not match mpv's path, so the title lost its
+  `[i/n]` and entry label. Album entries now store local paths in mpv's
+  form (`playlist::local_path`); CI's Windows run found it.
+- A dragged corner on GNOME Wayland ends in an interactive resize; RVP
+  fits the window to the video afterwards, which the kit's input check now
+  accepts.
+
 ## Differences from PotPlayer (known, deferred or unverified)
 
 - The window takes the video's shape 300 ms after a resize settles, not

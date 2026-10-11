@@ -7,6 +7,7 @@ use std::path::Path;
 use std::time::{Duration, Instant};
 
 use rvp_app::instance::{Mode, Request};
+use rvp_app::playlist::local_path;
 use rvp_app::{App, Cli, Settings};
 use rvp_engine::{Engine, EngineOptions, PlayerModel};
 
@@ -37,6 +38,11 @@ fn paths(app: &App) -> Vec<&str> {
         .collect()
 }
 
+/// Whether `path` plays (in mpv's form, see `local_path`).
+fn plays(model: &PlayerModel, path: &str) -> bool {
+    model.loaded_path() == Some(local_path(path).as_str())
+}
+
 #[test]
 fn add_insert_and_play_requests() {
     let dir = std::env::temp_dir().join(format!("rvp-instance-{}", std::process::id()));
@@ -48,16 +54,16 @@ fn add_insert_and_play_requests() {
     let mut app = App::new(settings, &dir).expect("app");
     let engine = Engine::new(&EngineOptions::headless()).expect("engine");
     app.open(&engine, &[LONG.to_owned()], false).expect("open");
-    wait(&mut app, &engine, "playing", |m| {
-        m.loaded_path() == Some(LONG)
-    });
+    wait(&mut app, &engine, "playing", |m| plays(m, LONG));
+    let (long, short) = (local_path(LONG), local_path(SHORT));
+    let inserted = local_path("/media/inserted.mkv");
 
     // `rvp /add SHORT`: appended, the film keeps playing.
     let cli = Cli::parse(["/add".to_owned(), SHORT.to_owned()]);
     let add = Request::from_cli(&cli, Path::new("/"));
     assert_eq!(add.mode, Mode::Add);
     app.remote(&engine, &add).expect("add");
-    assert_eq!(paths(&app), [LONG, SHORT]);
+    assert_eq!(paths(&app), [&long, &short]);
 
     // `rvp /insert X`: right below the entry that plays.
     let insert = Request {
@@ -65,10 +71,10 @@ fn add_insert_and_play_requests() {
         files: vec!["/media/inserted.mkv".to_owned()],
     };
     app.remote(&engine, &insert).expect("insert");
-    assert_eq!(paths(&app), [LONG, "/media/inserted.mkv", SHORT]);
+    assert_eq!(paths(&app), [&long, &inserted, &short]);
     std::thread::sleep(Duration::from_millis(300));
     app.drain(&engine, Instant::now());
-    assert_eq!(app.model.loaded_path(), Some(LONG), "still the film");
+    assert!(plays(&app.model, LONG), "still the film");
 
     // `rvp SHORT` (/current): appended and played.
     let play = Request {
@@ -78,7 +84,7 @@ fn add_insert_and_play_requests() {
     app.remote(&engine, &play).expect("play");
     assert_eq!(paths(&app).len(), 4);
     wait(&mut app, &engine, "the new entry plays", |m| {
-        m.loaded_path() == Some(SHORT)
+        plays(m, SHORT)
     });
     assert_eq!(app.library().shown().current, Some(3));
     let _ = std::fs::remove_dir_all(&dir);
