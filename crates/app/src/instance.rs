@@ -121,7 +121,9 @@ mod tests {
         let cwd = Path::new("/home/u/films");
         let play = Request::from_cli(&cli(&["a.mkv", "/m/b.mkv"]), cwd);
         assert_eq!(play.mode, Mode::Play);
-        assert_eq!(play.files, ["/home/u/films/a.mkv", "/m/b.mkv"]);
+        // Relative paths join the sender's folder (with `\` on Windows).
+        let joined = cwd.join("a.mkv").display().to_string();
+        assert_eq!(play.files, [joined.as_str(), "/m/b.mkv"]);
         assert_eq!(
             Request::from_cli(&cli(&["/add", "a.mkv"]), cwd).mode,
             Mode::Add
