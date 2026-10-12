@@ -201,3 +201,7 @@ Findings:
 - 2026-10-12: no fourth host run to separate the closing of the Keys and
   Mouse window from the second instance. The control comparison is
   enough, and that window is no longer in RVP.
+- 2026-10-12: goal G is complete without the Ubuntu boot run. The run
+  (`kit.sh m4all`, which covers `m3all`) stays open as an acceptance item
+  of M3 and of M4/M5, for the owner to run when convenient. The reminder
+  that M3's acceptance needs it was given.
