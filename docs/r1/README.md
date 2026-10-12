@@ -11,6 +11,7 @@ holds the tables and findings.
 | File | Content | Source |
 |------|---------|--------|
 | `menu-static.tsv` | The context menu as built from PotPlayer's resources: 894 items (88 submenus, 134 separators), English text, shortcuts as shown, command IDs | `tools/r1/potplayer_tables.py` (read-only: `PotPlayer64.dll` RT_MENU 101, `Language/English.ini`) |
+| `menu-playlist.tsv` | The playlist panel's context menu as built from PotPlayer's resources: 72 items, same columns as `menu-static.tsv` (goal G) | `tools/r1/potplayer_tables.py` (read-only: `PotPlayer64.dll` RT_MENU 111) |
 | `menu-runtime.tsv` | The live context menu while a video plays: 1580 items, including run-time lists (skins, languages, audio renderers, devices). Recent files and album names are replaced by placeholders | `host-session r1`, then `tools/r1/redact_menu.py` |
 | `hotkeys.tsv` | Default hotkeys: accelerator table 157 (main window, 259 keys) and 118 (playlist, 54 keys), with the menu items they trigger | `tools/r1/potplayer_tables.py` |
 | `mouse-actions.tsv` | Preferences → General → Mouse: each action, its current value, its index and all choices; the page's check boxes | `host-session r1` (Win32 messages, read-only) |

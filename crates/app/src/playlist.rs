@@ -794,6 +794,18 @@ impl Library {
         })
     }
 
+    /// The first playable entry of the album that plays (Repeat playlist).
+    #[must_use]
+    pub fn first_playable(&self) -> Option<(usize, usize)> {
+        let album_index = self.lists.playing?;
+        let album = self.lists.albums.get(album_index)?;
+        album
+            .entries
+            .iter()
+            .position(|entry| entry.playable)
+            .map(|index| (album_index, index))
+    }
+
     /// The next (`step` 1) or previous (-1) playable entry of the album that
     /// plays.
     #[must_use]

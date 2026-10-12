@@ -53,6 +53,7 @@ const VIDEO_SKIN: &str = "<Skin Version='1.0'>
 \t\t<Button Tooltip='Maximize' CmdID='CMD_MAX_WINDOW' Left='-20' Top='1' Width='8' Height='8' ImageLeft='0' ImageTop='10' />
 \t\t<Button Tooltip='Restore' CmdID='CMD_RESTORE_WINDOW' Left='-20' Top='1' Width='8' Height='8' ImageLeft='0' ImageTop='10' />
 \t\t<Button Tooltip='Exit' CmdID='ID_APP_EXIT' Left='-10' Top='1' Width='8' Height='8' ImageLeft='0' ImageTop='10' />
+\t\t<Button Tooltip='Open' CmdID='CMD_POPUP_USER_MENU' UserMenuName='OpenMenu' AltCmdID='CMD_POPUPMENU_SIZE' Left='2' Top='1' Width='8' Height='8' ImageLeft='0' ImageTop='10' />
 \t</Static>
 \t<Static Align='Bottom' Height='20' ImageLeft='0' ImageTop='0' ImageWidth='30' ImageHeight='10' LeftMargin='4' RightMargin='4' AltImageLeft='30' AltImageTop='0'>
 \t\t<Slider CmdID='CMD_TIMEBAR_CTRL' Left='12' Top='0' Width='-40' Height='4' ImageWidth='10' ImageHeight='2' ImageLeft='0' ImageTop='32' BackImageLeft='0' BackImageTop='30' AltImageLeft='0' AltImageTop='34' ThumbWidth='2' ThumbHeight='4' ThumbImageLeft='12' ThumbImageTop='30' />
@@ -60,6 +61,7 @@ const VIDEO_SKIN: &str = "<Skin Version='1.0'>
 \t\t<PicLabel CmdID='CMD_CURRENTTIME_MESSAGE' Left='12' Top='12' Width='40' Height='2' ImageLeft='0' ImageTop='20' ImageWidth='44' ImageHeight='2' />
 \t\t<Button Tooltip='Play< >Open' CmdID='CMD_MEDIA_PLAY' AltCmdID='ID_OPEN_FILE' Left='0' Top='8' Width='8' Height='8' ImageLeft='0' ImageTop='10' HoriCenter='1' />
 \t\t<Button Tooltip='Pause' CmdID='CMD_MEDIA_PAUSE' Left='0' Top='8' Width='8' Height='8' ImageLeft='0' ImageTop='40' HoriCenter='1' />
+\t\t<Button Tooltip='Page' CmdID='CMD_SELECT_PAGE' PageIndex='2' Left='2' Top='8' Width='8' Height='8' ImageLeft='0' ImageTop='10' />
 \t\t<Button Tooltip='Previous< >30 Sec Backward' CmdID='ID_PROCESS_PREV' AltCmdID='ID_PLAYBACK_30SEC_BACK' Left='-20' Top='8' Width='8' Height='8' ImageLeft='0' ImageTop='10' HoriCenter='1' />
 \t</Static>
 \t<Static Align='Client' Contain='CMD_VIDEO_WINDOW' />
@@ -247,6 +249,37 @@ fn buttons_act_on_release_over_the_same_button() {
             .release(&mut chrome, &bindings, window(), x, y - 40, Button::Left)
             .is_empty()
     );
+}
+
+#[test]
+fn menu_and_page_buttons() {
+    let mut chrome = chrome();
+    let bindings = Bindings::potplayer_defaults();
+    let mut pointer = Pointer::default();
+    let (x, y) = center(&chrome, "CMD_POPUP_USER_MENU");
+    pointer.press(&mut chrome, window(), x, y, Button::Left);
+    assert_eq!(
+        pointer.release(&mut chrome, &bindings, window(), x, y, Button::Left),
+        vec![Effect::Popup {
+            command: "CMD_POPUP_USER_MENU",
+            menu: Some("OpenMenu")
+        }]
+    );
+    assert_eq!(
+        pointer.release(&mut chrome, &bindings, window(), x, y, Button::Right),
+        vec![Effect::Popup {
+            command: "CMD_POPUPMENU_SIZE",
+            menu: None
+        }]
+    );
+    let (x, y) = center(&chrome, "CMD_SELECT_PAGE");
+    pointer.press(&mut chrome, window(), x, y, Button::Left);
+    assert!(
+        pointer
+            .release(&mut chrome, &bindings, window(), x, y, Button::Left)
+            .is_empty()
+    );
+    assert_eq!(chrome.state.current_page, 2);
 }
 
 #[test]

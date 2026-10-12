@@ -1,0 +1,38 @@
+// The Open URL dialog, loaded on first use.
+import QtQuick
+import QtQuick.Controls
+import QtQuick.Layouts
+import Rvp
+
+Item {
+    id: holder
+    required property Player player
+    readonly property alias dialog: urlDialog
+
+    function ask() {
+        urlField.text = ""
+        urlDialog.open()
+        urlField.forceActiveFocus()
+    }
+
+    Dialog {
+        id: urlDialog
+        title: "Open URL"
+        modal: true
+        anchors.centerIn: parent
+        standardButtons: Dialog.Ok | Dialog.Cancel
+        onAccepted: {
+            const url = urlField.text.trim()
+            if (url !== "")
+                holder.player.open_files(url, false)
+        }
+        contentItem: ColumnLayout {
+            Label { text: "Address (http, https, rtmp, ...):" }
+            TextField {
+                id: urlField
+                Layout.preferredWidth: 420
+                onAccepted: urlDialog.accept()
+            }
+        }
+    }
+}

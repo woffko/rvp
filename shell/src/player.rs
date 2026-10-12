@@ -20,7 +20,9 @@ use cxx_qt_lib::{QRectF, QString};
 use rvp_app::binding_editor::{Editor, Scope};
 use rvp_app::chrome::{Chrome, Damage, Frame, Mode};
 use rvp_app::instance::Request;
+use rvp_app::menu::{Command, Live, MenuItem, to_json};
 use rvp_app::pointer::{Button, Context, Cursor, Effect, Focus, ListEffect, Modifiers, Pointer};
+use rvp_app::preferences;
 use rvp_app::{
     Action, App, Cli, Dirs, KeyChord, ListAction, MouseGesture, Settings, UiRequest,
     WindowGeometry, view,
@@ -43,7 +45,8 @@ pub mod request {
     pub const START_MOVE: i32 = 7;
     /// Argument: `Qt::Edges` bits.
     pub const START_RESIZE: i32 = 8;
-    pub const KEYS_AND_MOUSE: i32 = 9;
+    /// The settings window at `settings_page` (empty: the first page).
+    pub const SETTINGS: i32 = 9;
     /// The file dialog, adding to the shown album.
     pub const ADD_FILES: i32 = 10;
     pub const ADD_FOLDER: i32 = 11;
@@ -55,6 +58,17 @@ pub mod request {
     /// The album name dialog (`album_name` holds the current name);
     /// argument 1 renames the shown album.
     pub const ALBUM_NAME: i32 = 15;
+    /// A skin menu or built-in submenu at the pointer (`menu_json("skin")`).
+    pub const SKIN_MENU: i32 = 16;
+    /// The folder dialog for Open Folder.
+    pub const OPEN_FOLDER: i32 = 17;
+    pub const OPEN_URL: i32 = 18;
+    pub const OPEN_SUBTITLE: i32 = 19;
+    /// The folder dialog for saved frames.
+    pub const IMAGE_FOLDER: i32 = 20;
+    /// Open `external_url` with the system (the image folder).
+    pub const OPEN_EXTERNAL: i32 = 21;
+    pub const ABOUT: i32 = 22;
 }
 
 /// The skin, loaded once for the process (the painters read it on the
@@ -102,6 +116,12 @@ struct Core {
     drain_queued: Arc<AtomicBool>,
     /// Playback updates of the chrome held back by [`CHROME_INTERVAL`].
     throttle: Throttle,
+    /// The skin menu a control asked for: its command and menu name.
+    popup: Option<(&'static str, Option<&'static str>)>,
+    /// The local time for the skin's clock.
+    clock: String,
+    /// The settings live next to the executable.
+    portable: bool,
 }
 
 /// Fitting the window to a video the user opened: requested, then the new
@@ -171,6 +191,10 @@ pub struct PlayerRust {
     pub(crate) restore_maximized: bool,
     pub(crate) osd: QString,
     pub(crate) album_name: QString,
+    pub(crate) settings_page: QString,
+    pub(crate) on_top: bool,
+    pub(crate) info_shown: bool,
+    pub(crate) external_url: QString,
     /// The command line, parsed by `start`.
     cli: Cli,
     core: Option<Core>,
@@ -283,20 +307,44 @@ fn load_skin(path: &Path) -> Result<&'static Skin, String> {
     Ok(skin)
 }
 
-/// The application core from the user's directories; on failure a
-/// temporary state directory and a message saying so.
-fn load_app() -> Result<(App, Option<String>), String> {
+/// The application core from the user's directories (and whether they are
+/// portable); on failure a temporary state directory and a message saying
+/// so.
+fn load_app() -> Result<(App, bool, Option<String>), String> {
     let loaded = Dirs::from_env().and_then(|dirs| {
-        App::load(&dirs).map_err(|error| format!("cannot read the settings: {error}"))
+        App::load(&dirs)
+            .map(|app| (app, dirs.portable))
+            .map_err(|error| format!("cannot read the settings: {error}"))
     });
     match loaded {
-        Ok(app) => Ok((app, None)),
+        Ok((app, portable)) => Ok((app, portable, None)),
         Err(message) => {
             let fallback = std::env::temp_dir().join("rvp-state");
             let app = App::new(Settings::default(), &fallback).map_err(|e| e.to_string())?;
-            Ok((app, Some(message)))
+            Ok((app, false, Some(message)))
         }
     }
+}
+
+/// A `file:` URL for a local path, for `Qt.openUrlExternally`.
+fn file_url(path: &Path) -> String {
+    let text = path.to_string_lossy().replace('\\', "/");
+    if text.starts_with('/') {
+        format!("file://{text}")
+    } else {
+        format!("file:///{text}")
+    }
+}
+
+/// `{"notes": [...], "restart": bool, "error": "..."}` for the settings
+/// window.
+fn settings_result(notes: &[String], restart: bool, error: Option<&str>) -> QString {
+    let value = serde_json::json!({
+        "notes": notes,
+        "restart": restart,
+        "error": error.unwrap_or(""),
+    });
+    QString::from(&value.to_string())
 }
 
 fn load_chrome(cli: &Cli, settings: &Settings) -> Result<Chrome, String> {
@@ -359,10 +407,10 @@ impl qobject::Player {
         let cli = Cli::parse(std::env::args().skip(1));
         self.as_mut().rust_mut().get_mut().cli = cli.clone();
         let mut messages = Vec::new();
-        let mut app = match load_app() {
-            Ok((app, message)) => {
+        let (mut app, portable) = match load_app() {
+            Ok((app, portable, message)) => {
                 messages.extend(message);
-                app
+                (app, portable)
             }
             Err(error) => {
                 self.show_message(&format!("cannot start: {error}"));
@@ -447,6 +495,9 @@ impl qobject::Player {
             fit: Fit::No,
             drain_queued,
             throttle: Throttle::default(),
+            popup: None,
+            clock: String::new(),
+            portable,
         });
         if let Some(message) = messages.first() {
             self.as_mut().show_message(message);
@@ -593,6 +644,9 @@ impl qobject::Player {
         };
         let mut data = view::data_model(&core.app.model, core.app.library().lists());
         data.playlist.drop_before = core.drop_before;
+        if !core.clock.is_empty() {
+            data.set_text("CMD_SYSTEM_TIME_MESSAGE", core.clock.as_str());
+        }
         if data != chrome.data {
             chrome.data = data;
         }
@@ -698,7 +752,7 @@ impl qobject::Player {
             && core.stretch
         {
             core.stretch = false;
-            let _ = core.engine.set_keep_aspect(true);
+            let _ = core.app.apply_picture(core.engine, false);
         }
         self.as_mut().set_chrome_shown(false);
         self.as_mut().set_fullscreen(fullscreen);
@@ -847,6 +901,12 @@ impl qobject::Player {
                     if let Some(core) = self.as_mut().core_mut() {
                         core.focus = focus;
                     }
+                }
+                Effect::Popup { command, menu } => {
+                    if let Some(core) = self.as_mut().core_mut() {
+                        core.popup = Some((command, menu));
+                    }
+                    self.as_mut().ui_request(request::SKIN_MENU, 0);
                 }
             }
         }
@@ -1038,20 +1098,6 @@ impl qobject::Player {
         }
     }
 
-    pub(crate) fn menu_label(&self, name: &QString) -> QString {
-        let (Some(core), Some(action)) = (self.core(), Action::from_name(&name.to_string())) else {
-            return QString::default();
-        };
-        QString::from(&core.app.menu_entry(action).0)
-    }
-
-    pub(crate) fn menu_shortcut(&self, name: &QString) -> QString {
-        let (Some(core), Some(action)) = (self.core(), Action::from_name(&name.to_string())) else {
-            return QString::default();
-        };
-        QString::from(&core.app.menu_entry(action).1)
-    }
-
     /// Carries out an action and the window request it may produce.
     fn perform(mut self: Pin<&mut Self>, action: Action) {
         let Some(core) = self.as_mut().core_mut() else {
@@ -1079,9 +1125,8 @@ impl qobject::Player {
             UiRequest::OpenFileDialog => self.ui_request(request::OPEN_FILES, 0),
             UiRequest::ToggleFullscreen { stretch } => {
                 let enter = !fullscreen;
-                let keep_aspect = !(enter && stretch);
                 core.stretch = enter && stretch;
-                let _ = core.engine.set_keep_aspect(keep_aspect);
+                let _ = core.app.apply_picture(core.engine, core.stretch);
                 self.as_mut().set_chrome_shown(false);
                 self.as_mut().set_fullscreen(enter);
                 self.as_mut()
@@ -1103,7 +1148,26 @@ impl qobject::Player {
                 }
                 self.relayout();
             }
-            UiRequest::KeysAndMouse => self.ui_request(request::KEYS_AND_MOUSE, 0),
+            UiRequest::Preferences(page) => {
+                self.as_mut()
+                    .set_settings_page(QString::from(page.unwrap_or("")));
+                self.ui_request(request::SETTINGS, 0);
+            }
+            UiRequest::About => self.ui_request(request::ABOUT, 0),
+            UiRequest::OpenFolderDialog => self.ui_request(request::OPEN_FOLDER, 0),
+            UiRequest::OpenUrlDialog => self.ui_request(request::OPEN_URL, 0),
+            UiRequest::OpenSubtitleDialog => self.ui_request(request::OPEN_SUBTITLE, 0),
+            UiRequest::ImageFolderDialog => self.ui_request(request::IMAGE_FOLDER, 0),
+            UiRequest::OpenExternal(path) => {
+                self.as_mut()
+                    .set_external_url(QString::from(&file_url(&path)));
+                self.ui_request(request::OPEN_EXTERNAL, 0);
+            }
+            UiRequest::SaveFrame { path, subtitles } => self.save_frame(path, subtitles),
+            UiRequest::ScaleWindow(factor) => self.scale_window(factor),
+            UiRequest::FitAspect => self.fit_aspect_now(true),
+            UiRequest::OnTop(on) => self.set_on_top(on),
+            UiRequest::ShowInfo(shown) => self.set_info_shown(shown),
             UiRequest::ImportPlaylists => match core.app.potplayer_folder() {
                 Some(folder) => self.import_from(&folder),
                 None => self.ui_request(request::IMPORT_PLAYLISTS, 0),
@@ -1117,6 +1181,67 @@ impl qobject::Player {
             UiRequest::Osd(text) => self.set_osd(QString::from(&text)),
             UiRequest::Message(text) => self.show_message(&text),
         }
+    }
+
+    /// Saves the frame on a thread: mpv encodes the image, which takes
+    /// longer than a frame.
+    fn save_frame(self: Pin<&mut Self>, path: PathBuf, subtitles: bool) {
+        let thread = self.qt_thread();
+        let spawned = std::thread::Builder::new()
+            .name("rvp-frame".to_owned())
+            .spawn(move || {
+                let mode = if subtitles { "subtitles" } else { "video" };
+                let text = path.to_string_lossy().into_owned();
+                let result = path
+                    .parent()
+                    .map_or(Ok(()), std::fs::create_dir_all)
+                    .map_err(|error| error.to_string())
+                    .and_then(|()| {
+                        ENGINE
+                            .get()
+                            .ok_or_else(|| "no player".to_owned())?
+                            .command("screenshot-to-file", &[&text, mode])
+                            .map_err(|error| error.to_string())
+                    });
+                let notice = match result {
+                    Ok(()) => format!("Saved {}", view::file_name(&text)),
+                    Err(error) => format!("Cannot save the frame: {error}"),
+                };
+                let _ = thread.queue(move |player| player.set_osd(QString::from(&notice)));
+            });
+        if let Err(error) = spawned {
+            eprintln!("rvp: cannot save the frame: {error}");
+        }
+    }
+
+    /// The window at `factor` times the video's size (PotPlayer's "1.0x
+    /// video output size"), within the screen.
+    fn scale_window(mut self: Pin<&mut Self>, factor: f64) {
+        if *self.fullscreen() {
+            return;
+        }
+        let Some(core) = self.core() else {
+            return;
+        };
+        let model = &core.app.model;
+        let (Some(height), Some(aspect)) = (
+            model.int(PropertyId::VideoHeight),
+            model.double(PropertyId::VideoAspect),
+        ) else {
+            return;
+        };
+        let (chrome_width, chrome_height) =
+            core.chrome.as_ref().map_or((0, 0), Chrome::chrome_size);
+        // Video sizes are far inside i32 and f64's exact range.
+        #[allow(clippy::cast_possible_truncation, clippy::cast_precision_loss)]
+        let (width, height) = (
+            (height as f64 * aspect * factor).round() as i32,
+            (height as f64 * factor).round() as i32,
+        );
+        if core.maximized {
+            self.as_mut().ui_request(request::MAXIMIZE_RESTORE, 0);
+        }
+        self.fit_window(width + chrome_width, height + chrome_height);
     }
 
     fn import_from(mut self: Pin<&mut Self>, folder: &Path) {
@@ -1164,13 +1289,6 @@ impl qobject::Player {
         }
     }
 
-    pub(crate) fn menu_checked(&self, name: &QString) -> i32 {
-        let (Some(core), Some(action)) = (self.core(), Action::from_name(&name.to_string())) else {
-            return -1;
-        };
-        core.app.checked(action).map_or(-1, i32::from)
-    }
-
     pub(crate) fn run_list_action(mut self: Pin<&mut Self>, name: &QString) {
         if let Some(action) = ListAction::from_name(&name.to_string()) {
             crate::metrics::input("input_ms");
@@ -1179,20 +1297,206 @@ impl qobject::Player {
         }
     }
 
-    pub(crate) fn list_menu_label(&self, name: &QString) -> QString {
-        let (Some(core), Some(action)) = (self.core(), ListAction::from_name(&name.to_string()))
-        else {
-            return QString::default();
+    pub(crate) fn menu_json(&self, kind: &QString) -> QString {
+        let Some(core) = self.core() else {
+            return QString::from("[]");
         };
-        QString::from(&core.app.list_menu_entry(action).0)
+        // Tracks and chapters are read from mpv now, once per menu.
+        let live = if core.app.model.media_loaded() {
+            Live {
+                tracks: core.engine.tracks(),
+                chapters: core.engine.chapters(),
+                chapter: core.app.model.int(PropertyId::Chapter),
+            }
+        } else {
+            Live::default()
+        };
+        let items = match kind.to_string().as_str() {
+            "context" => Some(core.app.context_menu(&live)),
+            "playlist" => Some(core.app.playlist_menu(&live)),
+            "skin" => match core.popup {
+                Some(("CMD_POPUP_USER_MENU", Some(name))) => skin().and_then(|skin| {
+                    skin.user_menus()
+                        .iter()
+                        .find(|menu| menu.name == name)
+                        .map(|menu| core.app.skin_menu(menu, &live))
+                }),
+                Some((command, _)) => core.app.popup(command, &live).map(|(_, items)| items),
+                None => None,
+            },
+            _ => None,
+        };
+        let items = items.unwrap_or_else(|| {
+            vec![MenuItem {
+                label: "Not in RVP yet".to_owned(),
+                ..MenuItem::default()
+            }]
+        });
+        QString::from(&to_json(&items))
     }
 
-    pub(crate) fn list_menu_shortcut(&self, name: &QString) -> QString {
-        let (Some(core), Some(action)) = (self.core(), ListAction::from_name(&name.to_string()))
-        else {
-            return QString::default();
+    pub(crate) fn run_menu_command(mut self: Pin<&mut Self>, id: &QString) {
+        let Some(command) = Command::parse(&id.to_string()) else {
+            return;
         };
-        QString::from(&core.app.list_menu_entry(action).1)
+        crate::metrics::input("input_ms");
+        match command {
+            Command::Window(action) => self.as_mut().perform(action),
+            Command::List(action) => self.as_mut().perform_list(action, false),
+            other => {
+                let Some(core) = self.as_mut().core_mut() else {
+                    return;
+                };
+                if matches!(other, Command::Album(_)) {
+                    core.request_fit();
+                }
+                let visible = Self::visible_rows(core);
+                if let Some(request) = core.app.run_menu_command(core.engine, other, visible) {
+                    self.as_mut().handle_request(request);
+                }
+            }
+        }
+        self.sync_chrome();
+    }
+
+    pub(crate) fn settings_view(&self) -> QString {
+        let Some(core) = self.core() else {
+            return QString::from("{}");
+        };
+        QString::from(
+            &core
+                .app
+                .settings_view(core.engine, core.portable)
+                .to_string(),
+        )
+    }
+
+    pub(crate) fn set_setting(
+        mut self: Pin<&mut Self>,
+        path: &QString,
+        value: &QString,
+    ) -> QString {
+        let Some(core) = self.as_mut().core_mut() else {
+            return settings_result(&[], false, Some("not started"));
+        };
+        let value = match serde_json::from_str(&value.to_string()) {
+            Ok(value) => value,
+            Err(error) => return settings_result(&[], false, Some(&error.to_string())),
+        };
+        let (changed, mut notes) =
+            match preferences::change(&core.app.settings, &path.to_string(), value) {
+                Ok(changed) => changed,
+                Err(error) => return settings_result(&[], false, Some(&error)),
+            };
+        let applied = core.app.apply_settings(core.engine, changed);
+        notes.extend(applied.notes);
+        notes.dedup();
+        self.as_mut().settings_applied();
+        settings_result(&notes, applied.restart, None)
+    }
+
+    pub(crate) fn import_settings(mut self: Pin<&mut Self>, path: &QString) -> QString {
+        let Some(core) = self.as_mut().core_mut() else {
+            return settings_result(&[], false, Some("not started"));
+        };
+        let (settings, mut notes) = match preferences::import(Path::new(&path.to_string())) {
+            Ok(imported) => imported,
+            Err(error) => return settings_result(&[], false, Some(&error)),
+        };
+        let applied = core.app.apply_settings(core.engine, settings);
+        notes.extend(applied.notes);
+        notes.dedup();
+        self.as_mut().settings_applied();
+        settings_result(&notes, applied.restart, None)
+    }
+
+    pub(crate) fn export_settings(&self, path: &QString) -> QString {
+        let Some(core) = self.core() else {
+            return settings_result(&[], false, Some("not started"));
+        };
+        let path = PathBuf::from(path.to_string());
+        match preferences::export(&core.app.settings, &path) {
+            Ok(()) => settings_result(&[format!("Saved {}", path.display())], false, None),
+            Err(error) => settings_result(&[], false, Some(&error.to_string())),
+        }
+    }
+
+    /// After a settings change: the window state and the chrome follow.
+    fn settings_applied(mut self: Pin<&mut Self>) {
+        let on_top = self
+            .as_mut()
+            .core_mut()
+            .and_then(|core| core.app.on_top_change());
+        if let Some(on_top) = on_top {
+            self.as_mut().set_on_top(on_top);
+        }
+        self.sync_chrome();
+    }
+
+    pub(crate) fn open_folder(mut self: Pin<&mut Self>, path: &QString) {
+        let Some(core) = self.as_mut().core_mut() else {
+            return;
+        };
+        let folder = PathBuf::from(path.to_string());
+        core.request_fit();
+        match core.app.open_folder(core.engine, &folder) {
+            Ok(0) => {
+                let text = format!("No media files in {}", folder.display());
+                self.as_mut().show_message(&text);
+            }
+            Ok(_) => {}
+            Err(error) => self.as_mut().show_message(&format!("cannot open: {error}")),
+        }
+        self.sync_chrome();
+    }
+
+    pub(crate) fn load_subtitle(mut self: Pin<&mut Self>, path: &QString) {
+        let Some(core) = self.as_mut().core_mut() else {
+            return;
+        };
+        if let Some(request) = core
+            .app
+            .load_subtitle(core.engine, Path::new(&path.to_string()))
+        {
+            self.handle_request(request);
+        }
+    }
+
+    pub(crate) fn set_image_folder(mut self: Pin<&mut Self>, path: &QString) {
+        let Some(core) = self.as_mut().core_mut() else {
+            return;
+        };
+        let folder = PathBuf::from(path.to_string());
+        core.app.set_image_folder(&folder);
+        self.set_osd(QString::from(&format!("Images go to {}", folder.display())));
+    }
+
+    pub(crate) fn about_text(&self) -> QString {
+        let mpv = self
+            .core()
+            .and_then(|core| core.engine.get_text("mpv-version"))
+            .unwrap_or_default();
+        QString::from(&format!(
+            "RVP {}\nA PotPlayer-style media player\n{mpv}",
+            env!("CARGO_PKG_VERSION")
+        ))
+    }
+
+    pub(crate) fn info_text(&self) -> QString {
+        self.core().map_or_else(QString::default, |core| {
+            QString::from(&view::info_text(&core.app.model))
+        })
+    }
+
+    pub(crate) fn set_clock(mut self: Pin<&mut Self>, text: &QString) {
+        let Some(core) = self.as_mut().core_mut() else {
+            return;
+        };
+        let text = text.to_string();
+        if core.clock != text {
+            core.clock = text;
+            self.sync_chrome();
+        }
     }
 
     pub(crate) fn add_folder(mut self: Pin<&mut Self>, path: &QString) {
@@ -1247,7 +1551,13 @@ impl qobject::Player {
         self.sync_chrome();
     }
 
-    pub(crate) fn fit_aspect(mut self: Pin<&mut Self>) {
+    pub(crate) fn fit_aspect(self: Pin<&mut Self>) {
+        self.fit_aspect_now(false);
+    }
+
+    /// The window takes the video's shape; `force` also when the setting is
+    /// off (Window Size > Fit to video aspect ratio).
+    fn fit_aspect_now(mut self: Pin<&mut Self>, force: bool) {
         if *self.fullscreen() {
             return;
         }
@@ -1258,7 +1568,9 @@ impl qobject::Player {
         let (Some(chrome), Some(aspect)) = (core.chrome.as_ref(), aspect) else {
             return;
         };
-        if core.maximized || !core.app.settings.keep_aspect_window || !core.app.model.media_loaded()
+        if core.maximized
+            || !(force || core.app.settings.keep_aspect_window)
+            || !core.app.model.media_loaded()
         {
             return;
         }
@@ -1649,6 +1961,15 @@ impl qobject::Player {
             ),
             ("editor_open", core.editor.is_some().to_string()),
             ("osd", text(Some(&self.osd().to_string()))),
+            ("volume_step", number(Some(core.app.settings.volume_step))),
+            ("speed", number(model.double(PropertyId::Speed))),
+            ("sub_scale", number(model.double(PropertyId::SubScale))),
+            ("on_top", self.on_top().to_string()),
+            ("info_shown", self.info_shown().to_string()),
+            ("current_page", {
+                let page = core.chrome.as_ref().map(|chrome| chrome.state.current_page);
+                integer(page.map(i64::from))
+            }),
         ]
     }
 

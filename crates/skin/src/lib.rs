@@ -20,6 +20,7 @@ pub mod image;
 pub mod lang;
 pub mod layout;
 pub mod markup;
+pub mod menu;
 pub mod paint;
 pub mod playlist;
 pub mod preprocess;

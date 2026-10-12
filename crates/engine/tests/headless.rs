@@ -4,7 +4,9 @@
 
 use std::time::{Duration, Instant};
 
-use rvp_engine::{EndReason, Engine, EngineEvent, EngineOptions, PlayerModel, PropertyId, Seek};
+use rvp_engine::{
+    EndReason, Engine, EngineEvent, EngineOptions, PlayerModel, PropertyId, Seek, TrackKind,
+};
 
 /// 96x72, 10 fps H.264 with an Opus tone; 60 s long.
 const LONG: &str = concat!(
@@ -233,5 +235,71 @@ fn unplayable_files_report_an_error() {
         events
             .iter()
             .any(|event| matches!(event, EngineEvent::Error(_)))
+    });
+}
+
+#[test]
+fn tracks_chapters_and_plain_properties() {
+    let mut player = Player::new();
+    player.load(LONG);
+    let tracks = player.engine.tracks();
+    let kinds: Vec<(TrackKind, i64, Option<&str>, bool)> = tracks
+        .iter()
+        .map(|t| (t.kind, t.id, t.codec.as_deref(), t.selected))
+        .collect();
+    assert_eq!(
+        kinds,
+        [
+            (TrackKind::Video, 1, Some("h264"), true),
+            (TrackKind::Audio, 1, Some("opus"), true)
+        ]
+    );
+    assert!(player.engine.chapters().is_empty());
+    assert_eq!(player.engine.get_int("chapters"), Some(0));
+
+    player.engine.set_text("aid", "no").expect("audio off");
+    player.wait("audio off", |model, _| {
+        model.int(PropertyId::Chapters).is_some()
+    });
+    assert!(
+        player
+            .engine
+            .tracks()
+            .iter()
+            .all(|t| t.kind != TrackKind::Audio || !t.selected)
+    );
+    player.engine.set_text("aid", "1").expect("audio on");
+
+    player.engine.set_double("speed", 1.5).expect("speed");
+    player.wait("speed", |model, _| {
+        model.double(PropertyId::Speed) == Some(1.5)
+    });
+    assert_eq!(player.engine.get_double("speed"), Some(1.5));
+    player
+        .engine
+        .set_double("sub-delay", -0.5)
+        .expect("sub-delay");
+    player.wait("sub-delay", |model, _| {
+        model.double(PropertyId::SubDelay) == Some(-0.5)
+    });
+    player
+        .engine
+        .set_flag("keepaspect", false)
+        .expect("keepaspect");
+    assert_eq!(player.engine.get_text("keepaspect").as_deref(), Some("no"));
+    assert!(player.engine.set_double("no-such-property", 1.0).is_err());
+    assert_eq!(player.engine.get_text("no-such-property"), None);
+    assert!(player.engine.command("no-such-command", &[]).is_err());
+
+    // A-B loop points are plain properties too.
+    player.engine.set_double("ab-loop-a", 10.0).expect("a");
+    player.engine.set_double("ab-loop-b", 12.0).expect("b");
+    player.wait("A-B", |model, _| {
+        model.double(PropertyId::AbLoopA) == Some(10.0)
+            && model.double(PropertyId::AbLoopB) == Some(12.0)
+    });
+    player.engine.set_text("ab-loop-a", "no").expect("clear a");
+    player.wait("A cleared", |model, _| {
+        model.double(PropertyId::AbLoopA).is_none()
     });
 }

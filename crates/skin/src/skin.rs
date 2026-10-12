@@ -111,6 +111,18 @@ impl Skin {
         &self.root
     }
 
+    /// The skin-defined menus (`<UserMenu>`, see [`crate::menu`]).
+    #[must_use]
+    pub fn user_menus(&self) -> Vec<crate::menu::UserMenu> {
+        crate::menu::user_menus(&self.root)
+    }
+
+    /// Every command the skin's live elements use.
+    #[must_use]
+    pub fn commands(&self) -> std::collections::BTreeMap<String, crate::menu::CommandUse> {
+        crate::menu::commands(&self.root)
+    }
+
     /// The skin's string table.
     #[must_use]
     pub fn strings(&self) -> &StringTable {

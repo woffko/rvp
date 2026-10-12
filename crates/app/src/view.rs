@@ -7,6 +7,8 @@
 //! of codecs that the table does not list) are left empty, so the skin shows
 //! nothing, as PotPlayer does for unknown values.
 
+use std::fmt::Write as _;
+
 use rvp_engine::{PlayerModel, PropertyId};
 use rvp_skin::state::ListScroll;
 use rvp_skin::{DataModel, Playlist, PlaylistEntry, SliderValue, UiState};
@@ -295,6 +297,91 @@ pub fn apply_playback_state(state: &mut UiState, model: &PlayerModel) {
     }
 }
 
+/// Playback information over the video (Tab): the file, video, decoder,
+/// audio, time and sync lines, from the observed properties (no mpv reads).
+#[must_use]
+pub fn info_text(model: &PlayerModel) -> String {
+    let Some(path) = model.loaded_path() else {
+        return "No file".to_owned();
+    };
+    let mut lines = vec![file_name(path).to_owned()];
+    let mut video = Vec::new();
+    if let Some(codec) = model.text(PropertyId::VideoFormat) {
+        video.push(codec.to_owned());
+    }
+    if let (Some(width), Some(height)) = (
+        model.int(PropertyId::VideoWidth),
+        model.int(PropertyId::VideoHeight),
+    ) {
+        video.push(format!("{width}x{height}"));
+    }
+    if let Some(fps) = model.double(PropertyId::ContainerFps) {
+        video.push(format!("{fps:.3} fps"));
+    }
+    if let Some(bits) = model.double(PropertyId::VideoBitrate) {
+        video.push(format!("{} kbit/s", kilobits(bits)));
+    }
+    if !video.is_empty() {
+        lines.push(format!("Video: {}", video.join(", ")));
+        let decoder = model
+            .text(PropertyId::HwdecCurrent)
+            .filter(|hwdec| !hwdec.is_empty() && *hwdec != "no")
+            .unwrap_or("software");
+        let output = model
+            .double(PropertyId::EstimatedVfFps)
+            .map_or_else(String::new, |fps| format!(", output {fps:.2} fps"));
+        lines.push(format!("Decoder: {decoder}{output}"));
+    }
+    let mut audio = Vec::new();
+    if let Some(codec) = model.text(PropertyId::AudioCodecName) {
+        audio.push(codec.to_owned());
+    }
+    if let Some(count) = model.int(PropertyId::AudioChannels) {
+        audio.push(format!("{} ch", channels(count)));
+    }
+    if let Some(rate) = model.int(PropertyId::AudioSampleRate) {
+        audio.push(format!("{rate} Hz"));
+    }
+    if let Some(bits) = model.double(PropertyId::AudioBitrate) {
+        audio.push(format!("{} kbit/s", kilobits(bits)));
+    }
+    if let Some(output) = model.text(PropertyId::CurrentAo) {
+        audio.push(format!("output {output}"));
+    }
+    if !audio.is_empty() {
+        lines.push(format!("Audio: {}", audio.join(", ")));
+    }
+    let time = model.double(PropertyId::TimePos).unwrap_or(0.0);
+    let total = model.double(PropertyId::Duration).unwrap_or(0.0);
+    let speed = model.double(PropertyId::Speed).unwrap_or(1.0);
+    let mut timing = format!("Time: {} / {}", format_time(time), format_time(total));
+    if (speed - 1.0).abs() > 1e-6 {
+        let _ = write!(timing, ", speed {speed:.1}x");
+    }
+    if let (Some(a), Some(b)) = (
+        model.double(PropertyId::AbLoopA),
+        model.double(PropertyId::AbLoopB),
+    ) {
+        let _ = write!(timing, ", A-B {} - {}", format_time(a), format_time(b));
+    }
+    lines.push(timing);
+    let audio_delay = model.double(PropertyId::AudioDelay).unwrap_or(0.0);
+    let subtitle_delay = model.double(PropertyId::SubDelay).unwrap_or(0.0);
+    if audio_delay != 0.0 || subtitle_delay != 0.0 {
+        lines.push(format!(
+            "Sync: audio {}, subtitles {}",
+            crate::commands::signed_seconds(audio_delay),
+            crate::commands::signed_seconds(subtitle_delay)
+        ));
+    }
+    lines.push(format!(
+        "Dropped frames: {} output, {} decoder",
+        model.int(PropertyId::FrameDropCount).unwrap_or(0),
+        model.int(PropertyId::DecoderFrameDropCount).unwrap_or(0)
+    ));
+    lines.join("\n")
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -395,6 +482,24 @@ mod tests {
         assert!(seek.enabled);
         assert!((seek.value - 0.482).abs() < 0.001);
         assert!((data.sliders["CMD_VOLUME_CTRL"].value - 0.22).abs() < 1e-6);
+    }
+
+    #[test]
+    fn playback_information() {
+        assert_eq!(info_text(&PlayerModel::new()), "No file");
+        let mut model = playing_model();
+        model.set(PropertyId::Speed, Some(Value::Double(1.5)));
+        model.set(PropertyId::SubDelay, Some(Value::Double(-0.5)));
+        assert_eq!(
+            info_text(&model),
+            "Sample Film.mkv\n\
+             Video: h264, 1920x800, 23.976 fps, 5621 kbit/s\n\
+             Decoder: software, output 59.06 fps\n\
+             Audio: ac3, 5.1 ch, 48000 Hz, 448 kbit/s\n\
+             Time: 01:02:05 / 02:08:49, speed 1.5x\n\
+             Sync: audio +0.0 s, subtitles -500 ms\n\
+             Dropped frames: 0 output, 0 decoder"
+        );
     }
 
     #[test]

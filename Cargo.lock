@@ -542,6 +542,7 @@ dependencies = [
  "rvp-app",
  "rvp-engine",
  "rvp-skin",
+ "serde_json",
 ]
 
 [[package]]

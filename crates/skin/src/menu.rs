@@ -1,0 +1,167 @@
+//! Skin-defined menus and the commands a skin uses.
+//!
+//! PotPlayer skins define their own small menus in a `<Menu>` section
+//! (BlackSpace has 19):
+//!
+//! ```text
+//! <Menu>
+//!   <UserMenu Name='OpenMenu2'>
+//!     <MenuItem CmdID='ID_BASE_OPEN' />
+//!     <MenuItem CmdID='' />                              (a separator)
+//!     <MenuItem CmdID='CMD_POPUPMENU_DVD' NoSubMenu='1' />
+//!   </UserMenu>
+//! </Menu>
+//! ```
+//!
+//! A `CMD_POPUPMENU_*` item stands for one of PotPlayer's built-in submenus:
+//! as a submenu entry, or with `NoSubMenu='1'` its items in place. Buttons
+//! open a skin menu with `CmdID='CMD_POPUP_USER_MENU' UserMenuName='...'`
+//! (left click) or `AltCmdID='CMD_POPUP_USER_MENU' AltUserMenuName='...'`
+//! (right click); [`crate::hit::Hit::Control`] carries both names.
+//!
+//! [`commands`] lists every command the skin's live elements use (`CmdID`,
+//! `AltCmdID` and menu items; lines disabled by deleting `<` are not
+//! elements), for the dispatcher's coverage report.
+
+use std::collections::{BTreeMap, BTreeSet};
+
+use crate::markup::Element;
+
+/// One `<UserMenu>`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct UserMenu {
+    pub name: String,
+    pub items: Vec<UserMenuItem>,
+}
+
+/// One `<MenuItem>`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct UserMenuItem {
+    /// The command; empty for a separator.
+    pub command: String,
+    /// `NoSubMenu='1'`: a built-in submenu's items in place of an entry.
+    pub inline: bool,
+}
+
+/// The skin's menus in document order.
+#[must_use]
+pub fn user_menus(root: &Element) -> Vec<UserMenu> {
+    let mut menus = Vec::new();
+    root.walk(&mut |element| {
+        if !element.is("UserMenu") {
+            return;
+        }
+        let items = element
+            .children
+            .iter()
+            .filter(|child| child.is("MenuItem"))
+            .map(|item| UserMenuItem {
+                command: item.attrs.get("CmdID").unwrap_or("").trim().to_owned(),
+                inline: item.attrs.flag("NoSubMenu"),
+            })
+            .collect();
+        menus.push(UserMenu {
+            name: element.attrs.get("Name").unwrap_or("").to_owned(),
+            items,
+        });
+    });
+    menus
+}
+
+/// Where a command appears.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct CommandUse {
+    /// Element names (`Button`, `Slider`, `MenuItem`, ...).
+    pub kinds: BTreeSet<String>,
+    /// The skin areas (`MainSkinArea`, ...) or `Menu`.
+    pub areas: BTreeSet<String>,
+    /// How many attributes name it.
+    pub count: usize,
+}
+
+/// Every command the skin's live elements name, with where it appears.
+#[must_use]
+pub fn commands(root: &Element) -> BTreeMap<String, CommandUse> {
+    let mut found = BTreeMap::new();
+    collect(root, "", &mut found);
+    found
+}
+
+fn collect(element: &Element, area: &str, found: &mut BTreeMap<String, CommandUse>) {
+    let area = if element.name.ends_with("Area") || element.is("Menu") {
+        element.name.as_str()
+    } else {
+        area
+    };
+    for attribute in ["CmdID", "AltCmdID"] {
+        if let Some(command) = element.attrs.get(attribute).map(str::trim)
+            && !command.is_empty()
+        {
+            let entry: &mut CommandUse = found.entry(command.to_owned()).or_default();
+            entry.kinds.insert(element.name.clone());
+            if !area.is_empty() {
+                entry.areas.insert(area.to_owned());
+            }
+            entry.count += 1;
+        }
+    }
+    for child in &element.children {
+        collect(child, area, found);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::markup::parse_document;
+
+    #[test]
+    fn menus_items_and_separators() {
+        let root = parse_document(
+            "<Skin><MainSkinArea><Button CmdID='CMD_POPUP_USER_MENU' UserMenuName='Open' \
+             AltCmdID='ID_X' /></MainSkinArea>\
+             <Menu><UserMenu Name='Open'><MenuItem CmdID='ID_BASE_OPEN' /><MenuItem CmdID='' />\
+             <MenuItem CmdID='CMD_POPUPMENU_DVD' NoSubMenu='1' />\
+             MenuItem CmdID='ID_DISABLED' /></UserMenu>\
+             <UserMenu Name='Empty'></UserMenu></Menu></Skin>",
+        );
+        let menus = user_menus(&root);
+        assert_eq!(menus.len(), 2);
+        assert_eq!(menus[0].name, "Open");
+        assert_eq!(
+            menus[0].items,
+            vec![
+                UserMenuItem {
+                    command: "ID_BASE_OPEN".into(),
+                    inline: false
+                },
+                UserMenuItem {
+                    command: String::new(),
+                    inline: false
+                },
+                UserMenuItem {
+                    command: "CMD_POPUPMENU_DVD".into(),
+                    inline: true
+                },
+            ]
+        );
+        let used = commands(&root);
+        let names: Vec<&str> = used.keys().map(String::as_str).collect();
+        assert_eq!(
+            names,
+            [
+                "CMD_POPUPMENU_DVD",
+                "CMD_POPUP_USER_MENU",
+                "ID_BASE_OPEN",
+                "ID_X"
+            ]
+        );
+        let popup = &used["CMD_POPUP_USER_MENU"];
+        assert_eq!(popup.kinds, BTreeSet::from(["Button".to_owned()]));
+        assert_eq!(popup.areas, BTreeSet::from(["MainSkinArea".to_owned()]));
+        assert_eq!(
+            used["ID_BASE_OPEN"].areas,
+            BTreeSet::from(["Menu".to_owned()])
+        );
+    }
+}

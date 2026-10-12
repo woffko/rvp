@@ -1,5 +1,5 @@
-// The file dialog, loaded on first use (Qt Quick Dialogs is not needed to
-// start RVP).
+// The file dialogs, loaded on first use (Qt Quick Dialogs is not needed to
+// start RVP): media files to open or add, and a subtitle file to load.
 import QtQuick
 import QtQuick.Dialogs
 import Rvp
@@ -16,6 +16,16 @@ Item {
         holder.append = adding
         fileDialog.title = adding ? "Add File(s)" : "Open File(s)"
         fileDialog.open()
+    }
+    function askSubtitle() {
+        subtitleDialog.open()
+    }
+
+    FileDialog {
+        id: subtitleDialog
+        title: "Load Subtitle"
+        nameFilters: ["Subtitles (*.srt *.ass *.ssa *.sub *.idx *.sup *.vtt *.smi)", "All files (*)"]
+        onAccepted: holder.player.load_subtitle(Tools.local_file(selectedFile))
     }
 
     FileDialog {

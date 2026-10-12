@@ -19,19 +19,49 @@ use std::thread::JoinHandle;
 pub struct Dirs {
     pub config: PathBuf,
     pub state: PathBuf,
+    /// Portable mode: both next to the executable.
+    pub portable: bool,
 }
 
+/// The file next to the executable that turns on portable mode.
+pub const PORTABLE_MARKER: &str = "rvp.portable";
+
 impl Dirs {
-    /// `RVP_CONFIG_DIR` and `RVP_STATE_DIR` override the platform defaults:
-    /// on Linux `$XDG_CONFIG_HOME/rvp` (`~/.config/rvp`) and
-    /// `$XDG_STATE_HOME/rvp` (`~/.local/state/rvp`), on Windows
-    /// `%APPDATA%\RVP` for both.
+    /// `RVP_CONFIG_DIR` and `RVP_STATE_DIR` override the others. Then, when
+    /// [`PORTABLE_MARKER`] is next to the executable, portable mode keeps
+    /// `settings.json` there and the state in its `state` folder. Otherwise
+    /// the platform defaults: on Linux `$XDG_CONFIG_HOME/rvp`
+    /// (`~/.config/rvp`) and `$XDG_STATE_HOME/rvp` (`~/.local/state/rvp`),
+    /// on Windows `%APPDATA%\RVP` for both.
     ///
     /// # Errors
-    /// Fails when neither the overrides nor the platform variables are set.
+    /// Fails when no rule gives both directories.
     pub fn from_env() -> Result<Self, String> {
-        let var = |name: &str| std::env::var_os(name).filter(|value| !value.is_empty());
-        let (config, state) = if cfg!(windows) {
+        let exe_dir = std::env::current_exe()
+            .ok()
+            .and_then(|exe| exe.parent().map(Path::to_path_buf));
+        Self::resolve(
+            |name| std::env::var_os(name),
+            exe_dir.as_deref(),
+            cfg!(windows),
+        )
+    }
+
+    /// [`Dirs::from_env`] with the environment, the executable's folder and
+    /// the system given (tests).
+    ///
+    /// # Errors
+    /// Fails when no rule gives both directories.
+    pub fn resolve(
+        var: impl Fn(&str) -> Option<std::ffi::OsString>,
+        exe_dir: Option<&Path>,
+        windows: bool,
+    ) -> Result<Self, String> {
+        let var = |name: &str| var(name).filter(|value| !value.is_empty());
+        let portable = exe_dir.filter(|dir| dir.join(PORTABLE_MARKER).is_file());
+        let (config, state) = if let Some(dir) = portable {
+            (Some(dir.to_path_buf()), Some(dir.join("state")))
+        } else if windows {
             let base = var("APPDATA").map(|dir| PathBuf::from(dir).join("RVP"));
             (base.clone(), base)
         } else {
@@ -46,22 +76,28 @@ impl Dirs {
                 .map(|dir| dir.join("rvp"));
             (config, state)
         };
-        let config = var("RVP_CONFIG_DIR").map(PathBuf::from).or(config);
-        let state = var("RVP_STATE_DIR").map(PathBuf::from).or(state);
-        match (config, state) {
-            (Some(config), Some(state)) => Ok(Self { config, state }),
+        let config_override = var("RVP_CONFIG_DIR").map(PathBuf::from);
+        let state_override = var("RVP_STATE_DIR").map(PathBuf::from);
+        let portable = portable.is_some() && config_override.is_none();
+        match (config_override.or(config), state_override.or(state)) {
+            (Some(config), Some(state)) => Ok(Self {
+                config,
+                state,
+                portable,
+            }),
             _ => {
                 Err("no configuration directory (set RVP_CONFIG_DIR and RVP_STATE_DIR)".to_owned())
             }
         }
     }
 
-    /// Both directories inside `dir` (tests, portable mode).
+    /// Both directories inside `dir` (tests).
     #[must_use]
     pub fn inside(dir: &Path) -> Self {
         Self {
             config: dir.join("config"),
             state: dir.join("state"),
+            portable: false,
         }
     }
 }

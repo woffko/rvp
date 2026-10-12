@@ -1,20 +1,15 @@
-// The key and mouse editor (F5, PotPlayer's Preferences > Keys), loaded on
-// first use. It edits a copy of the bindings in Player (editor_*): a key or
-// gesture already in use asks before it moves, Reset gives an action
-// PotPlayer's defaults back, and Save stores the changes in settings.json.
+// The settings window's key and mouse page (PotPlayer's Preferences >
+// Keys). It edits the bindings through Player (editor_*): a key or gesture
+// already in use asks before it moves, Reset gives an action PotPlayer's
+// defaults back, and every change applies and is saved at once.
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
 import Rvp
 
-ApplicationWindow {
+Item {
     id: editor
     required property Player player
-    title: "Keys and Mouse"
-    width: 760
-    height: 580
-    minimumWidth: 560
-    minimumHeight: 360
 
     property var rows: []
     property var gestures: []
@@ -25,29 +20,31 @@ ApplicationWindow {
     // yes because the key or gesture belongs to another action.
     property var capturing: null
     property var pending: null
-    property bool saved: false
 
+    // The page is shown: edit the bindings in use now.
     function begin() {
-        player.editor_open()
+        if (!editorOpen)
+            player.editor_open()
+        editorOpen = true
         gestures = JSON.parse(player.editor_gestures())
-        saved = false
         capturing = null
         pending = null
         notice = "Select an action, then add a key or a mouse gesture."
         reload()
-        show()
-        raise()
-        requestActivate()
     }
-    function reload() { rows = JSON.parse(player.editor_rows()) }
-    function finish(save) {
-        saved = true
-        player.editor_close(save)
-        close()
-    }
-    onClosing: {
-        if (!saved)
+    // The settings window closes.
+    function end() {
+        if (editorOpen)
             player.editor_close(false)
+        editorOpen = false
+    }
+    property bool editorOpen: false
+    function reload() { rows = JSON.parse(player.editor_rows()) }
+    // Applies and saves the edited bindings, then goes on editing.
+    function commit() {
+        player.editor_close(true)
+        player.editor_open()
+        reload()
     }
 
     // "x1-double-click" -> "X1 Double Click".
@@ -96,7 +93,7 @@ ApplicationWindow {
         const result = JSON.parse(player.editor_bind_key(row.scope, row.name, key, modifiers))
         notice = result.key + " → “" + row.label + "”"
                  + (result.displaced !== "" ? " (taken from another action)" : "")
-        reload()
+        commit()
     }
     function chooseGesture(row, gesture) {
         const owner = player.editor_gesture_owner(gesture)
@@ -112,7 +109,7 @@ ApplicationWindow {
     function bindGesture(row, gesture) {
         player.editor_bind_gesture(row.name, gesture)
         notice = gestureText(gesture) + " → “" + row.label + "”"
-        reload()
+        commit()
     }
     function confirm(yes) {
         const p = pending
@@ -121,10 +118,19 @@ ApplicationWindow {
             notice = "Unchanged."
             return
         }
-        if (p.kind === "key")
+        if (p.kind === "key") {
             bindKey(p.row, p.key, p.modifiers)
-        else
+        } else if (p.kind === "gesture") {
             bindGesture(p.row, p.gesture)
+        } else {
+            player.editor_reset_all()
+            notice = "All keys and mouse actions are PotPlayer's defaults again."
+            commit()
+        }
+    }
+
+    SystemPalette {
+        id: colors
     }
 
     // Takes the key while one is being captured.
@@ -154,6 +160,7 @@ ApplicationWindow {
 
         ListView {
             id: list
+            objectName: "keyRows"
             Layout.fillWidth: true
             Layout.fillHeight: true
             clip: true
@@ -165,7 +172,7 @@ ApplicationWindow {
                 required property int index
                 width: list.width
                 height: rowLayout.implicitHeight + 8
-                color: index % 2 ? editor.palette.alternateBase : editor.palette.base
+                color: index % 2 ? colors.alternateBase : colors.base
                 RowLayout {
                     id: rowLayout
                     anchors.fill: parent
@@ -193,7 +200,7 @@ ApplicationWindow {
                                 onClicked: {
                                     editor.player.editor_unbind_key(rowItem.modelData.scope, modelData)
                                     editor.notice = modelData + " removed"
-                                    editor.reload()
+                                    editor.commit()
                                 }
                             }
                         }
@@ -206,7 +213,7 @@ ApplicationWindow {
                                 onClicked: {
                                     editor.player.editor_unbind_gesture(modelData)
                                     editor.notice = editor.gestureText(modelData) + " removed"
-                                    editor.reload()
+                                    editor.commit()
                                 }
                             }
                         }
@@ -236,7 +243,7 @@ ApplicationWindow {
                         onClicked: {
                             editor.player.editor_reset(rowItem.modelData.scope, rowItem.modelData.name)
                             editor.notice = "“" + rowItem.modelData.label + "” has PotPlayer's keys again"
-                            editor.reload()
+                            editor.commit()
                         }
                     }
                 }
@@ -251,7 +258,7 @@ ApplicationWindow {
                 wrapMode: Text.Wrap
             }
             Button {
-                text: "Move"
+                text: editor.pending !== null && editor.pending.kind === "all" ? "Reset" : "Move"
                 visible: editor.pending !== null
                 onClicked: editor.confirm(true)
             }
@@ -272,19 +279,9 @@ ApplicationWindow {
             Button {
                 text: "Reset All"
                 onClicked: {
-                    editor.player.editor_reset_all()
-                    editor.notice = "All keys and mouse actions are PotPlayer's defaults again (not saved yet)."
-                    editor.reload()
+                    editor.pending = { kind: "all" }
+                    editor.notice = "Give every action PotPlayer's keys and mouse actions again?"
                 }
-            }
-            Button {
-                text: "Save"
-                highlighted: true
-                onClicked: editor.finish(true)
-            }
-            Button {
-                text: "Cancel"
-                onClicked: editor.finish(false)
             }
         }
     }

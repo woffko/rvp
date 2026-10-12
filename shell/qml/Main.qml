@@ -16,7 +16,7 @@ Window {
     visible: false
     color: "black"
     title: player.window_title
-    flags: Qt.Window | Qt.FramelessWindowHint
+    flags: Qt.Window | Qt.FramelessWindowHint | (player.on_top ? Qt.WindowStaysOnTopHint : 0)
 
     // Request kinds of Player.uiRequest (src/player.rs, mod request).
     readonly property int requestOpenFiles: 1
@@ -27,13 +27,20 @@ Window {
     readonly property int requestContextMenu: 6
     readonly property int requestStartMove: 7
     readonly property int requestStartResize: 8
-    readonly property int requestKeysAndMouse: 9
+    readonly property int requestSettings: 9
     readonly property int requestAddFiles: 10
     readonly property int requestAddFolder: 11
     readonly property int requestImportPlaylists: 12
     readonly property int requestListMenu: 13
     readonly property int requestRaise: 14
     readonly property int requestAlbumName: 15
+    readonly property int requestSkinMenu: 16
+    readonly property int requestOpenFolder: 17
+    readonly property int requestOpenUrl: 18
+    readonly property int requestOpenSubtitle: 19
+    readonly property int requestImageFolder: 20
+    readonly property int requestOpenExternal: 21
+    readonly property int requestAbout: 22
 
     property bool wasMaximized: false
     // The window state RVP last asked for and when (see applyVisibility).
@@ -143,7 +150,12 @@ Window {
         interval: 1000
         repeat: true
         running: true
-        onTriggered: player.tick()
+        triggeredOnStart: true
+        onTriggered: {
+            player.tick()
+            // The skin's clock (CMD_SYSTEM_TIME_MESSAGE).
+            player.set_clock(Qt.formatTime(new Date(), "hh:mm:ss"))
+        }
     }
     Timer {
         interval: 100
@@ -172,16 +184,40 @@ Window {
             folderLoader.item.ask(kind === requestImportPlaylists ? "import" : "add")
             break
         case requestListMenu:
-            listMenuLoader.active = true
-            listMenuLoader.item.menu.popup()
+            menuLoader.active = true
+            menuLoader.item.show("playlist")
+            break
+        case requestSkinMenu:
+            menuLoader.active = true
+            menuLoader.item.show("skin")
+            break
+        case requestOpenFolder:
+        case requestImageFolder:
+            folderLoader.active = true
+            folderLoader.item.ask(kind === requestOpenFolder ? "open" : "images")
+            break
+        case requestOpenUrl:
+            urlLoader.active = true
+            urlLoader.item.ask()
+            break
+        case requestOpenSubtitle:
+            dialogLoader.active = true
+            dialogLoader.item.askSubtitle()
+            break
+        case requestOpenExternal:
+            Qt.openUrlExternally(player.external_url)
+            break
+        case requestAbout:
+            aboutLoader.active = true
+            aboutLoader.item.ask()
             break
         case requestAlbumName:
             albumLoader.active = true
             albumLoader.item.ask(argument === 1, player.album_name)
             break
-        case requestKeysAndMouse:
-            keysLoader.active = true
-            keysLoader.item.begin()
+        case requestSettings:
+            settingsLoader.active = true
+            settingsLoader.item.begin(player.settings_page)
             break
         case requestRaise:
             if (root.visibility === Window.Minimized)
@@ -209,7 +245,7 @@ Window {
         case requestContextMenu:
             menuLoader.active = true
             menuLoader.item.logWindows = root.logGeometry
-            menuLoader.item.menu.popup()
+            menuLoader.item.show("context")
             break
         case requestStartMove:
             root.startSystemMove()
@@ -401,7 +437,7 @@ Window {
         id: menuLoader
         anchors.fill: parent
         active: false
-        Component.onCompleted: setSource("ContextMenu.qml", { player: player })
+        Component.onCompleted: setSource("Menus.qml", { player: player })
     }
     Loader {
         id: dialogLoader
@@ -414,10 +450,18 @@ Window {
         Component.onCompleted: setSource("FolderDialog.qml", { player: player })
     }
     Loader {
-        id: listMenuLoader
+        id: urlLoader
         anchors.fill: parent
+        z: 30
         active: false
-        Component.onCompleted: setSource("ListMenu.qml", { player: player })
+        Component.onCompleted: setSource("UrlDialog.qml", { player: player })
+    }
+    Loader {
+        id: aboutLoader
+        anchors.fill: parent
+        z: 30
+        active: false
+        Component.onCompleted: setSource("About.qml", { player: player })
     }
     Loader {
         id: albumLoader
@@ -427,9 +471,9 @@ Window {
         Component.onCompleted: setSource("AlbumName.qml", { player: player })
     }
     Loader {
-        id: keysLoader
+        id: settingsLoader
         active: false
-        Component.onCompleted: setSource("KeysAndMouse.qml", { player: player })
+        Component.onCompleted: setSource("Settings.qml", { player: player })
     }
 
     DropArea {
@@ -463,6 +507,33 @@ Window {
             id: osdTimer
             interval: 2000
             onTriggered: player.osd = ""
+        }
+    }
+
+    // Playback information (Tab), refreshed every second while shown.
+    Rectangle {
+        visible: player.info_shown
+        z: 20
+        x: player.video_rect.x + 12
+        y: player.video_rect.y + 44
+        width: infoText.implicitWidth + 16
+        height: infoText.implicitHeight + 12
+        radius: 4
+        color: "#99000000"
+        Text {
+            id: infoText
+            x: 8
+            y: 6
+            color: "#f0f0f0"
+            font.pixelSize: 14
+            text: ""
+        }
+        Timer {
+            running: parent.visible
+            repeat: true
+            interval: 1000
+            triggeredOnStart: true
+            onTriggered: infoText.text = player.info_text()
         }
     }
 
@@ -845,21 +916,23 @@ Window {
                 player.run_action("toggle-playlist")
             break
         case 29:
-            // The menu, dialog and tooltip load on first use.
+            // The menus, dialogs and tooltip load on first use.
             menuLoader.active = true
             dialogLoader.active = true
             tipLoader.active = true
-            listMenuLoader.active = true
             folderLoader.active = true
+            urlLoader.active = true
+            aboutLoader.active = true
             t.before = s
             t.next()
             break
         case 30: {
             t.check("menu_dialog_tooltip_load", menuLoader.status === Loader.Ready
                     && dialogLoader.status === Loader.Ready && tipLoader.status === Loader.Ready
-                    && listMenuLoader.status === Loader.Ready && folderLoader.status === Loader.Ready,
+                    && folderLoader.status === Loader.Ready && urlLoader.status === Loader.Ready
+                    && aboutLoader.status === Loader.Ready,
                     "status " + menuLoader.status + "," + dialogLoader.status + "," + tipLoader.status
-                    + "," + listMenuLoader.status + "," + folderLoader.status)
+                    + "," + folderLoader.status + "," + urlLoader.status + "," + aboutLoader.status)
             // What a drop or the file dialog does with a file URL: append
             // the playing file once more.
             const path = String(s.path).replace(/\\/g, "/")
@@ -878,7 +951,130 @@ Window {
             t.stepStarted = Date.now()
             break
         default:
-            m3Tick()
+            if (t.step >= 200)
+                m4Tick()
+            else
+                m3Tick()
+        }
+    }
+
+    // The item at a path of labels in a menu's JSON.
+    function menuItem(items, path) {
+        let found = null
+        for (const label of path) {
+            found = items.find(item => item.label === label)
+            if (!found)
+                return null
+            items = found.children
+        }
+        return found
+    }
+
+    function m4Tick() {
+        const t = selftest
+        const s = t.status()
+        switch (t.step) {
+        case 200: {
+            // The menus show PotPlayer's tree with the keys bound now.
+            const context = JSON.parse(player.menu_json("context"))
+            const play = root.menuItem(context, ["Playback", "Play/Pause Playback"])
+            const frame = root.menuItem(context, ["Playback", "Jump (to)", "Previous frame"])
+            const normalizer = root.menuItem(context, ["Audio", "Audio Effects", "Normalizer"])
+            t.check("context_menu_keys", play !== null && play.shortcut === "Space"
+                        && frame !== null && frame.shortcut === "D",
+                    "play " + (play && play.shortcut) + " frame " + (frame && frame.shortcut))
+            t.check("context_menu_marks", normalizer !== null && normalizer.checked === (s.normalizer ? 1 : 0),
+                    "normalizer " + (normalizer && normalizer.checked))
+            const list = JSON.parse(player.menu_json("playlist"))
+            const undo = root.menuItem(list, ["Undo"])
+            t.check("playlist_menu_keys", list[0].id === "l:play" && undo !== null && undo.shortcut === "Ctrl+Z",
+                    "first " + list[0].label + " undo " + (undo && undo.shortcut))
+            // Built as Qt Quick menus (opening needs real input on Wayland).
+            menuLoader.active = true
+            const count = menuLoader.item.build("context").count
+            const commands = menuLoader.item.commandCount
+            t.check("context_menu_builds", count > 15 && commands > 100,
+                    count + " top items, " + commands + " commands")
+            menuLoader.item.build("playlist")
+            t.check("playlist_menu_builds", menuLoader.item.commandCount > 15,
+                    menuLoader.item.commandCount + " commands")
+            // A menu command runs its action.
+            t.before = s
+            player.run_menu_command("w:speed-up")
+            t.next()
+            break
+        }
+        case 201:
+            if (t.waitFor("menu_command_runs", () => s.speed !== null && Math.abs(s.speed - 1.1) < 0.01,
+                          2000, () => "speed " + s.speed))
+                player.run_menu_command("w:speed-default")
+            break
+        case 202:
+            t.waitFor("speed_back", () => s.speed !== null && Math.abs(s.speed - 1) < 0.01, 2000,
+                      () => "speed " + s.speed)
+            break
+        case 203:
+            // F5 opens the settings window.
+            player.key(Qt.Key_F5, 0)
+            t.next()
+            break
+        case 204:
+            t.waitFor("f5_opens_settings", () => settingsLoader.status === Loader.Ready
+                          && settingsLoader.item.visible, 3000)
+            break
+        case 205: {
+            if (settingsLoader.status !== Loader.Ready) {
+                t.step = 210
+                break
+            }
+            const win = settingsLoader.item
+            const loaded = []
+            for (let i = 0; i < win.pages.length; i++) {
+                win.showPage(i)
+                const page = win.pageItem(i)
+                if (page && page.visible && page.width > 0)
+                    loaded.push(win.pages[i].key)
+            }
+            t.check("settings_pages_load", loaded.length === win.pages.length, loaded.join(","))
+            win.showPage(win.pages.findIndex(p => p.key === "input"))
+            const rows = JSON.parse(player.editor_rows())
+            const owner = JSON.parse(player.editor_key_owner("window", Qt.Key_Space, 0))
+            t.check("keys_page_rows", t.status().editor_open && rows.length > 50, rows.length + " actions")
+            t.check("keys_page_finds_owner", owner.owner === "play-pause", owner.key + " -> " + owner.owner)
+            Tools.grab(t.outDir, "settings")
+            // A changed setting applies at once: a bigger volume step (the
+            // action, as Down goes to the playlist while it has the keys).
+            win.showPage(win.pages.findIndex(p => p.key === "audio"))
+            win.set("volume-step", 5)
+            t.before = s
+            player.run_action("volume-down")
+            t.next()
+            break
+        }
+        case 206:
+            t.waitFor("setting_applies_at_once", () => s.volume_step === 5 && s.volume !== null
+                          && Math.abs(s.volume - (t.before.volume - 5)) < 0.01, 2000,
+                      () => "step " + s.volume_step + " volume " + t.before.volume + " -> " + s.volume)
+            break
+        case 207: {
+            const win = settingsLoader.item
+            win.set("volume-step", 1)
+            t.check("setting_restored", t.status().volume_step === 1, "step " + t.status().volume_step)
+            win.close()
+            t.next()
+            break
+        }
+        case 208:
+            t.waitFor("settings_window_closes", () => !settingsLoader.item.visible && !s.editor_open, 2000)
+            break
+        case 209:
+            t.next()
+            break
+        case 210:
+            // Back to M3's steps.
+            t.step = 126
+            t.stepStarted = Date.now()
+            break
         }
     }
 
@@ -1022,28 +1218,9 @@ Window {
             }
             break
         case 122:
-            player.key(Qt.Key_F5, 0)
-            t.next()
-            break
-        case 123:
-            t.waitFor("f5_opens_keys_and_mouse", () => s.editor_open && keysLoader.status === Loader.Ready
-                          && keysLoader.item.visible, 3000)
-            break
-        case 124: {
-            if (keysLoader.status === Loader.Ready) {
-                const rows = JSON.parse(player.editor_rows())
-                const owner = JSON.parse(player.editor_key_owner("window", Qt.Key_Space, 0))
-                t.check("keys_editor_rows", rows.length > 50, rows.length + " actions")
-                t.check("keys_editor_finds_owner", owner.owner === "play-pause",
-                        owner.key + " -> " + owner.owner)
-                Tools.grab(t.outDir, "keys")
-                keysLoader.item.finish(false)
-            }
-            t.next()
-            break
-        }
-        case 125:
-            t.waitFor("keys_editor_closes", () => !s.editor_open, 2000)
+            // M4 and M5: the menus and the settings window.
+            t.step = 200
+            t.stepStarted = Date.now()
             break
         case 126: {
             const name = player.option("instance")

@@ -74,7 +74,8 @@ fn atlas() -> Vec<u8> {
 /// deleting `<`, a broken quote, an unquoted value, glued attributes, the
 /// `< >` tooltip separator, an include with a macro, `#if`/`#else`, docking
 /// order, negative coordinates and sizes, centring, `ConstSize`, paired
-/// commands, `State` pages and `VisParentMinWidth`.
+/// commands, `State` pages, `VisParentMinWidth` and a skin menu on a right
+/// click (`AltUserMenuName`, the `<Menu>` section).
 const VIDEO_SKIN: &str = "<?XML version='1.0' ?>
 <Skin Version='1.0'>
 <MainSkinArea Image='Atlas.png'>
@@ -93,7 +94,7 @@ const VIDEO_SKIN: &str = "<?XML version='1.0' ?>
 \t\t<PicLabel CmdID='CMD_AUDIO_IN_NUM_CHANNEL_MESSAGE' Left='30' Top='6' Width='4' Height='2' ImageLeft='0' ImageTop='24' ImageWidth='4' ImageHeight='2'MappingDB='2,2.1;3,5.1' />
 \t\t<Button Tooltip='Play< >Open' CmdID='CMD_MEDIA_PLAY' AltCmdID=ID_OPEN_FILE Left='0' Top='2' Width='8' Height='8' ImageLeft='0' ImageTop='10' HoriCenter='1' />
 \t\t<Button CmdID='CMD_MEDIA_PAUSE' Left='0' Top='2' Width='8' Height='8' ImageLeft='0' ImageTop='10' HoriCenter='1' />
-\t\t<Button CmdID='ID_AUDIO_EQULIZER' DownFlag='1' Left='-12' Top='2' Width='8' Height='8' ImageLeft='0' ImageTop='10' />
+\t\t<Button CmdID='ID_AUDIO_EQULIZER' AltCmdID='CMD_POPUP_USER_MENU' AltUserMenuName='EQMenu' DownFlag='1' Left='-12' Top='2' Width='8' Height='8' ImageLeft='0' ImageTop='10' />
 \t\t<Button CmdID='ID_WIDE_ONLY' Left='40' Top='2' Width='8' Height='8' ImageLeft='0' ImageTop='10' VisParentMinWidth='500' />
 \t\t<Static State='CMD_PAGE_CONTROL' PageIndex='4' Left='50' Top='2' Width='8' Height='8' />
 \t</Static>
@@ -101,6 +102,14 @@ const VIDEO_SKIN: &str = "<?XML version='1.0' ?>
 \t<Static Align='Client' Contain='CMD_VIDEO_WINDOW' />
 </Control>
 </MainSkinArea>
+<Menu>
+<UserMenu Name='EQMenu' >
+\t<MenuItem CmdID='ID_AUDIO_EQULIZER' />
+\t<MenuItem CmdID='' />
+\t<MenuItem CmdID='CMD_POPUPMENU_AUDIO_EQULIZER' NoSubMenu='1' />
+\tMenuItem CmdID='ID_DISABLED_ITEM' />
+</UserMenu>
+</Menu>
 #if<SkinName==VideoSkin>
 <Marker Value='video' />
 #else
@@ -374,4 +383,54 @@ fn hit_testing() {
         })
     ));
     assert_eq!(hit_test(&placed, 200, 200), None);
+}
+
+#[test]
+fn skin_menus_and_commands() {
+    let skin = skin();
+    let menus = skin.user_menus();
+    assert_eq!(menus.len(), 1);
+    assert_eq!(menus[0].name, "EQMenu");
+    let items: Vec<(&str, bool)> = menus[0]
+        .items
+        .iter()
+        .map(|item| (item.command.as_str(), item.inline))
+        .collect();
+    assert_eq!(
+        items,
+        [
+            ("ID_AUDIO_EQULIZER", false),
+            ("", false),
+            ("CMD_POPUPMENU_AUDIO_EQULIZER", true)
+        ]
+    );
+    let commands = skin.commands();
+    assert!(commands.contains_key("CMD_POPUP_USER_MENU"));
+    assert!(commands.contains_key("ID_FROM_INCLUDE"));
+    assert!(!commands.contains_key("ID_DISABLED_ITEM"));
+    // The line disabled by deleting `<` names no command.
+    assert_eq!(commands["ID_AUDIO_EQULIZER"].count, 2);
+
+    // The right click opens the skin menu.
+    let placed = layout(&skin, "MainSkinArea", 100, 60, &UiState::default()).expect("layout");
+    let button = placed
+        .nodes
+        .iter()
+        .find(|node| node.element.attrs.get("CmdID") == Some("ID_AUDIO_EQULIZER"))
+        .expect("equalizer button");
+    let (x, y) = (button.rect.x + 1, button.rect.y + 1);
+    match hit_test(&placed, x, y) {
+        Some(Hit::Control {
+            alt_command,
+            alt_menu,
+            menu,
+            page,
+            ..
+        }) => {
+            assert_eq!(alt_command, Some("CMD_POPUP_USER_MENU"));
+            assert_eq!(alt_menu, Some("EQMenu"));
+            assert_eq!((menu, page), (None, None));
+        }
+        other => panic!("unexpected hit {other:?}"),
+    }
 }

@@ -9,8 +9,8 @@ mod engine;
 mod model;
 
 pub use engine::{
-    AudioOutput, EndReason, Engine, EngineError, EngineEvent, EngineOptions, Seek, VideoOutput,
-    default_ipc_server,
+    AudioOutput, Chapter, EndReason, Engine, EngineError, EngineEvent, EngineOptions, Seek, Track,
+    TrackKind, VideoOutput, default_ipc_server,
 };
 pub use libmpv2;
 pub use model::{Changes, Kind, PlayerModel, PropertyId, Value};

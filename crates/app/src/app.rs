@@ -20,6 +20,8 @@ use rvp_engine::{
 };
 
 use crate::action::{Action, ListAction};
+use crate::action::{AfterPlayback, Delay, Repeat};
+use crate::commands::Session;
 use crate::dpl::{self, DriveMap};
 use crate::input::{Bindings, KeyChord};
 use crate::instance::{Mode, Request};
@@ -41,8 +43,33 @@ pub enum UiRequest {
     Exit,
     ContextMenu,
     TogglePlaylist,
-    /// Open the key and mouse editor.
-    KeysAndMouse,
+    /// The settings window, at a page (`input`) or where it was.
+    Preferences(Option<&'static str>),
+    About,
+    /// Ask for a folder to open.
+    OpenFolderDialog,
+    /// Ask for a URL to open.
+    OpenUrlDialog,
+    /// Ask for a subtitle file for the playing video.
+    OpenSubtitleDialog,
+    /// Ask for the folder saved frames go to.
+    ImageFolderDialog,
+    /// Show a folder in the system's file manager.
+    OpenExternal(PathBuf),
+    /// Save the playing frame to this file (mpv `screenshot-to-file`, off
+    /// the GUI thread); `subtitles` as shown on screen.
+    SaveFrame {
+        path: PathBuf,
+        subtitles: bool,
+    },
+    /// Resize the window to the video at this scale.
+    ScaleWindow(f64),
+    /// The window takes the video's shape.
+    FitAspect,
+    /// Keep the window above others, or not.
+    OnTop(bool),
+    /// Show or hide the playback information over the video.
+    ShowInfo(bool),
     /// Ask for PotPlayer's playlist folder to import.
     ImportPlaylists,
     /// Ask for files to add to the shown album.
@@ -58,6 +85,15 @@ pub enum UiRequest {
     Osd(String),
     /// A non-blocking message (section 4: no modal interruptions).
     Message(String),
+}
+
+/// A sync step as PotPlayer's menu names it: `50ms`, `0.5 Sec`.
+fn sync_step_label(seconds: f64) -> String {
+    if seconds < 1.0 {
+        format!("{:.0}ms", seconds * 1000.0)
+    } else {
+        format!("{seconds} Sec")
+    }
 }
 
 /// A seek step as PotPlayer's menu names it: `5 Sec`, `1 Min`.
@@ -114,6 +150,8 @@ pub struct App {
     first_start: bool,
     /// Warnings from loading the settings, for the shell to show once.
     pub warnings: Vec<String>,
+    /// Picture and playback state for this session (M4's commands).
+    pub(crate) session: Session,
 }
 
 impl App {
@@ -138,8 +176,10 @@ impl App {
 
     /// # Errors
     /// Fails when the resume store or the albums cannot be read.
-    pub fn new(settings: Settings, state_dir: &Path) -> io::Result<Self> {
-        let (bindings, warnings) = settings.bindings();
+    pub fn new(mut settings: Settings, state_dir: &Path) -> io::Result<Self> {
+        let mut warnings = settings.validate();
+        let (bindings, binding_warnings) = settings.bindings();
+        warnings.extend(binding_warnings);
         let first_start = !state_dir.join("playlists.json").exists();
         Ok(Self {
             settings,
@@ -153,6 +193,7 @@ impl App {
             writer: storage::Writer::new()?,
             first_start,
             warnings,
+            session: Session::default(),
         })
     }
 
@@ -167,7 +208,32 @@ impl App {
             "volume-max".to_owned(),
             format!("{:.0}", self.settings.volume_max.max(100.0)),
         ));
+        let settings = &self.settings;
+        for (name, value) in [
+            ("audio-device", settings.audio_device.as_str()),
+            ("video-sync", settings.video_sync.as_str()),
+            ("scale", settings.scaler.as_str()),
+            ("slang", settings.subtitle_languages.as_str()),
+            ("sub-auto", settings.subtitle_auto.as_str()),
+        ] {
+            if !value.trim().is_empty() {
+                options
+                    .extra
+                    .push((name.to_owned(), value.trim().to_owned()));
+            }
+        }
+        options.extra.push((
+            "sub-scale".to_owned(),
+            format!("{:.2}", settings.subtitle_scale),
+        ));
         options
+    }
+
+    /// Where the settings are saved (`None` in tests that give settings
+    /// directly).
+    #[must_use]
+    pub fn settings_path(&self) -> Option<&Path> {
+        self.settings_path.as_deref()
     }
 
     #[must_use]
@@ -373,6 +439,17 @@ impl App {
             Action::ToggleNormalizer => Some(self.settings.normalizer.enabled),
             Action::ToggleBoost => Some(self.settings.normalizer.boost),
             Action::ToggleMute => Some(self.model.flag(PropertyId::Mute) == Some(true)),
+            Action::ToggleSubtitles => {
+                Some(self.model.flag(PropertyId::SubVisibility) != Some(false))
+            }
+            Action::ToggleKeyframeSeeks => Some(self.settings.keyframe_seeks),
+            Action::SetRepeat(repeat) => Some(self.settings.repeat == repeat),
+            Action::SetOnTop(mode) => Some(self.settings.on_top == mode),
+            Action::SetAfterPlayback(after) => Some(self.session.after == after),
+            Action::SetAspect(aspect) => Some(self.session.aspect == aspect),
+            Action::VideoFit(fit) => Some(self.session.fit == fit),
+            Action::SetImageFormat(format) => Some(self.settings.image_format == format),
+            Action::PlaybackInfo => Some(self.session.info),
             _ => None,
         }
     }
@@ -383,12 +460,7 @@ impl App {
     #[must_use]
     pub fn menu_entry(&self, action: Action) -> (String, String) {
         let (text, shown) = action.menu_text();
-        let label = match action {
-            Action::SeekBackward(step) | Action::SeekForward(step) => {
-                text.replace("%s", &step_label(self.settings.seek_seconds(step)))
-            }
-            _ => text.to_owned(),
-        };
+        let label = self.fill_step(action, text);
         let shown = shown
             .and_then(KeyChord::parse)
             .filter(|chord| self.bindings.key(chord) == Some(action));
@@ -403,6 +475,39 @@ impl App {
                 .unwrap_or_default(),
         };
         (label, shortcut)
+    }
+
+    /// PotPlayer's menu text with the step's length in place of `%s`
+    /// (`%s Backward` → `30 Sec Backward`).
+    #[must_use]
+    pub fn fill_step(&self, action: Action, text: &str) -> String {
+        match action {
+            Action::SeekBackward(step) | Action::SeekForward(step) => {
+                text.replace("%s", &step_label(self.settings.seek_seconds(step)))
+            }
+            Action::AudioDelay(Delay::Earlier | Delay::Later) => {
+                text.replace("%s", &sync_step_label(self.settings.audio_delay_step))
+            }
+            Action::SubtitleDelay(Delay::Earlier | Delay::Later) => {
+                text.replace("%s", &sync_step_label(self.settings.subtitle_delay_step))
+            }
+            _ => text.to_owned(),
+        }
+        .trim()
+        .to_owned()
+    }
+
+    /// Shows an album and plays its current (or first playable) entry.
+    pub fn play_album(&mut self, engine: &Engine, album: usize) {
+        self.library.show_album(album);
+        let target = self.library.lists().albums.get(album).and_then(|target| {
+            target
+                .current
+                .or_else(|| target.entries.iter().position(|entry| entry.playable))
+        });
+        if let Some(index) = target {
+            drop(self.play_entry(engine, album, index, false));
+        }
     }
 
     /// The playlist menu entry of a playlist action and its bound key.
@@ -435,7 +540,6 @@ impl App {
             Action::MaximizeRestore => return Some(UiRequest::MaximizeRestore),
             Action::ContextMenu => return Some(UiRequest::ContextMenu),
             Action::TogglePlaylist => return Some(UiRequest::TogglePlaylist),
-            Action::KeysAndMouse => return Some(UiRequest::KeysAndMouse),
             Action::ImportPlaylists => return Some(UiRequest::ImportPlaylists),
             Action::ToggleSubtitles => engine.toggle_subtitles(),
             Action::ToggleNormalizer => {
@@ -463,10 +567,10 @@ impl App {
             Action::Previous => self.step(engine, -1),
             Action::Next => self.step(engine, 1),
             Action::SeekBackward(step) => {
-                self.seek(engine, Seek::Relative(-self.settings.seek_seconds(step)))
+                self.seek_to(engine, Seek::Relative(-self.settings.seek_seconds(step)))
             }
             Action::SeekForward(step) => {
-                self.seek(engine, Seek::Relative(self.settings.seek_seconds(step)))
+                self.seek_to(engine, Seek::Relative(self.settings.seek_seconds(step)))
             }
             Action::VolumeUp => return self.change_volume(engine, self.settings.volume_step),
             Action::VolumeDown => return self.change_volume(engine, -self.settings.volume_step),
@@ -477,6 +581,7 @@ impl App {
                     .ok()
                     .map(|()| UiRequest::Osd(if mute { "Mute" } else { "Sound on" }.to_owned()));
             }
+            other => return self.command(engine, other),
         };
         // Commands that do not apply (nothing to seek) are ignored, as
         // PotPlayer does.
@@ -609,6 +714,37 @@ impl App {
         files.len()
     }
 
+    /// Opens the media files in `folder` and its subfolders (PotPlayer's
+    /// "Open Folder"): they join the shown album and the first one plays.
+    /// Returns how many there were.
+    ///
+    /// # Errors
+    /// Fails when libmpv rejects a command.
+    pub fn open_folder(&mut self, engine: &Engine, folder: &Path) -> Result<usize, EngineError> {
+        let mut files = Vec::new();
+        collect_media(folder, 0, &mut files);
+        files.sort();
+        if !files.is_empty() {
+            self.open(engine, &files, false)?;
+        }
+        Ok(files.len())
+    }
+
+    /// Loads a subtitle file for the playing video and shows it.
+    pub fn load_subtitle(&mut self, engine: &Engine, path: &Path) -> Option<UiRequest> {
+        if !self.model.media_loaded() {
+            return Some(UiRequest::Osd("Open a video first".to_owned()));
+        }
+        let text = path.to_string_lossy();
+        match engine.command("sub-add", &[&text, "select"]) {
+            Ok(()) => Some(UiRequest::Osd(format!(
+                "Subtitles: {}",
+                crate::view::file_name(&text)
+            ))),
+            Err(error) => Some(UiRequest::Message(format!("Cannot load {text}: {error}"))),
+        }
+    }
+
     /// Where PotPlayer's playlists are: the setting, else on Windows
     /// `%APPDATA%\PotPlayerMini64\Playlist`.
     #[must_use]
@@ -736,7 +872,7 @@ impl App {
         self.save_settings();
     }
 
-    fn seek(&mut self, engine: &Engine, target: Seek) -> Result<(), EngineError> {
+    pub(crate) fn seek_to(&mut self, engine: &Engine, target: Seek) -> Result<(), EngineError> {
         if !self.model.media_loaded() {
             return Ok(());
         }
@@ -744,7 +880,7 @@ impl App {
         if matches!(self.tracking, Tracking::Resuming(_)) {
             self.tracking = Tracking::On;
         }
-        engine.seek(target)
+        engine.seek_with(target, !self.settings.keyframe_seeks)
     }
 
     fn change_volume(&mut self, engine: &Engine, delta: f64) -> Option<UiRequest> {
@@ -758,7 +894,7 @@ impl App {
 
     /// The seek bar was clicked or dragged to `fraction` (0.0 to 1.0).
     pub fn seek_to_fraction(&mut self, engine: &Engine, fraction: f64) {
-        drop(self.seek(engine, Seek::Fraction(fraction)));
+        drop(self.seek_to(engine, Seek::Fraction(fraction)));
     }
 
     /// The volume slider was set to `fraction` (0.0 to 1.0 of 100 %).
@@ -777,8 +913,15 @@ impl App {
         let mut failed = false;
         for event in &events {
             match event {
-                EngineEvent::StartFile => self.tracking = Tracking::Loading,
+                EngineEvent::StartFile => {
+                    self.tracking = Tracking::Loading;
+                    // A-B points belong to one file.
+                    self.session.point_a = None;
+                    self.session.point_b = None;
+                    self.session.ab_active = false;
+                }
                 EngineEvent::FileLoaded { path } => {
+                    self.apply_ab(engine);
                     self.store.set_last_file(path);
                     save_now = true;
                     let resume = self
@@ -824,7 +967,10 @@ impl App {
             self.library.update_current(Some(duration), true);
         }
 
-        self.track_position(engine);
+        requests.extend(self.track_position(engine));
+        if let Some(top) = self.on_top_change() {
+            requests.push(UiRequest::OnTop(top));
+        }
         if changes.contains(PropertyId::Volume)
             && let Some(volume) = self.model.double(PropertyId::Volume)
         {
@@ -861,7 +1007,7 @@ impl App {
     }
 
     /// Records the position of the playing file and moves on at its end.
-    fn track_position(&mut self, engine: &Engine) {
+    fn track_position(&mut self, engine: &Engine) -> Option<UiRequest> {
         let time = self.model.double(PropertyId::TimePos);
         if let (Tracking::Resuming(target), Some(time)) = (self.tracking, time)
             && (time - target).abs() < 2.0
@@ -882,7 +1028,38 @@ impl App {
         if at_end && !self.end_handled && self.model.media_loaded() {
             // keep-open stops on the last frame; the album moves on.
             self.end_handled = true;
-            drop(self.step(engine, 1));
+            return self.end_of_file(engine);
+        }
+        None
+    }
+
+    /// The file played to its end: repeat it, move on, start the album
+    /// again or exit, as the repeat mode and "When Playback Finished" say.
+    fn end_of_file(&mut self, engine: &Engine) -> Option<UiRequest> {
+        if self.session.after == AfterPlayback::ExitAfterFile {
+            return Some(UiRequest::Exit);
+        }
+        if self.settings.repeat == Repeat::Item {
+            drop(
+                engine
+                    .seek(Seek::Absolute(0.0))
+                    .and_then(|()| engine.set_pause(false)),
+            );
+            self.end_handled = false;
+            return None;
+        }
+        let next = self.library.neighbour(1).or_else(|| {
+            (self.settings.repeat == Repeat::Album)
+                .then(|| self.library.first_playable())
+                .flatten()
+        });
+        match next {
+            Some((album, index)) => {
+                drop(self.play_entry(engine, album, index, false));
+                None
+            }
+            None if self.session.after == AfterPlayback::ExitAfterList => Some(UiRequest::Exit),
+            None => None,
         }
     }
 

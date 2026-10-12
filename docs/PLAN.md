@@ -1,8 +1,9 @@
 # RVP (Rust Video Player): project plan
 
-Status: in progress. Goals A-F are done (M1 skin engine, the gates, M2
-player window, M3 daily-use essentials; M3's one-week trial is pending);
-results are in `docs/goals/`.
+Status: in progress. Goals A-G are done (M1 skin engine, the gates, M2
+player window, M3 daily-use essentials, M4 menus and commands, M5 settings
+window); open: M3's one-week trial and its Ubuntu boot run, and goal G's
+host run for the self-test's dropped frames. Results are in `docs/goals/`.
 
 ## 1. Goal
 

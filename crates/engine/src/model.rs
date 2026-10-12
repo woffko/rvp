@@ -81,6 +81,16 @@ properties! {
     DecoderFrameDropCount = "decoder-frame-drop-count", Int;
     AudioFilters = "af", Text;
     VideoAspect = "video-params/aspect", Double;
+    Speed = "speed", Double;
+    AbLoopA = "ab-loop-a", Double;
+    AbLoopB = "ab-loop-b", Double;
+    AudioDelay = "audio-delay", Double;
+    SubDelay = "sub-delay", Double;
+    SubScale = "sub-scale", Double;
+    SubPos = "sub-pos", Double;
+    Chapter = "chapter", Int;
+    Chapters = "chapters", Int;
+    VideoOutAspect = "video-out-params/aspect", Double;
 }
 
 impl PropertyId {

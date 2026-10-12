@@ -33,6 +33,11 @@
 #           aspect lock, then three kill tests (kill -9 while the second
 #           album entry plays; the restart must reopen it paused within
 #           5 s of where it was)
+#   m4      milestones M4 and M5: the functional self-test's menu and
+#           settings checks (PotPlayer's menus with the bound keys, a menu
+#           command, every settings page, a changed setting that applies at
+#           once), then a portable copy of RVP (rvp.portable next to it)
+#           that must keep its settings next to the executable
 #   m3desktop  optional, not in m3all: an "RVP (kit)" entry in
 #           ~/.local/share/applications so that Files can open videos in
 #           the running RVP (single instance); delete the file to undo
@@ -40,6 +45,7 @@
 #   all     check deps mpv mvtools build s2 s3 input s1 report
 #   m2all   check deps mpv m2build m2 m2input m2gpu m2svp report
 #   m3all   check deps mpv m2build m2 m3 m2input m2gpu m2svp report
+#   m4all   check deps mpv m2build m2 m3 m4 m2input m2gpu m2svp report
 #
 # environment:
 #   RVP_KIT_DIR     build and download directory (default ~/.cache/rvp-kit)
@@ -762,6 +768,48 @@ step_m3() {
     fi
 }
 
+step_m4() {
+    local log=$LOG_DIR/m4.log out=$LOG_DIR/m4-grabs portable=$LOG_DIR/m4-portable
+    local functional checks missing=0 name portable_ok summary
+    m2_ready m4 || return 0
+    m2_env
+    export RVP_CONFIG_DIR=$LOG_DIR/m4-config RVP_STATE_DIR=$LOG_DIR/m4-state
+    rm -rf "$RVP_CONFIG_DIR" "$RVP_STATE_DIR" "$out" "$portable"
+    : > "$log"
+    echo "== functional (M4 and M5 checks)" >> "$log"
+    "$(rvp_bin)" --selftest "--out=$out" "--skin=${RVP_SKIN:-}" \
+        "--mpv-options=hwdec=$(m2_hwdec)" "$(test_video)" "$(s1_video)" >> "$log" 2>&1
+    functional=$?
+    for name in context_menu_keys context_menu_marks playlist_menu_keys context_menu_builds \
+        menu_command_runs f5_opens_settings settings_pages_load keys_page_rows \
+        setting_applies_at_once settings_window_closes; do
+        grep -q "^check $name=PASS" "$log" || missing=$((missing + 1))
+    done
+    checks=$(grep -c '^check .*=PASS' "$log")
+    # Portable mode: a copy with the marker keeps settings.json next to it.
+    echo "== portable" >> "$log"
+    mkdir -p "$portable"
+    cp "$(rvp_bin)" "$portable/rvp"
+    : > "$portable/rvp.portable"
+    (
+        unset RVP_CONFIG_DIR RVP_STATE_DIR
+        "$portable/rvp" --selftest=playback --play-seconds=3 "--out=$out" \
+            "--skin=${RVP_SKIN:-}" "--mpv-options=hwdec=$(m2_hwdec)" "$(s1_video)"
+    ) >> "$log" 2>&1
+    if [ -s "$portable/settings.json" ] && [ -d "$portable/state" ]; then
+        portable_ok=1
+    else
+        portable_ok=0
+    fi
+    summary="functional=$functional passed=$checks m4_missing=$missing portable=$portable_ok"
+    if [ "$functional" -eq 0 ] && [ "$missing" -eq 0 ] && [ "$portable_ok" -eq 1 ]; then
+        record m4 PASS "$summary"
+    else
+        record m4 FAIL "$summary $(grep -E '=FAIL' "$log" | tr '\n' ' ')"
+        return 1
+    fi
+}
+
 step_m3desktop() {
     local file=$HOME/.local/share/applications/rvp-kit.desktop
     if [ ! -x "$(rvp_bin)" ]; then
@@ -802,7 +850,7 @@ step_report() {
         echo "| Time | Step | Result | Detail |"
         echo "|------|------|--------|--------|"
         awk -F'\t' '{ printf "| %s | %s | %s | %s |\n", $1, $2, $3, $4 }' "$RESULTS" 2> /dev/null
-        for step in s2 s3 input s1 m2 m3 m2input m2gpu m2svp; do
+        for step in s2 s3 input s1 m2 m3 m4 m2input m2gpu m2svp; do
             [ -s "$LOG_DIR/$step.log" ] || continue
             echo
             echo "## $step output"
@@ -816,7 +864,7 @@ step_report() {
 }
 
 if [ "$#" -eq 0 ]; then
-    sed -n '2,59p' "$KIT_SCRIPT"
+    sed -n '2,65p' "$KIT_SCRIPT"
     exit 2
 fi
 for step in "$@"; do
@@ -824,15 +872,16 @@ for step in "$@"; do
         all) set -- check deps mpv mvtools build s2 s3 input s1 report ;;
         m2all) set -- check deps mpv m2build m2 m2input m2gpu m2svp report ;;
         m3all) set -- check deps mpv m2build m2 m3 m2input m2gpu m2svp report ;;
+        m4all) set -- check deps mpv m2build m2 m3 m4 m2input m2gpu m2svp report ;;
     esac
 done
 overall=0
 for step in "$@"; do
     case $step in
-        check | deps | mpv | mvtools | build | s1 | s2 | s3 | input | m2build | m2 | m2input | m2gpu | m2svp | m3 | m3desktop | report)
+        check | deps | mpv | mvtools | build | s1 | s2 | s3 | input | m2build | m2 | m2input | m2gpu | m2svp | m3 | m4 | m3desktop | report)
             "step_$step" || overall=1
             ;;
-        all | m2all | m3all) ;;
+        all | m2all | m3all | m4all) ;;
         *) say "unknown step $step"; exit 2 ;;
     esac
 done

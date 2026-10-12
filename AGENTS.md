@@ -85,8 +85,23 @@ each goal writes `docs/goals/goal-<letter>-status.md`.
   `QLocalServer` channel `rvp-<user>`). The self-test neither forwards nor
   listens unless `--instance=NAME` names a separate channel, so test runs
   never reach the owner's player.
-- The Windows test VM's M3 checks are `tools/windows-vm/m3-all.ps1` (copy
-  it and `run.ps1` to `C:\rvp-test` with the bundle).
+- The Windows test VM's checks are `tools/windows-vm/m3-all.ps1` and
+  `m4-all.ps1` (copy them and `run.ps1` to `C:\rvp-test` with the bundle).
+- Every action is one row of `ACTIONS` (`crates/app/src/action.rs`): its
+  settings name, PotPlayer's menu text, numeric IDs and skin `CmdID`s.
+  Menus are built from that table and R1's trees (`crates/app/src/menu.rs`)
+  as JSON each time one opens (`shell/qml/Menus.qml`). After changing the
+  table or `crates/app/src/coverage.rs`, rewrite `docs/coverage/` with
+  `RVP_BLESS=1 cargo test -p rvp-app --test coverage` (with the skin
+  present for `blackspace.md`).
+- Settings change through `Player.set_setting` and `App::apply_settings`
+  (`crates/app/src/preferences.rs`): a new setting needs a check in
+  `Settings::validate`, a page in `shell/qml/Settings.qml`, and, when mpv
+  can take it at run time, a line in `apply_settings`.
+- RVP's own QML files shadow Qt types of the same name inside the `Rvp`
+  module (`FolderDialog.qml`): import Qt's under a qualifier.
+- Portable mode: `rvp.portable` next to the executable keeps the settings
+  there; `RVP_CONFIG_DIR` and `RVP_STATE_DIR` still win (test runs).
 
 ## Test environments
 

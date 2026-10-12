@@ -16,13 +16,15 @@ fn main() {
     }
     let module = QmlModule::new("Rvp")
         .qml_file("qml/Main.qml")
-        .qml_file("qml/ContextMenu.qml")
+        .qml_file("qml/Menus.qml")
         .qml_file("qml/OpenDialog.qml")
         .qml_file("qml/Tip.qml")
-        .qml_file("qml/ListMenu.qml")
         .qml_file("qml/AlbumName.qml")
         .qml_file("qml/FolderDialog.qml")
-        .qml_file("qml/KeysAndMouse.qml");
+        .qml_file("qml/KeysAndMouse.qml")
+        .qml_file("qml/Settings.qml")
+        .qml_file("qml/UrlDialog.qml")
+        .qml_file("qml/About.qml");
     CxxQtBuilder::new_qml_module(module)
         .qt_module("Gui")
         .qt_module("Qml")

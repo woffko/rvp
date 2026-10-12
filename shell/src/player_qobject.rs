@@ -42,6 +42,10 @@ pub mod qobject {
         #[qproperty(bool, restore_maximized)]
         #[qproperty(QString, osd)]
         #[qproperty(QString, album_name)]
+        #[qproperty(QString, settings_page)]
+        #[qproperty(bool, on_top)]
+        #[qproperty(bool, info_shown)]
+        #[qproperty(QString, external_url)]
         type Player = super::PlayerRust;
 
         /// Loads settings, the skin and libmpv; sets the `restore_*`
@@ -97,29 +101,60 @@ pub mod qobject {
         #[qinvokable]
         fn run_action(self: Pin<&mut Self>, name: &QString);
 
-        /// PotPlayer's menu text of an action.
+        /// A menu as JSON (`rvp_app::menu::to_json`): `context`,
+        /// `playlist`, or `skin` (the skin menu a control asked for).
         #[qinvokable]
-        fn menu_label(self: &Self, name: &QString) -> QString;
+        fn menu_json(self: &Self, kind: &QString) -> QString;
 
-        /// The key shown next to an action in the menu.
+        /// Carries out a menu item's command (`rvp_app::menu::Command::id`).
         #[qinvokable]
-        fn menu_shortcut(self: &Self, name: &QString) -> QString;
+        fn run_menu_command(self: Pin<&mut Self>, id: &QString);
 
-        /// Whether a menu entry shows a check mark: -1 none, 0 off, 1 on.
-        #[qinvokable]
-        fn menu_checked(self: &Self, name: &QString) -> i32;
-
-        /// Runs a playlist action by its settings name (the playlist menu).
+        /// Runs a playlist action by its settings name (self-test).
         #[qinvokable]
         fn run_list_action(self: Pin<&mut Self>, name: &QString);
 
-        /// PotPlayer's text of a playlist action.
+        /// The settings window's data as JSON (`App::settings_view`).
         #[qinvokable]
-        fn list_menu_label(self: &Self, name: &QString) -> QString;
+        fn settings_view(self: &Self) -> QString;
 
-        /// The key shown next to a playlist action.
+        /// Changes one setting (`rvp_app::preferences::change`; the value
+        /// is JSON) and applies it; returns JSON with `notes`, `restart` and
+        /// `error`.
         #[qinvokable]
-        fn list_menu_shortcut(self: &Self, name: &QString) -> QString;
+        fn set_setting(self: Pin<&mut Self>, path: &QString, value: &QString) -> QString;
+
+        /// Imports a settings file and applies it; JSON as `set_setting`.
+        #[qinvokable]
+        fn import_settings(self: Pin<&mut Self>, path: &QString) -> QString;
+
+        /// Exports the settings; JSON as `set_setting`.
+        #[qinvokable]
+        fn export_settings(self: &Self, path: &QString) -> QString;
+
+        /// Opens a folder's media files (Open Folder).
+        #[qinvokable]
+        fn open_folder(self: Pin<&mut Self>, path: &QString);
+
+        /// Loads a subtitle file for the playing video.
+        #[qinvokable]
+        fn load_subtitle(self: Pin<&mut Self>, path: &QString);
+
+        /// Sets the folder for saved frames.
+        #[qinvokable]
+        fn set_image_folder(self: Pin<&mut Self>, path: &QString);
+
+        /// The About box's text.
+        #[qinvokable]
+        fn about_text(self: &Self) -> QString;
+
+        /// Playback information over the video (Tab), from the model.
+        #[qinvokable]
+        fn info_text(self: &Self) -> QString;
+
+        /// The local time for the skin's clock (`HH:MM:SS`).
+        #[qinvokable]
+        fn set_clock(self: Pin<&mut Self>, text: &QString);
 
         /// Opens files (one path or URL per line).
         #[qinvokable]

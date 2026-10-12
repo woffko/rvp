@@ -19,6 +19,7 @@ cxx-qt-lib.workspace = true
 rvp-app = { path = "../crates/app" }
 rvp-engine = { path = "../crates/engine" }
 rvp-skin = { path = "../crates/skin" }
+serde_json.workspace = true
 
 [build-dependencies]
 cxx-qt-build.workspace = true

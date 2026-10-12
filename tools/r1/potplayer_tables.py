@@ -3,13 +3,15 @@
 from an installed copy, read-only, for R1 (docs/PLAN.md).
 
 Sources:
-  PotPlayer64.dll   RT_MENU 101 (the popup menu: command IDs per item) and
+  PotPlayer64.dll   RT_MENU 101 (the popup menu: command IDs per item),
+                    RT_MENU 111 (the playlist panel's menu) and
                     RT_ACCELERATOR tables (default hotkeys: key -> command ID)
   Language/English.ini [MenuString]  English menu texts by index path,
                     for example 101_0_1_2 = "Open Folder...<TAB>F2"
 
 usage: potplayer_tables.py POTPLAYER_DIR OUT_DIR
-Writes OUT_DIR/menu-tree.tsv, OUT_DIR/hotkeys.tsv and OUT_DIR/summary.txt.
+Writes OUT_DIR/menu-tree.tsv (docs/r1/menu-static.tsv),
+OUT_DIR/menu-playlist.tsv, OUT_DIR/hotkeys.tsv and OUT_DIR/summary.txt.
 Needs pefile (pip install pefile==2024.8.26).
 """
 
@@ -21,6 +23,7 @@ from pathlib import Path
 import pefile
 
 POPUP_MENU = 101
+PLAYLIST_MENU = 111
 
 VK_NAMES = {
     0x08: "Backspace", 0x09: "Tab", 0x0D: "Enter", 0x13: "Pause", 0x14: "CapsLock",
@@ -162,27 +165,39 @@ def main() -> int:
     accelerators = resources(pe, pefile.RESOURCE_TYPE["RT_ACCELERATOR"])
     english = english_menu(root / "Language" / "English.ini")
 
-    items = parse_menu(menus[POPUP_MENU])
+    def menu_rows(menu_id: int) -> list[tuple]:
+        rows = []
+        for item in parse_menu(menus[menu_id]):
+            # The first item is the container (101_0 "Popup Menu", 111_0
+            # "PL"); its children are the menu.
+            if len(item["path"]) == 1:
+                continue
+            key = "_".join(str(i) for i in [menu_id] + item["path"])
+            label = english.get(key, item["text"])
+            name, _, shortcut = label.partition("\t")
+            name, shortcut = name.rstrip(), shortcut.strip()
+            if menu_id == POPUP_MENU:
+                # As written by the first version of this tool.
+                name, _, shortcut = label.partition("\t")
+            depth = len(item["path"]) - 2
+            if item["separator"]:
+                name = "---"
+            rows.append((key, depth, item["id"], name, shortcut, item["popup"]))
+        return rows
+
+    def write_tree(name: str, rows: list[tuple]) -> None:
+        with open(out / name, "w", encoding="utf-8") as tsv:
+            tsv.write("path\tdepth\tcommand_id\ttext\tshortcut_shown\tsubmenu\n")
+            for key, depth, ident, text, shortcut, popup in rows:
+                tsv.write(f"{key}\t{depth}\t{ident}\t{'  ' * depth}{text}\t{shortcut}\t{'yes' if popup else ''}\n")
+
+    rows = menu_rows(POPUP_MENU)
     by_id: dict[int, list[str]] = {}
-    rows = []
-    for item in items:
-        # The first item is the "Popup Menu" container (101_0); its children
-        # are the context menu.
-        if len(item["path"]) == 1:
-            continue
-        key = "_".join(str(i) for i in [POPUP_MENU] + item["path"])
-        label = english.get(key, item["text"])
-        name, _, shortcut = label.partition("\t")
-        depth = len(item["path"]) - 2
-        if item["separator"]:
-            name = "---"
-        rows.append((key, depth, item["id"], name, shortcut, item["popup"]))
-        if item["id"] and not item["popup"] and not item["separator"]:
-            by_id.setdefault(item["id"], []).append(name)
-    with open(out / "menu-tree.tsv", "w", encoding="utf-8") as tsv:
-        tsv.write("path\tdepth\tcommand_id\ttext\tshortcut_shown\tsubmenu\n")
-        for key, depth, ident, name, shortcut, popup in rows:
-            tsv.write(f"{key}\t{depth}\t{ident}\t{'  ' * depth}{name}\t{shortcut}\t{'yes' if popup else ''}\n")
+    for _, _, ident, name, _, popup in rows:
+        if ident and not popup and name != "---":
+            by_id.setdefault(ident, []).append(name)
+    write_tree("menu-tree.tsv", rows)
+    write_tree("menu-playlist.tsv", menu_rows(PLAYLIST_MENU))
 
     # Commands without a popup-menu item may still appear in the other menus
     # (playlist, skin menus); use them as a fallback for naming.

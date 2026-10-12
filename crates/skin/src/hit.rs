@@ -18,6 +18,13 @@ pub enum Hit<'a> {
         alt_command: Option<&'a str>,
         /// Tooltip as written in the skin (PotPlayer shows `< >` as is).
         tooltip: Option<&'a str>,
+        /// The skin menu a `CMD_POPUP_USER_MENU` command opens
+        /// (`UserMenuName`), see [`crate::menu`].
+        menu: Option<&'a str>,
+        /// The same for the right click (`AltUserMenuName`).
+        alt_menu: Option<&'a str>,
+        /// The page a `CMD_SELECT_PAGE` control shows (`PageIndex`).
+        page: Option<i32>,
     },
     /// A `IsTitleBar` static: dragging moves the window.
     TitleBar { node: usize },
@@ -48,6 +55,9 @@ pub fn hit_test<'a>(layout: &Layout<'a>, x: i32, y: i32) -> Option<Hit<'a>> {
                 command,
                 alt_command: attrs.get("AltCmdID").filter(|cmd| !cmd.is_empty()),
                 tooltip: attrs.get("Tooltip").filter(|tip| !tip.is_empty()),
+                menu: attrs.get("UserMenuName").filter(|name| !name.is_empty()),
+                alt_menu: attrs.get("AltUserMenuName").filter(|name| !name.is_empty()),
+                page: attrs.int("PageIndex"),
             });
         }
         if let Some(name) = attrs.get("Contain").filter(|slot| !slot.is_empty()) {

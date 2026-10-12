@@ -8,6 +8,11 @@
 //! * A right click on a control runs its `AltCmdID` (right click on Previous
 //!   is "30 Sec Backward"); elsewhere it is the right-click gesture (the
 //!   context menu).
+//! * A control whose command is `CMD_POPUP_USER_MENU` opens the skin menu
+//!   its `UserMenuName` (right click: `AltUserMenuName`) names; one with a
+//!   built-in submenu command (`CMD_POPUPMENU_*`) opens that part of the
+//!   menu ([`Effect::Popup`]). `CMD_SELECT_PAGE` shows the controls of its
+//!   `PageIndex` (the playlist panel's pages).
 //! * Sliders seek or set the volume on press and while dragging.
 //! * The frame edges resize the window; dragging the title bar, an empty
 //!   skin area or the video moves it ("prevent window from being dragged
@@ -30,6 +35,7 @@ use rvp_skin::playlist::ListHit;
 use crate::action::{Action, ListAction};
 use crate::chrome::Chrome;
 use crate::input::{Bindings, MouseGesture};
+use crate::menu::popup_source;
 use crate::playlist::Select;
 
 /// Mouse buttons.
@@ -85,6 +91,12 @@ pub enum Effect {
     List(ListEffect),
     /// Which part of the window gets the keyboard.
     Focus(Focus),
+    /// Open a menu at the pointer: a skin menu (`CMD_POPUP_USER_MENU` and
+    /// its name) or a built-in submenu (`CMD_POPUPMENU_*`).
+    Popup {
+        command: &'static str,
+        menu: Option<&'static str>,
+    },
 }
 
 /// What the playlist panel does.
@@ -143,6 +155,8 @@ enum Drag {
     Button {
         element: usize,
         command: &'static str,
+        menu: Option<&'static str>,
+        page: Option<i32>,
     },
     Slider {
         node: usize,
@@ -244,6 +258,33 @@ enum Target {
     Background,
 }
 
+/// Skin commands the pointer handles itself: menus and pages.
+fn is_control_command(command: &str) -> bool {
+    command == "CMD_POPUP_USER_MENU"
+        || command == "CMD_SELECT_PAGE"
+        || command.starts_with("CMD_POPUPMENU_")
+        || popup_source(command).is_some()
+}
+
+/// A menu or page command of a skin control.
+fn control_effect(
+    chrome: &mut Chrome,
+    command: &'static str,
+    menu: Option<&'static str>,
+    page: Option<i32>,
+) -> Vec<Effect> {
+    if command == "CMD_SELECT_PAGE" {
+        if let Some(page) = page {
+            chrome.state.current_page = page;
+        }
+        return Vec::new();
+    }
+    if is_control_command(command) {
+        return vec![Effect::Popup { command, menu }];
+    }
+    Vec::new()
+}
+
 fn target(chrome: &Chrome, ctx: Context, x: i32, y: i32) -> Target {
     if !ctx.chrome_shown {
         return Target::Video;
@@ -331,6 +372,8 @@ impl Pointer {
                 node,
                 element,
                 command,
+                menu,
+                page,
                 ..
             }) => {
                 let Some(command) = command else {
@@ -347,7 +390,12 @@ impl Pointer {
                         .into_iter()
                         .collect()
                 } else {
-                    self.drag = Drag::Button { element, command };
+                    self.drag = Drag::Button {
+                        element,
+                        command,
+                        menu,
+                        page,
+                    };
                     Vec::new()
                 }
             }
@@ -553,7 +601,12 @@ impl Pointer {
         }
         match button {
             Button::Left => match drag {
-                Drag::Button { element, command } => {
+                Drag::Button {
+                    element,
+                    command,
+                    menu,
+                    page,
+                } => {
                     let over = matches!(
                         chrome.hit(x, y),
                         Some(Hit::Control { element: e, .. }) if e == element
@@ -569,7 +622,7 @@ impl Pointer {
                             Effect::List(ListEffect::Action(action)),
                         ]
                     } else {
-                        Vec::new()
+                        control_effect(chrome, command, menu, page)
                     }
                 }
                 Drag::Rows {
@@ -607,14 +660,18 @@ impl Pointer {
                 Drag::Press { click: false, .. } | Drag::Thumb { .. } | Drag::Idle => Vec::new(),
             },
             Button::Right => match target(chrome, ctx, x, y) {
-                Target::Control(Hit::Control { alt_command, .. })
-                    if alt_command.and_then(Action::from_skin_command).is_some() =>
+                Target::Control(Hit::Control {
+                    alt_command: Some(command),
+                    alt_menu,
+                    page,
+                    ..
+                }) if Action::from_skin_command(command).is_some()
+                    || is_control_command(command) =>
                 {
-                    alt_command
-                        .and_then(Action::from_skin_command)
-                        .map(Effect::Action)
-                        .into_iter()
-                        .collect()
+                    match Action::from_skin_command(command) {
+                        Some(action) => vec![Effect::Action(action)],
+                        None => control_effect(chrome, command, alt_menu, page),
+                    }
                 }
                 Target::List(hit) => {
                     let mut effects = vec![Effect::Focus(Focus::Playlist)];

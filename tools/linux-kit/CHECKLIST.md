@@ -234,6 +234,57 @@ what to try; in short:
 - [ ] Resize the window while a video plays: once you let go, it takes the
       video's shape.
 
+## 7. Milestones M4 and M5: menus and the settings window (goal G)
+
+Same preparation as section 5. From a terminal inside the GNOME session:
+
+```sh
+cd ~/rvp && git pull
+tools/linux-kit/kit.sh m4all
+```
+
+`m4all` runs `check deps mpv m2build m2 m3 m4 m2input m2gpu m2svp
+report`: sections 5 and 6 on the new build, plus `m4`. If `m3all` has
+not run on this machine yet, this run also counts for M3's acceptance.
+Again, do not touch the mouse or keyboard while RVP's windows are open.
+
+What `m4` shows (about a minute):
+
+- The functional self-test of sections 5 and 6, now with M4's and M5's
+  checks: the context and playlist menus are built with PotPlayer's tree
+  and the keys bound now, a menu command changes the speed and back, F5
+  opens the settings window, every page is shown once, the volume step is
+  changed in the window and the next Down key uses it at once.
+- A copy of RVP with `rvp.portable` next to it plays for 3 seconds; its
+  `settings.json` and `state` folder must appear next to the copy (in the
+  kit's log directory), not in `~/.config/rvp`.
+
+Then try by hand:
+
+- [ ] Right-click the video: PotPlayer's context menu with only what RVP
+      does, the keys bound now and check marks (Repeat, Stay on Top, aspect
+      ratio, normalizer). Audio > Select Audio Stream and Subtitles >
+      Add/Select Subtitles list the file's tracks; Playback >
+      Chapter/Bookmark lists its chapters (try a file with chapters).
+- [ ] New commands: D and F (frame steps), X, C and Z (speed), [ ] and \
+      (A-B repeat), Shift+, and Shift+. (audio sync), < and > (subtitle
+      sync), Alt+PgUp/PgDn and Alt+Up/Down (subtitle size and position),
+      Ctrl+F6 (aspect ratio), the numeric keypad (zoom and move the
+      picture, 5 resets), 1 to 4 (window size), Ctrl+T (stay on top), Tab
+      (playback information), Ctrl+E (save the frame to Pictures/RVP).
+- [ ] The skin's own menus: the buttons with a small arrow or a right
+      click on them (open, aspect ratio, capture, playback, subtitles,
+      window size); menus RVP has nothing for show "Not in RVP yet".
+- [ ] The playlist panel's right-click menu: PotPlayer's playlist tree
+      plus Undo, Redo and the import.
+- [ ] F5: every page, a change applies at once (try the volume step, the
+      normalizer's Boost, the video sync, the subtitle size while a video
+      plays); the skin page says the skin changes at the next start.
+- [ ] Settings > Export…, then change something, then Import… the
+      exported file: the old value comes back.
+- [ ] Portable mode: copy the build folder elsewhere, add an empty
+      `rvp.portable` next to `rvp`, start it: the settings live there.
+
 ## Steps and what they record
 
 | Step | Needs | PASS means |
@@ -253,6 +304,7 @@ what to try; in short:
 | `m2gpu` | hardware GPU | no dropped frames over `RVP_M2_SECONDS` in fullscreen and in a 1920x1080 window (the counts and a per-second timeline are in the log) |
 | `m2svp` | SVP 4 Manager running | SVP's `@svp` filter appeared and RVP exited with status 0 |
 | `m3` | graphical session | the functional self-test including M3's checks passes (playlist panel, albums, normalizer, volume above 100 %, key editor, second instance, aspect lock), and all three kill tests reopen the album's second entry paused within 5 s of the last position |
+| `m4` | graphical session | the functional self-test passes with all of M4's and M5's checks (menus with the bound keys and check marks, a menu command, the settings window with every page, a setting that applies at once), and a portable copy kept its settings next to the executable |
 | `m3desktop` | `m2build` | the desktop entry was written |
 | `report` | — | the Markdown report was written |
 

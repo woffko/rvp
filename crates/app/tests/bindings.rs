@@ -4,7 +4,10 @@
 use std::time::{Duration, Instant};
 
 use rvp_app::playlist::local_path;
-use rvp_app::{Action, App, Bindings, Key, KeyChord, MouseGesture, SeekStep, Settings, UiRequest};
+use rvp_app::{
+    AbRepeat, Action, App, Bindings, Delay, Jump, Key, KeyChord, MouseGesture, SeekStep, Settings,
+    Speed, SubtitleStyle, UiRequest, Zoom,
+};
 use rvp_engine::{Engine, EngineOptions, PlayerModel, PropertyId};
 
 const LONG: &str = concat!(
@@ -106,9 +109,11 @@ impl Harness {
         while !done(&self.app.model) {
             assert!(
                 Instant::now() < deadline,
-                "timed out waiting for {what}: loaded {:?}, path {:?}",
+                "timed out waiting for {what}: loaded {:?}, path {:?}, time {:?}, pause {:?}",
                 self.app.model.loaded_path(),
-                self.app.model.text(PropertyId::Path)
+                self.app.model.text(PropertyId::Path),
+                self.app.model.double(PropertyId::TimePos),
+                self.app.model.flag(PropertyId::Pause)
             );
             std::thread::sleep(Duration::from_millis(10));
             self.app.drain(&self.engine, Instant::now());
@@ -155,12 +160,7 @@ impl Harness {
                     self.wait("long seek", |m| {
                         (m.double(PropertyId::TimePos).unwrap_or_default() - before).abs() > 4.0
                     });
-                    self.engine
-                        .seek(rvp_engine::Seek::Absolute(30.0))
-                        .expect("seek back");
-                    self.wait("back at 30 s", |m| {
-                        (m.double(PropertyId::TimePos).unwrap_or_default() - 30.0).abs() < 0.2
-                    });
+                    self.back_to_30();
                 }
             }
             Action::VolumeUp => {
@@ -249,11 +249,237 @@ impl Harness {
                 self.dispatch(action);
                 self.wait("boost on", |m| audio_filters(m).contains("m=5"));
             }
-            Action::KeysAndMouse => {
-                assert_eq!(self.dispatch(action), Some(UiRequest::KeysAndMouse));
-            }
             Action::ImportPlaylists => {
                 assert_eq!(self.dispatch(action), Some(UiRequest::ImportPlaylists));
+            }
+            Action::OpenFolder => {
+                assert_eq!(self.dispatch(action), Some(UiRequest::OpenFolderDialog));
+            }
+            Action::OpenUrl => assert_eq!(self.dispatch(action), Some(UiRequest::OpenUrlDialog)),
+            Action::OpenSubtitle => {
+                assert_eq!(self.dispatch(action), Some(UiRequest::OpenSubtitleDialog));
+            }
+            Action::Preferences => {
+                assert_eq!(self.dispatch(action), Some(UiRequest::Preferences(None)));
+            }
+            Action::About => assert_eq!(self.dispatch(action), Some(UiRequest::About)),
+            Action::WindowScale(scale) => {
+                assert_eq!(
+                    self.dispatch(action),
+                    Some(UiRequest::ScaleWindow(scale.factor()))
+                );
+            }
+            Action::WindowFitAspect => {
+                assert_eq!(self.dispatch(action), Some(UiRequest::FitAspect));
+            }
+            Action::PlaybackInfo => {
+                assert_eq!(self.dispatch(action), Some(UiRequest::ShowInfo(true)));
+                assert_eq!(self.dispatch(action), Some(UiRequest::ShowInfo(false)));
+            }
+            Action::SaveFrame | Action::SaveScreen => match self.dispatch(action) {
+                Some(UiRequest::SaveFrame { path, subtitles }) => {
+                    assert_eq!(subtitles, action == Action::SaveScreen);
+                    let name = path.file_name().unwrap_or_default().to_string_lossy();
+                    assert!(name.starts_with("fixture-60s 00.00.30."), "{name}");
+                }
+                other => panic!("{action:?}: {other:?}"),
+            },
+            _ => self.check_command(action),
+        }
+    }
+
+    /// Asserts that `action` shows `text` on screen.
+    fn osd(&mut self, action: Action, text: &str) {
+        assert_eq!(
+            self.dispatch(action),
+            Some(UiRequest::Osd(text.to_owned())),
+            "{action:?}"
+        );
+    }
+
+    /// Asserts that `action` shows a notice starting with `start`.
+    fn osd_starts(&mut self, action: Action, start: &str) {
+        match self.dispatch(action) {
+            Some(UiRequest::Osd(text)) => assert!(text.starts_with(start), "{action:?}: {text}"),
+            other => panic!("{action:?}: {other:?}"),
+        }
+    }
+
+    fn wait_double(&mut self, what: &str, property: PropertyId, value: f64) {
+        self.wait(what, |m| {
+            m.double(property)
+                .is_some_and(|now| (now - value).abs() < 1e-6)
+        });
+    }
+
+    /// Seeks back to 30 s, paused.
+    fn back_to_30(&mut self) {
+        self.engine.set_pause(true).expect("pause");
+        self.engine
+            .seek(rvp_engine::Seek::Absolute(30.0))
+            .expect("seek back");
+        // A frame step sent while mpv still restarts after the seek is lost.
+        self.wait("back at 30 s", |m| {
+            m.flag(PropertyId::Pause) == Some(true)
+                && m.flag(PropertyId::Seeking) == Some(false)
+                && (m.double(PropertyId::TimePos).unwrap_or_default() - 30.0).abs() < 0.05
+        });
+    }
+
+    /// M4's commands: frames, jumps, speed, A-B, sync, subtitles, tracks,
+    /// aspect, zoom and window state.
+    fn check_command(&mut self, action: Action) {
+        match action {
+            Action::Reopen => {
+                assert_eq!(self.dispatch(action), None);
+                // Positions are off in this harness: the file starts again.
+                self.wait("reopened", |m| {
+                    m.media_loaded() && m.double(PropertyId::TimePos).unwrap_or(99.0) < 5.0
+                });
+                self.back_to_30();
+            }
+            Action::FrameForward => {
+                assert_eq!(self.dispatch(action), None);
+                self.wait("next frame", |m| {
+                    m.double(PropertyId::TimePos).unwrap_or_default() > 30.05
+                });
+                self.back_to_30();
+            }
+            Action::FrameBack => {
+                assert_eq!(self.dispatch(action), None);
+                self.wait("previous frame", |m| {
+                    m.double(PropertyId::TimePos).unwrap_or(30.0) < 29.95
+                });
+                self.back_to_30();
+            }
+            Action::JumpTo(Jump::Start) => {
+                assert_eq!(self.dispatch(action), None);
+                self.wait("at the start", |m| {
+                    m.double(PropertyId::TimePos).unwrap_or(99.0) < 0.2
+                });
+                self.back_to_30();
+            }
+            // The 60 s fixture's middle and 30 s before its end are both 30 s.
+            Action::JumpTo(Jump::Middle | Jump::BeforeEnd) => {
+                self.engine
+                    .seek(rvp_engine::Seek::Absolute(10.0))
+                    .expect("seek");
+                self.wait("at 10 s", |m| {
+                    (m.double(PropertyId::TimePos).unwrap_or_default() - 10.0).abs() < 0.05
+                });
+                assert_eq!(self.dispatch(action), None);
+                self.back_to_30();
+            }
+            // The fixtures have no subtitles: nothing happens.
+            Action::JumpTo(_) => assert_eq!(self.dispatch(action), None),
+            Action::Speed(Speed::Default) => {
+                self.osd(action, "Speed: 1.0x");
+                self.wait_double("1.0x", PropertyId::Speed, 1.0);
+            }
+            Action::Speed(change) => {
+                let (text, value) = if change == Speed::Faster {
+                    ("Speed: 1.1x", 1.1)
+                } else {
+                    ("Speed: 0.9x", 0.9)
+                };
+                self.osd(action, text);
+                self.wait_double(text, PropertyId::Speed, value);
+                // Default goes back to 1.0x.
+                self.osd(Action::Speed(Speed::Default), "Speed: 1.0x");
+                self.wait_double("1.0x", PropertyId::Speed, 1.0);
+            }
+            Action::AbRepeat(change) => {
+                let text = match change {
+                    AbRepeat::SetA => "A-B Repeat (off): A 0:00:30 B -",
+                    AbRepeat::SetB => "A-B Repeat (off): A - B 0:00:30",
+                    _ => "A-B Repeat (off): A - B -",
+                };
+                self.osd(action, text);
+                self.osd(
+                    Action::AbRepeat(AbRepeat::Clear),
+                    "A-B Repeat (off): A - B -",
+                );
+            }
+            Action::AfterPlaybackCycle => {
+                self.osd(action, "When playback ends: exit");
+                self.osd(action, "When the playlist ends: exit");
+                self.osd(action, "When playback ends: do nothing");
+            }
+            Action::OnTopCycle => {
+                self.osd(action, "Stay on top: always");
+                self.osd(action, "Stay on top: while playing");
+                self.osd(action, "Stay on top: never");
+            }
+            Action::AspectCycle => {
+                for text in ["4:3", "16:9", "16:10", "1.85:1", "2.35:1", "Default"] {
+                    self.osd(action, &format!("Aspect ratio: {text}"));
+                }
+            }
+            Action::AudioDelay(_) | Action::SubtitleDelay(_) | Action::Subtitle(_) => {
+                self.check_sync_and_subtitles(action);
+            }
+            // The fixtures have one track each: cycling stays on it.
+            Action::CycleAudio => self.osd_starts(action, "Audio: "),
+            Action::CycleVideo => self.osd_starts(action, "Video: "),
+            Action::CycleSubtitles => self.osd(action, "Subtitle: off"),
+            Action::Zoom(_) => {
+                self.osd_starts(action, "Zoom: ");
+                self.osd(
+                    Action::Zoom(Zoom::Reset),
+                    "Zoom: 100 % (100 x 100 %), position +0 %, +0 %",
+                );
+            }
+            _ => unreachable!("{action:?} is checked in check()"),
+        }
+    }
+
+    /// Audio and subtitle sync, subtitle size and position.
+    fn check_sync_and_subtitles(&mut self, action: Action) {
+        match action {
+            Action::AudioDelay(delay) => {
+                let (text, value) = match delay {
+                    Delay::Earlier => ("Audio sync: -50 ms", -0.05),
+                    Delay::Later => ("Audio sync: +50 ms", 0.05),
+                    Delay::Reset => ("Audio sync: +0.0 s", 0.0),
+                };
+                self.osd(action, text);
+                self.wait_double(text, PropertyId::AudioDelay, value);
+                self.osd(Action::AudioDelay(Delay::Reset), "Audio sync: +0.0 s");
+                self.wait_double("audio sync reset", PropertyId::AudioDelay, 0.0);
+            }
+            Action::SubtitleDelay(delay) => {
+                let (text, value) = match delay {
+                    Delay::Earlier => ("Subtitle sync: -500 ms", -0.5),
+                    Delay::Later => ("Subtitle sync: +500 ms", 0.5),
+                    Delay::Reset => ("Subtitle sync: +0.0 s", 0.0),
+                };
+                self.osd(action, text);
+                self.wait_double(text, PropertyId::SubDelay, value);
+                self.osd(Action::SubtitleDelay(Delay::Reset), "Subtitle sync: +0.0 s");
+                self.wait_double("subtitle sync reset", PropertyId::SubDelay, 0.0);
+            }
+            Action::Subtitle(style @ (SubtitleStyle::Bigger | SubtitleStyle::Smaller)) => {
+                let (text, value, back) = if style == SubtitleStyle::Bigger {
+                    ("Subtitle size: 110 %", 1.1, SubtitleStyle::Smaller)
+                } else {
+                    ("Subtitle size: 90 %", 0.9, SubtitleStyle::Bigger)
+                };
+                self.osd(action, text);
+                self.wait_double(text, PropertyId::SubScale, value);
+                self.osd(Action::Subtitle(back), "Subtitle size: 100 %");
+                self.wait_double("subtitle size back", PropertyId::SubScale, 1.0);
+            }
+            Action::Subtitle(style) => {
+                let (text, value) = match style {
+                    SubtitleStyle::Up => ("Subtitle position: 99 %", 99.0),
+                    SubtitleStyle::Down => ("Subtitle position: 101 %", 101.0),
+                    _ => ("Subtitle position: 100 %", 100.0),
+                };
+                self.osd(action, text);
+                self.wait_double(text, PropertyId::SubPos, value);
+                let reset = Action::Subtitle(SubtitleStyle::DefaultPosition);
+                self.osd(reset, "Subtitle position: 100 %");
+                self.wait_double("subtitle position back", PropertyId::SubPos, 100.0);
             }
             _ => unreachable!("{action:?} is checked in check()"),
         }
@@ -291,12 +517,7 @@ fn every_default_binding_triggers_its_action() {
     h.wait("paused at 50 %", |m| {
         m.flag(PropertyId::Pause) == Some(true) && m.double(PropertyId::Volume) == Some(50.0)
     });
-    h.engine
-        .seek(rvp_engine::Seek::Absolute(30.0))
-        .expect("seek");
-    h.wait("at 30 s", |m| {
-        (m.double(PropertyId::TimePos).unwrap_or_default() - 30.0).abs() < 0.2
-    });
+    h.back_to_30();
 
     for action in early.into_iter().chain(late) {
         h.check(action);

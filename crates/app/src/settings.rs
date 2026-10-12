@@ -6,7 +6,7 @@ use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
 
-use crate::action::{Action, ListAction, SeekStep};
+use crate::action::{Action, ImageFormat, ListAction, OnTop, Repeat, SeekStep};
 use crate::input::{Bindings, KeyChord, MouseGesture};
 use crate::normalizer::Normalizer;
 
@@ -61,6 +61,33 @@ pub struct Settings {
     /// Playlist key changes (while the panel has the keyboard): key to
     /// playlist action name (`select-all`).
     pub playlist_keys: BTreeMap<String, String>,
+    /// Seek to keyframes instead of exactly (PotPlayer's "Use keyframe to
+    /// jump to a time"; off: the owner keeps exact seeks, 2026-10-11).
+    pub keyframe_seeks: bool,
+    /// What happens at the end of a file (PotPlayer's "Repeat Playback").
+    pub repeat: Repeat,
+    /// "Stay on Top".
+    pub on_top: OnTop,
+    /// Where saved frames go; unset: `Pictures/RVP` in the home folder.
+    pub image_folder: Option<PathBuf>,
+    pub image_format: ImageFormat,
+    /// Audio sync step in seconds (Shift+, and Shift+.).
+    pub audio_delay_step: f64,
+    /// Subtitle sync step in seconds (< and >).
+    pub subtitle_delay_step: f64,
+    /// mpv `audio-device` (`auto`: the system's default output).
+    pub audio_device: String,
+    /// mpv `video-sync` (`audio`: the video follows the audio clock).
+    pub video_sync: String,
+    /// mpv `scale` (the upscaler); empty: mpv's default.
+    pub scaler: String,
+    /// Preferred subtitle languages, comma separated (mpv `slang`).
+    pub subtitle_languages: String,
+    /// Load subtitle files next to the video (mpv `sub-auto`: `no`,
+    /// `exact`, `fuzzy` or `all`).
+    pub subtitle_auto: String,
+    /// Subtitle size (mpv `sub-scale`).
+    pub subtitle_scale: f64,
 }
 
 impl Default for Settings {
@@ -82,6 +109,19 @@ impl Default for Settings {
             keys: BTreeMap::new(),
             mouse: BTreeMap::new(),
             playlist_keys: BTreeMap::new(),
+            keyframe_seeks: false,
+            repeat: Repeat::Off,
+            on_top: OnTop::Never,
+            image_folder: None,
+            image_format: ImageFormat::Png,
+            audio_delay_step: 0.05,
+            subtitle_delay_step: 0.5,
+            audio_device: "auto".to_owned(),
+            video_sync: "audio".to_owned(),
+            scaler: String::new(),
+            subtitle_languages: String::new(),
+            subtitle_auto: "fuzzy".to_owned(),
+            subtitle_scale: 1.0,
         }
     }
 }

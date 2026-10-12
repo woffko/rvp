@@ -144,6 +144,36 @@ pub enum Seek {
     Fraction(f64),
 }
 
+/// What a track carries.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub enum TrackKind {
+    Audio,
+    Video,
+    Subtitle,
+}
+
+/// One of a file's tracks (mpv's `track-list`).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Track {
+    /// mpv's ID within its kind (`aid`, `vid`, `sid`).
+    pub id: i64,
+    pub kind: TrackKind,
+    pub title: Option<String>,
+    pub language: Option<String>,
+    pub codec: Option<String>,
+    pub selected: bool,
+    /// Loaded from a separate file (a subtitle added later).
+    pub external: bool,
+}
+
+/// One chapter (mpv's `chapter-list`).
+#[derive(Debug, Clone, PartialEq)]
+pub struct Chapter {
+    pub title: Option<String>,
+    /// Start in seconds.
+    pub time: f64,
+}
+
 /// The libmpv player.
 pub struct Engine {
     mpv: Mpv,
@@ -342,16 +372,130 @@ impl Engine {
     /// # Errors
     /// Fails when libmpv rejects the command (for example with nothing loaded).
     pub fn seek(&self, target: Seek) -> Result<(), EngineError> {
+        self.seek_with(target, true)
+    }
+
+    /// Seeks exactly, or to a keyframe near the target (fast, but up to a
+    /// few seconds off).
+    ///
+    /// # Errors
+    /// Fails when libmpv rejects the command (for example with nothing loaded).
+    pub fn seek_with(&self, target: Seek, exact: bool) -> Result<(), EngineError> {
+        let precision = if exact { "exact" } else { "keyframes" };
         let (amount, mode) = match target {
-            Seek::Absolute(seconds) => (seconds, "absolute+exact"),
-            Seek::Relative(seconds) => (seconds, "relative+exact"),
-            Seek::Fraction(fraction) => {
-                (fraction.clamp(0.0, 1.0) * 100.0, "absolute-percent+exact")
-            }
+            Seek::Absolute(seconds) => (seconds, "absolute"),
+            Seek::Relative(seconds) => (seconds, "relative"),
+            Seek::Fraction(fraction) => (fraction.clamp(0.0, 1.0) * 100.0, "absolute-percent"),
         };
         self.mpv
-            .command("seek", &[&format!("{amount:.3}"), mode])
+            .command(
+                "seek",
+                &[&format!("{amount:.3}"), &format!("{mode}+{precision}")],
+            )
             .map_err(|e| error("seek", &e))
+    }
+
+    /// Runs an mpv command (`frame-step`, `sub-seek -1`, ...).
+    ///
+    /// # Errors
+    /// Fails when libmpv rejects the command.
+    pub fn command(&self, name: &str, args: &[&str]) -> Result<(), EngineError> {
+        self.mpv.command(name, args).map_err(|e| error(name, &e))
+    }
+
+    /// Sets an mpv property or option.
+    ///
+    /// # Errors
+    /// Fails when libmpv rejects the value.
+    pub fn set_double(&self, name: &str, value: f64) -> Result<(), EngineError> {
+        self.mpv
+            .set_property(name, value)
+            .map_err(|e| error(name, &e))
+    }
+
+    /// Sets an mpv property or option.
+    ///
+    /// # Errors
+    /// Fails when libmpv rejects the value.
+    pub fn set_text(&self, name: &str, value: &str) -> Result<(), EngineError> {
+        self.mpv
+            .set_property(name, value)
+            .map_err(|e| error(name, &e))
+    }
+
+    /// Sets an mpv property or option.
+    ///
+    /// # Errors
+    /// Fails when libmpv rejects the value.
+    pub fn set_flag(&self, name: &str, value: bool) -> Result<(), EngineError> {
+        self.mpv
+            .set_property(name, value)
+            .map_err(|e| error(name, &e))
+    }
+
+    /// Reads a property now. This waits for mpv's core: for menus and
+    /// dialogs, never in a loop during playback.
+    #[must_use]
+    pub fn get_double(&self, name: &str) -> Option<f64> {
+        self.mpv.get_property::<f64>(name).ok()
+    }
+
+    /// Reads a property now (see [`Engine::get_double`]).
+    #[must_use]
+    pub fn get_int(&self, name: &str) -> Option<i64> {
+        self.mpv.get_property::<i64>(name).ok()
+    }
+
+    /// Reads a property now (see [`Engine::get_double`]).
+    #[must_use]
+    pub fn get_text(&self, name: &str) -> Option<String> {
+        self.mpv.get_property::<String>(name).ok()
+    }
+
+    /// The file's audio, video and subtitle tracks (read now, for menus).
+    #[must_use]
+    pub fn tracks(&self) -> Vec<Track> {
+        let count = self.get_int("track-list/count").unwrap_or(0);
+        (0..count)
+            .filter_map(|index| {
+                let field = |name: &str| format!("track-list/{index}/{name}");
+                let kind = match self.get_text(&field("type"))?.as_str() {
+                    "audio" => TrackKind::Audio,
+                    "video" => TrackKind::Video,
+                    "sub" => TrackKind::Subtitle,
+                    _ => return None,
+                };
+                Some(Track {
+                    id: self.get_int(&field("id"))?,
+                    kind,
+                    title: self.get_text(&field("title")),
+                    language: self.get_text(&field("lang")),
+                    codec: self.get_text(&field("codec")),
+                    selected: self
+                        .mpv
+                        .get_property::<bool>(&field("selected"))
+                        .unwrap_or(false),
+                    external: self
+                        .mpv
+                        .get_property::<bool>(&field("external"))
+                        .unwrap_or(false),
+                })
+            })
+            .collect()
+    }
+
+    /// The file's chapters (read now, for menus).
+    #[must_use]
+    pub fn chapters(&self) -> Vec<Chapter> {
+        let count = self.get_int("chapter-list/count").unwrap_or(0);
+        (0..count)
+            .map(|index| Chapter {
+                title: self.get_text(&format!("chapter-list/{index}/title")),
+                time: self
+                    .get_double(&format!("chapter-list/{index}/time"))
+                    .unwrap_or(0.0),
+            })
+            .collect()
     }
 
     /// Sets the volume in percent (100 is unchanged).
