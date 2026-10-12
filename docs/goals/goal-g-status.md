@@ -94,17 +94,30 @@ Findings:
   earlier parts of goal F's run dropped frames too (resizing a 4K60 window
   8, the appended file and the next click 11), but the counter restarted
   after them. This goal's build drops 0-1 frame in those steps (runs 1 and
-  2).
+  2). The 5 frames before the second instance's check are attributed to
+  the window's closing by a control: the second-instance code is the same
+  in both builds and cost 0 frames in runs 1 and 2. A pause between the
+  two steps in goal F's build would separate them directly; that would
+  take a fourth host run.
 - **Run 1's 19 frames (measured, then attributed by a control).** In run 1
   they fell in one step that both built the menus and changed the speed.
   Run 2 measured the speed change on its own (0 frames) with unchanged
   speed-change code, so they came from the menu step, whose code changed.
   In run 1 that step built PotPlayer's whole tree (141 commands in about 25
   submenus) on the GUI thread and read each track's properties from mpv
-  one by one; offscreen on this PC, building the whole tree takes about
-  130 ms. Run 2 builds only the top level (38 ms on the host) and reads
-  tracks and chapters in one read each: 0 frames. Which of the two costs
-  dominated in run 1 was not measured separately.
+  one by one. The two costs, timed apart on this PC (silent tests: Qt's
+  `qml` tool with the offscreen platform, and headless libmpv playing the
+  60 s fixture), are:
+
+  | Cost | Before | After |
+  |------|--------|-------|
+  | Menu items | the whole tree: 122-187 ms | the top level: 15 ms |
+  | Track and chapter reads | 0.06-0.07 ms per menu | 0.04-0.05 ms |
+
+  So the tree build was nearly all of the step's GUI-thread time; the read
+  change is a small cleanup. On the host, run 2 built the top level in
+  38 ms with 0 dropped frames. Dropped frames for the two costs apart were
+  not counted on the host.
 - **Run 1's 11 frames for changing a setting** included the self-test's
   grab of the window and a re-read of mpv's audio device list on every
   change. Run 2 measured them apart: grab 5, change 0. The device list is
