@@ -97,8 +97,9 @@ Findings:
   2). The 5 frames before the second instance's check are attributed to
   the window's closing by a control: the second-instance code is the same
   in both builds and cost 0 frames in runs 1 and 2. A pause between the
-  two steps in goal F's build would separate them directly; that would
-  take a fourth host run.
+  two steps in goal F's build would separate them directly. That would
+  take a fourth host run, which the owner declined (see "Owner
+  decisions").
 - **Run 1's 19 frames (measured, then attributed by a control).** In run 1
   they fell in one step that both built the menus and changed the speed.
   Run 2 measured the speed change on its own (0 frames) with unchanged
@@ -195,4 +196,8 @@ Findings:
 
 ## Owner decisions
 
-None were needed in this goal.
+- 2026-10-12: two more host runs approved after the first one: one to
+  check the fixes, and one of goal F's build for the direct attribution.
+- 2026-10-12: no fourth host run to separate the closing of the Keys and
+  Mouse window from the second instance. The control comparison is
+  enough, and that window is no longer in RVP.
