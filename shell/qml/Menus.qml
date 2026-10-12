@@ -1,7 +1,10 @@
 // The menus, loaded on first use: PotPlayer's context menu, the playlist
 // panel's menu and the skin's menus, built from Player.menu_json
 // (rvp_app::menu) each time one opens, so the keys bound now and RVP's
-// check marks show. Items run Player.run_menu_command.
+// check marks show. Items run Player.run_menu_command. Only the top level
+// is built at once; a submenu gets its items when it first opens, so a
+// right click during playback stays short (building all of PotPlayer's
+// tree at once held the GUI thread long enough to drop video frames).
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
@@ -13,9 +16,8 @@ Item {
     required property Player player
     // --log-geometry: list the windows once the menu's window is mapped.
     property bool logWindows: false
-    // The menu built last and how many commands it has (self-test).
+    // The menu built last (self-test).
     property Menu current: null
-    property int commandCount: 0
 
     component Entry: MenuItem {
         id: entry
@@ -45,7 +47,11 @@ Item {
     Component {
         id: menuComponent
         Menu {
+            id: submenu
             popupType: Popup.Window
+            // The items still to add (JSON), the first time it opens.
+            property var pending: []
+            onAboutToShow: holder.fillPending(submenu)
         }
     }
     Component {
@@ -63,17 +69,22 @@ Item {
                 // Items belong to the menu's list, which deletes them with it.
                 menu.addItem(separatorComponent.createObject(menu.contentItem))
             } else if (item.children.length > 0) {
-                const sub = menuComponent.createObject(menu, { title: item.label.replace(/&/g, "&&") })
-                fill(sub, item.children)
-                menu.addMenu(sub)
+                menu.addMenu(menuComponent.createObject(menu, {
+                    title: item.label.replace(/&/g, "&&"), pending: item.children
+                }))
             } else {
                 menu.addItem(entryComponent.createObject(menu.contentItem, {
                     label: item.label, commandId: item.id, shortcut: item.shortcut, mark: item.checked
                 }))
-                if (item.id !== "")
-                    holder.commandCount += 1
             }
         }
+    }
+    function fillPending(menu) {
+        if (menu.pending.length === 0)
+            return
+        const items = menu.pending
+        menu.pending = []
+        fill(menu, items)
     }
 
     // Builds the menu of `kind` ("context", "playlist" or "skin").
@@ -82,7 +93,6 @@ Item {
             holder.current.close()
             holder.current.destroy()
         }
-        holder.commandCount = 0
         const menu = menuComponent.createObject(holder)
         fill(menu, JSON.parse(holder.player.menu_json(kind)))
         holder.current = menu

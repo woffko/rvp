@@ -452,50 +452,60 @@ impl Engine {
         self.mpv.get_property::<String>(name).ok()
     }
 
-    /// The file's audio, video and subtitle tracks (read now, for menus).
+    /// The file's audio, video and subtitle tracks (read now, for menus):
+    /// `track-list` in one read, which mpv gives as JSON text.
     #[must_use]
     pub fn tracks(&self) -> Vec<Track> {
-        let count = self.get_int("track-list/count").unwrap_or(0);
-        (0..count)
-            .filter_map(|index| {
-                let field = |name: &str| format!("track-list/{index}/{name}");
-                let kind = match self.get_text(&field("type"))?.as_str() {
+        let Some(list) = self.get_json("track-list") else {
+            return Vec::new();
+        };
+        let text = |value: &serde_json::Value| value.as_str().map(str::to_owned);
+        list.as_array()
+            .map(Vec::as_slice)
+            .unwrap_or_default()
+            .iter()
+            .filter_map(|track| {
+                let kind = match track["type"].as_str()? {
                     "audio" => TrackKind::Audio,
                     "video" => TrackKind::Video,
                     "sub" => TrackKind::Subtitle,
                     _ => return None,
                 };
                 Some(Track {
-                    id: self.get_int(&field("id"))?,
+                    id: track["id"].as_i64()?,
                     kind,
-                    title: self.get_text(&field("title")),
-                    language: self.get_text(&field("lang")),
-                    codec: self.get_text(&field("codec")),
-                    selected: self
-                        .mpv
-                        .get_property::<bool>(&field("selected"))
-                        .unwrap_or(false),
-                    external: self
-                        .mpv
-                        .get_property::<bool>(&field("external"))
-                        .unwrap_or(false),
+                    title: text(&track["title"]),
+                    language: text(&track["lang"]),
+                    codec: text(&track["codec"]),
+                    selected: track["selected"].as_bool().unwrap_or(false),
+                    external: track["external"].as_bool().unwrap_or(false),
                 })
             })
             .collect()
     }
 
-    /// The file's chapters (read now, for menus).
+    /// The file's chapters (read now, for menus), in one read.
     #[must_use]
     pub fn chapters(&self) -> Vec<Chapter> {
-        let count = self.get_int("chapter-list/count").unwrap_or(0);
-        (0..count)
-            .map(|index| Chapter {
-                title: self.get_text(&format!("chapter-list/{index}/title")),
-                time: self
-                    .get_double(&format!("chapter-list/{index}/time"))
-                    .unwrap_or(0.0),
+        let Some(list) = self.get_json("chapter-list") else {
+            return Vec::new();
+        };
+        list.as_array()
+            .map(Vec::as_slice)
+            .unwrap_or_default()
+            .iter()
+            .map(|chapter| Chapter {
+                title: chapter["title"].as_str().map(str::to_owned),
+                time: chapter["time"].as_f64().unwrap_or(0.0),
             })
             .collect()
+    }
+
+    /// A node property (lists, maps) as JSON, which mpv gives for them as
+    /// text.
+    #[must_use]
+    pub fn get_json(&self, name: &str) -> Option<serde_json::Value> {
+        serde_json::from_str(&self.get_text(name)?).ok()
     }
 
     /// Sets the volume in percent (100 is unchanged).

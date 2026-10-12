@@ -1359,16 +1359,12 @@ impl qobject::Player {
         self.sync_chrome();
     }
 
-    pub(crate) fn settings_view(&self) -> QString {
+    pub(crate) fn settings_view(&self, devices: bool) -> QString {
         let Some(core) = self.core() else {
             return QString::from("{}");
         };
-        QString::from(
-            &core
-                .app
-                .settings_view(core.engine, core.portable)
-                .to_string(),
-        )
+        let view = core.app.settings_view(core.engine, core.portable, devices);
+        QString::from(&view.to_string())
     }
 
     pub(crate) fn set_setting(

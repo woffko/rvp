@@ -958,6 +958,14 @@ Window {
         }
     }
 
+    // How many commands a menu's JSON has, submenus included.
+    function countCommands(items) {
+        let count = 0
+        for (const item of items)
+            count += item.children.length > 0 ? countCommands(item.children) : (item.id !== "" ? 1 : 0)
+        return count
+    }
+
     // The item at a path of labels in a menu's JSON.
     function menuItem(items, path) {
         let found = null
@@ -970,6 +978,9 @@ Window {
         return found
     }
 
+    // M4 and M5. Each step that may cost video frames is followed by a
+    // pause and a `settled_*` line, so the drop counts show which step
+    // costs them (goal F's open item).
     function m4Tick() {
         const t = selftest
         const s = t.status()
@@ -989,42 +1000,52 @@ Window {
             const undo = root.menuItem(list, ["Undo"])
             t.check("playlist_menu_keys", list[0].id === "l:play" && undo !== null && undo.shortcut === "Ctrl+Z",
                     "first " + list[0].label + " undo " + (undo && undo.shortcut))
-            // Built as Qt Quick menus (opening needs real input on Wayland).
+            // Built as Qt Quick menus (opening needs real input on Wayland);
+            // submenus fill when they open.
             menuLoader.active = true
+            const started = Date.now()
             const count = menuLoader.item.build("context").count
-            const commands = menuLoader.item.commandCount
+            const ms = Date.now() - started
+            const commands = root.countCommands(context)
             t.check("context_menu_builds", count > 15 && commands > 100,
-                    count + " top items, " + commands + " commands")
-            menuLoader.item.build("playlist")
-            t.check("playlist_menu_builds", menuLoader.item.commandCount > 15,
-                    menuLoader.item.commandCount + " commands")
-            // A menu command runs its action.
-            t.before = s
-            player.run_menu_command("w:speed-up")
+                    count + " top items in " + ms + " ms, " + commands + " commands")
+            const listCount = menuLoader.item.build("playlist").count
+            t.check("playlist_menu_builds", listCount > 5 && root.countCommands(list) > 15,
+                    listCount + " top items, " + root.countCommands(list) + " commands")
             t.next()
             break
         }
         case 201:
-            if (t.waitFor("menu_command_runs", () => s.speed !== null && Math.abs(s.speed - 1.1) < 0.01,
-                          2000, () => "speed " + s.speed))
-                player.run_menu_command("w:speed-default")
+            if (root.settled("menus"))
+                player.run_menu_command("w:speed-up")
             break
         case 202:
+            // A menu command runs its action.
+            t.waitFor("menu_command_runs", () => s.speed !== null && Math.abs(s.speed - 1.1) < 0.01,
+                      2000, () => "speed " + s.speed)
+            break
+        case 203:
+            if (root.settled("speed_up"))
+                player.run_menu_command("w:speed-default")
+            break
+        case 204:
             t.waitFor("speed_back", () => s.speed !== null && Math.abs(s.speed - 1) < 0.01, 2000,
                       () => "speed " + s.speed)
             break
-        case 203:
-            // F5 opens the settings window.
-            player.key(Qt.Key_F5, 0)
-            t.next()
+        case 205:
+            if (root.settled("speed_back"))
+                player.key(Qt.Key_F5, 0)
             break
-        case 204:
+        case 206:
+            // F5 opens the settings window.
             t.waitFor("f5_opens_settings", () => settingsLoader.status === Loader.Ready
                           && settingsLoader.item.visible, 3000)
             break
-        case 205: {
+        case 207: {
+            if (!root.settled("settings_open"))
+                break
             if (settingsLoader.status !== Loader.Ready) {
-                t.step = 210
+                t.step = 220
                 break
             }
             const win = settingsLoader.item
@@ -1041,41 +1062,61 @@ Window {
             const owner = JSON.parse(player.editor_key_owner("window", Qt.Key_Space, 0))
             t.check("keys_page_rows", t.status().editor_open && rows.length > 50, rows.length + " actions")
             t.check("keys_page_finds_owner", owner.owner === "play-pause", owner.key + " -> " + owner.owner)
-            Tools.grab(t.outDir, "settings")
-            // A changed setting applies at once: a bigger volume step (the
-            // action, as Down goes to the playlist while it has the keys).
-            win.showPage(win.pages.findIndex(p => p.key === "audio"))
-            win.set("volume-step", 5)
-            t.before = s
-            player.run_action("volume-down")
-            t.next()
             break
         }
-        case 206:
+        case 208:
+            // A picture of the window for the record (a grab costs frames).
+            if (root.settled("settings_pages"))
+                Tools.grab(t.outDir, "settings")
+            break
+        case 209: {
+            if (!root.settled("settings_grab"))
+                break
+            // A changed setting applies at once: a bigger volume step (the
+            // action, as Down goes to the playlist while it has the keys).
+            const win = settingsLoader.item
+            win.showPage(win.pages.findIndex(p => p.key === "audio"))
+            win.set("volume-step", 5)
+            t.before = t.status()
+            player.run_action("volume-down")
+            break
+        }
+        case 210:
             t.waitFor("setting_applies_at_once", () => s.volume_step === 5 && s.volume !== null
                           && Math.abs(s.volume - (t.before.volume - 5)) < 0.01, 2000,
                       () => "step " + s.volume_step + " volume " + t.before.volume + " -> " + s.volume)
             break
-        case 207: {
-            const win = settingsLoader.item
-            win.set("volume-step", 1)
+        case 211:
+            if (!root.settled("setting_change"))
+                break
+            settingsLoader.item.set("volume-step", 1)
             t.check("setting_restored", t.status().volume_step === 1, "step " + t.status().volume_step)
-            win.close()
-            t.next()
+            settingsLoader.item.close()
             break
-        }
-        case 208:
+        case 212:
             t.waitFor("settings_window_closes", () => !settingsLoader.item.visible && !s.editor_open, 2000)
             break
-        case 209:
-            t.next()
+        case 213:
+            root.settled("settings_close")
             break
-        case 210:
+        default:
             // Back to M3's steps.
             t.step = 126
             t.stepStarted = Date.now()
             break
         }
+    }
+
+    // After a step that may cost frames: once 1.5 s passed, logs the drops
+    // so far as `check settled_NAME=PASS [drops N]` and goes on; returns
+    // true at that tick.
+    function settled(name) {
+        const t = selftest
+        if (Date.now() - t.stepStarted < 1500)
+            return false
+        t.check("settled_" + name, true, "")
+        t.next()
+        return true
     }
 
     function middle(r) { return { x: r.x + r.width / 2, y: r.y + r.height / 2 } }

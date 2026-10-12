@@ -36,7 +36,7 @@ ApplicationWindow {
     property bool restartNeeded: false
 
     function begin(page) {
-        reload()
+        reload(true)
         const index = pages.findIndex(p => p.key === page)
         showPage(index >= 0 ? index : 0)
         notice = ""
@@ -51,7 +51,14 @@ ApplicationWindow {
     }
     // The page item at an index (self-test: every page loads).
     function pageItem(index) { return stack.children[index] }
-    function reload() { view = JSON.parse(player.settings_view()) }
+    // `devices`: read the audio devices too (only when the window opens:
+    // asking the system for them can cost video frames).
+    function reload(devices) {
+        const next = JSON.parse(player.settings_view(devices === true))
+        if (devices !== true && view.choices)
+            next.choices["audio-device"] = view.choices["audio-device"]
+        view = next
+    }
     function value(path) {
         let v = s
         for (const part of path.split(".")) {

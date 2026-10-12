@@ -525,6 +525,7 @@ name = "rvp-engine"
 version = "0.0.1"
 dependencies = [
  "libmpv2",
+ "serde_json",
 ]
 
 [[package]]

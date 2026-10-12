@@ -161,7 +161,7 @@ fn the_settings_window_gets_values_choices_and_the_file() {
     let dir = scratch("view");
     let engine = Engine::new(&EngineOptions::headless()).expect("engine");
     let app = App::load(&Dirs::inside(&dir)).expect("load");
-    let view = app.settings_view(&engine, false);
+    let view = app.settings_view(&engine, false, true);
     assert_eq!(view["settings"]["volume-step"], json!(1.0));
     assert_eq!(view["settings"]["normalizer"]["level"], json!(75.0));
     assert!(
@@ -179,5 +179,8 @@ fn the_settings_window_gets_values_choices_and_the_file() {
         Some(dir.join("config").join("settings.json"))
     );
     assert_eq!(view["portable"], json!(false));
+    // Without the device list (reloads after a change).
+    let view = app.settings_view(&engine, false, false);
+    assert_eq!(view["choices"]["audio-device"], json!([]));
     let _ = std::fs::remove_dir_all(&dir);
 }

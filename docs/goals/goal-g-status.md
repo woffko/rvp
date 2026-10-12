@@ -1,9 +1,10 @@
 # Goal G status: milestones M4 (menus and commands) and M5 (settings window)
 
-Date: 2026-10-12. Result: **done on WSL and both VMs**; one item waits for
-the owner: the Windows host run that finds which self-test step drops
-17-18 frames (it needs the owner's permission; see "Windows host").
-Precondition met: `goal-f-status.md` records goal F as done.
+Date: 2026-10-12. Result: **done**: all tests and checks pass on WSL, the
+Ubuntu VM, the Windows VM and, in two approved runs, the Windows host,
+where the dropped frames goal F left open were traced and the part RVP
+caused was fixed (see "Windows host"). Precondition met:
+`goal-f-status.md` records goal F as done.
 
 M3's one-week trial: the owner had reported no findings when this goal
 started, so nothing was fixed ahead of M4 and M5.
@@ -25,7 +26,7 @@ started, so nothing was fixed ahead of M4 and M5.
 | Portable mode | `rvp.portable` next to the executable: `settings.json` next to it and the state in its `state` folder; `RVP_CONFIG_DIR` and `RVP_STATE_DIR` still win | `crates/app/src/storage.rs` (`Dirs::resolve`) |
 | Import and export | Export writes the settings file; import reads one (missing fields take their defaults, unknown ones are named and ignored, values are checked) and applies it as one change | `crates/app/src/preferences.rs`, the settings window's buttons |
 | Other | The skin's clock (`CMD_SYSTEM_TIME_MESSAGE`); playback information over the video (Tab: file, video, decoder, audio, time, speed, A-B, sync, dropped frames) | `shell/qml/Main.qml`, `crates/app/src/view.rs` |
-| Self-test | 14 new checks (menus with the bound keys and check marks, both menus built, a menu command, F5, every settings page, the keys page, a setting that applies at once, the window closing); they replace M3's four Keys and Mouse window checks | `shell/qml/Main.qml` |
+| Self-test | 14 new checks (menus with the bound keys and check marks, both menus built with the time it took, a menu command, F5, every settings page, the keys page, a setting that applies at once, the window closing); they replace M3's four Keys and Mouse window checks. Each step of M4's part that may cost video frames is followed by a 1.5 s pause and a `settled_*` line, so the drop counts show the step | `shell/qml/Main.qml` |
 | Linux kit | Step `m4` (the self-test's M4 and M5 checks and a portable copy), `m4all`, checklist section 7 | `tools/linux-kit/` |
 | Windows VM script | `m4-all.ps1` (the same checks, portable mode in the bundle folder, cleaned up afterwards) | `tools/windows-vm/` |
 
@@ -57,14 +58,38 @@ All PASS; details in `docs/test-runs/2026-10-12-m4-vms.md`.
 - **Windows VM**: `m4-all.ps1` (functional with M4's and M5's checks,
   portable mode) and `m3-all.ps1` (second instance, 3 of 3 kill tests).
 - **WSL**: only silent tests (no window, no sound); no GUI run.
+- **Windows host**: two approved self-test runs, all checks PASS (below).
 
-## Windows host: the self-test's dropped frames (open, needs permission)
+## Windows host: the self-test's dropped frames (two approved runs)
 
 Goal F's host runs dropped 17-18 frames per self-test with the M3 build
-and none with goal E's. The self-test prints the drops with every check,
-so one host run of this build shows the step. That run starts RVP on the
-owner's desktop and is waiting for the owner's permission; the fix, if RVP
-causes the drops, follows the run.
+and none with goal E's. The self-test prints the drops with every check.
+Both runs: the owner's desktop (2560x1440 at 60 Hz, RTX 30-series card,
+`d3d11va-copy`, WASAPI), `run-g.cmd --selftest --instance=host-g` with the
+4K60 HEVC and 1080p clips, a fresh state in `C:\Users\<user>\rvp-test\g-*`,
+`ipc-server` empty (SVP not attached); PotPlayer and SVP were not touched.
+
+| Run | Build | Result | Dropped frames by step |
+|-----|-------|--------|------------------------|
+| 1 | f4b1f22 | 44 checks PASS | M3's steps 0-1 (the counter restarts with each file); building the menus and the speed change (one step) 19; opening the settings window and its pages 3; changing a setting and the window grab 11; total 33 |
+| 2 | with the fixes below | 52 checks PASS | M3's steps 0-1; menus 0 (top level built in 38 ms); speed up 0; speed back 0; opening the window 2; showing all eight pages at once 4; the self-test's grab of the window 5; changing a setting 0; closing 0; total 11 |
+
+Findings:
+
+- **Goal F's 17-18 frames** came from M3's F5 step: opening the Keys and
+  Mouse window and the self-test's grab of it. That step is gone; M3's
+  remaining steps now cost 0-1 frame on the host.
+- **RVP's own costs, fixed:** the menus built PotPlayer's whole tree (141
+  commands in about 25 submenus) on the GUI thread at every right click,
+  and read each track's properties from mpv one by one; changing a
+  setting re-read mpv's audio device list (mpv asks the system). Now only
+  the top level is built when a menu opens (each submenu when it first
+  opens), the track and chapter lists are one read each, and the device
+  list is read only when the settings window opens.
+- **Left as is:** opening the settings window costs about 2 frames on its
+  first use (QML loads it then) and each page about half a frame the first
+  time it shows; the window opens on request only. The grab is the
+  self-test's (for the record of each run), not RVP's.
 
 ## Differences from PotPlayer
 
@@ -105,16 +130,12 @@ causes the drops, follows the run.
 
 ## For the owner
 
-1. **Host run (permission needed).** One `rvp --selftest` of this build on
-   the Windows desktop (about 40 seconds, RVP's window with the 4K and
-   1080p test clips, sound on, SVP not attached) to see which step drops
-   the 17-18 frames.
-2. **M3's acceptance needs the Ubuntu boot run.** `goal-f-status.md`
+1. **M3's acceptance needs the Ubuntu boot run.** `goal-f-status.md`
    does not record `kit.sh m3all` on the owner's Ubuntu 26.10 boot; it is
    still required for M3's acceptance (PLAN's risk table: GPU checks at
    the end of M2, M3 and M6). `kit.sh m4all` now runs M3's and M4/M5's
    steps together (checklist sections 6 and 7).
-3. **What to check** (on Windows with the new `rvp.exe`, on Ubuntu after
+2. **What to check** (on Windows with the new `rvp.exe`, on Ubuntu after
    `kit.sh m4all`; checklist section 7 has the same list):
    - Right-click menu: only what RVP does, PotPlayer's order and texts,
      the keys bound now, check marks (Repeat, Stay on Top, aspect ratio,

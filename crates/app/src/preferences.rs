@@ -410,12 +410,14 @@ impl App {
     }
 
     /// The settings window's data: the settings, the choices it offers
-    /// (with the audio devices mpv knows) and where the file is.
+    /// and where the file is. With `devices` the audio devices mpv knows
+    /// are read too (when the window opens: mpv asks the system, which can
+    /// take long enough to cost video frames).
     #[must_use]
-    pub fn settings_view(&self, engine: &Engine, portable: bool) -> Value {
-        let devices: Value = engine
-            .get_text("audio-device-list")
-            .and_then(|text| serde_json::from_str(&text).ok())
+    pub fn settings_view(&self, engine: &Engine, portable: bool, devices: bool) -> Value {
+        let devices: Value = devices
+            .then(|| engine.get_json("audio-device-list"))
+            .flatten()
             .unwrap_or_else(|| Value::Array(Vec::new()));
         let skins: Vec<String> = self
             .skin_choices()

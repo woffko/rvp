@@ -114,9 +114,10 @@ pub mod qobject {
         #[qinvokable]
         fn run_list_action(self: Pin<&mut Self>, name: &QString);
 
-        /// The settings window's data as JSON (`App::settings_view`).
+        /// The settings window's data as JSON (`App::settings_view`); with
+        /// `devices` also the audio devices (slow: only when it opens).
         #[qinvokable]
-        fn settings_view(self: &Self) -> QString;
+        fn settings_view(self: &Self, devices: bool) -> QString;
 
         /// Changes one setting (`rvp_app::preferences::change`; the value
         /// is JSON) and applies it; returns JSON with `notes`, `restart` and

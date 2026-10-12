@@ -10,6 +10,9 @@ publish.workspace = true
 
 [dependencies]
 libmpv2.workspace = true
+# mpv's track and chapter lists come as one JSON text each (one read
+# instead of several per track while a video plays).
+serde_json.workspace = true
 
 [lints]
 workspace = true
