@@ -1,9 +1,12 @@
 # Goal G status: milestones M4 (menus and commands) and M5 (settings window)
 
-Date: 2026-10-12. Result: **done**: all tests and checks pass on WSL, the
-Ubuntu VM, the Windows VM and, in two approved runs, the Windows host,
-where the dropped frames goal F left open were traced and the part RVP
-caused was fixed (see "Windows host"). Precondition met:
+Date: 2026-10-12. Result: **done**. All tests and checks pass on WSL, the
+Ubuntu VM, the Windows VM and the Windows host. On the host, goal F's
+17-18 dropped frames were traced to their steps by a direct measurement of
+goal F's build, and the new M4 and M5 steps' costs were measured and the
+part RVP caused was fixed (see "Windows host"). The goal asked for one
+host run; the owner approved three: the new build, the build with the
+fixes, and goal F's build for the direct attribution. Precondition met:
 `goal-f-status.md` records goal F as done.
 
 M3's one-week trial: the owner had reported no findings when this goal
@@ -58,38 +61,60 @@ All PASS; details in `docs/test-runs/2026-10-12-m4-vms.md`.
 - **Windows VM**: `m4-all.ps1` (functional with M4's and M5's checks,
   portable mode) and `m3-all.ps1` (second instance, 3 of 3 kill tests).
 - **WSL**: only silent tests (no window, no sound); no GUI run.
-- **Windows host**: two approved self-test runs, all checks PASS (below).
+- **Windows host**: three approved self-test runs (two of this goal's
+  builds, one of goal F's), all checks PASS (below).
 
-## Windows host: the self-test's dropped frames (two approved runs)
+## Windows host: the self-test's dropped frames (three approved runs)
 
 Goal F's host runs dropped 17-18 frames per self-test with the M3 build
 and none with goal E's. The self-test prints the drops with every check.
-Both runs: the owner's desktop (2560x1440 at 60 Hz, RTX 30-series card,
-`d3d11va-copy`, WASAPI), `run-g.cmd --selftest --instance=host-g` with the
-4K60 HEVC and 1080p clips, a fresh state in `C:\Users\<user>\rvp-test\g-*`,
-`ipc-server` empty (SVP not attached); PotPlayer and SVP were not touched.
+All three runs used the owner's desktop: 2560x1440 at 60 Hz, RTX 30-series card,
+`d3d11va-copy` and WASAPI. Each played the 4K60 HEVC clip and then the
+1080p clip with a fresh state and `ipc-server` empty, so SVP did not
+attach. PotPlayer and SVP were not touched. Runs 1 and 2 used `run-g.cmd
+--selftest --instance=host-g` with state in `C:\Users\<user>\rvp-test\g-*`.
+Run 3 used goal F's `run-m3.cmd --selftest --instance=host-f` with
+`m3-*`.
 
 | Run | Build | Result | Dropped frames by step |
 |-----|-------|--------|------------------------|
 | 1 | f4b1f22 | 44 checks PASS | M3's steps 0-1 (the counter restarts with each file); building the menus and the speed change (one step) 19; opening the settings window and its pages 3; changing a setting and the window grab 11; total 33 |
-| 2 | with the fixes below | 52 checks PASS | M3's steps 0-1; menus 0 (top level built in 38 ms); speed up 0; speed back 0; opening the window 2; showing all eight pages at once 4; the self-test's grab of the window 5; changing a setting 0; closing 0; total 11 |
+| 2 | with the fixes below (14c21ac) | 52 checks PASS | M3's steps 0-1; menus 0 (top level built in 38 ms); speed up 0; speed back 0; opening the window 2; showing all eight pages at once 4; the self-test's grab of the window 5; changing a setting 0; closing 0; the second instance 0; total 11 |
+| 3 | goal F's build as it is on the host (`rvp-bundle\rvp.exe`, between 947acc2 and b2d7657: it prints the drops per check, its normalizer has no `b=1`), `run-m3.cmd` with a fresh `m3-state` | 34 checks PASS | mpv's counter restarts with each file and seek. 4K60 part: entering and leaving fullscreen 2, the resize to 900x500 8. After the seek to the middle: the appended file 5, the click in the list 6. After the 1080p file started: Shift+N, the volume 0; F5 opening Keys and Mouse 4, the grab 3, closing 4; the second instance 5; total at the end 16 |
 
 Findings:
 
-- **Goal F's 17-18 frames** came from M3's F5 step: opening the Keys and
-  Mouse window and the self-test's grab of it. That step is gone; M3's
-  remaining steps now cost 0-1 frame on the host.
-- **RVP's own costs, fixed:** the menus built PotPlayer's whole tree (141
-  commands in about 25 submenus) on the GUI thread at every right click,
-  and read each track's properties from mpv one by one; changing a
-  setting re-read mpv's audio device list (mpv asks the system). Now only
-  the top level is built when a menu opens (each submenu when it first
-  opens), the track and chapter lists are one read each, and the device
-  list is read only when the settings window opens.
-- **Left as is:** opening the settings window costs about 2 frames on its
-  first use (QML loads it then) and each page about half a frame the first
-  time it shows; the window opens on request only. The grab is the
-  self-test's (for the record of each run), not RVP's.
+- **Goal F's 17-18 frames (run 3, measured).** They are the count at the
+  end of goal F's self-test, so they are the drops since the last restart
+  of mpv's counter, when the album's first entry started. In goal F's
+  build those are: F5 opening the Keys and Mouse window 4, the
+  self-test's grab of it 3, closing it 4, and 5 more by the next check (the
+  second instance; in this goal's build the same step costs 0 in both
+  runs, so they are most likely the tail of the window's closing). The
+  earlier parts of goal F's run dropped frames too (resizing a 4K60 window
+  8, the appended file and the next click 11), but the counter restarted
+  after them. This goal's build drops 0-1 frame in those steps (runs 1 and
+  2).
+- **Run 1's 19 frames (measured, then attributed by a control).** In run 1
+  they fell in one step that both built the menus and changed the speed.
+  Run 2 measured the speed change on its own (0 frames) with unchanged
+  speed-change code, so they came from the menu step, whose code changed.
+  In run 1 that step built PotPlayer's whole tree (141 commands in about 25
+  submenus) on the GUI thread and read each track's properties from mpv
+  one by one; offscreen on this PC, building the whole tree takes about
+  130 ms. Run 2 builds only the top level (38 ms on the host) and reads
+  tracks and chapters in one read each: 0 frames. Which of the two costs
+  dominated in run 1 was not measured separately.
+- **Run 1's 11 frames for changing a setting** included the self-test's
+  grab of the window and a re-read of mpv's audio device list on every
+  change. Run 2 measured them apart: grab 5, change 0. The device list is
+  now read only when the window opens.
+- **Left as is:** opening a window during playback costs a few frames on
+  the host: Keys and Mouse in goal F 4 to open and 4 to close, the
+  settings window now 2 to open and 0 to close. Showing all eight pages
+  once cost 4, about half a frame per page the first time it shows. The
+  windows open on request only. The grabs belong to the self-test (a
+  picture for each run's record), not to RVP.
 
 ## Differences from PotPlayer
 
