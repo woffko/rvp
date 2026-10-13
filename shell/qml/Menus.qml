@@ -35,6 +35,7 @@ Item {
             Label {
                 text: (entry.mark === 1 ? "✓ " : entry.mark === 0 ? "  " : "") + entry.label
                 opacity: entry.enabled ? 1 : 0.5
+                elide: Text.ElideRight
                 Layout.fillWidth: true
             }
             Label {
@@ -49,6 +50,18 @@ Item {
         Menu {
             id: submenu
             popupType: Popup.Window
+            // Qt's Menu keeps its background's width (200 pixels) whatever
+            // its items need, so long labels ran into their shortcuts with
+            // Ubuntu's fonts: take the widest item's width.
+            width: {
+                let widest = 0
+                for (let i = 0; i < count; ++i) {
+                    const item = itemAt(i)
+                    if (item)
+                        widest = Math.max(widest, item.implicitWidth)
+                }
+                return Math.max(implicitBackgroundWidth, widest + leftPadding + rightPadding)
+            }
             // The items still to add (JSON), the first time it opens.
             property var pending: []
             onAboutToShow: holder.fillPending(submenu)

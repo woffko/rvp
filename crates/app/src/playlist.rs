@@ -54,20 +54,26 @@ pub fn is_url(text: &str) -> bool {
 /// A local path as mpv's `path` property reports it, so that the entry
 /// that plays can be recognised by it. On Windows mpv turns `/` into `\`
 /// and drops `.` and `..` (`C:/a/../b.mkv` plays as `C:\b.mkv`); file
-/// dialogs and drops give forward slashes. Elsewhere, and for URLs, the
-/// path stays as it is.
+/// dialogs and drops give forward slashes. On Linux the kit's mpv master
+/// drops `.` and `..` too (`/a/../b.mkv` plays as `/b.mkv`), while older
+/// builds such as Ubuntu 24.04's 0.37 report the path as given; once RVP
+/// drops them itself, both report the same. URLs stay as they are.
 #[must_use]
 pub fn local_path(path: &str) -> String {
-    if !cfg!(windows) || is_url(path) {
+    if is_url(path) {
         return path.to_owned();
     }
-    let unified = path.replace('/', "\\");
+    let (unified, separator) = if cfg!(windows) {
+        (path.replace('/', "\\"), "\\")
+    } else {
+        (path.to_owned(), "/")
+    };
     let mut prefix = String::new();
     let mut parts: Vec<String> = Vec::new();
     for component in Path::new(&unified).components() {
         match component {
             Component::Prefix(drive) => prefix.push_str(&drive.as_os_str().to_string_lossy()),
-            Component::RootDir => prefix.push('\\'),
+            Component::RootDir => prefix.push_str(separator),
             Component::CurDir => {}
             Component::ParentDir => {
                 if parts.pop().is_none() && prefix.is_empty() {
@@ -77,7 +83,7 @@ pub fn local_path(path: &str) -> String {
             Component::Normal(part) => parts.push(part.to_string_lossy().into_owned()),
         }
     }
-    format!("{prefix}{}", parts.join("\\"))
+    format!("{prefix}{}", parts.join(separator))
 }
 
 impl Entry {
@@ -986,7 +992,8 @@ mod tests {
             );
             assert_eq!(local_path(r"\\nas\Media\x\..\y.mkv"), r"\\nas\Media\y.mkv");
         } else {
-            assert_eq!(local_path("/a/../b.mkv"), "/a/../b.mkv");
+            assert_eq!(local_path("/a/../b.mkv"), "/b.mkv");
+            assert_eq!(local_path("/home/u/./films//a.mkv"), "/home/u/films/a.mkv");
         }
         assert_eq!(Entry::new("C:/x.mkv").path, local_path("C:/x.mkv"));
     }

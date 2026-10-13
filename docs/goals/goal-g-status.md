@@ -130,6 +130,72 @@ Findings:
   windows open on request only. The grabs belong to the self-test (a
   picture for each run's record), not to RVP.
 
+## Ubuntu boot run
+
+On 2026-10-12, with reruns on 2026-10-13, `kit.sh m4all` ran on the
+owner's Ubuntu 26.10 boot: GNOME Wayland, RTX 30-series card, BlackSpace_en.dsf
+from the read-only Windows partition, and SVP 4 Manager running.
+`goal-f-status.md`, section "Ubuntu boot run", has the machine, every
+step, the GPU checks, SVP and the usability targets. The report is
+`docs/test-runs/2026-10-13-ubuntu-boot.md`.
+
+| Step | Result | Detail |
+|------|--------|--------|
+| `m4` | PASS | 51 checks: the menus with the bound keys and check marks (24 top items built in 18-20 ms, 141 commands), a menu command, F5 with every page, the Keys and Mouse page with 151 actions, a setting applied at once, and the window closing. A portable copy then kept `settings.json` and `state` next to itself. Rerun after the fixes: PASS |
+| `m2input` | PASS | A real right click opened the context menu in its own window: 200x617 at first, 241x617 after the menu fix |
+| `m2gpu` | FAIL (goal D's open item) | 8 dropped frames per 25 s in fullscreen and 6 in a 1920x1080 window at 4K60; goal D measured 6 per 20 s |
+| `m2svp` | PASS | SVP attached after 1.36 s; exit status 0 |
+
+**Dropped frames by step.** These come from the functional self-tests of
+`m3` and `m4`, in both the first run and the rerun. SVP was not attached,
+and mpv's counter restarts with each file.
+
+- With the 4K60 clip, entering and leaving fullscreen cost 1-2 frames.
+- With the 1080p clip:
+  - **14 frames in the 1.5 s after the speed returned from 1.1x to 1x.**
+    On the Windows host (run 2 above) this step cost 0.
+  - 0-1 frames while every settings page was shown.
+  - 2-3 frames for the self-test's grab of the settings window.
+  - 0 for each of the other steps: building the menus, the speed rise to
+    1.1x, opening the settings window, changing a setting, and closing
+    it.
+
+The rerun of `m2` counted 0 at every step. SVP attached to that self-test,
+though, so it played interpolated and does not compare. The cause of the
+14 frames was not investigated (open item below).
+
+**The owner's manual checks (checklist section 7).** Owner's notes, given
+in the order of the checklist's seven items:
+
+| Check | Owner's finding | Result |
+|-------|-----------------|--------|
+| Right-click menu | Labels ran into their shortcuts ("Fullscreen (Keep AR)" into Alt+Enter, "Playback/System Info" into Tab) | Fixed, see below |
+| New keys | Work | |
+| The skin's own menus | Seem to work | |
+| The playlist panel's menu | Works ("more or less"; no fault named) | |
+| F5, changes applied at once | Work | |
+| Export and import | Taken as working | |
+| Portable mode by hand | Deferred by the owner as not important for now | `m4`'s portable copy passed |
+
+The owner also found that real films played upside down. The fix is in
+`goal-f-status.md`.
+
+**The menu fix.** Qt Quick Controls' `Menu` keeps its background's
+implicit width of 200 pixels, whatever its items need. With Ubuntu's
+fonts, the longer labels did not fit next to their shortcuts. Every menu
+and submenu now takes the width of its widest item, and a label that
+still does not fit ends in an ellipsis (`shell/qml/Menus.qml`). In the
+rerun of `m2input`, the context menu opened 241 pixels wide.
+
+**Open items from this run:**
+
+1. The 14 dropped frames after the speed returns to 1x on this boot.
+2. The kit's self-test steps (`m2`, `m3`, `m4`) leave `ipc-server` at its
+   default, so a running SVP Manager can attach to them, as it did in the
+   rerun of `m2`. Setting it empty, as the Windows host runs do, would
+   keep their counts comparable.
+3. The owner's own check of portable mode.
+
 ## Differences from PotPlayer
 
 - The menus are Qt Quick menus in their own popup windows (D6: native
@@ -169,11 +235,9 @@ Findings:
 
 ## For the owner
 
-1. **M3's acceptance needs the Ubuntu boot run.** `goal-f-status.md`
-   does not record `kit.sh m3all` on the owner's Ubuntu 26.10 boot; it is
-   still required for M3's acceptance (PLAN's risk table: GPU checks at
-   the end of M2, M3 and M6). `kit.sh m4all` now runs M3's and M4/M5's
-   steps together (checklist sections 6 and 7).
+1. **The Ubuntu boot run.** It was done on 2026-10-12 and 13 with `kit.sh
+   m4all`, which runs M3's steps and M4/M5's together (checklist sections
+   6 and 7). See "Ubuntu boot run".
 2. **What to check** (on Windows with the new `rvp.exe`, on Ubuntu after
    `kit.sh m4all`; checklist section 7 has the same list):
    - Right-click menu: only what RVP does, PotPlayer's order and texts,

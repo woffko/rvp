@@ -2,7 +2,8 @@
 
 Date: 2026-10-11. Result: **done**: all tests and checks pass on WSL, the
 Ubuntu VM, the Windows VM and, in three approved runs, the Windows host.
-The one-week trial and the Ubuntu boot run are the owner's (open items).
+The Ubuntu boot run was done on 2026-10-12 and 13 (see "Ubuntu boot
+run"). The one-week trial is the owner's (an open item).
 Precondition met: `goal-e-status.md` records goal E as done.
 
 At the start no answers to goal E's open questions were recorded and
@@ -207,6 +208,79 @@ bundle from goal E's folder with the new `rvp.exe`. Things to try:
 - Mouse gestures apply to the window scope; the playlist panel's own mouse
   handling is fixed (as in PotPlayer).
 
+## Ubuntu boot run
+
+2026-10-12, with reruns on 2026-10-13, on the owner's Ubuntu 26.10 boot
+(development branch, kernel 7.2.0-5). The machine: GNOME Wayland, two
+2560x1440 screens at 60 Hz, an RTX 30-series card with driver 595.91.07, and a
+32-core processor. `tools/linux-kit/kit.sh m4all` ran M3's steps together
+with M4 and M5's, so it counts as the `m3all` run. It ran from a terminal
+in the GNOME session with:
+
+- the kit's libmpv (`b2c255c13e`, `nvdec-copy`, PipeWire);
+- BlackSpace_en.dsf from the Windows partition, mounted read-only;
+- SVP 4 Manager running.
+
+The owner installed the packages, ran `ydotoold` as root and started SVP.
+The report is `docs/test-runs/2026-10-13-ubuntu-boot.md`. M4
+and M5's part, with the owner's manual checks, is in `goal-g-status.md`.
+
+| Step | Result | Detail |
+|------|--------|--------|
+| `check`, `deps`, `mpv`, `m2build` | PASS | Qt 6.10.3, meson 1.12.1, the kit's libmpv |
+| `m2` | PASS | The functional self-test passed, and the restart reopened the last file paused. Rerun after the fixes below: PASS |
+| `m3` | PASS | The functional self-test passed with M3's checks: playlist panel, albums, normalizer, volume above 100 %, the Keys and Mouse page, second instance and aspect lock. All 3 kill tests reopened entry 2 of 2 paused, 0.67-0.71 s before the last position the test saw (5 s allowed) |
+| `m2input` | PASS | With the real pointer (ydotool), the window moved by -80,60 and resized by -142,-80 with the aspect lock. A double click entered fullscreen at 2560x1440, and a second one left it. A right click opened the menu window. Rerun after the fixes: PASS |
+| `m2gpu` | FAIL (goal D's open item) | 4K60 HEVC for 25 s: 8 dropped frames in fullscreen, 6 in a 1920x1080 window; the decoder dropped none |
+| `m2svp` | PASS | SVP's `@svp` filter attached after 1.36 s. 12 dropped frames in 40 s in a window, none by the decoder; exit status 0 |
+| `report` | PASS | |
+
+**GPU checks.** Per 20 s, the counts are 6.4 in fullscreen and 4.8 in the
+window. That is the level goal D left open (6 per 20 s at 4K60, GNOME
+Wayland with the NVIDIA driver; mpv's own output drops a few too). The
+decoder dropped no frames, so decoding keeps up. Nothing was changed for
+this.
+
+**SVP.** In `m2svp`, SVP attached through RVP's default IPC socket
+(`/tmp/mpvsocket`) and played the 1080p clip to the end. SVP Manager was
+also running during the other steps. It attached to the rerun's `m2`
+self-test as well (that run's last status shows `@svp`), because the
+kit's self-test steps leave `ipc-server` at its default. The Windows host
+runs set it empty instead.
+
+**Usability targets (section 4) on real hardware.** Measured across the
+self-tests of `m2`, `m3`, `m4`, `m2gpu` and `m2svp`, including the reruns:
+
+| Target | Ubuntu boot | Verdict |
+|--------|-------------|---------|
+| Input to visible reaction < 50 ms | 51 of 64 inputs took 0.8-43 ms; 13 took 51-314 ms | Met for most inputs. The outliers match the Windows host's (56-456 ms) |
+| Seek to new frame < 300 ms | 103-516 ms over six seeks (only one under 300) | Not met: seeks are exact (goal E, question 1) |
+| Window shown < 500 ms | 225-324 ms (324 ms on the first start after the build) | Met. The Ubuntu VM took 751-816 ms and the Windows host 973-1183 ms |
+| First frame < 1 s | 614-869 ms | Met |
+| State written on change and at least every 5 s; nothing lost after a crash | 3 of 3 kill tests | Met |
+
+**Found and fixed in this run.** `cargo xtask ci` passes with all three
+fixes, and the reruns of `m2`, `m4` and `m2input` pass:
+
+- **The video was upside down.** On real films the owner saw the picture
+  upside down and mirrored, which is what a vertical flip looks like.
+  `MpvItem` mirrored itself vertically, but mpv already renders into the
+  framebuffer object the way Qt samples it, so the mirror flipped it a
+  second time. Compared with ffmpeg's frame of the same clip, earlier
+  grabs on Linux and Windows show the same flip; the synthetic test
+  pattern had hidden it. The mirror is gone (`shell/cpp/shell.cpp`). The
+  rerun's grab (`m2-grabs/playing-0.png` in the kit's log directory) now
+  matches ffmpeg's frame, with the timestamp at the top left.
+- **Paths with `.` or `..`.** At fd5eda9 `cargo xtask ci` failed in
+  `tests/bindings.rs` on this boot. The kit's mpv master drops `.` and
+  `..` from the `path` property on Linux too. A path given with them then
+  no longer matched its album entry, so RVP did not recognise the entry
+  that played. CI did not catch it because it uses Ubuntu 24.04's mpv
+  0.37, which reports paths as given. `playlist::local_path` now drops
+  `.` and `..` itself on every system, so every mpv version reports the
+  same path.
+- **Menu labels ran into their shortcuts.** See `goal-g-status.md`.
+
 ## Open items
 
 1. **Dropped frames in the host self-test** (17-18 per run, see "Windows
@@ -214,11 +288,9 @@ bundle from goal E's folder with the new `rvp.exe`. Things to try:
    the owner's permission.
 2. **The one-week trial** (M3's exit in PLAN.md): normal viewing on one
    system without losing a position or a playlist.
-3. **The Ubuntu boot run** (`tools/linux-kit/kit.sh m3all`): PLAN.md's risk
-   table asks for GPU checks on the Ubuntu boot at the end of M2, M3 and
-   M6, so it blocks M3's acceptance; if the trial runs on Ubuntu, it comes
-   first (the kit builds RVP there). The owner asked to be reminded when it
-   blocks.
+3. **The Ubuntu boot run**: done on 2026-10-12 and 13 with `kit.sh m4all`
+   (see "Ubuntu boot run"). All steps pass except `m2gpu`, whose dropped
+   frames are goal D's open item at the same level.
 
 ## Owner decisions in this goal
 

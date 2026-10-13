@@ -133,7 +133,9 @@ MpvItem::MpvItem(QQuickItem *parent)
     : QQuickFramebufferObject(parent)
 {
     instance.store(this);
-    setMirrorVertically(true);
+    // No mirroring: mpv renders into the framebuffer object the way Qt
+    // samples it (flip off), and mirroring showed every video upside down on
+    // Linux and on Windows (the Ubuntu boot run of M3-M5).
     connect(this, &QQuickItem::windowChanged, this, [](QQuickWindow *window) {
         if (window != nullptr) {
             // Emitted on the render thread after each presented frame.
