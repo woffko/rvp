@@ -589,6 +589,16 @@ Window {
     //                         SVP's @svp filter; --next plays the album's
     //                         second entry; logs time= every second (the
     //                         kit's kill test)
+    //   --selftest=upright    plays a clip (testdata/media/fixture-marker.mkv)
+    //                         and compares the picture with --reference=PNG
+    //                         (default: the clip's name with .png): upright,
+    //                         not flipped or mirrored; SKIPPED when the grab
+    //                         has no video (Windows session 0)
+    //   --selftest=svp        SVP's acceptance (section 7): SVP attaches
+    //                         (@svp), the frame rate reaches at least
+    //                         --svp-factor (default 1.9) times the file's,
+    //                         and after seeks audio and video stay
+    //                         together (|avsync| under 0.1 s)
     //   --selftest=resume     expects the last file reopened paused within
     //                         --expect-tolerance (default 2.5) seconds of
     //                         --expect-time=SECONDS; with --expect-entry=I
@@ -683,6 +693,10 @@ Window {
             return playbackTick()
         if (selftest.mode === "resume")
             return resumeTick()
+        if (selftest.mode === "upright")
+            return uprightTick()
+        if (selftest.mode === "svp")
+            return svpTick()
         functionalTick()
     }
 
@@ -714,6 +728,101 @@ Window {
                         "entry " + s.playlist_pos + " of " + s.playlist_count)
             t.finish()
             break
+        }
+    }
+
+    function uprightTick() {
+        const t = selftest
+        const s = t.status()
+        switch (t.step) {
+        case 0:
+            t.next()
+            break
+        case 1:
+            t.waitFor("file_playing", () => s.loaded && s.video_width > 0 && s.time > 0.5
+                          && s.video_aspect > 0, 20000, () => "time " + s.time)
+            break
+        case 2: {
+            // A second for the picture to settle in the window.
+            if (Date.now() - t.stepStarted < 1000)
+                break
+            const reference = player.option("reference") !== "" ? player.option("reference")
+                : String(s.path).replace(/\.[^.\/\\]+$/, ".png")
+            const r = JSON.parse(Tools.compare_frame(video, s.video_aspect, reference))
+            Tools.grab(t.outDir, "upright")
+            const detail = "reference " + reference + " distances upright " + r.upright
+                + " flipped " + r.flipped + " mirrored " + r.mirrored + " rotated " + r.rotated
+                + " picture " + JSON.stringify(r.picture)
+            if (r.error)
+                t.check("picture_upright", false, r.error + " " + reference)
+            else if (r.dark)
+                Tools.log("check picture_upright=SKIPPED the grab shows no video (" + detail + ")")
+            else
+                t.check("picture_upright", r.upright < 30 && r.upright < r.flipped
+                            && r.upright < r.mirrored && r.upright < r.rotated, detail)
+            t.finish()
+            break
+        }
+        }
+    }
+
+    function svpTick() {
+        const t = selftest
+        const s = t.status()
+        const factor = Number(player.option("svp-factor") || "1.9")
+        switch (t.step) {
+        case 0:
+            Tools.log("svp_endpoint=" + JSON.parse(player.settings_view(false)).svp_endpoint)
+            t.next()
+            break
+        case 1:
+            t.waitFor("file_playing", () => s.loaded && s.video_width > 0 && s.time > 0.5, 20000,
+                      () => "time " + s.time)
+            break
+        case 2:
+            // SVP's first run of a profile may build its engine for a while.
+            t.waitFor("svp_attached", () => s.vf !== null && s.vf.indexOf("@svp") >= 0, 90000,
+                      () => "after " + Math.round((Date.now() - t.stepStarted) / 100) / 10 + " s, vf "
+                          + s.vf + ", status " + s.svp_status)
+            break
+        case 3:
+            // From the observed properties: reading mpv's every tick would
+            // cost frames.
+            t.waitFor("svp_target_fps", () => s.container_fps > 0
+                          && s.estimated_vf_fps >= s.container_fps * factor, 30000,
+                      () => s.container_fps + " fps in, " + s.estimated_vf_fps + " fps out")
+            break
+        case 4:
+        case 6:
+        case 8: {
+            // Seeks: forward, back, to the middle; then a few seconds of play.
+            const target = t.step === 4 ? s.time + 20 : t.step === 6 ? Math.max(0, s.time - 15) : s.duration / 2
+            t.before = { time: s.time, target: target }
+            player.seek_fraction(target / s.duration)
+            t.next()
+            break
+        }
+        case 5:
+        case 7:
+        case 9: {
+            if (Date.now() - t.stepStarted < 4000)
+                break
+            const d = JSON.parse(player.diagnostics())
+            const name = "svp_seek_" + ((t.step - 3) / 2) + "_in_sync"
+            t.check(name, d.avsync !== null && Math.abs(d.avsync) < 0.1 && s.vf.indexOf("@svp") >= 0
+                        && Math.abs(s.time - t.before.target) < 10,
+                    "to " + Math.round(t.before.target) + " s, now " + s.time + ", avsync " + d.avsync
+                        + ", " + d.estimated_vf_fps + " fps")
+            t.next()
+            break
+        }
+        case 10: {
+            t.check("svp_still_interpolating", s.estimated_vf_fps >= s.container_fps * factor && s.playing,
+                    s.estimated_vf_fps + " fps, playing " + s.playing)
+            Tools.log("diagnostics_end=" + player.diagnostics())
+            t.finish()
+            break
+        }
         }
     }
 
@@ -1004,6 +1113,8 @@ Window {
         const s = t.status()
         switch (t.step) {
         case 200: {
+            Tools.log("m4_start=" + JSON.stringify({ path: s.path, time: s.time, pos: s.playlist_pos,
+                                                     album: s.playing_album, pause: s.pause }))
             // The menus show PotPlayer's tree with the keys bound now.
             const context = JSON.parse(player.menu_json("context"))
             const play = root.menuItem(context, ["Playback", "Play/Pause Playback"])
@@ -1150,6 +1261,8 @@ Window {
         const s = t.status()
         switch (t.step) {
         case 300:
+            Tools.log("m6_start=" + JSON.stringify({ path: s.path, time: s.time, pos: s.playlist_pos,
+                                                     album: s.playing_album, pause: s.pause }))
             if (!player.has_skin) {
                 Tools.log("check f7_opens_panel=SKIPPED no skin")
                 t.step = 313
@@ -1262,7 +1375,8 @@ Window {
             t.waitFor("svp_diagnostic_shows", () => String(s.svp_status).startsWith("SVP did not attach")
                           && s.message === s.svp_status
                           && JSON.parse(player.settings_view(false)).svp_status === s.svp_status,
-                      20000, () => "status " + s.svp_status + " message " + s.message)
+                      20000, () => "status " + s.svp_status + " message " + s.message + " playing "
+                          + s.playing + " time " + s.time + " path " + s.path)
             break
         case 319: {
             const result = JSON.parse(player.set_setting("ipc-server", "\"\""))
@@ -1401,8 +1515,10 @@ Window {
                 clickAt(middle(player.list_rect("tab", 0)), 0)
             break
         case 117:
-            t.waitFor("tab_click_shows_album", () => s.shown_album === 0 || !player.has_skin, 2000,
-                      () => "shown " + s.shown_album)
+            if (t.waitFor("tab_click_shows_album", () => s.shown_album === 0 || !player.has_skin, 2000,
+                          () => "shown " + s.shown_album))
+                Tools.log("m3_tabs=" + JSON.stringify({ path: s.path, time: s.time, pos: s.playlist_pos,
+                                                        album: s.playing_album, pause: s.pause }))
             break
         case 118:
             player.key(Qt.Key_N, Qt.ShiftModifier)

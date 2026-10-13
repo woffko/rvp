@@ -38,6 +38,17 @@
 #           command, every settings page, a changed setting that applies at
 #           once), then a portable copy of RVP (rvp.portable next to it)
 #           that must keep its settings next to the executable
+#   m6      milestone M6: the functional self-test's control panel (F7),
+#           colour, equalizer, shader and SVP diagnostic checks; the
+#           orientation check (--selftest=upright on a clip with a corner
+#           mark); and the headless video tests, with SVP's VapourSynth for
+#           the script slot (cargo; MPV_LIB_DIR is the kit's libmpv)
+#   m6svp   SVP's acceptance (section 7, start SVP first): RVP in SVP mode
+#           on the film-rate clip reaches SVP's frame rate and stays in sync
+#           after seeks; a second window (/new) on its own endpoint too
+#   m6gpu   the 4K60 clip in fullscreen with M6's processing on (colours,
+#           deband, a shader, the equalizer) counts dropped frames (GPU
+#           machines only)
 #   m3desktop  optional, not in m3all: an "RVP (kit)" entry in
 #           ~/.local/share/applications so that Files can open videos in
 #           the running RVP (single instance); delete the file to undo
@@ -46,6 +57,8 @@
 #   m2all   check deps mpv m2build m2 m2input m2gpu m2svp report
 #   m3all   check deps mpv m2build m2 m3 m2input m2gpu m2svp report
 #   m4all   check deps mpv m2build m2 m3 m4 m2input m2gpu m2svp report
+#   m6all   check deps mpv mvtools m2build m2 m3 m4 m6 m2input m2gpu m6gpu
+#           m2svp m6svp report
 #
 # environment:
 #   RVP_KIT_DIR     build and download directory (default ~/.cache/rvp-kit)
@@ -825,6 +838,131 @@ step_m4() {
     fi
 }
 
+step_m6() {
+    local log=$LOG_DIR/m6.log out=$LOG_DIR/m6-grabs functional upright tests vsscript
+    local missing=0 name summary
+    m2_ready m6 || return 0
+    m2_env
+    export RVP_CONFIG_DIR=$LOG_DIR/m6-config RVP_STATE_DIR=$LOG_DIR/m6-state
+    rm -rf "$RVP_CONFIG_DIR" "$RVP_STATE_DIR" "$out"
+    kit_settings
+    : > "$log"
+    echo "== functional (M6 checks)" >> "$log"
+    "$(rvp_bin)" --selftest "--out=$out" "--skin=${RVP_SKIN:-}" \
+        "--mpv-options=hwdec=$(m2_hwdec)" "$(test_video)" "$(s1_video)" >> "$log" 2>&1
+    functional=$?
+    for name in f7_opens_panel color_slider_applies color_reset_applies equalizer_slider_applies \
+        equalizer_button_toggles f7_closes_panel shift_p_shaders_on shift_p_shaders_off \
+        svp_diagnostic_shows svp_mode_off; do
+        grep -q "^check $name=PASS" "$log" || missing=$((missing + 1))
+    done
+    # The picture is upright: a clip with a mark at the top left against
+    # ffmpeg's decoding of it.
+    echo "== upright" >> "$log"
+    rm -rf "$RVP_STATE_DIR"
+    kit_settings '"fit-window-to-video": false'
+    "$(rvp_bin)" --selftest=upright "--out=$out" "--skin=${RVP_SKIN:-}" \
+        "--mpv-options=hwdec=$(m2_hwdec)" "$REPO/testdata/media/fixture-marker.mkv" >> "$log" 2>&1
+    upright=$?
+    # The headless video tests; the script slot runs with SVP's VapourSynth
+    # when it is installed.
+    echo "== cargo test (video, equalizer)" >> "$log"
+    vsscript=$(find_vsscript)
+    (
+        cd "$REPO" || exit 1
+        export QMAKE MPV_LIB_DIR
+        QMAKE=$(qt_dir)/bin/qmake
+        MPV_LIB_DIR=$(mpv_lib_dir)
+        VSSCRIPT_PATH=${vsscript:-${VSSCRIPT_PATH:-}} PYTHONDONTWRITEBYTECODE=1 \
+            cargo test --release -p rvp-app --test video --test equalizer -- --nocapture
+    ) >> "$log" 2>&1
+    tests=$?
+    summary="functional=$functional m6_missing=$missing upright=$upright tests=$tests vsscript=${vsscript:-none} $(grep -E '^check picture_upright' "$log" | head -1)"
+    if [ "$functional" -eq 0 ] && [ "$missing" -eq 0 ] && [ "$upright" -eq 0 ] && [ "$tests" -eq 0 ]; then
+        record m6 PASS "$summary"
+    else
+        record m6 FAIL "$summary $(grep -E '=FAIL|FAILED|panicked' "$log" | tr '\n' ' ')"
+        return 1
+    fi
+}
+
+step_m6svp() {
+    local log=$LOG_DIR/m6svp.log out=$LOG_DIR/m6-grabs vsscript first second pid
+    m2_ready m6svp || return 0
+    if ! pgrep -f SVPManager > /dev/null 2>&1; then
+        record m6svp SKIPPED "SVP 4 Manager is not running"
+        return 0
+    fi
+    m2_env
+    export RVP_CONFIG_DIR=$LOG_DIR/m6svp-config RVP_STATE_DIR=$LOG_DIR/m6svp-state
+    rm -rf "$RVP_CONFIG_DIR" "$RVP_STATE_DIR"
+    # SVP mode on RVP's default endpoint (/tmp/mpvsocket).
+    kit_settings
+    printf '{\n  "ipc-server": "/tmp/mpvsocket"\n}\n' > "$RVP_CONFIG_DIR/settings.json"
+    vsscript=$(find_vsscript)
+    : > "$log"
+    echo "== first window" >> "$log"
+    VSSCRIPT_PATH=${vsscript:-${VSSCRIPT_PATH:-}} PYTHONDONTWRITEBYTECODE=1 \
+        "$(rvp_bin)" --selftest=svp "--out=$out" "--skin=${RVP_SKIN:-}" \
+        --mpv-options=hwdec=auto-copy "$(s1_video)" > "$LOG_DIR/m6svp-first.log" 2>&1 &
+    pid=$!
+    # The second window starts once the first holds the endpoint.
+    sleep 8
+    # Its own settings and state: two processes must not share them.
+    echo "== second window (/new)" >> "$log"
+    mkdir -p "$LOG_DIR/m6svp-config2"
+    cp "$RVP_CONFIG_DIR/settings.json" "$LOG_DIR/m6svp-config2/"
+    rm -rf "$LOG_DIR/m6svp-state2"
+    RVP_CONFIG_DIR=$LOG_DIR/m6svp-config2 RVP_STATE_DIR=$LOG_DIR/m6svp-state2 \
+        VSSCRIPT_PATH=${vsscript:-${VSSCRIPT_PATH:-}} PYTHONDONTWRITEBYTECODE=1 \
+        "$(rvp_bin)" /new --selftest=svp "--out=$out" "--skin=${RVP_SKIN:-}" \
+        --mpv-options=hwdec=auto-copy "$(s1_video)" > "$LOG_DIR/m6svp-second.log" 2>&1
+    second=$?
+    wait "$pid"
+    first=$?
+    cat "$LOG_DIR/m6svp-first.log" >> "$log"
+    echo "== second window log" >> "$log"
+    cat "$LOG_DIR/m6svp-second.log" >> "$log"
+    local detail
+    detail="first=$first second=$second $(grep -hE '^svp_endpoint=|^check svp_(attached|target_fps)' "$LOG_DIR/m6svp-first.log" "$LOG_DIR/m6svp-second.log" | tr '\n' ' ')"
+    if [ "$first" -eq 0 ] && [ "$second" -eq 0 ]; then
+        record m6svp PASS "$detail"
+    else
+        record m6svp FAIL "$detail $(grep -hE '=FAIL' "$log" | tr '\n' ' ')"
+        return 1
+    fi
+}
+
+step_m6gpu() {
+    local log=$LOG_DIR/m6gpu.log out=$LOG_DIR/m6-grabs seconds=${RVP_M2_SECONDS:-25} shader
+    m2_ready m6gpu || return 0
+    if ! gpu_checks; then
+        record m6gpu SKIPPED "no hardware GPU"
+        return 0
+    fi
+    m2_env
+    export RVP_CONFIG_DIR=$LOG_DIR/m6gpu-config RVP_STATE_DIR=$LOG_DIR/m6gpu-state
+    rm -rf "$RVP_CONFIG_DIR" "$RVP_STATE_DIR"
+    mkdir -p "$RVP_CONFIG_DIR"
+    shader=$RVP_CONFIG_DIR/identity.glsl
+    printf '//!HOOK MAIN\n//!BIND HOOKED\n//!DESC RVP kit (no change)\nvec4 hook() { return HOOKED_texOff(0); }\n' > "$shader"
+    kit_settings '"color": { "enabled": true, "brightness": 4, "saturation": 6 },
+  "deband": true,
+  "shaders": { "enabled": true, "files": ["'"$shader"'"] },
+  "equalizer": { "enabled": true, "preset": "Rock", "bands": [5, 3, -3.5, -5, -2, 2.5, 5.5, 7, 7, 7] }'
+    "$(rvp_bin)" --selftest=playback "--play-seconds=$seconds" --gpu-checks --fullscreen \
+        "--out=$out" "--skin=${RVP_SKIN:-}" --mpv-options=hwdec=auto-copy "$(test_video)" > "$log" 2>&1
+    local status=$?
+    local detail
+    detail="$(grep '^frames_dropped=' "$log" | tail -1) $(grep -o '"glsl_shaders":"[^"]*"' "$log" | tail -1)"
+    if [ "$status" -eq 0 ]; then
+        record m6gpu PASS "$detail"
+    else
+        record m6gpu FAIL "$detail $(grep -E '=FAIL' "$log" | tr '\n' ' ')"
+        return 1
+    fi
+}
+
 step_m3desktop() {
     local file=$HOME/.local/share/applications/rvp-kit.desktop
     if [ ! -x "$(rvp_bin)" ]; then
@@ -865,7 +1003,7 @@ step_report() {
         echo "| Time | Step | Result | Detail |"
         echo "|------|------|--------|--------|"
         awk -F'\t' '{ printf "| %s | %s | %s | %s |\n", $1, $2, $3, $4 }' "$RESULTS" 2> /dev/null
-        for step in s2 s3 input s1 m2 m3 m4 m2input m2gpu m2svp; do
+        for step in s2 s3 input s1 m2 m3 m4 m6 m2input m2gpu m6gpu m2svp m6svp; do
             [ -s "$LOG_DIR/$step.log" ] || continue
             echo
             echo "## $step output"
@@ -879,7 +1017,7 @@ step_report() {
 }
 
 if [ "$#" -eq 0 ]; then
-    sed -n '2,65p' "$KIT_SCRIPT"
+    sed -n '2,78p' "$KIT_SCRIPT"
     exit 2
 fi
 for step in "$@"; do
@@ -888,15 +1026,16 @@ for step in "$@"; do
         m2all) set -- check deps mpv m2build m2 m2input m2gpu m2svp report ;;
         m3all) set -- check deps mpv m2build m2 m3 m2input m2gpu m2svp report ;;
         m4all) set -- check deps mpv m2build m2 m3 m4 m2input m2gpu m2svp report ;;
+        m6all) set -- check deps mpv mvtools m2build m2 m3 m4 m6 m2input m2gpu m6gpu m2svp m6svp report ;;
     esac
 done
 overall=0
 for step in "$@"; do
     case $step in
-        check | deps | mpv | mvtools | build | s1 | s2 | s3 | input | m2build | m2 | m2input | m2gpu | m2svp | m3 | m4 | m3desktop | report)
+        check | deps | mpv | mvtools | build | s1 | s2 | s3 | input | m2build | m2 | m2input | m2gpu | m2svp | m3 | m4 | m6 | m6svp | m6gpu | m3desktop | report)
             "step_$step" || overall=1
             ;;
-        all | m2all | m3all | m4all) ;;
+        all | m2all | m3all | m4all | m6all) ;;
         *) say "unknown step $step"; exit 2 ;;
     esac
 done

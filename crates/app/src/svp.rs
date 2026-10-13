@@ -16,8 +16,8 @@
 //!   points mpv at SVP's own (rule 8: `~/SVP4/mpv` or `/opt/svp` on Linux,
 //!   `mpv64` in SVP's folder on Windows) unless the settings name one.
 //! * When SVP has not attached a few seconds after a file starts, RVP says
-//!   why it may not have ([`Problem`]), once per session and on the settings
-//!   window's SVP page.
+//!   why it may not have ([`Problem`]), once per session (again after the
+//!   endpoint changed) and on the settings window's SVP page.
 
 use std::path::{Path, PathBuf};
 use std::sync::mpsc::{Receiver, channel};
@@ -341,6 +341,12 @@ pub struct Watch {
 }
 
 impl Watch {
+    /// The endpoint changed: problems are told again.
+    pub fn endpoint_changed(&mut self, endpoint: Option<String>) {
+        self.endpoint = endpoint;
+        self.shown.clear();
+    }
+
     /// A file started playing.
     pub fn file_started(&mut self, svp_mode: bool, now: Instant) {
         self.pending = None;
@@ -477,6 +483,15 @@ mod tests {
             mpv_sockets_endpoint(7, Path::new("C:\\Users\\x\\AppData\\Local\\Temp\\")),
             "C:\\Users\\x\\AppData\\Local\\Temp/mpvSockets/7"
         );
+    }
+
+    #[test]
+    fn a_new_endpoint_tells_problems_again() {
+        let mut watch = Watch::default();
+        watch.shown.push(Problem::ManagerNotRunning);
+        watch.endpoint_changed(Some("/tmp/other".to_owned()));
+        assert!(watch.shown.is_empty());
+        assert_eq!(watch.endpoint.as_deref(), Some("/tmp/other"));
     }
 
     #[test]

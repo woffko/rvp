@@ -17,7 +17,7 @@
 use std::io;
 use std::path::Path;
 
-use rvp_engine::{Engine, Seek};
+use rvp_engine::Engine;
 use serde_json::{Map, Value};
 
 use crate::app::App;
@@ -445,9 +445,7 @@ impl App {
         if old.normalizer != new.normalizer {
             self.apply_normalizer(engine);
             // As a toggle does: play on from here with the new chain.
-            if self.model.media_loaded() {
-                drop(engine.seek(Seek::Relative(0.0)));
-            }
+            self.resync_audio(engine);
         }
         if (&old.keys, &old.mouse, &old.playlist_keys)
             != (&new.keys, &new.mouse, &new.playlist_keys)
@@ -461,7 +459,7 @@ impl App {
             self.session.on_top = None;
         }
         if let Some(endpoint) = endpoint_changed {
-            self.svp.endpoint = endpoint;
+            self.svp.endpoint_changed(endpoint);
             if self.model.media_loaded() {
                 self.svp.file_started(
                     crate::svp::svp_mode(&self.settings),

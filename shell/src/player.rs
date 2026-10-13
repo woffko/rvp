@@ -2224,6 +2224,14 @@ impl qobject::Player {
             ("osd", text(Some(&self.osd().to_string()))),
             ("volume_step", number(Some(core.app.settings.volume_step))),
             ("speed", number(model.double(PropertyId::Speed))),
+            (
+                "container_fps",
+                number(model.double(PropertyId::ContainerFps)),
+            ),
+            (
+                "estimated_vf_fps",
+                number(model.double(PropertyId::EstimatedVfFps)),
+            ),
             ("sub_scale", number(model.double(PropertyId::SubScale))),
             ("on_top", self.on_top().to_string()),
             ("info_shown", self.info_shown().to_string()),
@@ -2304,6 +2312,7 @@ impl qobject::Player {
             ("display_fps", float("display-fps")),
             ("estimated_display_fps", float("estimated-display-fps")),
             ("vsync_jitter", float("vsync-jitter")),
+            ("avsync", float("avsync")),
             ("current_vo", text("current-vo")),
             ("current_ao", text("current-ao")),
             ("hwdec_current", text("hwdec-current")),

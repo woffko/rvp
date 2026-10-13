@@ -57,6 +57,12 @@ public:
     // Writes a UTF-8 text file (the self-test's shader); returns its
     // absolute path, empty on failure.
     Q_INVOKABLE QString write_file(const QString &path, const QString &text) const;
+    // The orientation check: grabs the window, finds the picture of a
+    // video of `aspect` (width / height) inside `item` and compares a 4x4
+    // grid of points with the reference image as it is, flipped, mirrored
+    // and turned 180 degrees. JSON: the mean colour distance of each, and
+    // `dark` when every point is black (a grab without video).
+    Q_INVOKABLE QString compare_frame(QQuickItem *item, double aspect, const QString &reference) const;
     // Grabs the visible Quick windows to `directory/prefix-N.png`.
     Q_INVOKABLE int grab(const QString &directory, const QString &prefix) const;
     // Renders windows that are visible but not exposed (Windows session 0).

@@ -337,11 +337,8 @@ impl App {
         // the Ubuntu boot when the speed went back to 1x). A seek to the
         // current position, queued before the speed changes, empties the
         // chain first.
-        if self.settings.normalizer.enabled
-            && self.model.media_loaded()
-            && (next - current).abs() > 1e-6
-        {
-            drop(engine.seek(Seek::Relative(0.0)));
+        if self.settings.normalizer.enabled && (next - current).abs() > 1e-6 {
+            self.resync_audio(engine);
         }
         engine.set_double("speed", next).ok()?;
         Some(UiRequest::Osd(format!("Speed: {next:.1}x")))

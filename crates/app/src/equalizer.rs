@@ -13,7 +13,7 @@
 
 use std::fmt::Write as _;
 
-use rvp_engine::{Engine, Seek};
+use rvp_engine::Engine;
 use serde::{Deserialize, Serialize};
 
 use crate::app::{App, UiRequest};
@@ -173,8 +173,8 @@ impl App {
     pub(crate) fn equalizer_chain_changed(&self, engine: &Engine) {
         self.apply_equalizer(engine);
         // Rebuilding the chain drops what the normalizer had decoded ahead.
-        if self.settings.normalizer.enabled && self.model.media_loaded() {
-            drop(engine.seek(Seek::Relative(0.0)));
+        if self.settings.normalizer.enabled {
+            self.resync_audio(engine);
         }
     }
 

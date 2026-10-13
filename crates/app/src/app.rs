@@ -148,6 +148,10 @@ pub struct App {
     tracking: Tracking,
     /// The end of the file that plays was handled (moved on or stayed).
     end_handled: bool,
+    /// The entry being loaded is to play: mpv may still carry the pause
+    /// keep-open set at the end of the one before (seen on the Windows VM),
+    /// so it is unpaused again once loaded.
+    play_on_load: bool,
     /// Where settings changed from the window (normalizer) are saved.
     settings_path: Option<PathBuf>,
     writer: storage::Writer,
@@ -198,6 +202,7 @@ impl App {
             library: Library::open(state_dir)?,
             tracking: Tracking::On,
             end_handled: false,
+            play_on_load: false,
             settings_path: None,
             writer: storage::Writer::new()?,
             first_start,
@@ -443,6 +448,7 @@ impl App {
         };
         self.library.set_playing(album, index);
         self.end_handled = false;
+        self.play_on_load = !paused;
         self.tracking = Tracking::Loading;
         engine.set_pause(paused)?;
         engine.load(&path, false)
@@ -869,13 +875,30 @@ impl App {
         }
     }
 
+    /// Plays on from the current position: the audio chain changed and
+    /// the audio mpv had decoded ahead for the old one (the normalizer looks
+    /// ten seconds ahead) would put audio and video out of step. Not in the
+    /// last half second: there nothing is left to resync, and a seek at the
+    /// end hides the end from mpv's `eof-reached`, so the album would not
+    /// move on.
+    pub(crate) fn resync_audio(&self, engine: &Engine) {
+        if !self.model.media_loaded() || self.model.flag(PropertyId::EofReached) == Some(true) {
+            return;
+        }
+        let time = self.model.double(PropertyId::TimePos).unwrap_or(0.0);
+        if self
+            .model
+            .double(PropertyId::Duration)
+            .is_some_and(|duration| duration - time < 0.5)
+        {
+            return;
+        }
+        drop(engine.seek(Seek::Relative(0.0)));
+    }
+
     fn normalizer_changed(&mut self, engine: &Engine) -> UiRequest {
         self.apply_normalizer(engine);
-        // The new chain lost the audio mpv had decoded ahead for the old
-        // one (the normalizer looks ten seconds ahead): play on from here.
-        if self.model.media_loaded() {
-            drop(engine.seek(Seek::Relative(0.0)));
-        }
+        self.resync_audio(engine);
         self.save_settings();
         let normalizer = self.settings.normalizer;
         let on_off = |on: bool| if on { "On" } else { "Off" };
@@ -962,21 +985,8 @@ impl App {
                     self.session.ab_active = false;
                 }
                 EngineEvent::FileLoaded { path } => {
-                    self.apply_ab(engine);
-                    self.svp
-                        .file_started(crate::svp::svp_mode(&self.settings), now);
-                    self.store.set_last_file(path);
+                    self.file_loaded(engine, path, now);
                     save_now = true;
-                    let resume = self
-                        .store
-                        .position(path)
-                        .filter(|_| self.settings.remember_positions);
-                    self.tracking = match resume {
-                        Some(position) if engine.seek(Seek::Absolute(position)).is_ok() => {
-                            Tracking::Resuming(position)
-                        }
-                        _ => Tracking::On,
-                    };
                 }
                 EngineEvent::EndFile {
                     reason: EndReason::Eof,
@@ -1050,6 +1060,28 @@ impl App {
         }
     }
 
+    /// A file is open: A-B points, SVP's watch, the last file, and the
+    /// resume position.
+    fn file_loaded(&mut self, engine: &Engine, path: &str, now: Instant) {
+        if std::mem::take(&mut self.play_on_load) {
+            drop(engine.set_pause(false));
+        }
+        self.apply_ab(engine);
+        self.svp
+            .file_started(crate::svp::svp_mode(&self.settings), now);
+        self.store.set_last_file(path);
+        let resume = self
+            .store
+            .position(path)
+            .filter(|_| self.settings.remember_positions);
+        self.tracking = match resume {
+            Some(position) if engine.seek(Seek::Absolute(position)).is_ok() => {
+                Tracking::Resuming(position)
+            }
+            _ => Tracking::On,
+        };
+    }
+
     /// Records the position of the playing file and moves on at its end.
     fn track_position(&mut self, engine: &Engine) -> Option<UiRequest> {
         let time = self.model.double(PropertyId::TimePos);
@@ -1059,6 +1091,10 @@ impl App {
             self.tracking = Tracking::On;
         }
         let at_end = self.model.flag(PropertyId::EofReached) == Some(true);
+        if !at_end {
+            // Playback left the end (a seek back): the next end counts.
+            self.end_handled = false;
+        }
         if self.tracking == Tracking::On
             && let (Some(path), Some(time)) = (self.model.loaded_path(), time)
         {

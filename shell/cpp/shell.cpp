@@ -1,6 +1,9 @@
 #include "rvp-shell/cpp/shell.h"
 
+#include <algorithm>
+#include <array>
 #include <clocale>
+#include <cmath>
 #include <cstdio>
 #include <string>
 #include <utility>
@@ -220,6 +223,88 @@ QString Tools::write_file(const QString &path, const QString &text) const
     }
     file.close();
     return QDir::toNativeSeparators(info.absoluteFilePath());
+}
+
+namespace {
+
+// The mean colour of a 5x5 block around (x, y), clamped to the image.
+std::array<double, 3> sampleAt(const QImage &image, int x, int y)
+{
+    std::array<double, 3> sum{0, 0, 0};
+    int count = 0;
+    for (int dy = -2; dy <= 2; ++dy) {
+        for (int dx = -2; dx <= 2; ++dx) {
+            const int px = std::clamp(x + dx, 0, image.width() - 1);
+            const int py = std::clamp(y + dy, 0, image.height() - 1);
+            const QRgb rgb = image.pixel(px, py);
+            sum[0] += qRed(rgb);
+            sum[1] += qGreen(rgb);
+            sum[2] += qBlue(rgb);
+            ++count;
+        }
+    }
+    for (double &channel : sum) {
+        channel /= count;
+    }
+    return sum;
+}
+
+} // namespace
+
+QString Tools::compare_frame(QQuickItem *item, double aspect, const QString &reference) const
+{
+    QJsonObject result;
+    const QImage expected = QImage(reference).convertToFormat(QImage::Format_RGB32);
+    QQuickWindow *window = item != nullptr ? item->window() : nullptr;
+    if (window == nullptr || expected.isNull() || !(aspect > 0)) {
+        result.insert(QStringLiteral("error"), QStringLiteral("no item, reference or aspect"));
+        return QString::fromUtf8(QJsonDocument(result).toJson(QJsonDocument::Compact));
+    }
+    const QImage frame = window->grabWindow().convertToFormat(QImage::Format_RGB32);
+    const qreal ratio = frame.devicePixelRatio();
+    QRectF area = item->mapRectToScene(QRectF(0, 0, item->width(), item->height()));
+    area = QRectF(area.x() * ratio, area.y() * ratio, area.width() * ratio, area.height() * ratio);
+    // mpv keeps the aspect ratio: the picture is centred with bars.
+    QRectF picture = area;
+    if (area.width() / area.height() > aspect) {
+        picture.setWidth(area.height() * aspect);
+        picture.moveLeft(area.x() + (area.width() - picture.width()) / 2);
+    } else {
+        picture.setHeight(area.width() / aspect);
+        picture.moveTop(area.y() + (area.height() - picture.height()) / 2);
+    }
+    const std::array<double, 4> grid{0.125, 0.375, 0.625, 0.875};
+    // Upright, flipped (upside down), mirrored, turned.
+    std::array<double, 4> distance{0, 0, 0, 0};
+    bool dark = true;
+    int points = 0;
+    for (const double fy : grid) {
+        for (const double fx : grid) {
+            const auto shown = sampleAt(frame, int(picture.x() + fx * picture.width()),
+                                        int(picture.y() + fy * picture.height()));
+            if (std::max({shown[0], shown[1], shown[2]}) >= 24) {
+                dark = false;
+            }
+            const std::array<std::array<double, 2>, 4> places{{
+                {fx, fy}, {fx, 1 - fy}, {1 - fx, fy}, {1 - fx, 1 - fy}}};
+            for (std::size_t h = 0; h < places.size(); ++h) {
+                const auto wanted = sampleAt(expected, int(places[h][0] * expected.width()),
+                                             int(places[h][1] * expected.height()));
+                distance[h] += (std::abs(shown[0] - wanted[0]) + std::abs(shown[1] - wanted[1])
+                                + std::abs(shown[2] - wanted[2])) / 3;
+            }
+            ++points;
+        }
+    }
+    const char *names[] = {"upright", "flipped", "mirrored", "rotated"};
+    for (std::size_t h = 0; h < distance.size(); ++h) {
+        result.insert(QString::fromLatin1(names[h]), distance[h] / points);
+    }
+    result.insert(QStringLiteral("points"), points);
+    result.insert(QStringLiteral("dark"), dark);
+    result.insert(QStringLiteral("picture"),
+                  QJsonArray{int(picture.x()), int(picture.y()), int(picture.width()), int(picture.height())});
+    return QString::fromUtf8(QJsonDocument(result).toJson(QJsonDocument::Compact));
 }
 
 int Tools::grab(const QString &directory, const QString &prefix) const

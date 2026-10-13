@@ -285,6 +285,69 @@ Then try by hand:
 - [ ] Portable mode: copy the build folder elsewhere, add an empty
       `rvp.portable` next to `rvp`, start it: the settings live there.
 
+## 8. Milestone M6: SVP and video processing (goal H)
+
+Same preparation as section 5, with SVP 4 installed (for `m6svp` and the
+script slot test). From a terminal inside the GNOME session:
+
+```sh
+cd ~/rvp && git pull
+tools/linux-kit/kit.sh m6all
+```
+
+`m6all` runs `check deps mpv mvtools m2build m2 m3 m4 m6 m2input m2gpu
+m6gpu m2svp m6svp report`. Start SVP 4 Manager before the run, or run
+`m2svp m6svp report` again later with it running. Do not touch the mouse
+or keyboard while RVP's windows are open.
+
+What the M6 steps show (about three minutes, plus SVP's first start):
+
+- `m6`: the functional self-test with M6's checks: F7 opens the control
+  panel, a click on its colour slider sets the brightness and the reset
+  button clears it, an equalizer band slider switches the equalizer on
+  (before the normalizer in the audio chain) and the EQ button switches
+  it off, F7 closes the panel, Shift+P switches a shader of RVP's own on
+  and off, and with an endpoint SVP does not know RVP says why SVP did
+  not attach. Then `--selftest=upright` plays a clip with a white mark at
+  the top left and compares the picture with ffmpeg's frame (the
+  upside-down picture of the last Ubuntu run would fail it). Last, the
+  headless video and equalizer tests; with SVP's VapourSynth found, a
+  PotPlayer-style script (`vs.get_core()`) doubles the frame rate in its
+  slot.
+- `m6gpu` (GPU only): the 4K60 clip in fullscreen with colours, deband, a
+  shader and the equalizer on; the dropped frames are in the detail.
+- `m6svp` (SVP running): SVP's acceptance. RVP in SVP mode
+  (`/tmp/mpvsocket`) plays the 23.976 fps clip; SVP must attach and raise
+  the frame rate to about twice the file's (59.94 on a 60 Hz display), and
+  after three seeks audio and video must stay within 0.1 s. Eight seconds
+  later a second window (`/new`) starts while the first holds the socket:
+  it uses `/tmp/mpvSockets/<process id>`, and SVP must attach to it too.
+
+Then try by hand (this is M6's acceptance on Linux):
+
+- [ ] F7: the control panel opens beside the video; its five pages work
+      (audio, video, subtitles, playback, aspect ratio); drag it by its
+      background; F7 or its close button hides it.
+- [ ] Audio page: the band sliders change the sound at once, PRESET and
+      the arrow open the presets, the EQ button and Shift+E switch the
+      equalizer; with the normalizer on, nothing stutters.
+- [ ] Video page: the colour sliders and RESET buttons; BLUR, SHARP and
+      POST (soften, sharpen, deblock) show pressed while on; CAPT saves
+      the frame under a name you choose.
+- [ ] Keys: Q (colours off and back), W/E, R/T, Y/U, I/O (brightness,
+      contrast, saturation, hue), Ctrl+I (deinterlacing), Ctrl+P and
+      Ctrl+Z (flips), Alt+K (rotation), Shift+P (shaders).
+- [ ] With SVP running: a 24 fps film plays at the display's rate (SVP's
+      tray icon shows it active); seeking keeps lip sync; a second RVP
+      window (`rvp /new FILE`) is interpolated too.
+- [ ] Settings > SVP and VapourSynth: the status line says whether SVP is
+      attached; add PotPlayer's `motioninterpolation.vpy` as a script and
+      the kit's `libmvtools.so` as a plugin, select the script and enable
+      it: the frame rate rises without SVP (switch SVP off for this).
+- [ ] Settings > Shaders: add an mpv `.glsl` shader (for example from
+      mpv's shader collections), switch it on with Shift+P.
+- [ ] The picture is upright and not mirrored with a real video.
+
 ## Steps and what they record
 
 | Step | Needs | PASS means |
@@ -305,6 +368,9 @@ Then try by hand:
 | `m2svp` | SVP 4 Manager running | SVP's `@svp` filter appeared and RVP exited with status 0 |
 | `m3` | graphical session | the functional self-test including M3's checks passes (playlist panel, albums, normalizer, volume above 100 %, key editor, second instance, aspect lock), and all three kill tests reopen the album's second entry paused within 5 s of the last position |
 | `m4` | graphical session | the functional self-test passes with all of M4's and M5's checks (menus with the bound keys and check marks, a menu command, the settings window with every page, a setting that applies at once), and a portable copy kept its settings next to the executable |
+| `m6` | graphical session, cargo | the functional self-test passes with all of M6's checks (control panel, colour, equalizer, shader, SVP diagnostic), the picture is upright, and the headless video and equalizer tests pass (the script slot test runs with SVP's VapourSynth when it is found) |
+| `m6gpu` | hardware GPU | no dropped frames over `RVP_M2_SECONDS` in fullscreen with colours, deband, a shader and the equalizer on |
+| `m6svp` | SVP 4 Manager running | SVP attached to both windows (the second one on its `mpvSockets` endpoint), the frame rate reached 1.9 times the file's, and audio and video stayed within 0.1 s after each seek |
 | `m3desktop` | `m2build` | the desktop entry was written |
 | `report` | — | the Markdown report was written |
 
