@@ -2,8 +2,9 @@
 
 Status: in progress. Goals A-G are done (M1 skin engine, the gates, M2
 player window, M3 daily-use essentials, M4 menus and commands, M5 settings
-window); open: M3's one-week trial and its Ubuntu boot run, and goal G's
-host run for the self-test's dropped frames. Results are in `docs/goals/`.
+window), and the Ubuntu boot run of M3-M5 passed on 2026-10-13; open:
+M3's one-week trial and goal G's host run for the self-test's dropped
+frames. Results are in `docs/goals/`.
 
 ## 1. Goal
 
@@ -21,6 +22,11 @@ Build RVP, a desktop media player for Linux and Windows written in Rust, that:
    - full control from both mouse and keyboard, with configurable bindings and
      PotPlayer's defaults (Enter fullscreen, Space pause, Up/Down volume, ...);
    - polished usability (section 4).
+4. Has its own identity. RVP shows its own logo, never Daum's or
+   PotPlayer's. It ships its own default skin in BlackSpace's spirit, so it
+   works without PotPlayer installed (M7). Skins of other players (VLC, and
+   mpv's on-screen controllers) are considered after that (M9). Owner request,
+   2026-10-13.
 
 Project facts: name RVP, license GPL-3.0-or-later, private GitHub repository
 for now.
@@ -28,7 +34,8 @@ for now.
 Non-goals for the first release:
 
 - Shipping PotPlayer's own skins or artwork. RVP loads `.dsf` files the user
-  already has and bundles only original art.
+  already has and bundles only original art: its logo and its default skin
+  (M7).
 - A full copy of PotPlayer's Preferences window. RVP needs a settings window for
   its own options, but matching PotPlayer's look there is optional.
 - DirectShow concepts (filter graphs, splitter and decoder priorities, OpenCodec).
@@ -173,6 +180,7 @@ playback state between the two systems possible (open question 2).
 | D7 | Linux packaging: AppImage and native packages. No Flatpak or Snap. | SVP cannot attach to sandboxed applications. | SVP wiki |
 | D8 | License GPL-3.0-or-later. The `rust` skill's no-GPL/LGPL rule is waived for libmpv and Qt (owner decision 2026-10-10), including the LGPL-2.1 binding crates `libmpv2` and `libmpv2-sys`; other Rust crates stay under `cargo deny`'s permissive list. | Confirmed by the owner. libmpv's default build is GPL; Qt is used under LGPL with dynamic linking. | Owner |
 | D9 | Player state (playlists, positions, settings) in our own files, written atomically and often. | The resume requirement must survive crashes, not only clean exits; mpv's watch-later files are written only on quit. | M2, M3 |
+| D10 | RVP shows its own logo everywhere: its window and application icons, its idle screen, its About box, and in place of the Daum logo in a loaded skin's title bar. RVP draws its logo over that sprite and leaves the user's `.dsf` unchanged. | RVP is not a Daum or Kakao product, and their marks in its window would suggest that it is. Owner request, 2026-10-13. | Owner |
 
 ## 4. Usability requirements
 
@@ -390,19 +398,93 @@ one system without losing a position or a playlist.
   shaders; deinterlace; color adjustments.
 - Control panel (F7) from `ControlBoxSkinArea`: equalizer, color, subtitle sync.
 
-### M7. Platform integration and packaging (M)
+### M7. Own look: logo and default skin (M)
+
+- **RVP's logo.** Drawn for RVP from a vector source in the repository and
+  chosen by the owner from a few drafts. It appears everywhere D10 lists:
+  - the window and application icons (`.ico`, PNG sizes, and SVG for
+    Linux);
+  - the idle screen, which is black today because BlackSpace's Flash logo
+    is not shown;
+  - the About box;
+  - over the Daum logo in a loaded skin's title bar.
+- **An original default skin, "RVP Default", in BlackSpace's spirit.** It
+  keeps the same classic layout and functions: the title bar, video, seek
+  bar, buttons and info strip, the playlist docked on the right, the
+  control panel from M6, and the same commands and menus, so habits carry
+  over. Its design is its own: shapes, icons, palette and fonts.
+- **The `.dsf` format.** The skin is written in PotPlayer's `.dsf` format,
+  so the same engine draws it and users can edit it. Its sources are in the
+  repository (XML and vector art), and `cargo xtask` builds the archive and
+  its atlas. RVP ships it and uses it when no skin is set; today the window
+  is then all video. Optional: atlases at 2x for HiDPI screens, as an RVP
+  extension of the format.
+- **Originality rules.** The layout and the placement of functions are
+  shared on purpose; the look is not.
+  - Nothing is taken from PotPlayer's skins: no files, sprites, crops,
+    tracings or sampled colours.
+  - No Daum, Kakao or PotPlayer names or marks appear.
+  - Every asset is drawn for RVP or comes from an icon set or font under a
+    GPL-compatible license. A sources file lists each asset with its
+    origin and license.
+  - The owner gets a side-by-side comparison with BlackSpace.
+  - This is not legal advice. Before any public release, the owner decides
+    whether a lawyer reviews the skin (see Risks).
+- **Tests.**
+  - The skin loads without warnings.
+  - Geometry snapshots and golden renders at three sizes. These may be
+    committed, because the art is RVP's.
+  - Every control maps to an RVP action, in a coverage report like
+    BlackSpace's.
+
+Exit: the owner approves the logo and the skin, and RVP starts with the
+default skin on both systems without PotPlayer installed.
+
+### M8. Platform integration and packaging (M)
 
 - Linux: MPRIS, screensaver inhibit, `.desktop` file and MIME associations,
   AppImage, `.deb`, AUR package.
 - Windows: media transport controls, file associations, installer and portable
   ZIP, crash logs.
+- The packages carry the default skin and RVP's icons from M7.
 - Continuous integration builds for both systems in the private repository.
 
-### M8. Later
+### M9. Other players' skins (M-L)
+
+- **Study first** (a spike like M0's). Take a sample of popular VLC skins
+  and mpv on-screen controllers, and record:
+  - what each format needs;
+  - what RVP lacks for it;
+  - what each part would cost.
+
+  The owner then picks the scope.
+- **VLC skins.** These are `.vlt` files in VLC's skins2 format: an archive
+  with `theme.xml` and images that holds windows, layouts, buttons,
+  sliders, text and the playlist, plus actions such as `vlc.play()`.
+  Support would add:
+  - a second loader in `crates/skin` that builds the same display list as
+    `.dsf`;
+  - VLC's actions mapped to RVP's;
+  - a coverage report.
+
+  The skins are loaded from the user's files on both systems.
+- **mpv's on-screen controllers.** mpv has no skin files. Its look comes
+  from controller scripts that mpv draws over the video: the built-in
+  `osc.lua`, or third-party ones such as uosc and ModernX. Support needs:
+  - libmpv with Lua on both systems (the kit builds it with
+    `-Dlua=disabled` today);
+  - an RVP mode where mpv's controller replaces the skin, with a borderless
+    window and the pointer and keys passed to mpv;
+  - the user's scripts folder. Third-party scripts are loaded from there,
+    not shipped.
+
+Exit: the parts the owner chose work on both systems.
+
+### M10. Later
 
 Audio-only skin mode (`AudioSkin.xml`), overlay controls mode
 (`MainSkinAreaOscInside`), playback info window (Ctrl+F1), subtitle search and
-translation, streaming via yt-dlp, an original default skin, other `.dsf` skins.
+translation, streaming via yt-dlp, other `.dsf` skins.
 
 ## 7. Testing strategy
 
@@ -440,6 +522,8 @@ translation, streaming via yt-dlp, an original default skin, other `.dsf` skins.
 | Font differences on Linux (Tahoma, Arial) | Text not pixel-identical | Metric-compatible fonts; looser text comparison |
 | HiDPI scaling of 96-dpi bitmap skins | Blurry or misaligned art | Integer scaling where possible; test at 100%, 150%, 200% |
 | Third-party skin copyright | Legal | Never redistribute; load from the user's install |
+| The default skin is too close to BlackSpace | Copyright or trade dress claim | M7's rules: original art with a sources file, its own design, no Daum or PotPlayer marks; the owner decides on a legal review before any public release |
+| Other players' skins depend on those players' internals (VLC's variables, mpv's Lua scripts) | Partial support | M9 starts with a study; unsupported parts are listed as in BlackSpace's coverage report |
 | Codec patents when shipping FFmpeg in our builds | Legal, mainly for public binaries | Same practice as mpv and VLC builds; decide before any public release |
 
 ## 9. Open questions
@@ -466,9 +550,12 @@ Deferred items (owner decisions, picked up when they become relevant):
 
 ## 10. Goals for `/goal`
 
-The milestones are grouped into nine goals, A to I. Each goal is one `/goal`
+The milestones are grouped into eleven goals, A to K. Each goal is one `/goal`
 run, writes `docs/goals/goal-<letter>-status.md` and ends with a commit pushed to
-the private `origin`. Goals run in order; C and D can swap.
+the private `origin`. Goals run in order; C and D can swap. Goal I follows H
+so that the default skin can include M6's control panel. Goals I to K were
+added on 2026-10-13 at the owner's request, and packaging became M8 and
+goal J.
 
 | Stage | Goal | Covers | Where it runs | Needs the owner |
 |-------|------|--------|---------------|-----------------|
@@ -480,7 +567,9 @@ the private `origin`. Goals run in order; C and D can swap.
 | 4 | F | M3 daily-use essentials | WSL and VMs | Week-long trial afterwards |
 | 5 | G | M4 menus and commands, M5 settings window | WSL and VMs | Permission for one host check |
 | 5 | H | M6 SVP and video processing | WSL, VMs, host | Permission for host checks |
-| 5 | I | M7 platform integration and packaging | WSL and VMs | No |
+| 6 | I | M7 own look: logo and default skin | WSL and VMs | Picks the logo, approves the skin |
+| 6 | J | M8 platform integration and packaging | WSL and VMs | No |
+| 7 | K | M9 other players' skins (VLC, mpv's on-screen controllers) | WSL and VMs | Picks the scope after the study |
 
 Rules shared by all goals, also written into the project `AGENTS.md` by goal A:
 
@@ -541,5 +630,15 @@ Goal H:
 
 Goal I:
 ```
-/goal Execute goal I of docs/PLAN.md (milestone M7, platform integration and packaging) in ~/rvp after goal H. Linux: MPRIS, screensaver inhibit, .desktop file and MIME associations, AppImage, .deb and an AUR PKGBUILD. Windows: media transport controls, file associations, an installer and a portable ZIP, crash logs. CI builds packages for both systems as artifacts of the private repository. Done when: the packages install, run and uninstall cleanly on the Ubuntu VM and the Windows VM, docs/goals/goal-i-status.md is written, and everything is committed and pushed. Do not: publish packages anywhere, install on the host without advance notice and explicit permission, make the repository public, tag or release. Stop on blockers or when an owner decision is needed.
+/goal Execute goal I of docs/PLAN.md (milestone M7, RVP's own look: logo and default skin) in ~/rvp after goal H. Logo: draw two or three drafts of an RVP logo as vector sources, show them to the owner and wait for the choice; then use it as the window and application icon, on the idle screen and in the About box, and draw it over the Daum logo in a loaded skin's title bar (decision D10; the user's .dsf stays unchanged). Default skin: an original skin "RVP Default" in BlackSpace's spirit, with the same classic layout and functions (title bar, video, seek bar, buttons, info strip, the playlist docked on the right, M6's control panel, the same commands and menus) but its own shapes, icons, palette and fonts. Write it in the .dsf format from sources in the repository, build it with cargo xtask, ship it with RVP and use it when no skin is set. Follow M7's originality rules: take nothing from PotPlayer's skins (no files, sprites, crops, tracings or sampled colours); use no Daum, Kakao or PotPlayer names or marks; draw every asset for RVP or take it from icon sets and fonts under GPL-compatible licenses, listing each asset's origin and license in a sources file. Tests: the skin loads without warnings, geometry snapshots and golden renders at three sizes, and a coverage report mapping every control to an action. Show the owner the renders next to BlackSpace's; BlackSpace's renders stay local in ~/rvp-reference. Wait for the owner's approval of the skin. Done when: tests and CI are green, the owner has approved the logo and the skin, RVP starts with the default skin without PotPlayer installed on the Ubuntu VM and the Windows VM, docs/goals/goal-i-status.md is written, and everything is committed and pushed. Do not: copy, trace or sample anything from PotPlayer's skins; commit PotPlayer or SVP files or renders made from them; run anything on the Windows host without advance notice and explicit permission; make the repository public; tag or release. Stop on blockers or when an owner decision is needed.
+```
+
+Goal J:
+```
+/goal Execute goal J of docs/PLAN.md (milestone M8, platform integration and packaging) in ~/rvp after goal I. Linux: MPRIS, screensaver inhibit, .desktop file and MIME associations, AppImage, .deb and an AUR PKGBUILD. Windows: media transport controls, file associations, an installer and a portable ZIP, crash logs. The packages carry the default skin and RVP's icons from goal I. CI builds packages for both systems as artifacts of the private repository. Done when: the packages install, run and uninstall cleanly on the Ubuntu VM and the Windows VM, docs/goals/goal-j-status.md is written, and everything is committed and pushed. Do not: publish packages anywhere, install on the host without advance notice and explicit permission, make the repository public, tag or release. Stop on blockers or when an owner decision is needed.
+```
+
+Goal K:
+```
+/goal Execute goal K of docs/PLAN.md (milestone M9, other players' skins) in ~/rvp after goal J. Start with the study. Ask the owner which VLC skins and mpv on-screen controllers to try; without an answer, take the most downloaded skins from VLC's skins page plus uosc, ModernX and mpv's built-in OSC. Keep the downloads local in ~/rvp-reference. Record in docs/spikes/s6-other-skins.md what each format needs, what RVP lacks and the cost of each part, then stop and ask the owner to choose the scope. Then implement the chosen parts on both systems. For VLC .vlt skins: a second loader in crates/skin that builds the same display list, VLC's actions mapped to RVP's, and a coverage report. For mpv's on-screen controllers: libmpv built with Lua on both systems, an RVP mode where mpv's controller replaces the skin (borderless window, pointer and keys passed to mpv), and the user's scripts folder. Done when: tests and CI are green, the chosen parts work on the Ubuntu VM and the Windows VM, docs/goals/goal-k-status.md is written, and everything is committed and pushed. Do not: commit third-party skins or scripts or renders made from them, run anything on the Windows host without advance notice and explicit permission, make the repository public, tag or release. Stop on blockers or when an owner decision is needed.
 ```
