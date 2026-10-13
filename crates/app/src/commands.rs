@@ -43,6 +43,10 @@ pub struct Session {
     pub info: bool,
     /// The last "Stay on Top" state sent to the window.
     pub on_top: Option<bool>,
+    /// The screen rotation in degrees.
+    pub rotation: u16,
+    /// The control panel window is shown.
+    pub control_panel: bool,
 }
 
 impl Default for Session {
@@ -62,6 +66,8 @@ impl Default for Session {
             after: AfterPlayback::Nothing,
             info: false,
             on_top: None,
+            rotation: 0,
+            control_panel: false,
         }
     }
 }
@@ -194,6 +200,12 @@ impl App {
             Action::KeysAndMouse => Some(UiRequest::Preferences(Some("input"))),
             Action::Settings(page) => Some(UiRequest::Preferences(Some(page.key()))),
             Action::About => Some(UiRequest::About),
+            Action::ControlPanel => {
+                self.session.control_panel = !self.session.control_panel;
+                Some(UiRequest::ControlPanel(self.session.control_panel))
+            }
+            Action::ToggleEqualizer => Some(self.toggle_equalizer(engine)),
+            Action::SaveFrameAs => self.frame_path().map(UiRequest::SaveFrameDialog),
             other => self.view_command(engine, other),
         }
     }
@@ -260,8 +272,9 @@ impl App {
                 self.session.info = !self.session.info;
                 Some(UiRequest::ShowInfo(self.session.info))
             }
-            // M2's and M3's actions are App::dispatch's.
-            _ => None,
+            // M6's video processing; M2's and M3's actions are
+            // App::dispatch's.
+            other => self.video_command(engine, other),
         }
     }
 
@@ -319,10 +332,19 @@ impl App {
             Speed::Default => self.session.last_speed,
         };
         let next = ((next * 10.0).round() / 10.0).clamp(0.1, 16.0);
-        engine
-            .set_double("speed", next)
-            .ok()
-            .map(|()| UiRequest::Osd(format!("Speed: {next:.1}x")))
+        // The normalizer holds about ten seconds of audio; played at the new
+        // speed, it put audio and video out of step (14 dropped frames on
+        // the Ubuntu boot when the speed went back to 1x). A seek to the
+        // current position, queued before the speed changes, empties the
+        // chain first.
+        if self.settings.normalizer.enabled
+            && self.model.media_loaded()
+            && (next - current).abs() > 1e-6
+        {
+            drop(engine.seek(Seek::Relative(0.0)));
+        }
+        engine.set_double("speed", next).ok()?;
+        Some(UiRequest::Osd(format!("Speed: {next:.1}x")))
     }
 
     fn ab_repeat(&mut self, engine: &Engine, change: AbRepeat) -> UiRequest {
@@ -617,6 +639,13 @@ impl App {
     }
 
     fn save_frame(&self, subtitles: bool) -> Option<UiRequest> {
+        self.frame_path()
+            .map(|path| UiRequest::SaveFrame { path, subtitles })
+    }
+
+    /// A new file in the image folder for the current frame, named after
+    /// the video and the time; `None` without a video.
+    fn frame_path(&self) -> Option<PathBuf> {
         let path = self.model.loaded_path()?;
         self.model.int(PropertyId::VideoWidth)?;
         let stem = Path::new(crate::view::file_name(path))
@@ -647,10 +676,7 @@ impl App {
             file = folder.join(format!("{name} ({counter}).{extension}"));
             counter += 1;
         }
-        Some(UiRequest::SaveFrame {
-            path: file,
-            subtitles,
-        })
+        Some(file)
     }
 
     fn set_on_top(&mut self, mode: OnTop) -> UiRequest {

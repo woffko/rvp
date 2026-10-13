@@ -6,6 +6,7 @@
 
 use std::path::{Path, PathBuf};
 
+use rvp_app::Action;
 use rvp_app::coverage::{
     ItemStatus, commands, item_status, menu_report, skin_covered, skin_reason, skin_report,
 };
@@ -63,8 +64,16 @@ fn every_menu_item_is_carried_out_or_explained() {
         "chapters"
     );
     assert!(
-        matches!(find(10383), Some(ItemStatus::Missing(_))),
+        matches!(find(10383), Some(ItemStatus::Window(Action::ControlPanel))),
         "control panel"
+    );
+    assert!(
+        matches!(find(20008), Some(ItemStatus::Runtime(_))),
+        "equalizer presets"
+    );
+    assert!(
+        matches!(find(10770), Some(ItemStatus::Missing(_))),
+        "AviSynth"
     );
 }
 

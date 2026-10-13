@@ -33,6 +33,9 @@ pub mod bridge {
         fn rvp_instance_listen(name: &str) -> bool;
         /// libmpv needs `LC_NUMERIC=C`; Qt sets the user locale on Unix.
         fn rvp_set_c_numeric_locale();
+        /// Sets an environment variable (`qputenv`); only while no other
+        /// thread runs.
+        fn rvp_set_env(name: &str, value: &str);
         /// `QOpenGLContext::getProcAddress` of the current context.
         fn rvp_gl_get_proc_address(name: &str) -> usize;
         /// Schedules a video frame (mpv's render update callback; any

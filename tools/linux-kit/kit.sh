@@ -607,6 +607,16 @@ m2_ready() {
     fi
 }
 
+# RVP's settings for the steps that measure RVP alone (goal H): with
+# "ipc-server" empty a running SVP 4 Manager cannot attach, as in the
+# Windows host runs, so the dropped-frame counts compare. Only m2svp lets
+# SVP attach.
+kit_settings() {
+    mkdir -p "$RVP_CONFIG_DIR"
+    printf '{\n  "ipc-server": ""%s\n}\n' "${1:+,
+  $1}" > "$RVP_CONFIG_DIR/settings.json"
+}
+
 # Hardware decoding where a GPU decodes; the VM's virtual GPU does not.
 m2_hwdec() {
     if gpu_checks; then echo auto-copy; else echo no; fi
@@ -617,6 +627,7 @@ step_m2() {
     m2_ready m2 || return 0
     m2_env
     rm -rf "$RVP_CONFIG_DIR" "$RVP_STATE_DIR" "$out"
+    kit_settings
     : > "$log"
     # Functional check with two files (next and previous).
     echo "== functional" >> "$log"
@@ -651,7 +662,7 @@ step_m2input() {
     rm -rf "$RVP_CONFIG_DIR" "$RVP_STATE_DIR"
     mkdir -p "$RVP_CONFIG_DIR" "$RVP_STATE_DIR"
     # A 900x560 window that keeps its size when the video opens.
-    printf '{ "fit-window-to-video": false }\n' > "$RVP_CONFIG_DIR/settings.json"
+    kit_settings '"fit-window-to-video": false'
     printf '{ "window": { "x": null, "y": null, "width": 900, "height": 560, "maximized": false } }\n' \
         > "$RVP_STATE_DIR/state.json"
     # shellcheck disable=SC2086 # "WIDTH HEIGHT"
@@ -684,7 +695,7 @@ step_m2gpu() {
         mkdir -p "$RVP_STATE_DIR" "$RVP_CONFIG_DIR"
         printf '{ "window": { "x": null, "y": null, "width": 1920, "height": 1080, "maximized": false } }\n' \
             > "$RVP_STATE_DIR/state.json"
-        printf '{ "fit-window-to-video": false }\n' > "$RVP_CONFIG_DIR/settings.json"
+        kit_settings '"fit-window-to-video": false'
         "$(rvp_bin)" --selftest=playback "--play-seconds=$seconds" --gpu-checks "${extra[@]}" \
             "--out=$out" "--skin=${RVP_SKIN:-}" --mpv-options=hwdec=auto-copy "$(test_video)" >> "$log" 2>&1 ||
             status=1
@@ -730,6 +741,7 @@ step_m3() {
     m2_env
     export RVP_CONFIG_DIR=$LOG_DIR/m3-config RVP_STATE_DIR=$LOG_DIR/m3-state
     rm -rf "$RVP_CONFIG_DIR" "$RVP_STATE_DIR" "$out"
+    kit_settings
     : > "$log"
     echo "== functional (M3)" >> "$log"
     "$(rvp_bin)" --selftest --instance=kit-m3 "--out=$out" "--skin=${RVP_SKIN:-}" \
@@ -775,6 +787,7 @@ step_m4() {
     m2_env
     export RVP_CONFIG_DIR=$LOG_DIR/m4-config RVP_STATE_DIR=$LOG_DIR/m4-state
     rm -rf "$RVP_CONFIG_DIR" "$RVP_STATE_DIR" "$out" "$portable"
+    kit_settings
     : > "$log"
     echo "== functional (M4 and M5 checks)" >> "$log"
     "$(rvp_bin)" --selftest "--out=$out" "--skin=${RVP_SKIN:-}" \
@@ -793,8 +806,10 @@ step_m4() {
     : > "$portable/rvp.portable"
     (
         unset RVP_CONFIG_DIR RVP_STATE_DIR
+        # The copy writes its own settings.json, so SVP is kept out through
+        # mpv's option instead.
         "$portable/rvp" --selftest=playback --play-seconds=3 "--out=$out" \
-            "--skin=${RVP_SKIN:-}" "--mpv-options=hwdec=$(m2_hwdec)" "$(s1_video)"
+            "--skin=${RVP_SKIN:-}" "--mpv-options=hwdec=$(m2_hwdec),input-ipc-server=" "$(s1_video)"
     ) >> "$log" 2>&1
     if [ -s "$portable/settings.json" ] && [ -d "$portable/state" ]; then
         portable_ok=1

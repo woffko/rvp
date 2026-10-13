@@ -1,8 +1,8 @@
 // The settings window (F5, PotPlayer's Preferences), loaded on first use.
 // It shows RVP's own options from settings.json (rvp_app::preferences):
 // every change goes through Player.set_setting, which checks it, applies
-// it to the running player and saves the file. Only the skin waits for the
-// next start.
+// it to the running player and saves the file. Only the skin and the
+// VSScript library wait for the next start.
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Dialogs as Dialogs
@@ -25,6 +25,7 @@ ApplicationWindow {
         { key: "playlist", title: "Playlist" },
         { key: "audio", title: "Audio" },
         { key: "video", title: "Video" },
+        { key: "shaders", title: "Shaders" },
         { key: "svp", title: "SVP and VapourSynth" },
         { key: "subtitles", title: "Subtitles" },
         { key: "input", title: "Keys and Mouse" },
@@ -82,6 +83,28 @@ ApplicationWindow {
     }
     function set(path, newValue) {
         report(player.set_setting(path, JSON.stringify(newValue)), "Applied.")
+    }
+    // A list setting with one item added, removed or moved by `delta`.
+    function listAdd(path, items) {
+        const list = (value(path) || []).slice()
+        for (const item of items)
+            if (list.indexOf(item) < 0)
+                list.push(item)
+        set(path, list)
+    }
+    function listRemove(path, index) {
+        const list = (value(path) || []).slice()
+        list.splice(index, 1)
+        set(path, list)
+    }
+    function listMove(path, index, delta) {
+        const list = (value(path) || []).slice()
+        const to = index + delta
+        if (to < 0 || to >= list.length)
+            return
+        const item = list.splice(index, 1)[0]
+        list.splice(to, 0, item)
+        set(path, list)
     }
     // A choice list that keeps a value typed into the file.
     function withCurrent(list, current) {
@@ -189,6 +212,64 @@ ApplicationWindow {
             id: tail
         }
     }
+    // One of RVP's video effects (the `effects` set).
+    component Effect: CheckBox {
+        property string effect
+        checked: (win.s.effects || []).indexOf(effect) >= 0
+        onToggled: {
+            const list = (win.s.effects || []).filter(e => e !== effect)
+            if (checked)
+                list.push(effect)
+            win.set("effects", list)
+        }
+    }
+    // A file list (`path`) with move and remove buttons.
+    component FileList: ColumnLayout {
+        id: fileList
+        property string path
+        property bool ordered: false
+        // Optional radio selection of one item (`selectPath`).
+        property string selectPath
+        Layout.fillWidth: true
+        Repeater {
+            model: win.value(fileList.path) || []
+            delegate: RowLayout {
+                id: row
+                required property string modelData
+                required property int index
+                Layout.fillWidth: true
+                RadioButton {
+                    visible: fileList.selectPath !== ""
+                    checked: win.value(fileList.selectPath) === row.modelData
+                    onClicked: win.set(fileList.selectPath, row.modelData)
+                }
+                Label {
+                    text: row.modelData
+                    elide: Text.ElideMiddle
+                    Layout.fillWidth: true
+                }
+                Button {
+                    visible: fileList.ordered
+                    text: "Up"
+                    enabled: row.index > 0
+                    onClicked: win.listMove(fileList.path, row.index, -1)
+                }
+                Button {
+                    visible: fileList.ordered
+                    text: "Down"
+                    onClicked: win.listMove(fileList.path, row.index, 1)
+                }
+                Button {
+                    text: "Remove"
+                    onClicked: {
+                        if (fileList.selectPath !== "" && win.value(fileList.selectPath) === row.modelData)
+                            win.set(fileList.selectPath, null)
+                        win.listRemove(fileList.path, row.index)
+                    }
+                }
+            }
+        }
+    }
     component Page: ScrollView {
         id: page
         default property alias content: column.data
@@ -207,6 +288,31 @@ ApplicationWindow {
         id: folderChooser
         property string target
         onAccepted: win.set(target, Tools.local_file(selectedFolder))
+    }
+    // Adds the chosen files to the list setting `target`.
+    Dialogs.FileDialog {
+        id: listChooser
+        property string target
+        fileMode: Dialogs.FileDialog.OpenFiles
+        onAccepted: win.listAdd(target, selectedFiles.map(url => Tools.local_file(url)))
+    }
+    // Fills the single file setting `target`.
+    Dialogs.FileDialog {
+        id: fileChooser
+        property string target
+        onAccepted: win.set(target, Tools.local_file(selectedFile))
+    }
+    function chooseFiles(target, title, filters) {
+        listChooser.target = target
+        listChooser.title = title
+        listChooser.nameFilters = filters
+        listChooser.open()
+    }
+    function chooseFile(target, title, filters) {
+        fileChooser.target = target
+        fileChooser.title = title
+        fileChooser.nameFilters = filters
+        fileChooser.open()
     }
     Dialogs.FileDialog {
         id: skinChooser
@@ -397,6 +503,9 @@ ApplicationWindow {
                         }
                     }
                     Number { label: "Audio sync step (Shift+, and Shift+.)"; path: "audio-delay-step"; unit: "s" }
+                    Heading { text: "Equalizer" }
+                    Check { path: "equalizer.enabled"; text: "Use the equalizer (Shift+E), before the normalizer" }
+                    Note { text: "Bands and presets: the control panel (F7) and the Audio menu." }
                 }
 
                 Page {
@@ -421,6 +530,29 @@ ApplicationWindow {
                         values: win.withCurrent(win.view.choices.scaler, win.s.scaler)
                         texts: ({ "": "mpv's default" })
                     }
+                    Heading { text: "Deinterlacing" }
+                    Choice {
+                        label: "Deinterlace (Ctrl+I)"
+                        path: "deinterlace"
+                        values: ["auto", "on", "off"]
+                        texts: ({ "auto": "Auto (interlaced frames only)", "on": "Always", "off": "Off" })
+                    }
+                    Heading { text: "Colour" }
+                    Check { path: "color.enabled"; text: "Use the colour adjustments (Q switches them off and back)" }
+                    Number { label: "Brightness (W, E)"; path: "color.brightness"; unit: "(-100 to 100)" }
+                    Number { label: "Contrast (R, T)"; path: "color.contrast"; unit: "(-100 to 100)" }
+                    Number { label: "Saturation (Y, U)"; path: "color.saturation"; unit: "(-100 to 100)" }
+                    Number { label: "Hue (I, O)"; path: "color.hue"; unit: "(-100 to 100)" }
+                    Number { label: "Gamma"; path: "color.gamma"; unit: "(-100 to 100)" }
+                    Heading { text: "Effects" }
+                    Effect { effect: "deblock"; text: "Deblock (Ctrl+H)" }
+                    Effect { effect: "denoise"; text: "Denoise 3D (Ctrl+N)" }
+                    Effect { effect: "soften"; text: "Soften (Ctrl+B)" }
+                    Effect { effect: "sharpen"; text: "Sharpen (Ctrl+R)" }
+                    Effect { effect: "flip-vertical"; text: "Flip vertical (Ctrl+P)" }
+                    Effect { effect: "flip-horizontal"; text: "Flip horizontal (Ctrl+Z)" }
+                    Check { path: "deband"; text: "Deband (mpv's renderer)" }
+                    Note { text: "Effects run as RVP's own filters before SVP's, which they leave in place; while one is on, hardware decoding copies the frames back." }
                     Heading { text: "Saved frames" }
                     Field {
                         label: "Folder"
@@ -444,18 +576,78 @@ ApplicationWindow {
                 }
 
                 Page {
+                    Heading { text: "GLSL shaders" }
+                    Check { path: "shaders.enabled"; text: "Use the shaders (Shift+P)" }
+                    FileList { path: "shaders.files"; ordered: true }
+                    RowLayout {
+                        Button {
+                            text: "Add Shaders…"
+                            onClicked: win.chooseFiles("shaders.files", "GLSL shaders",
+                                                       ["mpv shaders (*.glsl *.hook)", "All files (*)"])
+                        }
+                        Button {
+                            text: "Open Shader Folder"
+                            onClicked: win.player.run_action("shaders-folder")
+                        }
+                        Button {
+                            text: "Reload"
+                            onClicked: win.player.run_action("shaders-reload")
+                        }
+                    }
+                    Note { text: "mpv's user shaders run in the listed order. PotPlayer's HLSL pixel shaders do not run in mpv. Shader folder: " + (win.view.shader_folder || "") }
+                }
+
+                Page {
                     Heading { text: "SVP" }
                     Field {
                         label: "IPC endpoint SVP attaches to"
                         path: "ipc-server"
-                        placeholder: "empty: SVP cannot attach"
+                        placeholder: "empty: SVP mode off"
                         Button {
                             text: "Default"
                             onClicked: win.set("ipc-server", win.view["default-ipc"])
                         }
                     }
+                    Label {
+                        text: "Status: " + (win.view.svp_status || "")
+                        wrapMode: Text.Wrap
+                        Layout.fillWidth: true
+                    }
                     Note {
-                        text: "SVP finds a player by this pipe or socket while it plays. SVP's profiles, VapourSynth scripts, shaders and the rest of video processing come in M6."
+                        text: "Endpoint in use: " + (win.view.svp_endpoint || "none")
+                              + ". SVP 4 Manager finds a player by this pipe or socket while it plays; a second RVP window uses mpvSockets/<process id> in the temporary folder, which SVP finds too. In SVP mode hardware decoding copies the frames back, so SVP's filter gets them."
+                    }
+                    Heading { text: "VapourSynth" }
+                    Check { path: "vapoursynth.enabled"; text: "Run the selected script (before SVP's filter)" }
+                    FileList { path: "vapoursynth.slots"; selectPath: "vapoursynth.script" }
+                    Button {
+                        text: "Add Script…"
+                        onClicked: win.chooseFiles("vapoursynth.slots", "VapourSynth scripts",
+                                                   ["VapourSynth scripts (*.vpy)", "All files (*)"])
+                    }
+                    Label { text: "Plugins loaded first (mvtools for PotPlayer's motion interpolation)" }
+                    FileList { path: "vapoursynth.plugins" }
+                    Button {
+                        text: "Add Plugins…"
+                        onClicked: win.chooseFiles("vapoursynth.plugins", "VapourSynth plugins",
+                                                   [win.view.windows ? "Plugins (*.dll)" : "Plugins (*.so)", "All files (*)"])
+                    }
+                    Number { label: "Buffered frames"; path: "vapoursynth.buffered-frames"; unit: "(1-64)" }
+                    Field {
+                        label: "VSScript library"
+                        path: "vapoursynth.library"
+                        optional: true
+                        placeholder: "SVP's runtime"
+                        Button {
+                            text: "Browse…"
+                            onClicked: win.chooseFile("vapoursynth.library", "VSScript library",
+                                                      [win.view.windows ? "VSScript (VSScript.dll)" : "VSScript (libvapoursynth-script.so*)",
+                                                       "All files (*)"])
+                        }
+                    }
+                    Note {
+                        text: "In use: " + (win.view.vapoursynth_runtime || "none found")
+                              + ". A new library takes effect at the next start. PotPlayer's .vpy scripts run unchanged: RVP wraps them for today's VapourSynth (get_core) and loads the plugins first."
                     }
                 }
 
@@ -506,7 +698,7 @@ ApplicationWindow {
 
         Label {
             Layout.fillWidth: true
-            text: win.notice + (win.restartNeeded ? (win.notice !== "" ? "  " : "") + "Restart RVP for the new skin." : "")
+            text: win.notice + (win.restartNeeded ? (win.notice !== "" ? "  " : "") + "Restart RVP to apply it." : "")
             wrapMode: Text.Wrap
         }
 

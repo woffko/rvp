@@ -70,6 +70,11 @@ pub enum UiRequest {
     OnTop(bool),
     /// Show or hide the playback information over the video.
     ShowInfo(bool),
+    /// Show (`true`) or hide the control panel window (F7).
+    ControlPanel(bool),
+    /// A save dialog for the current frame, suggesting this file (then
+    /// `Player.save_frame_to`).
+    SaveFrameDialog(PathBuf),
     /// Ask for PotPlayer's playlist folder to import.
     ImportPlaylists,
     /// Ask for files to add to the shown album.
@@ -152,6 +157,10 @@ pub struct App {
     pub warnings: Vec<String>,
     /// Picture and playback state for this session (M4's commands).
     pub(crate) session: Session,
+    /// Where the resume store, the albums and generated files live.
+    state_dir: PathBuf,
+    /// SVP mode's watch over the file that plays (M6).
+    pub(crate) svp: crate::svp::Watch,
 }
 
 impl App {
@@ -194,6 +203,8 @@ impl App {
             first_start,
             warnings,
             session: Session::default(),
+            state_dir: state_dir.to_path_buf(),
+            svp: crate::svp::Watch::default(),
         })
     }
 
@@ -201,9 +212,10 @@ impl App {
     #[must_use]
     pub fn engine_options(&self) -> EngineOptions {
         let mut options = EngineOptions::player();
-        options.hwdec.clone_from(&self.settings.hwdec);
-        options.ipc_server =
-            Some(self.settings.ipc_server.clone()).filter(|server| !server.is_empty());
+        options.hwdec = self.effective_hwdec();
+        options.ipc_server = self.svp.endpoint.clone().or_else(|| {
+            Some(self.settings.ipc_server.trim().to_owned()).filter(|server| !server.is_empty())
+        });
         options.extra.push((
             "volume-max".to_owned(),
             format!("{:.0}", self.settings.volume_max.max(100.0)),
@@ -234,6 +246,12 @@ impl App {
     #[must_use]
     pub fn settings_path(&self) -> Option<&Path> {
         self.settings_path.as_deref()
+    }
+
+    /// The state folder (resume store, albums, generated files).
+    #[must_use]
+    pub fn state_dir(&self) -> &Path {
+        &self.state_dir
     }
 
     #[must_use]
@@ -271,6 +289,13 @@ impl App {
         engine.set_mute(state.mute)?;
         let last_file = state.last_file.clone();
         self.apply_normalizer(engine);
+        self.apply_equalizer(engine);
+        if let Err(error) = self.apply_picture_settings(engine) {
+            self.warnings.push(format!("Picture settings: {error}"));
+        }
+        if let Err(error) = self.apply_video_filters(engine) {
+            self.warnings.push(format!("Video filters: {error}"));
+        }
         if self.first_start
             && let Some(folder) = self.potplayer_folder()
             && let Ok(count) = self.import_playlists(&folder)
@@ -450,6 +475,22 @@ impl App {
             Action::VideoFit(fit) => Some(self.session.fit == fit),
             Action::SetImageFormat(format) => Some(self.settings.image_format == format),
             Action::PlaybackInfo => Some(self.session.info),
+            Action::ToggleEqualizer => Some(self.settings.equalizer.enabled),
+            Action::Color(crate::video::ColorChange::Toggle) => Some(self.settings.color.enabled),
+            Action::SetDeinterlace(mode) => Some(self.settings.deinterlace == mode),
+            Action::VideoEffect(effect) => Some(self.settings.effects.contains(&effect)),
+            Action::ToggleDeband => Some(self.settings.deband),
+            Action::Rotate(crate::video::Rotation::To(degrees)) => {
+                Some(self.session.rotation == degrees % 360)
+            }
+            Action::Shaders(
+                crate::video::ShaderChange::Toggle | crate::video::ShaderChange::On,
+            ) => Some(self.settings.shaders.enabled),
+            Action::Shaders(crate::video::ShaderChange::Off) => {
+                Some(!self.settings.shaders.enabled)
+            }
+            Action::ToggleVapourSynth => Some(self.settings.vapoursynth.enabled),
+            Action::ControlPanel => Some(self.session.control_panel),
             _ => None,
         }
     }
@@ -922,6 +963,8 @@ impl App {
                 }
                 EngineEvent::FileLoaded { path } => {
                     self.apply_ab(engine);
+                    self.svp
+                        .file_started(crate::svp::svp_mode(&self.settings), now);
                     self.store.set_last_file(path);
                     save_now = true;
                     let resume = self
@@ -971,6 +1014,7 @@ impl App {
         if let Some(top) = self.on_top_change() {
             requests.push(UiRequest::OnTop(top));
         }
+        requests.extend(self.watch_svp(now));
         if changes.contains(PropertyId::Volume)
             && let Some(volume) = self.model.double(PropertyId::Volume)
         {

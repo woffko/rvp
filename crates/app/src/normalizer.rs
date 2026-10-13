@@ -18,7 +18,10 @@
 //! ten seconds ahead: mpv decodes that much audio before playing on after a
 //! seek (about 50 ms more per seek on a local file), and changing the chain
 //! during playback dropped that audio, so a toggle seeks to the current
-//! position (`App`).
+//! position (`App`). A speed change does the same: the audio held in the
+//! filter, played at the new speed, put audio and video out of step (mpv:
+//! "Audio/Video desynchronisation detected"; 14 dropped frames on the
+//! Ubuntu boot).
 
 use serde::{Deserialize, Serialize};
 

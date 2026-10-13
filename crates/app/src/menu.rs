@@ -10,8 +10,9 @@
 //!   mark RVP's state.
 //! * Where PotPlayer shows run-time lists, RVP puts its own: the audio,
 //!   video and subtitle tracks (in "Select Audio Stream", "Select Video
-//!   Stream" and "Add/Select Subtitles"), the chapters ("Chapter/Bookmark")
-//!   and the albums ("Album/Favorites").
+//!   Stream" and "Add/Select Subtitles"), the chapters ("Chapter/Bookmark"),
+//!   the albums ("Album/Favorites") and the equalizer's presets ("Equalizer
+//!   Presets").
 //! * A skin menu item names a command (`ID_OPEN_URL`), a built-in submenu
 //!   (`CMD_POPUPMENU_PLAY_GOTO`, in place with `NoSubMenu='1'`) or nothing
 //!   (a separator). [`popup_source`] says which part of PotPlayer's menu
@@ -130,6 +131,7 @@ pub enum PopupSource {
     Tracks(TrackKind),
     Chapters,
     Albums,
+    EqualizerPresets,
 }
 
 /// The part of PotPlayer's menus a skin's built-in submenu command shows;
@@ -156,6 +158,9 @@ pub fn popup_source(command: &str) -> Option<PopupSource> {
         "CMD_POPUPMENU_PLAY_BOOKMARK" => PopupSource::Chapters,
         "CMD_POPUPMENU_FAVORITE" => PopupSource::Albums,
         "CMD_PLAYLIST_MENU_SORT" => PopupSource::Playlist("111_0_8"),
+        "CMD_POPUPMENU_AUDIO_EQULIZER" | "CMD_POPUPMENU_EQULIZER_PRESET" => {
+            PopupSource::EqualizerPresets
+        }
         _ => return None,
     })
 }
@@ -171,6 +176,8 @@ pub enum Command {
     Chapter(usize),
     /// Play an album (index).
     Album(usize),
+    /// Choose an equalizer preset (index into `equalizer::PRESETS`).
+    EqualizerPreset(usize),
 }
 
 impl Command {
@@ -194,6 +201,7 @@ impl Command {
             }
             Command::Chapter(index) => format!("c:{index}"),
             Command::Album(index) => format!("b:{index}"),
+            Command::EqualizerPreset(index) => format!("e:{index}"),
         }
     }
 
@@ -218,6 +226,7 @@ impl Command {
             "s" => track(TrackKind::Subtitle),
             "c" => value.parse().ok().map(Command::Chapter),
             "b" => value.parse().ok().map(Command::Album),
+            "e" => value.parse().ok().map(Command::EqualizerPreset),
             _ => None,
         }
     }
@@ -378,6 +387,9 @@ impl App {
             PopupSource::Tracks(kind) => ("Tracks".to_owned(), self.tracks(live, kind)),
             PopupSource::Chapters => ("Chapters".to_owned(), self.chapters(live)),
             PopupSource::Albums => ("Albums".to_owned(), self.albums()),
+            PopupSource::EqualizerPresets => {
+                ("Equalizer Presets".to_owned(), self.equalizer_presets())
+            }
         };
         let items = tidy(items);
         (!items.is_empty()).then_some((title, items))
@@ -405,6 +417,7 @@ impl App {
                 self.play_album(engine, index);
                 None
             }
+            Command::EqualizerPreset(index) => self.set_equalizer_preset(engine, index),
         }
     }
 
@@ -442,6 +455,10 @@ impl App {
         // "Chapter/Bookmark" is a list of the file's chapters.
         if node.id == 10324 {
             return MenuItem::submenu(&node.text, self.chapters(live));
+        }
+        // "Equalizer Presets" lists RVP's presets.
+        if node.id == 20008 {
+            return MenuItem::submenu(&node.text, self.equalizer_presets());
         }
         None
     }
@@ -525,6 +542,20 @@ impl App {
             .collect()
     }
 
+    fn equalizer_presets(&self) -> Vec<MenuItem> {
+        let eq = &self.settings.equalizer;
+        crate::equalizer::PRESETS
+            .iter()
+            .enumerate()
+            .map(|(index, preset)| MenuItem {
+                label: preset.name.to_owned(),
+                command: Some(Command::EqualizerPreset(index)),
+                checked: Some(eq.enabled && eq.preset == preset.name),
+                ..MenuItem::default()
+            })
+            .collect()
+    }
+
     fn albums(&self) -> Vec<MenuItem> {
         let lists = self.library().lists();
         lists
@@ -574,6 +605,7 @@ mod tests {
             Command::Track(TrackKind::Subtitle, None),
             Command::Chapter(3),
             Command::Album(1),
+            Command::EqualizerPreset(4),
         ] {
             assert_eq!(Command::parse(&command.id()), Some(command), "{command:?}");
         }

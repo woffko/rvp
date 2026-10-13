@@ -63,7 +63,10 @@ const CONTEXT_REASONS: &[(&str, &str)] = &[
     ("101_0_10_13", "subtitle search is not planned"),
     ("101_0_11", "not in RVP yet"),
     ("101_0_11_1", "RVP renders through libmpv (D4)"),
-    ("101_0_11_2", "pixel shaders come with GLSL shaders in M6"),
+    (
+        "101_0_11_2",
+        "mpv's GLSL shaders choose their own stage, so RVP has one shader list",
+    ),
     ("101_0_11_3", "3D video is not planned"),
     (
         "101_0_11_4",
@@ -73,14 +76,19 @@ const CONTEXT_REASONS: &[(&str, &str)] = &[
         "101_0_11_6",
         "mpv scales the video (the scaler is a setting)",
     ),
-    ("101_0_11_7", "deinterlacing comes in M6"),
     (
         "101_0_11_8",
         "extending and cropping the picture is not in RVP yet",
     ),
     ("101_0_11_9", "bottom margins are not in RVP yet"),
-    ("101_0_11_10", "video effects come in M6"),
-    ("101_0_11_11", "screen rotation is not in RVP yet"),
+    (
+        "101_0_11_10",
+        "this effect is not in RVP yet (RVP has deblock, denoise 3D, soften, sharpen, the flips and deband)",
+    ),
+    (
+        "101_0_11_11",
+        "rotating by the aspect ratio is not in RVP yet",
+    ),
     (
         "101_0_11_12",
         "consecutive images, thumbnails, the clipboard, BMP and file name options are not in RVP yet",
@@ -88,7 +96,7 @@ const CONTEXT_REASONS: &[(&str, &str)] = &[
     ("101_0_11_13", "video recording is not planned"),
     (
         "101_0_11_14",
-        "AviSynth is not planned (VapourSynth comes in M6)",
+        "AviSynth is not planned; RVP runs VapourSynth scripts (settings, SVP and VapourSynth page)",
     ),
     ("101_0_12", "not in RVP yet"),
     ("101_0_12_1", "the audio device is a setting"),
@@ -148,7 +156,6 @@ const PLAYLIST_REASONS: &[(&str, &str)] = &[
 
 /// Reasons for single items.
 const ITEM_REASONS: &[(u32, &str)] = &[
-    (10383, "the control panel (F7) comes in M6"),
     (10187, "Daum's login, discontinued"),
     (10325, "the jump dialog is not in RVP yet"),
     (10792, "single instance: rvp /new opens another window"),
@@ -185,15 +192,6 @@ const ITEM_REASONS: &[(u32, &str)] = &[
     (10825, "mpv (libass) always animates ASS subtitles"),
     (10826, "subtitle styles are not in RVP yet"),
     (10827, "subtitle styles are not in RVP yet"),
-    (10085, "colour controls come with the control panel (M6)"),
-    (10086, "colour controls come with the control panel (M6)"),
-    (10087, "colour controls come with the control panel (M6)"),
-    (10088, "colour controls come with the control panel (M6)"),
-    (10089, "colour controls come with the control panel (M6)"),
-    (10090, "colour controls come with the control panel (M6)"),
-    (10091, "colour controls come with the control panel (M6)"),
-    (10092, "colour controls come with the control panel (M6)"),
-    (10093, "colour controls come with the control panel (M6)"),
     (
         37750,
         "playing one channel of a stereo track is not in RVP yet",
@@ -218,9 +216,23 @@ const ITEM_REASONS: &[(u32, &str)] = &[
         20007,
         "output channels and resampling are mpv's (not in RVP yet)",
     ),
-    (10095, "the equalizer is not in RVP yet"),
-    (20008, "the equalizer is not in RVP yet"),
     (10454, "DirectShow filters do not apply to libmpv"),
+    (
+        10917,
+        "mpv manages colours and HDR itself (target colour space, tone mapping)",
+    ),
+    (
+        11025,
+        "mpv manages colours and HDR itself (target colour space, tone mapping)",
+    ),
+    (
+        11026,
+        "mpv manages colours and HDR itself (target colour space, tone mapping)",
+    ),
+    (
+        11027,
+        "mpv manages colours and HDR itself (target colour space, tone mapping)",
+    ),
     (10644, "presets are not in RVP yet"),
     (10968, "stay on top while in fullscreen is not in RVP yet"),
     (10479, "shutting the computer down is not planned"),
@@ -268,6 +280,9 @@ pub fn item_status(item: &Recorded) -> ItemStatus {
     }
     if item.id == 10324 {
         return ItemStatus::Runtime("the file's chapters");
+    }
+    if item.id == 20008 {
+        return ItemStatus::Runtime("the equalizer's presets");
     }
     let reasons = if item.path.starts_with("111") {
         PLAYLIST_REASONS
@@ -370,6 +385,58 @@ pub const DISPLAY: &[(&str, &str)] = &[
     ("CMD_VIDEO_OUT_FOURCC_MESSAGE", "decoder output"),
     ("CMD_VIDEO_OUT_FPS_MESSAGE", "output frame rate"),
     ("CMD_VOLUME_CTRL", "volume slider"),
+    (
+        "CMD_MASTER_VOLUME",
+        "the volume (the control panel's slider; RVP's volume, not the system's)",
+    ),
+    ("CMD_COLOR_OFFSET", "and sets the brightness (slider)"),
+    ("CMD_COLOR_GAIN", "and sets the contrast (slider)"),
+    ("CMD_COLOR_SAT", "and sets the saturation (slider)"),
+    ("CMD_COLOR_HUE", "and sets the hue (slider)"),
+    (
+        "CMD_EQULIZER_0",
+        "and sets the equalizer's 60 Hz band (slider)",
+    ),
+    (
+        "CMD_EQULIZER_1",
+        "and sets the equalizer's 170 Hz band (slider)",
+    ),
+    (
+        "CMD_EQULIZER_2",
+        "and sets the equalizer's 310 Hz band (slider)",
+    ),
+    (
+        "CMD_EQULIZER_3",
+        "and sets the equalizer's 600 Hz band (slider)",
+    ),
+    (
+        "CMD_EQULIZER_4",
+        "and sets the equalizer's 1 kHz band (slider)",
+    ),
+    (
+        "CMD_EQULIZER_5",
+        "and sets the equalizer's 3 kHz band (slider)",
+    ),
+    (
+        "CMD_EQULIZER_6",
+        "and sets the equalizer's 6 kHz band (slider)",
+    ),
+    (
+        "CMD_EQULIZER_7",
+        "and sets the equalizer's 12 kHz band (slider)",
+    ),
+    (
+        "CMD_EQULIZER_8",
+        "and sets the equalizer's 14 kHz band (slider)",
+    ),
+    (
+        "CMD_EQULIZER_9",
+        "and sets the equalizer's 16 kHz band (slider)",
+    ),
+    ("CMD_EQ_PRESET_MESSAGE", "the equalizer's preset"),
+    ("CMD_CAPTION_SIZE_MESSAGE", "the subtitle size"),
+    ("CMD_REPEAT_START_MESSAGE", "A-B point A"),
+    ("CMD_REPEAT_END_MESSAGE", "A-B point B"),
 ];
 
 /// Why a skin command is not carried out.
@@ -397,25 +464,8 @@ pub fn skin_reason(command: &str) -> &'static str {
     if starts(&["CMD_CAPTURE1ST", "CMD_CAPTURE2ND", "CMD_CAPTURE_PIP"]) {
         return "PotPlayer's screen capture areas are not planned";
     }
-    if starts(&["CMD_COLOR_"]) {
-        return "colour controls come with the control panel (M6)";
-    }
-    if starts(&["CMD_EQULIZER_", "CMD_EQ_PRESET"])
-        || matches!(
-            command,
-            "ID_AUDIO_EQULIZER" | "CMD_POPUPMENU_AUDIO_EQULIZER" | "CMD_POPUPMENU_EQULIZER_PRESET"
-        )
-    {
-        return "the equalizer is not in RVP yet";
-    }
     match command {
-        "CMD_MASTER_VOLUME" => "the system volume is not RVP's to change",
-        "ID_VIDEO_BLUR" | "ID_VIDEO_SHARPEN" | "ID_VIDEO_POSTPROC" => "video filters come in M6",
         "ID_VIDEO_MARGIN" => "screen margins are not in RVP yet",
-        "ID_CONTROL_BOX_WINDOW"
-        | "CMD_REPEAT_START_MESSAGE"
-        | "CMD_REPEAT_END_MESSAGE"
-        | "CMD_CAPTION_SIZE_MESSAGE" => "the control panel (F7) comes in M6",
         "ID_SKIN_AUTO_HIDE" => "the skin on/off (floating window) mode is not in RVP yet",
         "ID_OPEN_DVD" => "DVD playback is not planned",
         "ID_ETC_CLOSE_SYSTEM_FILE" | "ID_ETC_CLOSE_SYSTEM_LIST" => {
@@ -425,7 +475,6 @@ pub fn skin_reason(command: &str) -> &'static str {
         "ID_VIDEO_IMAGE_THUMBNAIL" | "ID_VIDEO_ADV_CAPTURE" | "ID_VIDEO_CAPTURE_CAPTION" => {
             "thumbnails and advanced capture are not in RVP yet"
         }
-        "ID_VIDEO_IMAGE_CAPTURE_PROMPT" => "saving a frame under a chosen name is not in RVP yet",
         "ID_PLAYLIST_SAVE" => "saving albums as playlist files is not in RVP yet",
         "ID_CAPTION_MOVE_LEFT" | "ID_CAPTION_MOVE_RIGHT" => "mpv cannot move subtitles sideways",
         "ID_CAPTION_FONT_SELECT" | "CMD_CAPTION_FONT_MESSAGE" | "CMD_POPUPMENU_CAPTION_FONT" => {
@@ -466,6 +515,7 @@ pub fn skin_status(command: &str) -> String {
             PopupSource::Tracks(_) => "menu: the file's tracks".to_owned(),
             PopupSource::Chapters => "menu: the file's chapters".to_owned(),
             PopupSource::Albums => "menu: the albums".to_owned(),
+            PopupSource::EqualizerPresets => "menu: the equalizer's presets".to_owned(),
         };
     }
     format!("not carried out: {}", skin_reason(command))
@@ -485,9 +535,9 @@ pub fn skin_report(skin: &str, commands: &BTreeMap<String, CommandUse>) -> Strin
         "# {skin}'s commands in RVP\n\nGenerated by `cargo test -p rvp-app --test coverage` \
          (`RVP_BLESS=1`, with `RVP_TEST_SKIN` set) from the skin's live elements: every \
          `CmdID`, `AltCmdID` and menu item, where it appears, and what RVP does with it. \
-         Areas other than `MainSkinArea`, `PlaylistSkinArea` and the menus are not shown \
-         by RVP yet (the control panel `ControlBoxSkinArea` comes in M6; the broadcast, \
-         chat and capture areas belong to discontinued services).\n\n\
+         RVP shows `MainSkinArea` with `PlaylistSkinArea`, the control panel \
+         (`ControlBoxSkinArea`, F7) and the menus; the broadcast, chat and capture areas \
+         belong to discontinued services.\n\n\
          {} commands: {covered} carried out or shown, {} not.\n\n\
          | Command | Where | RVP |\n|---------|-------|-----|\n",
         commands.len(),

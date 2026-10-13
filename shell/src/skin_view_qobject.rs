@@ -31,6 +31,7 @@ pub mod qobject {
         #[qml_element]
         #[base = QQuickPaintedItem]
         #[qproperty(i32, region_index)]
+        #[qproperty(i32, surface)]
         type SkinView = super::SkinViewRust;
 
         /// Paints the current frame (render thread, GUI thread blocked).
@@ -54,6 +55,9 @@ impl cxx_qt::Constructor<()> for qobject::SkinView {
     }
 
     fn new((): ()) -> SkinViewRust {
-        SkinViewRust { region_index: -1 }
+        SkinViewRust {
+            region_index: -1,
+            surface: 0,
+        }
     }
 }

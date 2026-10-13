@@ -54,6 +54,9 @@ public:
     // A local path for a file URL; other URLs as text.
     Q_INVOKABLE QString local_file(const QUrl &url) const;
     Q_INVOKABLE void log(const QString &line) const;
+    // Writes a UTF-8 text file (the self-test's shader); returns its
+    // absolute path, empty on failure.
+    Q_INVOKABLE QString write_file(const QString &path, const QString &text) const;
     // Grabs the visible Quick windows to `directory/prefix-N.png`.
     Q_INVOKABLE int grab(const QString &directory, const QString &prefix) const;
     // Renders windows that are visible but not exposed (Windows session 0).
@@ -76,6 +79,7 @@ bool rvp_has_windows();
 bool rvp_instance_send(rust::Str name, rust::Str message);
 bool rvp_instance_listen(rust::Str name);
 void rvp_set_c_numeric_locale();
+void rvp_set_env(rust::Str name, rust::Str value);
 std::size_t rvp_gl_get_proc_address(rust::Str name);
 void rvp_video_request_update();
 bool rvp_atlas_contains(rust::Str name);

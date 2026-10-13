@@ -1,5 +1,6 @@
 // The file dialogs, loaded on first use (Qt Quick Dialogs is not needed to
-// start RVP): media files to open or add, and a subtitle file to load.
+// start RVP): media files to open or add, a subtitle file to load, and
+// where to save the current frame.
 import QtQuick
 import QtQuick.Dialogs
 import Rvp
@@ -19,6 +20,20 @@ Item {
     }
     function askSubtitle() {
         subtitleDialog.open()
+    }
+    // `suggested`: a file URL in the image folder.
+    function askFrame(suggested) {
+        frameDialog.selectedFile = suggested
+        frameDialog.currentFolder = suggested.substring(0, suggested.lastIndexOf("/"))
+        frameDialog.open()
+    }
+
+    FileDialog {
+        id: frameDialog
+        title: "Save Current Frame As"
+        fileMode: FileDialog.SaveFile
+        nameFilters: ["Images (*.png *.jpg *.jpeg)", "All files (*)"]
+        onAccepted: holder.player.save_frame_to(Tools.local_file(selectedFile))
     }
 
     FileDialog {

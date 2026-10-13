@@ -543,6 +543,48 @@ impl Engine {
         }
     }
 
+    /// Puts an audio filter (`@label:...`) in front of the chain, replacing
+    /// the one with the same label; `None` removes it. Other filters keep
+    /// their places.
+    ///
+    /// # Errors
+    /// Fails when libmpv rejects the filter.
+    pub fn set_audio_filter_first(
+        &self,
+        label: &str,
+        entry: Option<&str>,
+    ) -> Result<(), EngineError> {
+        drop(self.mpv.command("af", &["remove", &format!("@{label}")]));
+        match entry {
+            Some(entry) => self
+                .mpv
+                .command("af", &["pre", entry])
+                .map_err(|e| error("af pre", &e)),
+            None => Ok(()),
+        }
+    }
+
+    /// Removes the video filter with this label (`vf remove @label`); other
+    /// filters keep their places.
+    ///
+    /// # Errors
+    /// Fails when no filter has the label.
+    pub fn remove_video_filter(&self, label: &str) -> Result<(), EngineError> {
+        self.mpv
+            .command("vf", &["remove", &format!("@{label}")])
+            .map_err(|e| error("vf remove", &e))
+    }
+
+    /// Puts a video filter (`@label:...`) in front of the chain (`vf pre`).
+    ///
+    /// # Errors
+    /// Fails when libmpv rejects the filter.
+    pub fn prepend_video_filter(&self, entry: &str) -> Result<(), EngineError> {
+        self.mpv
+            .command("vf", &["pre", entry])
+            .map_err(|e| error("vf pre", &e))
+    }
+
     /// Shows or hides subtitles (`sub-visibility`).
     ///
     /// # Errors

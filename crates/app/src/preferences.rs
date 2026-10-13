@@ -157,6 +157,37 @@ impl Settings {
             notes,
         );
         clamp(&mut self.subtitle_scale, 0.3, 3.0, "subtitle-scale", notes);
+        for kind in crate::video::ColorKind::ALL {
+            let value = self.color.get(kind);
+            if !(-100..=100).contains(&value) {
+                notes.push(format!(
+                    "color {} must be -100 to 100: {} used",
+                    kind.property(),
+                    value.clamp(-100, 100)
+                ));
+                self.color.set(kind, value);
+            }
+        }
+        let range = crate::equalizer::RANGE;
+        for (band, gain) in self.equalizer.bands.iter_mut().enumerate() {
+            let mut value = *gain;
+            clamp(
+                &mut value,
+                -range,
+                range,
+                &format!("equalizer band {}", band + 1),
+                notes,
+            );
+            *gain = value;
+        }
+        let frames = self.vapoursynth.buffered_frames;
+        if !(1..=64).contains(&frames) {
+            let repaired = frames.clamp(1, 64);
+            notes.push(format!(
+                "vapoursynth buffered-frames must be 1 to 64: {repaired} used"
+            ));
+            self.vapoursynth.buffered_frames = repaired;
+        }
     }
 
     fn validate_texts(&mut self, notes: &mut Vec<String>) {
@@ -215,6 +246,25 @@ impl Settings {
             && !skin.is_file()
         {
             notes.push(format!("skin {} is not there", skin.display()));
+        }
+        for file in &self.shaders.files {
+            if !file.is_file() {
+                notes.push(format!("shader {} is not there", file.display()));
+            }
+        }
+        let vs = &self.vapoursynth;
+        for file in vs.slots.iter().chain(&vs.plugins).chain(&vs.script) {
+            if !file.is_file() {
+                notes.push(format!("VapourSynth file {} is not there", file.display()));
+            }
+        }
+        if let Some(library) = &vs.library
+            && !library.is_file()
+        {
+            notes.push(format!(
+                "VapourSynth library {} is not there",
+                library.display()
+            ));
         }
     }
 }
@@ -350,11 +400,19 @@ impl App {
                 applied.notes.push(format!("cannot set {name}: {error}"));
             }
         };
-        if old.hwdec != new.hwdec {
-            set("hwdec", &new.hwdec);
-        }
+        let mut endpoint_changed = None;
         if old.ipc_server != new.ipc_server {
-            set("input-ipc-server", &new.ipc_server);
+            // Another process may hold the endpoint (see crate::svp).
+            let endpoint = crate::svp::choose_endpoint(
+                &new.ipc_server,
+                std::process::id(),
+                crate::svp::endpoint_in_use,
+            );
+            if let Some(endpoint) = &endpoint {
+                crate::svp::prepare_endpoint(endpoint);
+            }
+            set("input-ipc-server", endpoint.as_deref().unwrap_or(""));
+            endpoint_changed = Some(endpoint);
         }
         if (old.volume_max - new.volume_max).abs() > f64::EPSILON {
             set("volume-max", &format!("{:.0}", new.volume_max));
@@ -402,11 +460,56 @@ impl App {
             // The window gets the new state with the next update.
             self.session.on_top = None;
         }
-        if old.skin != new.skin {
+        if let Some(endpoint) = endpoint_changed {
+            self.svp.endpoint = endpoint;
+            if self.model.media_loaded() {
+                self.svp.file_started(
+                    crate::svp::svp_mode(&self.settings),
+                    std::time::Instant::now(),
+                );
+            }
+        }
+        self.apply_m6_settings(engine, &old, &mut applied);
+        if old.skin != new.skin || old.vapoursynth.library != new.vapoursynth.library {
             applied.restart = true;
         }
         self.save_settings();
         applied
+    }
+
+    /// M6's part of [`App::apply_settings`]: decoding, video filters, the
+    /// renderer's picture settings and the equalizer.
+    fn apply_m6_settings(&mut self, engine: &Engine, old: &Settings, applied: &mut Applied) {
+        let new = &self.settings;
+        let filters = old.effects != new.effects || old.vapoursynth != new.vapoursynth;
+        if filters || old.hwdec != new.hwdec || old.ipc_server != new.ipc_server {
+            self.apply_decoding(engine);
+        }
+        if filters && let Err(error) = self.apply_video_filters(engine) {
+            applied.notes.push(error);
+        }
+        let new = &self.settings;
+        if (old.color != new.color
+            || old.deinterlace != new.deinterlace
+            || old.deband != new.deband
+            || old.shaders != new.shaders)
+            && let Err(error) = self.apply_picture_settings(engine)
+        {
+            applied.notes.push(format!("picture settings: {error}"));
+        }
+        let new = &self.settings;
+        if old.equalizer.enabled != new.equalizer.enabled {
+            self.equalizer_chain_changed(engine);
+        } else if new.equalizer.enabled
+            && old
+                .equalizer
+                .bands
+                .iter()
+                .zip(new.equalizer.bands)
+                .any(|(a, b)| (a - b).abs() > 1e-9)
+        {
+            self.update_equalizer_bands(engine);
+        }
     }
 
     /// The settings window's data: the settings, the choices it offers
@@ -438,6 +541,10 @@ impl App {
             "portable": portable,
             "default-ipc": rvp_engine::default_ipc_server(),
             "windows": cfg!(windows),
+            "svp_status": self.svp_status(),
+            "svp_endpoint": self.svp.endpoint,
+            "vapoursynth_runtime": self.svp.vapoursynth.as_ref().map(|path| path.display().to_string()),
+            "shader_folder": self.shader_folder().display().to_string(),
         })
     }
 

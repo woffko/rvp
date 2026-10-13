@@ -41,6 +41,8 @@ Window {
     readonly property int requestImageFolder: 20
     readonly property int requestOpenExternal: 21
     readonly property int requestAbout: 22
+    readonly property int requestPanelMove: 23
+    readonly property int requestSaveFrameAs: 24
 
     property bool wasMaximized: false
     // The window state RVP last asked for and when (see applyVisibility).
@@ -210,6 +212,14 @@ Window {
         case requestAbout:
             aboutLoader.active = true
             aboutLoader.item.ask()
+            break
+        case requestPanelMove:
+            if (panelLoader.item)
+                panelLoader.item.startMove()
+            break
+        case requestSaveFrameAs:
+            dialogLoader.active = true
+            dialogLoader.item.askFrame(player.frame_path)
             break
         case requestAlbumName:
             albumLoader.active = true
@@ -474,6 +484,12 @@ Window {
         id: settingsLoader
         active: false
         Component.onCompleted: setSource("Settings.qml", { player: player })
+    }
+    // The control panel's window (F7), created the first time it shows.
+    Loader {
+        id: panelLoader
+        active: player.panel_shown || item !== null
+        Component.onCompleted: setSource("ControlPanel.qml", { player: player, owner: root })
     }
 
     DropArea {
@@ -951,7 +967,9 @@ Window {
             t.stepStarted = Date.now()
             break
         default:
-            if (t.step >= 200)
+            if (t.step >= 300)
+                m6Tick()
+            else if (t.step >= 200)
                 m4Tick()
             else
                 m3Tick()
@@ -1099,6 +1117,160 @@ Window {
         case 213:
             root.settled("settings_close")
             break
+        default:
+            // M6: the control panel, video processing and SVP.
+            t.step = 300
+            t.stepStarted = Date.now()
+            break
+        }
+    }
+
+    function panelClick(command) {
+        const r = player.panel_rect(command)
+        const p = root.middle(r)
+        player.panel_press(p.x, p.y, Qt.LeftButton)
+        player.panel_release(p.x, p.y, Qt.LeftButton)
+        return r.width > 0
+    }
+    // A press on a slider of the panel at `fraction` of its length (from
+    // the left, or from the bottom for vertical ones).
+    function panelSlide(command, fraction, vertical) {
+        const r = player.panel_rect(command)
+        const x = vertical ? r.x + r.width / 2 : r.x + fraction * (r.width - 1)
+        const y = vertical ? r.y + (1 - fraction) * (r.height - 1) : r.y + r.height / 2
+        player.panel_press(x, y, Qt.LeftButton)
+        player.panel_release(x, y, Qt.LeftButton)
+        return r.width > 0
+    }
+
+    // M6: F7's control panel (driven through its own pointer handlers), a
+    // colour and an equalizer change, a shader toggle and SVP's diagnostic.
+    function m6Tick() {
+        const t = selftest
+        const s = t.status()
+        switch (t.step) {
+        case 300:
+            if (!player.has_skin) {
+                Tools.log("check f7_opens_panel=SKIPPED no skin")
+                t.step = 313
+                break
+            }
+            player.key(Qt.Key_F7, 0)
+            t.next()
+            break
+        case 301:
+            t.waitFor("f7_opens_panel", () => s.panel_shown && panelLoader.status === Loader.Ready
+                          && panelLoader.item.visible && player.panel_rect("CMD_EQULIZER_0").width > 0,
+                      3000, () => "panel " + player.panel_width + "x" + player.panel_height)
+            break
+        case 302:
+            if (root.settled("panel_open"))
+                root.panelClick("CMD_SELECT_PAGE:1")
+            break
+        case 303:
+            if (t.waitFor("panel_shows_video_page", () => s.panel_page === 1, 2000,
+                          () => "page " + s.panel_page))
+                root.panelSlide("CMD_COLOR_OFFSET", 0.75, false)
+            break
+        case 304: {
+            t.waitFor("color_slider_applies", () => {
+                if (s.brightness < 30 || s.brightness > 70)
+                    return false
+                const d = JSON.parse(player.diagnostics())
+                return d.brightness === s.brightness
+            }, 2000, () => "brightness " + s.brightness + " mpv " + JSON.parse(player.diagnostics()).brightness)
+            break
+        }
+        case 305:
+            if (root.settled("color_change"))
+                root.panelClick("CMD_COLOR_OFFSET_DEFAULT")
+            break
+        case 306:
+            if (t.waitFor("color_reset_applies", () => s.brightness === 0
+                              && JSON.parse(player.diagnostics()).brightness === 0, 2000,
+                          () => "brightness " + s.brightness))
+                root.panelClick("CMD_SELECT_PAGE:0")
+            break
+        case 307:
+            if (s.panel_page === 0) {
+                t.before = s
+                root.panelSlide("CMD_EQULIZER_4", 1, true)
+                t.next()
+            } else if (Date.now() - t.stepStarted > 2000) {
+                t.check("panel_shows_audio_page", false, "page " + s.panel_page)
+                t.step = 311
+            }
+            break
+        case 308:
+            t.waitFor("equalizer_slider_applies", () => s.eq_enabled && s.eq_bands[4] > 11
+                          && s.af !== null && s.af.indexOf("rvpeq") >= 0
+                          && s.af.indexOf("rvpeq") < s.af.indexOf("rvpnorm"), 3000,
+                      () => "band " + s.eq_bands[4] + " af " + s.af)
+            break
+        case 309:
+            if (root.settled("equalizer_change"))
+                root.panelClick("ID_AUDIO_EQULIZER")
+            break
+        case 310:
+            t.waitFor("equalizer_button_toggles", () => !s.eq_enabled && s.af !== null
+                          && s.af.indexOf("rvpeq") < 0 && s.af.indexOf("rvpnorm") >= 0, 3000,
+                      () => "af " + s.af)
+            break
+        case 311:
+            player.key(Qt.Key_F7, 0)
+            t.next()
+            break
+        case 312:
+            t.waitFor("f7_closes_panel", () => !s.panel_shown
+                          && (panelLoader.item === null || !panelLoader.item.visible), 2000)
+            break
+        case 313: {
+            // A shader of RVP's own that changes nothing.
+            const path = Tools.write_file(t.outDir + "/selftest.glsl",
+                "//!HOOK MAIN\n//!BIND HOOKED\n//!DESC RVP self-test (no change)\n"
+                + "vec4 hook() { return HOOKED_texOff(0); }\n")
+            const result = JSON.parse(player.set_setting("shaders.files", JSON.stringify([path])))
+            t.check("shader_list_set", path !== "" && !result.error, path + " " + (result.error || ""))
+            player.key(Qt.Key_P, Qt.ShiftModifier)
+            t.next()
+            break
+        }
+        case 314:
+            t.waitFor("shift_p_shaders_on", () => s.shaders_enabled
+                          && String(JSON.parse(player.diagnostics()).glsl_shaders).indexOf("selftest.glsl") >= 0,
+                      2000, () => "shaders " + JSON.parse(player.diagnostics()).glsl_shaders)
+            break
+        case 315:
+            if (root.settled("shaders_on"))
+                player.key(Qt.Key_P, Qt.ShiftModifier)
+            break
+        case 316:
+            t.waitFor("shift_p_shaders_off", () => !s.shaders_enabled
+                          && String(JSON.parse(player.diagnostics()).glsl_shaders) === "", 2000,
+                      () => "shaders " + JSON.parse(player.diagnostics()).glsl_shaders)
+            break
+        case 317: {
+            // SVP mode on an endpoint of the test's own: SVP does not attach
+            // (no Manager on the test machines), and RVP says why.
+            const endpoint = Qt.platform.os === "windows" ? "rvp-selftest-svp" : t.outDir + "/svp.sock"
+            const result = JSON.parse(player.set_setting("ipc-server", JSON.stringify(endpoint)))
+            t.check("svp_mode_on", !result.error && s.loaded, endpoint + " " + (result.error || ""))
+            t.next()
+            break
+        }
+        case 318:
+            t.waitFor("svp_diagnostic_shows", () => String(s.svp_status).startsWith("SVP did not attach")
+                          && s.message === s.svp_status
+                          && JSON.parse(player.settings_view(false)).svp_status === s.svp_status,
+                      20000, () => "status " + s.svp_status + " message " + s.message)
+            break
+        case 319: {
+            const result = JSON.parse(player.set_setting("ipc-server", "\"\""))
+            const status = t.status().svp_status
+            t.check("svp_mode_off", !result.error && status === "SVP mode is off", "status " + status)
+            t.next()
+            break
+        }
         default:
             // Back to M3's steps.
             t.step = 126

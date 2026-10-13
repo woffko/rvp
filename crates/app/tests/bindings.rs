@@ -4,6 +4,7 @@
 use std::time::{Duration, Instant};
 
 use rvp_app::playlist::local_path;
+use rvp_app::video::{ColorChange, ColorKind, Rotation, ShaderChange, VideoEffect};
 use rvp_app::{
     AbRepeat, Action, App, Bindings, Delay, Jump, Key, KeyChord, MouseGesture, SeekStep, Settings,
     Speed, SubtitleStyle, UiRequest, Zoom,
@@ -46,6 +47,26 @@ fn potplayer_default_keys() {
         ("F4", Action::CloseMedia),
         ("F6", Action::TogglePlaylist),
         ("Alt+H", Action::ToggleSubtitles),
+        ("F7", Action::ControlPanel),
+        ("Shift+E", Action::ToggleEqualizer),
+        ("Q", Action::Color(ColorChange::Toggle)),
+        ("W", Action::Color(ColorChange::Down(ColorKind::Brightness))),
+        ("E", Action::Color(ColorChange::Up(ColorKind::Brightness))),
+        ("R", Action::Color(ColorChange::Down(ColorKind::Contrast))),
+        ("T", Action::Color(ColorChange::Up(ColorKind::Contrast))),
+        ("Y", Action::Color(ColorChange::Down(ColorKind::Saturation))),
+        ("U", Action::Color(ColorChange::Up(ColorKind::Saturation))),
+        ("I", Action::Color(ColorChange::Down(ColorKind::Hue))),
+        ("O", Action::Color(ColorChange::Up(ColorKind::Hue))),
+        ("Ctrl+I", Action::DeinterlaceCycle),
+        ("Ctrl+B", Action::VideoEffect(VideoEffect::Soften)),
+        ("Ctrl+R", Action::VideoEffect(VideoEffect::Sharpen)),
+        ("Ctrl+H", Action::VideoEffect(VideoEffect::Deblock)),
+        ("Ctrl+N", Action::VideoEffect(VideoEffect::Denoise)),
+        ("Ctrl+P", Action::VideoEffect(VideoEffect::FlipVertical)),
+        ("Ctrl+Z", Action::VideoEffect(VideoEffect::FlipHorizontal)),
+        ("Alt+K", Action::Rotate(Rotation::Cycle)),
+        ("Shift+P", Action::Shaders(ShaderChange::Toggle)),
     ] {
         assert_eq!(bindings.key(&chord(key)), Some(action), "{key}");
     }
@@ -428,6 +449,69 @@ impl Harness {
                     Action::Zoom(Zoom::Reset),
                     "Zoom: 100 % (100 x 100 %), position +0 %, +0 %",
                 );
+            }
+            _ => self.check_video(action),
+        }
+    }
+
+    /// M6's commands: the control panel, the equalizer, colours,
+    /// deinterlacing, effects, rotation and shaders.
+    fn check_video(&mut self, action: Action) {
+        let vf = |h: &Self| h.engine.get_text("vf").unwrap_or_default();
+        match action {
+            Action::ControlPanel => {
+                assert_eq!(self.dispatch(action), Some(UiRequest::ControlPanel(true)));
+                assert_eq!(self.dispatch(action), Some(UiRequest::ControlPanel(false)));
+            }
+            Action::ToggleEqualizer => {
+                self.osd(action, "Equalizer: Flat");
+                self.wait("equalizer on", |m| audio_filters(m).contains("@rvpeq:"));
+                self.osd(action, "Equalizer: off");
+                self.wait("equalizer off", |m| !audio_filters(m).contains("@rvpeq:"));
+            }
+            Action::Color(ColorChange::Toggle) => {
+                self.osd(action, "Color controls: off");
+                self.osd(action, "Color controls: last used");
+            }
+            Action::Color(ColorChange::Up(kind) | ColorChange::Down(kind)) => {
+                let sign = if matches!(action, Action::Color(ColorChange::Up(_))) {
+                    1
+                } else {
+                    -1
+                };
+                self.osd(action, &format!("{}: {sign}", kind.text()));
+                assert_eq!(
+                    self.engine.get_double(kind.property()).map(f64::round),
+                    Some(f64::from(sign))
+                );
+                self.osd(
+                    Action::Color(ColorChange::Reset(kind)),
+                    &format!("{}: 0", kind.text()),
+                );
+            }
+            Action::DeinterlaceCycle => {
+                self.osd(action, "Deinterlacing: On");
+                self.osd(action, "Deinterlacing: Off");
+                self.osd(action, "Deinterlacing: Auto");
+            }
+            Action::VideoEffect(effect) => {
+                self.osd(action, &format!("{}: on", effect.text()));
+                assert!(
+                    vf(self).contains(&format!("@{}:", effect.label())),
+                    "{}",
+                    vf(self)
+                );
+                self.osd(action, &format!("{}: off", effect.text()));
+                assert!(!vf(self).contains(&format!("@{}:", effect.label())));
+            }
+            Action::Rotate(Rotation::Cycle) => {
+                for degrees in [90, 180, 270, 0] {
+                    self.osd(action, &format!("Rotation: {degrees}°"));
+                }
+            }
+            Action::Shaders(ShaderChange::Toggle) => {
+                self.osd(action, "Shaders: on (0)");
+                self.osd(action, "Shaders: off");
             }
             _ => unreachable!("{action:?} is checked in check()"),
         }

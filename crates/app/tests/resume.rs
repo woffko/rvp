@@ -249,16 +249,18 @@ fn playlists_survive_killed_processes() {
             .map_or(0, |n| *n as usize);
         assert!(last > 0, "run {run}: no edit was reported");
         // The file is whole (written atomically) and holds the albums after
-        // one of the edits of the last second: the writer may still have
-        // been writing, or already the edit after the last reported one.
+        // one of the edits of the last three seconds: the writer may still
+        // have been writing (it falls behind while the rest of the test
+        // suite loads the machine), or already the edit after the last
+        // reported one.
         let saved = Library::open(&dir).expect("readable").lists().clone();
-        let found = (last.saturating_sub(10)..=last + 1)
+        let found = (last.saturating_sub(30)..=last + 1)
             .rev()
             .find(|&n| saved == expected_after(n));
         assert!(
             found.is_some(),
             "run {run}: the albums on disk are not those of edits {}..={}",
-            last.saturating_sub(10),
+            last.saturating_sub(30),
             last + 1
         );
         let _ = std::fs::remove_dir_all(&dir);

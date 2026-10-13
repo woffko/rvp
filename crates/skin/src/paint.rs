@@ -21,7 +21,10 @@
 //!   image up to the value and the thumb. With no media loaded the seek bar
 //!   (`CMD_TIMEBAR_CTRL`) draws nothing at all (R1 idle captures); the
 //!   `AltImage` track is for media that cannot be sought (the owner's
-//!   screenshot of a loaded, stopped file).
+//!   screenshot of a loaded, stopped file). A `Vert='1'` slider (the
+//!   control panel's equalizer) runs bottom to top: its track is centred
+//!   across the width, the sprites are sliced by `TopMargin` and
+//!   `BottomMargin`, and the fill grows up from the bottom.
 
 use crate::geometry::Rect;
 use crate::layout::{Kind, Layout, Node};
@@ -472,10 +475,20 @@ fn paint_slider(list: &mut DisplayList, node: &Node<'_>, state: &UiState, data: 
     let width = attrs.int_or("ImageWidth", 0);
     let height = attrs.int_or("ImageHeight", 0);
     let rect = node.rect;
+    let vertical = attrs.flag("Vert");
     if width > 0 && height > 0 {
-        let track = Rect::new(rect.x, rect.y + (rect.h - height) / 2, rect.w, height);
-        let [left_margin, _, right_margin, _] = margins(attrs);
-        let slice = [left_margin, 0, right_margin, 0];
+        let [left_margin, top_margin, right_margin, bottom_margin] = margins(attrs);
+        let (track, slice) = if vertical {
+            (
+                Rect::new(rect.x + (rect.w - width) / 2, rect.y, width, rect.h),
+                [0, top_margin, 0, bottom_margin],
+            )
+        } else {
+            (
+                Rect::new(rect.x, rect.y + (rect.h - height) / 2, rect.w, height),
+                [left_margin, 0, right_margin, 0],
+            )
+        };
         let back = if !slider.enabled && attrs.has("AltImageLeft") {
             Some((
                 attrs.int_or("AltImageLeft", 0),
@@ -499,7 +512,12 @@ fn paint_slider(list: &mut DisplayList, node: &Node<'_>, state: &UiState, data: 
             );
         }
         if slider.enabled && has_sprite(attrs) {
-            let filled = fraction(rect.w, slider.value);
+            let fill = if vertical {
+                let filled = fraction(rect.h, slider.value);
+                Rect::new(track.x, track.y + track.h - filled, track.w, filled)
+            } else {
+                Rect::new(track.x, track.y, fraction(rect.w, slider.value), track.h)
+            };
             list.nine_slice(
                 node.atlas,
                 Rect::new(
@@ -509,7 +527,7 @@ fn paint_slider(list: &mut DisplayList, node: &Node<'_>, state: &UiState, data: 
                     height,
                 ),
                 slice,
-                Rect::new(track.x, track.y, filled, track.h),
+                fill,
                 node.clip,
             );
         }
@@ -521,8 +539,17 @@ fn paint_slider(list: &mut DisplayList, node: &Node<'_>, state: &UiState, data: 
         && thumb_height > 0
         && (attrs.has("ThumbImageLeft") || attrs.has("ThumbImageTop"))
     {
-        let x = rect.x + fraction(rect.w - thumb_width, slider.value);
-        let y = rect.y + (rect.h - thumb_height) / 2;
+        let (x, y) = if vertical {
+            (
+                rect.x + (rect.w - thumb_width) / 2,
+                rect.y + rect.h - thumb_height - fraction(rect.h - thumb_height, slider.value),
+            )
+        } else {
+            (
+                rect.x + fraction(rect.w - thumb_width, slider.value),
+                rect.y + (rect.h - thumb_height) / 2,
+            )
+        };
         list.image(
             node.atlas,
             Rect::new(

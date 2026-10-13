@@ -15,16 +15,20 @@ mod cli;
 mod commands;
 pub mod coverage;
 pub mod dpl;
+pub mod equalizer;
 mod input;
 pub mod instance;
 pub mod menu;
 pub mod normalizer;
+pub mod panel;
 pub mod playlist;
 pub mod pointer;
 pub mod preferences;
 mod resume;
 mod settings;
 mod storage;
+pub mod svp;
+pub mod video;
 pub mod view;
 
 pub use action::{

@@ -1,7 +1,8 @@
 //! `SkinView`: a `QQuickPaintedItem` that paints the chrome's display list
-//! (D5). With `region_index` -1 it is the static layer and covers the
-//! window; otherwise it covers one dynamic region and paints only what
-//! touches it (`rvp_app::chrome`).
+//! (D5). In the main window (`surface` 0) with `region_index` -1 it is the
+//! static layer and covers the window; otherwise it covers one dynamic
+//! region and paints only what touches it (`rvp_app::chrome`). The control
+//! panel's window (`surface` 1) is small and paints everything at once.
 
 use std::pin::Pin;
 
@@ -18,6 +19,7 @@ use crate::skin_view_qobject::qobject;
 /// The Rust state of [`qobject::SkinView`].
 pub struct SkinViewRust {
     pub(crate) region_index: i32,
+    pub(crate) surface: i32,
 }
 
 fn rect(r: rvp_skin::Rect) -> [i32; 4] {
@@ -106,6 +108,16 @@ fn paint_frame(mut painter: Pin<&mut qobject::QPainter>, frame: &Frame, region: 
     }
 }
 
+/// Paints every operation of `frame` (the control panel).
+fn paint_all(mut painter: Pin<&mut qobject::QPainter>, frame: &Frame) {
+    let Some(skin) = crate::player::skin() else {
+        return;
+    };
+    for op in &frame.list.ops {
+        draw(painter.as_mut(), skin, op);
+    }
+}
+
 // SAFETY: the one FFI point of the painter: Qt hands `paint` a raw
 // QPainter pointer (owner decision 2026-10-10 allows `unsafe` here).
 #[allow(unsafe_code)]
@@ -122,6 +134,12 @@ impl qobject::SkinView {
         // SAFETY: the QPainter is a C++ object that Rust never moves; the
         // pin lasts only for this call.
         let painter = unsafe { Pin::new_unchecked(painter) };
+        if *self.surface() == 1 {
+            if let Some(frame) = crate::player::panel_frame() {
+                paint_all(painter, &frame);
+            }
+            return;
+        }
         let Some(frame) = crate::player::frame() else {
             return;
         };

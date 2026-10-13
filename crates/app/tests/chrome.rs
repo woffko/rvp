@@ -75,6 +75,23 @@ const VIDEO_SKIN: &str = "<Skin Version='1.0'>
 \t</Static>
 </Control>
 </MainSkinAreaOscInside>
+<ControlBoxSkinArea Image='Atlas.png' Width='60' Height='40'>
+<Control>
+\t<Static Align='Client' ImageLeft='0' ImageTop='0' ImageWidth='30' ImageHeight='10'>
+\t\t<Button CmdID='ID_CONTROL_BOX_WINDOW' Left='-10' Top='1' Width='8' Height='8' ImageLeft='0' ImageTop='10' />
+\t\t<Button CmdID='CMD_SELECT_PAGE' PageIndex='0' Left='2' Top='12' Width='8' Height='8' ImageLeft='0' ImageTop='10' />
+\t\t<Button CmdID='CMD_SELECT_PAGE' PageIndex='1' Left='2' Top='22' Width='8' Height='8' ImageLeft='0' ImageTop='10' />
+\t\t<Static State='CMD_PAGE_CONTROL' PageIndex='0' Left='20' Top='10' Width='38' Height='28'>
+\t\t\t<Button CmdID='ID_AUDIO_EQULIZER' DownFlag='1' Left='0' Top='0' Width='8' Height='8' ImageLeft='0' ImageTop='10' />
+\t\t\t<Slider CmdID='CMD_EQULIZER_0' Vert='1' Left='12' Top='2' Width='4' Height='21' ImageWidth='2' ImageHeight='10' ImageLeft='0' ImageTop='32' BackImageLeft='0' BackImageTop='30' ThumbWidth='2' ThumbHeight='0' />
+\t\t</Static>
+\t\t<Static State='CMD_PAGE_CONTROL' PageIndex='1' Left='20' Top='10' Width='38' Height='28'>
+\t\t\t<Slider CmdID='CMD_COLOR_OFFSET' Left='0' Top='4' Width='21' Height='4' ImageWidth='10' ImageHeight='2' ImageLeft='0' ImageTop='32' BackImageLeft='0' BackImageTop='30' ThumbWidth='0' ThumbHeight='4' />
+\t\t\t<Button CmdID='CMD_COLOR_OFFSET_DEFAULT' Left='24' Top='2' Width='8' Height='8' ImageLeft='0' ImageTop='10' />
+\t\t</Static>
+\t</Static>
+</Control>
+</ControlBoxSkinArea>
 </Skin>
 ";
 
@@ -123,6 +140,7 @@ fn window() -> Context {
         height: HEIGHT,
         movable: true,
         chrome_shown: true,
+        panel: false,
         modifiers: Modifiers::default(),
     }
 }
@@ -473,5 +491,110 @@ fn fullscreen_uses_the_overlay_bars() {
     assert_eq!(
         pointer.double_click(&mut chrome, &bindings, hidden, x, y, Button::Left),
         vec![Effect::Action(Action::ToggleFullscreen)]
+    );
+}
+
+#[test]
+fn the_control_panel_has_its_own_window_pages_and_sliders() {
+    let mut chrome = chrome();
+    let skin = chrome.skin();
+    assert_eq!(Mode::ControlBox.area_size(skin), Some((60, 40)));
+    assert_eq!(Mode::Window.area_size(skin), None);
+    chrome.resize(Mode::ControlBox, 60, 40).expect("layout");
+    let bindings = Bindings::potplayer_defaults();
+    let panel = Context {
+        width: 60,
+        height: 40,
+        panel: true,
+        ..window()
+    };
+    let mut pointer = Pointer::default();
+    // Page 0: the equalizer's band reads the pointer from the bottom up.
+    let slider = chrome
+        .layout()
+        .and_then(|placed| placed.find_command("CMD_EQULIZER_0"))
+        .expect("band slider")
+        .rect;
+    assert_eq!(slider, Rect::new(32, 12, 4, 21));
+    assert_eq!(
+        pointer.press(&mut chrome, panel, 33, slider.bottom() - 1, Button::Left),
+        vec![Effect::Slider {
+            command: "CMD_EQULIZER_0",
+            fraction: 0.0
+        }]
+    );
+    assert_eq!(
+        pointer.moved(&mut chrome, panel, 40, slider.y + 5),
+        vec![Effect::Slider {
+            command: "CMD_EQULIZER_0",
+            fraction: 0.75
+        }]
+    );
+    assert_eq!(
+        pointer.release(
+            &mut chrome,
+            &bindings,
+            panel,
+            40,
+            slider.y - 3,
+            Button::Left
+        ),
+        vec![Effect::Slider {
+            command: "CMD_EQULIZER_0",
+            fraction: 1.0
+        }]
+    );
+    assert_eq!(chrome.toggle_commands(), vec!["ID_AUDIO_EQULIZER"]);
+    // The second page button shows the colour page.
+    pointer.press(&mut chrome, panel, 5, 25, Button::Left);
+    assert!(
+        pointer
+            .release(&mut chrome, &bindings, panel, 5, 25, Button::Left)
+            .is_empty()
+    );
+    assert_eq!(chrome.state.current_page, 1);
+    chrome.refresh();
+    assert!(chrome.toggle_commands().is_empty());
+    let (x, y) = center(&chrome, "CMD_COLOR_OFFSET");
+    assert_eq!(
+        pointer.press(&mut chrome, panel, x, y, Button::Left),
+        vec![Effect::Slider {
+            command: "CMD_COLOR_OFFSET",
+            fraction: 0.5
+        }]
+    );
+    pointer.release(&mut chrome, &bindings, panel, x, y, Button::Left);
+    let (x, y) = center(&chrome, "CMD_COLOR_OFFSET_DEFAULT");
+    pointer.press(&mut chrome, panel, x, y, Button::Left);
+    assert_eq!(
+        pointer.release(&mut chrome, &bindings, panel, x, y, Button::Left),
+        vec![Effect::Action(Action::Color(
+            rvp_app::video::ColorChange::Reset(rvp_app::video::ColorKind::Brightness)
+        ))]
+    );
+    // The close button hides the panel.
+    let (x, y) = center(&chrome, "ID_CONTROL_BOX_WINDOW");
+    pointer.press(&mut chrome, panel, x, y, Button::Left);
+    assert_eq!(
+        pointer.release(&mut chrome, &bindings, panel, x, y, Button::Left),
+        vec![Effect::Action(Action::ControlPanel)]
+    );
+    // No resize border: the corner moves the panel like its background,
+    // and a right click is no gesture there.
+    assert!(
+        pointer
+            .press(&mut chrome, panel, 1, 1, Button::Left)
+            .is_empty()
+    );
+    assert_eq!(
+        pointer.moved(&mut chrome, panel, 9, 1),
+        vec![Effect::StartMove]
+    );
+    pointer.release(&mut chrome, &bindings, panel, 9, 1, Button::Left);
+    pointer.press(&mut chrome, panel, 15, 30, Button::Right);
+    assert!(
+        pointer
+            .release(&mut chrome, &bindings, panel, 15, 30, Button::Right)
+            .is_empty()
     );
 }

@@ -13,7 +13,10 @@
 //!   built-in submenu command (`CMD_POPUPMENU_*`) opens that part of the
 //!   menu ([`Effect::Popup`]). `CMD_SELECT_PAGE` shows the controls of its
 //!   `PageIndex` (the playlist panel's pages).
-//! * Sliders seek or set the volume on press and while dragging.
+//! * Sliders act on press and while dragging: the seek bar seeks, the
+//!   volume sliders set the volume, the others (the control panel's
+//!   equalizer bands and colours) set their value ([`Effect::Slider`]).
+//!   Vertical sliders (`Vert='1'`) read the pointer from the bottom up.
 //! * The frame edges resize the window; dragging the title bar, an empty
 //!   skin area or the video moves it ("prevent window from being dragged
 //!   outside of the title bar" is off). The move starts once the pointer
@@ -22,6 +25,8 @@
 //!   double click plays, dragging selected rows moves them (a line marks
 //!   where they land), the wheel scrolls, tabs switch albums and the mark on
 //!   the shown tab deletes it; the panel then has the keyboard.
+//! * The control panel (F7) is a window of its own with a fixed size: no
+//!   resize border and no mouse gestures; dragging its background moves it.
 //! * In the video area the bound gestures apply; with
 //!   `left_click_video_only` the left click acts nowhere else. A single
 //!   click acts at once (section 4: reaction under 50 ms). When it turns into
@@ -83,6 +88,12 @@ pub enum Effect {
     SeekFraction(f64),
     /// Set the volume to this fraction of 100 %.
     VolumeFraction(f64),
+    /// Another slider moved to this fraction of its range (from the left
+    /// or the bottom).
+    Slider {
+        command: &'static str,
+        fraction: f64,
+    },
     /// Let the window system move the window (`startSystemMove`).
     StartMove,
     /// Let the window system resize the window at these edges.
@@ -138,6 +149,8 @@ pub struct Context {
     pub movable: bool,
     /// False in fullscreen while the bars are hidden: everything is video.
     pub chrome_shown: bool,
+    /// The control panel's window: a fixed size and no mouse gestures.
+    pub panel: bool,
     /// Modifiers held with the button (playlist selection).
     pub modifiers: Modifiers,
 }
@@ -289,7 +302,7 @@ fn target(chrome: &Chrome, ctx: Context, x: i32, y: i32) -> Target {
     if !ctx.chrome_shown {
         return Target::Video;
     }
-    if ctx.movable {
+    if ctx.movable && !ctx.panel {
         let edges = edges_at(x, y, ctx.width, ctx.height);
         if edges != 0 {
             return Target::Edge(edges);
@@ -317,18 +330,31 @@ fn target(chrome: &Chrome, ctx: Context, x: i32, y: i32) -> Target {
     }
 }
 
-fn slider_effect(chrome: &Chrome, node: usize, command: &str, x: i32) -> Option<Effect> {
-    let rect = chrome.node_rect(node)?;
-    let fraction = if rect.w > 1 {
+fn slider_effect(
+    chrome: &Chrome,
+    node: usize,
+    command: &'static str,
+    x: i32,
+    y: i32,
+) -> Option<Effect> {
+    let node = chrome.layout()?.nodes.get(node)?;
+    let rect = node.rect;
+    let fraction = if node.element.attrs.flag("Vert") {
+        if rect.h > 1 {
+            (f64::from(rect.bottom() - 1 - y) / f64::from(rect.h - 1)).clamp(0.0, 1.0)
+        } else {
+            0.0
+        }
+    } else if rect.w > 1 {
         (f64::from(x - rect.x) / f64::from(rect.w - 1)).clamp(0.0, 1.0)
     } else {
         0.0
     };
-    match command {
-        "CMD_TIMEBAR_CTRL" => Some(Effect::SeekFraction(fraction)),
-        "CMD_VOLUME_CTRL" => Some(Effect::VolumeFraction(fraction)),
-        _ => None,
-    }
+    Some(match command {
+        "CMD_TIMEBAR_CTRL" => Effect::SeekFraction(fraction),
+        "CMD_VOLUME_CTRL" | "CMD_MASTER_VOLUME" => Effect::VolumeFraction(fraction),
+        _ => Effect::Slider { command, fraction },
+    })
 }
 
 fn gesture(button: Button, double: bool) -> MouseGesture {
@@ -386,7 +412,7 @@ impl Pointer {
                     .is_some_and(|n| n.kind == rvp_skin::layout::Kind::Slider);
                 if is_slider {
                     self.drag = Drag::Slider { node, command };
-                    slider_effect(chrome, node, command, x)
+                    slider_effect(chrome, node, command, x, y)
                         .into_iter()
                         .collect()
                 } else {
@@ -547,7 +573,7 @@ impl Pointer {
     pub fn moved(&mut self, chrome: &mut Chrome, ctx: Context, x: i32, y: i32) -> Vec<Effect> {
         match self.drag {
             Drag::Slider { node, command } => {
-                return slider_effect(chrome, node, command, x)
+                return slider_effect(chrome, node, command, x, y)
                     .into_iter()
                     .collect();
             }
@@ -649,7 +675,7 @@ impl Pointer {
                         Vec::new()
                     }
                 }
-                Drag::Slider { node, command } => slider_effect(chrome, node, command, x)
+                Drag::Slider { node, command } => slider_effect(chrome, node, command, x, y)
                     .into_iter()
                     .collect(),
                 Drag::Press { click: true, .. } => {
@@ -701,7 +727,7 @@ impl Pointer {
         button: Button,
     ) -> Vec<Effect> {
         let in_video = matches!(target(chrome, ctx, x, y), Target::Video);
-        if button == Button::Left && bindings.left_click_video_only && !in_video {
+        if ctx.panel || (button == Button::Left && bindings.left_click_video_only && !in_video) {
             return Vec::new();
         }
         bindings
@@ -724,6 +750,9 @@ impl Pointer {
     ) -> Vec<Effect> {
         if delta != 0 && matches!(target(chrome, ctx, x, y), Target::List(_)) {
             return vec![Effect::List(ListEffect::ScrollBy(-3 * delta.signum()))];
+        }
+        if ctx.panel {
+            return Vec::new();
         }
         let gesture = match delta.signum() {
             1 => MouseGesture::WheelUp,

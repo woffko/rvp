@@ -46,6 +46,11 @@ pub mod qobject {
         #[qproperty(bool, on_top)]
         #[qproperty(bool, info_shown)]
         #[qproperty(QString, external_url)]
+        #[qproperty(bool, panel_shown)]
+        #[qproperty(i32, panel_width)]
+        #[qproperty(i32, panel_height)]
+        #[qproperty(QString, panel_tooltip)]
+        #[qproperty(QString, frame_path)]
         type Player = super::PlayerRust;
 
         /// Loads settings, the skin and libmpv; sets the `restore_*`
@@ -92,6 +97,33 @@ pub mod qobject {
         fn mouse_wheel(self: Pin<&mut Self>, x: f64, y: f64, delta: i32);
         #[qinvokable]
         fn mouse_leave(self: Pin<&mut Self>);
+
+        /// Pointer input in the control panel's window (F7), in its
+        /// coordinates, as the `mouse_*` calls of the main window.
+        #[qinvokable]
+        fn panel_press(self: Pin<&mut Self>, x: f64, y: f64, button: i32);
+        #[qinvokable]
+        fn panel_double(self: Pin<&mut Self>, x: f64, y: f64, button: i32);
+        #[qinvokable]
+        fn panel_release(self: Pin<&mut Self>, x: f64, y: f64, button: i32);
+        #[qinvokable]
+        fn panel_move(self: Pin<&mut Self>, x: f64, y: f64);
+        #[qinvokable]
+        fn panel_leave(self: Pin<&mut Self>);
+
+        /// The window system closed the control panel's window.
+        #[qinvokable]
+        fn panel_closed(self: Pin<&mut Self>);
+
+        /// The rectangle of the control panel's control bound to a command
+        /// (self-test); empty when it is not shown. `CMD_SELECT_PAGE:1`
+        /// names the button of page 1.
+        #[qinvokable]
+        fn panel_rect(self: &Self, command: &QString) -> QRectF;
+
+        /// Saves the current frame to a file chosen in the save dialog.
+        #[qinvokable]
+        fn save_frame_to(self: Pin<&mut Self>, path: &QString);
 
         /// A key press (`QKeyEvent::key()`, `modifiers()`); true when bound.
         #[qinvokable]
@@ -299,6 +331,11 @@ pub mod qobject {
         #[qsignal]
         #[cxx_name = "damaged"]
         fn damaged(self: Pin<&mut Self>, static_layer: bool, regions: QString, synced: bool);
+
+        /// The control panel's window repaints (all of it: it is small).
+        #[qsignal]
+        #[cxx_name = "panelDamaged"]
+        fn panel_damaged(self: Pin<&mut Self>);
 
         /// Resize the window to this size (a new video at 100 %).
         #[qsignal]

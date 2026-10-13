@@ -66,6 +66,9 @@ fn atlas() -> Vec<u8> {
     put(&mut image, Rect::new(0, 32, 10, 2), SLIDER_FILL);
     put(&mut image, Rect::new(0, 34, 10, 2), SLIDER_DISABLED);
     put(&mut image, Rect::new(12, 30, 2, 4), SLIDER_THUMB);
+    // A vertical slider's back and fill: 2x10 strips.
+    put(&mut image, Rect::new(40, 30, 2, 10), SLIDER_BACK);
+    put(&mut image, Rect::new(42, 30, 2, 10), SLIDER_FILL);
     put(&mut image, Rect::new(60, 60, 1, 1), LABEL_COLOR);
     image.encode_png().expect("encode atlas")
 }
@@ -74,8 +77,9 @@ fn atlas() -> Vec<u8> {
 /// deleting `<`, a broken quote, an unquoted value, glued attributes, the
 /// `< >` tooltip separator, an include with a macro, `#if`/`#else`, docking
 /// order, negative coordinates and sizes, centring, `ConstSize`, paired
-/// commands, `State` pages, `VisParentMinWidth` and a skin menu on a right
-/// click (`AltUserMenuName`, the `<Menu>` section).
+/// commands, `State` pages, `VisParentMinWidth`, a skin menu on a right
+/// click (`AltUserMenuName`, the `<Menu>` section) and a control panel area
+/// with a vertical slider.
 const VIDEO_SKIN: &str = "<?XML version='1.0' ?>
 <Skin Version='1.0'>
 <MainSkinArea Image='Atlas.png'>
@@ -102,6 +106,13 @@ const VIDEO_SKIN: &str = "<?XML version='1.0' ?>
 \t<Static Align='Client' Contain='CMD_VIDEO_WINDOW' />
 </Control>
 </MainSkinArea>
+<ControlBoxSkinArea Image='Atlas.png' Width='20' Height='30'>
+<Control>
+\t<Static Align='Client'>
+\t\t<Slider CmdID='CMD_EQULIZER_0' Vert='1' Left='4' Top='2' Width='2' Height='20' ImageWidth='2' ImageHeight='10' ImageLeft='42' ImageTop='30' BackImageLeft='40' BackImageTop='30' ThumbWidth='2' ThumbHeight='0' />
+\t</Static>
+</Control>
+</ControlBoxSkinArea>
 <Menu>
 <UserMenu Name='EQMenu' >
 \t<MenuItem CmdID='ID_AUDIO_EQULIZER' />
@@ -356,6 +367,33 @@ fn bitmap_labels_and_sliders() {
         rvp_skin::paint::Op::Image { dst, .. } => dst.intersect(&seek_bar) != *dst,
         _ => true,
     }));
+}
+
+#[test]
+fn vertical_sliders_fill_from_the_bottom() {
+    let skin = skin();
+    let mut data = DataModel::default();
+    data.sliders.insert(
+        "CMD_EQULIZER_0".to_owned(),
+        SliderValue {
+            value: 0.25,
+            enabled: true,
+        },
+    );
+    let state = UiState::default();
+    let placed = layout(&skin, "ControlBoxSkinArea", 20, 30, &state).expect("layout");
+    let slider = placed.find_command("CMD_EQULIZER_0").expect("slider").rect;
+    assert_eq!(slider, Rect::new(4, 2, 2, 20));
+    let image = rasterize(
+        &paint(&skin, &placed, &state, &data),
+        &skin,
+        &mut Fonts::new(Vec::new()),
+    );
+    // 25 % of 20 pixels: the bottom 5 rows are filled, the rest is track.
+    assert_eq!(image.pixel(4, 21), SLIDER_FILL);
+    assert_eq!(image.pixel(5, 17), SLIDER_FILL);
+    assert_eq!(image.pixel(4, 16), SLIDER_BACK);
+    assert_eq!(image.pixel(4, 2), SLIDER_BACK);
 }
 
 #[test]

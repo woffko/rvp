@@ -69,6 +69,11 @@ pub mod request {
     /// Open `external_url` with the system (the image folder).
     pub const OPEN_EXTERNAL: i32 = 21;
     pub const ABOUT: i32 = 22;
+    /// Let the window system move the control panel's window.
+    pub const PANEL_MOVE: i32 = 23;
+    /// The save dialog for the current frame (`frame_path` suggests the
+    /// file).
+    pub const SAVE_FRAME_AS: i32 = 24;
 }
 
 /// The skin, loaded once for the process (the painters read it on the
@@ -89,6 +94,20 @@ fn publish(frame: Arc<Frame>) {
     if let Ok(mut slot) = FRAME.lock() {
         *slot = Some(frame);
     }
+}
+
+/// The frame the control panel's painter draws.
+static PANEL_FRAME: Mutex<Option<Arc<Frame>>> = Mutex::new(None);
+
+pub fn panel_frame() -> Option<Arc<Frame>> {
+    PANEL_FRAME.lock().ok().and_then(|frame| frame.clone())
+}
+
+/// The control panel's window (F7): the skin's `ControlBoxSkinArea` with a
+/// pointer of its own.
+struct Panel {
+    chrome: Chrome,
+    pointer: Pointer,
 }
 
 /// Everything that exists once `start` ran.
@@ -122,6 +141,8 @@ struct Core {
     clock: String,
     /// The settings live next to the executable.
     portable: bool,
+    /// The control panel, once it was shown.
+    panel: Option<Panel>,
 }
 
 /// Fitting the window to a video the user opened: requested, then the new
@@ -195,6 +216,11 @@ pub struct PlayerRust {
     pub(crate) on_top: bool,
     pub(crate) info_shown: bool,
     pub(crate) external_url: QString,
+    pub(crate) panel_shown: bool,
+    pub(crate) panel_width: i32,
+    pub(crate) panel_height: i32,
+    pub(crate) panel_tooltip: QString,
+    pub(crate) frame_path: QString,
     /// The command line, parsed by `start`.
     cli: Cli,
     core: Option<Core>,
@@ -266,9 +292,39 @@ fn open_skin(path: &Path) -> Result<Skin, String> {
     Skin::open(path).map_err(|error| format!("{}: {error}", path.display()))
 }
 
-/// Starts loading the skin on a thread while Qt and QML start (called first
-/// in `main`). The settings are read here and again in `start`; both are
-/// cheap.
+/// The VapourSynth runtime (VSScript) the process points libmpv at.
+static VSSCRIPT: OnceLock<Option<PathBuf>> = OnceLock::new();
+
+/// Points libmpv at a VapourSynth runtime through `VSSCRIPT_PATH`, which
+/// it reads when a `vapoursynth` filter starts: the one the settings name,
+/// else one already in the environment, else SVP's own (rule 8). Runs
+/// before any other thread exists.
+fn point_at_vapoursynth(settings: &Settings) {
+    let configured = settings
+        .vapoursynth
+        .library
+        .as_deref()
+        .filter(|path| path.is_file());
+    let from_environment = std::env::var_os("VSSCRIPT_PATH")
+        .map(PathBuf::from)
+        .filter(|path| path.is_file());
+    let chosen = match (configured, from_environment) {
+        (None, Some(path)) => Some(path),
+        (configured, _) => {
+            let home = std::env::var_os("HOME").map(PathBuf::from);
+            let found = rvp_app::svp::find_vsscript(configured, home.as_deref());
+            if let Some(path) = &found {
+                crate::ffi::bridge::rvp_set_env("VSSCRIPT_PATH", &path.to_string_lossy());
+            }
+            found
+        }
+    };
+    let _ = VSSCRIPT.set(chosen);
+}
+
+/// Points libmpv at VapourSynth and starts loading the skin on a thread
+/// while Qt and QML start (called first in `main`). The settings are read
+/// here and again in `start`; both are cheap.
 pub fn preload_skin() {
     let cli = Cli::parse(std::env::args().skip(1));
     let settings = Dirs::from_env()
@@ -276,6 +332,7 @@ pub fn preload_skin() {
         .and_then(|dirs| rvp_app::read_json::<Settings>(&dirs.config.join("settings.json")).ok())
         .flatten()
         .unwrap_or_default();
+    point_at_vapoursynth(&settings);
     let Some(path) = skin_path(&cli, &settings) else {
         return;
     };
@@ -433,6 +490,7 @@ impl qobject::Player {
         crate::metrics::mark("skin_loaded_ms");
 
         crate::ffi::bridge::rvp_set_c_numeric_locale();
+        app.prepare_svp(VSSCRIPT.get().cloned().flatten());
         let mut options = app.engine_options();
         options.extra.extend(extra_mpv_options(&cli));
         let mut engine = match Engine::new(&options) {
@@ -466,14 +524,7 @@ impl qobject::Player {
         });
 
         if let Some(window) = app.store().state().window {
-            self.as_mut().set_restore_width(window.width);
-            self.as_mut().set_restore_height(window.height);
-            if let (Some(x), Some(y)) = (window.x, window.y) {
-                self.as_mut().set_restore_x(x);
-                self.as_mut().set_restore_y(y);
-                self.as_mut().set_restore_position(true);
-            }
-            self.as_mut().set_restore_maximized(window.maximized);
+            self.as_mut().restore_window(window);
         }
         self.as_mut().set_has_skin(chrome.is_some());
         self.as_mut().set_window_title(QString::from("RVP"));
@@ -498,6 +549,7 @@ impl qobject::Player {
             popup: None,
             clock: String::new(),
             portable,
+            panel: None,
         });
         if let Some(message) = messages.first() {
             self.as_mut().show_message(message);
@@ -505,6 +557,18 @@ impl qobject::Player {
         if crate::video::READY.load(Ordering::Acquire) {
             self.render_ready();
         }
+    }
+
+    /// The window's last geometry, for QML to restore.
+    fn restore_window(mut self: Pin<&mut Self>, window: WindowGeometry) {
+        self.as_mut().set_restore_width(window.width);
+        self.as_mut().set_restore_height(window.height);
+        if let (Some(x), Some(y)) = (window.x, window.y) {
+            self.as_mut().set_restore_x(x);
+            self.as_mut().set_restore_y(y);
+            self.as_mut().set_restore_position(true);
+        }
+        self.set_restore_maximized(window.maximized);
     }
 
     /// The render context exists: open the files.
@@ -647,12 +711,199 @@ impl qobject::Player {
         if !core.clock.is_empty() {
             data.set_text("CMD_SYSTEM_TIME_MESSAGE", core.clock.as_str());
         }
+        core.app.panel_data(&mut data);
         if data != chrome.data {
             chrome.data = data;
         }
         view::apply_playback_state(&mut chrome.state, &core.app.model);
+        let toggles = chrome.toggle_commands();
+        core.app.toggle_flags(&mut chrome.state, toggles);
         let damage = chrome.refresh();
-        self.emit_damage(&damage, synced);
+        self.as_mut().emit_damage(&damage, synced);
+        self.sync_panel(false);
+    }
+
+    /// Recomputes the control panel while it shows; it repaints whole.
+    fn sync_panel(mut self: Pin<&mut Self>, force: bool) {
+        if !*self.panel_shown() {
+            return;
+        }
+        let Some(core) = self.as_mut().core_mut() else {
+            return;
+        };
+        let Some(panel) = core.panel.as_mut() else {
+            return;
+        };
+        let mut data = rvp_skin::DataModel::default();
+        core.app.panel_data(&mut data);
+        if data != panel.chrome.data {
+            panel.chrome.data = data;
+        }
+        view::apply_playback_state(&mut panel.chrome.state, &core.app.model);
+        let toggles = panel.chrome.toggle_commands();
+        core.app.toggle_flags(&mut panel.chrome.state, toggles);
+        let damage = panel.chrome.refresh();
+        if damage.is_empty() && !force {
+            return;
+        }
+        if let Ok(mut slot) = PANEL_FRAME.lock() {
+            *slot = Some(panel.chrome.frame());
+        }
+        self.panel_damaged();
+    }
+
+    /// Shows or hides the control panel; it is laid out the first time.
+    fn show_panel(mut self: Pin<&mut Self>, shown: bool) {
+        let Some(core) = self.as_mut().core_mut() else {
+            return;
+        };
+        if shown && core.panel.is_none() {
+            core.panel = core.chrome.as_ref().and_then(|main| {
+                let skin = main.skin();
+                let (width, height) = Mode::ControlBox.area_size(skin)?;
+                let mut chrome = Chrome::new(skin);
+                chrome.resize(Mode::ControlBox, width, height).ok()?;
+                Some(Panel {
+                    chrome,
+                    pointer: Pointer::default(),
+                })
+            });
+            if core.panel.is_none() {
+                core.app.panel_closed();
+                self.set_osd(QString::from("The skin has no control panel"));
+                return;
+            }
+        }
+        let (width, height) = core
+            .panel
+            .as_ref()
+            .map_or((0, 0), |panel| panel.chrome.size());
+        self.as_mut().set_panel_width(width);
+        self.as_mut().set_panel_height(height);
+        self.as_mut().set_panel_shown(shown);
+        self.sync_panel(true);
+    }
+
+    /// `phase`: 0 press, 1 double click, 2 release (as `pointer_event`).
+    fn panel_pointer(mut self: Pin<&mut Self>, x: f64, y: f64, button_value: i32, phase: u8) {
+        let Some(button) = button(button_value) else {
+            return;
+        };
+        let Some(core) = self.as_mut().core_mut() else {
+            return;
+        };
+        let Some(panel) = core.panel.as_mut() else {
+            return;
+        };
+        let ctx = Self::panel_context(panel);
+        let (x, y) = (pixel(x), pixel(y));
+        let bindings = &core.app.bindings;
+        let effects = match phase {
+            0 => panel.pointer.press(&mut panel.chrome, ctx, x, y, button),
+            1 => panel
+                .pointer
+                .double_click(&mut panel.chrome, bindings, ctx, x, y, button),
+            _ => panel
+                .pointer
+                .release(&mut panel.chrome, bindings, ctx, x, y, button),
+        };
+        self.as_mut().apply_panel_effects(&effects);
+        self.sync_chrome();
+    }
+
+    fn panel_context(panel: &Panel) -> Context {
+        let (width, height) = panel.chrome.size();
+        Context {
+            width,
+            height,
+            movable: true,
+            chrome_shown: true,
+            panel: true,
+            modifiers: Modifiers::default(),
+        }
+    }
+
+    /// The control panel moves its own window; the rest is as in the main
+    /// window.
+    fn apply_panel_effects(mut self: Pin<&mut Self>, effects: &[Effect]) {
+        for effect in effects {
+            match effect {
+                Effect::StartMove => self.as_mut().ui_request(request::PANEL_MOVE, 0),
+                Effect::Focus(_) => {}
+                other => self.as_mut().apply_effects(std::slice::from_ref(other)),
+            }
+        }
+    }
+
+    pub(crate) fn panel_press(self: Pin<&mut Self>, x: f64, y: f64, button_value: i32) {
+        self.panel_pointer(x, y, button_value, 0);
+    }
+
+    pub(crate) fn panel_double(self: Pin<&mut Self>, x: f64, y: f64, button_value: i32) {
+        self.panel_pointer(x, y, button_value, 1);
+    }
+
+    pub(crate) fn panel_release(self: Pin<&mut Self>, x: f64, y: f64, button_value: i32) {
+        self.panel_pointer(x, y, button_value, 2);
+    }
+
+    pub(crate) fn panel_move(mut self: Pin<&mut Self>, x: f64, y: f64) {
+        let Some(core) = self.as_mut().core_mut() else {
+            return;
+        };
+        let Some(panel) = core.panel.as_mut() else {
+            return;
+        };
+        let ctx = Self::panel_context(panel);
+        let effects = panel
+            .pointer
+            .moved(&mut panel.chrome, ctx, pixel(x), pixel(y));
+        let tooltip = panel.pointer.tooltip.unwrap_or("");
+        self.as_mut().set_panel_tooltip(QString::from(tooltip));
+        self.as_mut().apply_panel_effects(&effects);
+        self.sync_chrome();
+    }
+
+    pub(crate) fn panel_leave(mut self: Pin<&mut Self>) {
+        let Some(core) = self.as_mut().core_mut() else {
+            return;
+        };
+        if let Some(panel) = core.panel.as_mut() {
+            panel.pointer.leave(&mut panel.chrome);
+        }
+        self.as_mut().set_panel_tooltip(QString::default());
+        self.sync_panel(false);
+    }
+
+    pub(crate) fn panel_closed(mut self: Pin<&mut Self>) {
+        if let Some(core) = self.as_mut().core_mut() {
+            core.app.panel_closed();
+        }
+        self.set_panel_shown(false);
+    }
+
+    pub(crate) fn panel_rect(&self, command: &QString) -> QRectF {
+        let command = command.to_string();
+        let (command, page) = match command.split_once(':') {
+            Some((command, page)) => (command.to_owned(), page.parse::<i32>().ok()),
+            None => (command, None),
+        };
+        self.core()
+            .and_then(|core| core.panel.as_ref())
+            .and_then(|panel| {
+                panel.chrome.layout()?.nodes.iter().find(|node| {
+                    node.command() == Some(command.as_str())
+                        && page.is_none_or(|page| node.element.attrs.int("PageIndex") == Some(page))
+                })
+            })
+            .map_or_else(QRectF::default, |node| to_rectf(node.rect))
+    }
+
+    pub(crate) fn save_frame_to(self: Pin<&mut Self>, path: &QString) {
+        let path = path.to_string();
+        if !path.is_empty() {
+            self.save_frame(PathBuf::from(path), false);
+        }
     }
 
     fn emit_damage(mut self: Pin<&mut Self>, damage: &Damage, synced: bool) {
@@ -800,6 +1051,7 @@ impl qobject::Player {
             height: core.height,
             movable: !fullscreen && !core.maximized,
             chrome_shown: core.chrome.is_some() && (!fullscreen || *self.chrome_shown()),
+            panel: false,
             modifiers,
         })
     }
@@ -890,6 +1142,13 @@ impl qobject::Player {
                 Effect::VolumeFraction(fraction) => {
                     if let Some(core) = self.as_mut().core_mut() {
                         core.app.set_volume_fraction(core.engine, fraction);
+                    }
+                }
+                Effect::Slider { command, fraction } => {
+                    if let Some(core) = self.as_mut().core_mut()
+                        && let Some(request) = core.app.set_slider(core.engine, command, fraction)
+                    {
+                        self.as_mut().handle_request(request);
                     }
                 }
                 Effect::StartMove => self.as_mut().ui_request(request::START_MOVE, 0),
@@ -1177,6 +1436,12 @@ impl qobject::Player {
             UiRequest::AlbumName { rename, current } => {
                 self.as_mut().set_album_name(QString::from(&current));
                 self.ui_request(request::ALBUM_NAME, i32::from(rename));
+            }
+            UiRequest::ControlPanel(shown) => self.show_panel(shown),
+            UiRequest::SaveFrameDialog(path) => {
+                self.as_mut()
+                    .set_frame_path(QString::from(&file_url(&path)));
+                self.ui_request(request::SAVE_FRAME_AS, 0);
             }
             UiRequest::Osd(text) => self.set_osd(QString::from(&text)),
             UiRequest::Message(text) => self.show_message(&text),
@@ -1967,6 +2232,44 @@ impl qobject::Player {
                 integer(page.map(i64::from))
             }),
         ]
+        .into_iter()
+        .chain(Self::m6_status(core))
+        .chain([
+            ("panel_shown", self.panel_shown().to_string()),
+            ("message", text(Some(&self.message().to_string()))),
+        ])
+        .collect()
+    }
+
+    /// M6's part of [`Self::status`]: the control panel, colours, the
+    /// equalizer, shaders and SVP.
+    fn m6_status(core: &Core) -> Vec<(&'static str, String)> {
+        let settings = &core.app.settings;
+        let text = |value: &str| json_string(value);
+        let bands: Vec<String> = settings
+            .equalizer
+            .bands
+            .iter()
+            .map(|gain| format!("{gain:.1}"))
+            .collect();
+        let mut fields = vec![
+            (
+                "panel_page",
+                core.panel.as_ref().map_or_else(
+                    || "null".to_owned(),
+                    |panel| panel.chrome.state.current_page.to_string(),
+                ),
+            ),
+            ("eq_enabled", settings.equalizer.enabled.to_string()),
+            ("eq_bands", format!("[{}]", bands.join(","))),
+            ("color_enabled", settings.color.enabled.to_string()),
+            ("shaders_enabled", settings.shaders.enabled.to_string()),
+            ("svp_status", text(&core.app.svp_status())),
+        ];
+        for kind in rvp_app::video::ColorKind::ALL {
+            fields.push((kind.property(), settings.color.applied(kind).to_string()));
+        }
+        fields
     }
 
     /// Reads mpv's properties synchronously: call it rarely (each read waits
@@ -2006,6 +2309,15 @@ impl qobject::Player {
             ("hwdec_current", text("hwdec-current")),
             ("video_sync", text("video-sync")),
             ("vf", text("vf")),
+            ("af", text("af")),
+            ("glsl_shaders", text("glsl-shaders")),
+            ("deinterlace", text("deinterlace")),
+            ("video_rotate", count("video-rotate")),
+            ("brightness", count("brightness")),
+            ("contrast", count("contrast")),
+            ("saturation", count("saturation")),
+            ("hue", count("hue")),
+            ("gamma", count("gamma")),
             ("width", count("video-params/w")),
             ("height", count("video-params/h")),
         ];

@@ -2,9 +2,13 @@
 
 #include <clocale>
 #include <cstdio>
+#include <string>
 #include <utility>
 
+#include <QtCore/QByteArray>
 #include <QtCore/QDir>
+#include <QtCore/QFile>
+#include <QtCore/QFileInfo>
 #include <QtCore/QHash>
 #include <QtCore/QJsonArray>
 #include <QtCore/QJsonDocument>
@@ -202,6 +206,22 @@ void Tools::log(const QString &line) const
     writeLine(line);
 }
 
+QString Tools::write_file(const QString &path, const QString &text) const
+{
+    const QFileInfo info(path);
+    QDir().mkpath(info.absolutePath());
+    QFile file(info.absoluteFilePath());
+    if (!file.open(QIODevice::WriteOnly | QIODevice::Truncate)) {
+        return {};
+    }
+    const QByteArray bytes = text.toUtf8();
+    if (file.write(bytes) != bytes.size()) {
+        return {};
+    }
+    file.close();
+    return QDir::toNativeSeparators(info.absoluteFilePath());
+}
+
 int Tools::grab(const QString &directory, const QString &prefix) const
 {
     QDir().mkpath(directory);
@@ -352,6 +372,12 @@ void rvp_set_c_numeric_locale()
     // libmpv refuses to start unless LC_NUMERIC is "C"; Qt sets the user
     // locale on Unix.
     std::setlocale(LC_NUMERIC, "C");
+}
+
+void rvp_set_env(rust::Str name, rust::Str value)
+{
+    const std::string key(name.data(), name.size());
+    qputenv(key.c_str(), QString::fromUtf8(value.data(), qsizetype(value.size())).toLocal8Bit());
 }
 
 std::size_t rvp_gl_get_proc_address(rust::Str name)

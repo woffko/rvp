@@ -29,6 +29,9 @@ pub enum Mode {
     Window,
     /// Fullscreen: the bars of `MainSkinAreaOscInside` over the video.
     Fullscreen,
+    /// The control panel (F7) in a window of its own
+    /// (`ControlBoxSkinArea`).
+    ControlBox,
 }
 
 impl Mode {
@@ -37,7 +40,17 @@ impl Mode {
         match self {
             Mode::Window => "MainSkinArea",
             Mode::Fullscreen => "MainSkinAreaOscInside",
+            Mode::ControlBox => "ControlBoxSkinArea",
         }
+    }
+
+    /// The size the mode's area asks for (`Width` and `Height`), when it
+    /// sets one: BlackSpace's control panel is 300x159.
+    #[must_use]
+    pub fn area_size(self, skin: &Skin) -> Option<(i32, i32)> {
+        let area = skin.area(self.area())?;
+        let size = (area.attrs.int("Width")?, area.attrs.int("Height")?);
+        (size.0 > 0 && size.1 > 0).then_some(size)
     }
 }
 
@@ -270,6 +283,23 @@ impl Chrome {
     #[must_use]
     pub fn layout(&self) -> Option<&Layout<'static>> {
         self.layout.as_ref()
+    }
+
+    /// The commands of the shown `DownFlag` buttons: they look pressed
+    /// while their command is on (the equalizer, a video effect).
+    #[must_use]
+    pub fn toggle_commands(&self) -> Vec<&'static str> {
+        let Some(placed) = &self.layout else {
+            return Vec::new();
+        };
+        placed
+            .nodes
+            .iter()
+            .map(|node| node.element)
+            .filter(|element| element.attrs.flag("DownFlag"))
+            .filter_map(|element| element.attrs.get("CmdID"))
+            .filter(|command| !command.is_empty())
+            .collect()
     }
 
     /// The control, title bar or slot under a point.

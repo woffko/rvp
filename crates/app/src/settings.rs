@@ -1,14 +1,16 @@
 //! User settings (`settings.json` in the configuration directory). Missing
 //! fields take their defaults, so older files keep working.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
 
 use crate::action::{Action, ImageFormat, ListAction, OnTop, Repeat, SeekStep};
+use crate::equalizer::Equalizer;
 use crate::input::{Bindings, KeyChord, MouseGesture};
 use crate::normalizer::Normalizer;
+use crate::video::{Color, Deinterlace, Shaders, VapourSynth, VideoEffect};
 
 /// RVP's settings.
 // Each flag is an independent option as the settings file stores it.
@@ -88,6 +90,20 @@ pub struct Settings {
     pub subtitle_auto: String,
     /// Subtitle size (mpv `sub-scale`).
     pub subtitle_scale: f64,
+    /// Colour adjustments (brightness, contrast, saturation, hue, gamma).
+    pub color: Color,
+    /// mpv's deinterlacing.
+    pub deinterlace: Deinterlace,
+    /// RVP's video effects that are on (their own filters, M6).
+    pub effects: BTreeSet<VideoEffect>,
+    /// mpv's debanding (the renderer's).
+    pub deband: bool,
+    /// GLSL shaders.
+    pub shaders: Shaders,
+    /// VapourSynth script slots and runtime.
+    pub vapoursynth: VapourSynth,
+    /// The ten-band equalizer.
+    pub equalizer: Equalizer,
 }
 
 impl Default for Settings {
@@ -122,6 +138,13 @@ impl Default for Settings {
             subtitle_languages: String::new(),
             subtitle_auto: "fuzzy".to_owned(),
             subtitle_scale: 1.0,
+            color: Color::default(),
+            deinterlace: Deinterlace::default(),
+            effects: BTreeSet::new(),
+            deband: false,
+            shaders: Shaders::default(),
+            vapoursynth: VapourSynth::default(),
+            equalizer: Equalizer::default(),
         }
     }
 }
