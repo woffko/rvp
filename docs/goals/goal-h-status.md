@@ -2,7 +2,7 @@
 
 Date: 2026-10-14. Result: **done**. Tests and CI are green; the self-test's
 M6 checks pass on the Ubuntu VM and the Windows VM; SVP's acceptance passed
-on the Windows host in three approved runs. Preconditions met:
+on the Windows host in four approved runs, the last with the final build. Preconditions met:
 `goal-g-status.md` records goal G as done and `goal-f-status.md` records
 the Ubuntu boot run of M3-M5.
 
@@ -139,7 +139,7 @@ Details in `docs/test-runs/2026-10-14-m6-runs.md`.
   videos are far larger.
 - **WSL**: only silent tests (no window, no sound).
 
-## Windows host: SVP acceptance (three approved runs)
+## Windows host: SVP acceptance (four approved runs)
 
 The owner's desktop (2560x1440, RTX 30-series card), SVP 4 Manager running with
 the owner's profile (RIFE), PotPlayer and SVP settings untouched. The
@@ -154,10 +154,11 @@ own settings and state (`h-*`, `h2-*`, `hu-*`), SVP mode on `mpvpipe`
 | 1 | `/new --selftest=svp`, second window 12 s later | listened on `C:\Users\<user>\AppData\Local\Temp/mpvSockets/46264`; SVP did not attach within 90 s |
 | 2 | first window again; second window on `mpvSockets/4242` | first window all PASS (attached after 1.3 s, 59.5 fps, seeks in sync, still interpolating); second window: SVP did not attach within 30 s. Owner decision: keep (above) |
 | 3 | `--selftest=svp` with RVP's filters while SVP works | all PASS: attached after 1.3 s, 59.6 fps, three seeks in sync; with sharpen and deinterlacing on the chain was `@rvpsharpen:...,@svp:...`, SVP kept interpolating, and with them off SVP's entry was unchanged |
+| 4 | the final build (aa876c2, with the tempo filter after the normalizer): `--selftest=svp`, then `--selftest=speed` twice with SVP mode off | SVP: all PASS (attached after 1.8 s, 23.976 → 59.9-61.0 fps, three seeks in sync with `avsync` 0.0000 s, still interpolating at 59.5, RVP's filter before `@svp`, SVP's entry unchanged). Speed: 0 frames dropped in 1.5 s of steady playback and 0 after the return from 1.1x to 1x, both runs |
 
-**SVP's acceptance (section 7): passed.** A 24 fps file reaches SVP's
-target (59.94 on this 60 Hz display; 59.5-59.8 measured), and audio and
-video stay in sync after seeks.
+**SVP's acceptance (section 7): passed**, with the final build too. A 24
+fps file reaches SVP's target (59.94 on this 60 Hz display; 59.5-61.0
+measured), and audio and video stay in sync after seeks.
 
 Run 3 also showed what forced deinterlacing does to progressive video:
 mpv deinterlaces to the field rate, so SVP received 47.95 fps and
