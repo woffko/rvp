@@ -139,6 +139,9 @@ const MEDIA_EXTENSIONS: &[&str] = &[
 ];
 
 /// The application core.
+// Independent flags of the playback state (the end handled, the next entry
+// to play, filters waiting near the end, the first start), not a mode.
+#[allow(clippy::struct_excessive_bools)]
 pub struct App {
     pub settings: Settings,
     pub bindings: Bindings,
@@ -148,6 +151,10 @@ pub struct App {
     tracking: Tracking,
     /// The end of the file that plays was handled (moved on or stayed).
     end_handled: bool,
+    /// RVP's audio filters changed in the last half second of a file or at
+    /// its end and wait for the next file or for playback to leave the end
+    /// (`App::defer_chain_change`).
+    chain_pending: bool,
     /// The entry being loaded is to play: mpv may still carry the pause
     /// keep-open set at the end of the one before (seen on the Windows VM),
     /// so it is unpaused again once loaded.
@@ -203,6 +210,7 @@ impl App {
             tracking: Tracking::On,
             end_handled: false,
             play_on_load: false,
+            chain_pending: false,
             settings_path: None,
             writer: storage::Writer::new()?,
             first_start,
@@ -863,42 +871,76 @@ impl App {
             .unwrap_or_else(|| name.to_owned())
     }
 
-    /// Applies the normalizer settings to mpv's audio filters.
+    /// Applies the normalizer settings to mpv's audio filters: the
+    /// normalizer, then the tempo filter that keeps speed changes from
+    /// putting audio and video out of step (`crate::normalizer`).
     pub fn apply_normalizer(&self, engine: &Engine) {
-        let entry = self
-            .settings
-            .normalizer
-            .enabled
-            .then(|| self.settings.normalizer.chain_entry());
+        let enabled = self.settings.normalizer.enabled;
+        let entry = enabled.then(|| self.settings.normalizer.chain_entry());
         if let Err(error) = engine.set_audio_filter(crate::normalizer::LABEL, entry.as_deref()) {
             eprintln!("rvp: cannot set the normalizer: {error}");
+        }
+        // Re-added after the normalizer, so it stays last.
+        let tempo = enabled.then_some(crate::normalizer::TEMPO_ENTRY);
+        if let Err(error) = engine.set_audio_filter(crate::normalizer::TEMPO_LABEL, tempo) {
+            eprintln!("rvp: cannot set the tempo filter: {error}");
+        }
+    }
+
+    /// True in the last half second of the loaded file or at its end.
+    fn near_end(&self) -> bool {
+        if !self.model.media_loaded() {
+            return false;
+        }
+        if self.model.flag(PropertyId::EofReached) == Some(true) {
+            return true;
+        }
+        let time = self.model.double(PropertyId::TimePos).unwrap_or(0.0);
+        self.model
+            .double(PropertyId::Duration)
+            .is_some_and(|duration| duration - time < 0.5)
+    }
+
+    /// Whether a change of RVP's audio filters waits: a chain change or a
+    /// seek in the last half second of a file can leave mpv's
+    /// `eof-reached` false for good (seen on the Windows VM), and the album
+    /// would not move on. The filters are applied when the next file starts
+    /// or playback leaves the end.
+    pub(crate) fn defer_chain_change(&mut self) -> bool {
+        if self.near_end() {
+            self.chain_pending = true;
+        }
+        self.chain_pending
+    }
+
+    /// Applies the audio filters a change left waiting; `resync` plays on
+    /// from the current position (not needed when a file starts).
+    fn apply_pending_chain(&mut self, engine: &Engine, resync: bool) {
+        if !std::mem::take(&mut self.chain_pending) {
+            return;
+        }
+        self.apply_normalizer(engine);
+        self.apply_equalizer(engine);
+        if resync {
+            self.resync_audio(engine);
         }
     }
 
     /// Plays on from the current position: the audio chain changed and
     /// the audio mpv had decoded ahead for the old one (the normalizer looks
-    /// ten seconds ahead) would put audio and video out of step. Not in the
-    /// last half second: there nothing is left to resync, and a seek at the
-    /// end hides the end from mpv's `eof-reached`, so the album would not
-    /// move on.
+    /// ten seconds ahead) would put audio and video out of step. Never near
+    /// the end (`App::defer_chain_change`).
     pub(crate) fn resync_audio(&self, engine: &Engine) {
-        if !self.model.media_loaded() || self.model.flag(PropertyId::EofReached) == Some(true) {
-            return;
+        if self.model.media_loaded() && !self.near_end() {
+            drop(engine.seek(Seek::Relative(0.0)));
         }
-        let time = self.model.double(PropertyId::TimePos).unwrap_or(0.0);
-        if self
-            .model
-            .double(PropertyId::Duration)
-            .is_some_and(|duration| duration - time < 0.5)
-        {
-            return;
-        }
-        drop(engine.seek(Seek::Relative(0.0)));
     }
 
     fn normalizer_changed(&mut self, engine: &Engine) -> UiRequest {
-        self.apply_normalizer(engine);
-        self.resync_audio(engine);
+        if !self.defer_chain_change() {
+            self.apply_normalizer(engine);
+            self.resync_audio(engine);
+        }
         self.save_settings();
         let normalizer = self.settings.normalizer;
         let on_off = |on: bool| if on { "On" } else { "Off" };
@@ -1066,6 +1108,7 @@ impl App {
         if std::mem::take(&mut self.play_on_load) {
             drop(engine.set_pause(false));
         }
+        self.apply_pending_chain(engine, false);
         self.apply_ab(engine);
         self.svp
             .file_started(crate::svp::svp_mode(&self.settings), now);
@@ -1094,6 +1137,9 @@ impl App {
         if !at_end {
             // Playback left the end (a seek back): the next end counts.
             self.end_handled = false;
+        }
+        if self.chain_pending && !self.near_end() {
+            self.apply_pending_chain(engine, true);
         }
         if self.tracking == Tracking::On
             && let (Some(path), Some(time)) = (self.model.loaded_path(), time)

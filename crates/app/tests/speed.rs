@@ -1,13 +1,11 @@
 //! Speed changes with the normalizer on (goal H, carry-over from the
-//! Ubuntu boot run). The normalizer holds about ten seconds of audio, and
-//! played at a new speed it put audio and video out of step: after the
-//! speed went back to 1x, mpv's A/V offset (`avsync`) stayed above 0.6 s,
-//! which a real video output corrects by dropping frames (14 on the Ubuntu
-//! boot). RVP now plays on from the current position when the speed
-//! changes, so the offset stays at the usual few hundredths of a second.
-//! (mpv may still log its one-time desync warning at the instant of the
-//! change, before the seek runs; the offset is what matters.) Headless
-//! libmpv, no window, no sound.
+//! Ubuntu boot run). With only the normalizer in the chain, the return to
+//! 1x left mpv's A/V offset (`avsync`) above 0.6 s at some moments of a
+//! file (one second in, reliably), which a real video output corrects by
+//! dropping frames (14 on the Ubuntu boot). RVP now keeps a tempo filter of
+//! its own after the normalizer (`rvp_app::normalizer::TEMPO_ENTRY`), so
+//! the offset stays at a few hundredths of a second without a seek.
+//! Headless libmpv, no window, no sound.
 
 use std::time::{Duration, Instant};
 
@@ -53,7 +51,7 @@ fn speed_changes_keep_audio_and_video_together_with_the_normalizer() {
         assert!(Instant::now() < deadline, "the fixture plays");
         play(&mut app, &engine, 20);
     }
-    // Without the resync the second change (back to 1x) reached 0.61 s.
+    // With the normalizer alone the return to 1x reached 0.60-0.61 s here.
     for change in [Speed::Faster, Speed::Default, Speed::Slower, Speed::Default] {
         app.dispatch(&engine, Action::Speed(change));
         let largest = play(&mut app, &engine, 1500);
@@ -64,5 +62,9 @@ fn speed_changes_keep_audio_and_video_together_with_the_normalizer() {
     }
     let speed = app.model.double(PropertyId::Speed).unwrap_or_default();
     assert!((speed - 1.0).abs() < 1e-6, "speed {speed}");
+    // No seek: the clock ran on through the four changes (6 s of wall
+    // time, 0.1x faster and slower for 1.5 s each).
+    let time = app.model.double(PropertyId::TimePos).unwrap_or_default();
+    assert!(time > 6.5, "played on without seeks: {time}");
     let _ = std::fs::remove_dir_all(&dir);
 }

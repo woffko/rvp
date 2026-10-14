@@ -332,14 +332,8 @@ impl App {
             Speed::Default => self.session.last_speed,
         };
         let next = ((next * 10.0).round() / 10.0).clamp(0.1, 16.0);
-        // The normalizer holds about ten seconds of audio; played at the new
-        // speed, it put audio and video out of step (14 dropped frames on
-        // the Ubuntu boot when the speed went back to 1x). A seek to the
-        // current position, queued before the speed changes, empties the
-        // chain first.
-        if self.settings.normalizer.enabled && (next - current).abs() > 1e-6 {
-            self.resync_audio(engine);
-        }
+        // With the normalizer on, the tempo filter after it takes the speed
+        // (`crate::normalizer`): no seek is needed.
         engine.set_double("speed", next).ok()?;
         Some(UiRequest::Osd(format!("Speed: {next:.1}x")))
     }

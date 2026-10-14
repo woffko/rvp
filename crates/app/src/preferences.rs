@@ -442,7 +442,7 @@ impl App {
         if (old.subtitle_scale - new.subtitle_scale).abs() > f64::EPSILON {
             set("sub-scale", &format!("{:.2}", new.subtitle_scale));
         }
-        if old.normalizer != new.normalizer {
+        if old.normalizer != new.normalizer && !self.defer_chain_change() {
             self.apply_normalizer(engine);
             // As a toggle does: play on from here with the new chain.
             self.resync_audio(engine);

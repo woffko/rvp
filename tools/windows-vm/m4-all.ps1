@@ -18,7 +18,7 @@ $lines = & "$PSScriptRoot\run.ps1" -Extra (@('--selftest') + $common + @($long, 
     Select-String -NotMatch 'DPI|DpiAware|^grabbed=|^qt\.' | ForEach-Object { $_.Line }
 $lines | ForEach-Object { Write-Host $_ }
 $names = 'context_menu_keys', 'context_menu_marks', 'playlist_menu_keys', 'context_menu_builds',
-    'menu_command_runs', 'speed_back_in_sync', 'f5_opens_settings', 'settings_pages_load', 'keys_page_rows',
+    'menu_command_runs', 'f5_opens_settings', 'settings_pages_load', 'keys_page_rows',
     'setting_applies_at_once', 'settings_window_closes'
 $missing = @($names | Where-Object { -not ($lines -match "^check $_=PASS") })
 Write-Host "m4_missing=$($missing.Count) $($missing -join ',')"

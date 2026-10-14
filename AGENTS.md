@@ -62,8 +62,8 @@ each goal writes `docs/goals/goal-<letter>-status.md`.
 
 ## Shell notes
 
-- `rvp --selftest` (also `=playback`, `=resume`, `=upright`, `=svp` and
-  `=vpy`, see `shell/qml/Main.qml`) is the functional check for the VMs,
+- `rvp --selftest` (also `=playback`, `=resume`, `=upright`, `=svp`,
+  `=vpy` and `=speed`, see `shell/qml/Main.qml`) is the functional check for the VMs,
   the kit and the host. It drives RVP through its own input handlers,
   never through the window system, and prints `check`, `metric` and
   `status` lines.
@@ -90,10 +90,12 @@ each goal writes `docs/goals/goal-<letter>-status.md`.
   `m4-all.ps1` and `m6-all.ps1` (copy them and `run.ps1` to `C:\rvp-test`
   with the bundle and `testdata/media/fixture-marker.*`).
 - Video filters: RVP adds and removes only its own, by label (`@rvp*`,
-  `vf pre`), and never touches SVP's `@svp` (goal H's rule 4). Seeks that
-  resync audio after a chain change go through `App::resync_audio`: a seek
-  at the very end of a file leaves mpv's `eof-reached` false and the album
-  stops.
+  `vf pre`), and never touches SVP's `@svp` (goal H's rule 4).
+- Audio filters: the equalizer first, the normalizer, then `@rvptempo`
+  (`scaletempo2`, which keeps speed changes from putting audio and video
+  out of step). Changes go through `App::defer_chain_change` and
+  `App::resync_audio`: a chain change or seek at the very end of a file
+  leaves mpv's `eof-reached` false and the album stops.
 - The VapourSynth runtime is chosen before any thread starts
   (`point_at_vapoursynth` sets `VSSCRIPT_PATH` through `rvp_set_env`); do
   not set environment variables later or from Rust (`set_var` is unsafe).

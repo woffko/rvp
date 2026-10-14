@@ -611,6 +611,16 @@ Window {
     //                         motioninterpolation.vpy with mvtools), in its
     //                         slot and checks that the rate rose; SKIPPED
     //                         without a VapourSynth runtime
+    //   --selftest=speed      goal H's carry-over: 1.5 s of steady playback
+    //                         from --speed-at seconds (default 1) count the
+    //                         frames the machine drops anyway; then the
+    //                         speed goes to 1.1x and 1.5 s later back to 1x.
+    //                         The frames dropped in the 1.5 s after that and
+    //                         mpv's A/V offset then are printed (baseline_
+    //                         drops=, speed_back_drops=, speed_back_avsync=)
+    //                         and checked: at most 2 frames more than the
+    //                         baseline, offset under 0.1 s (SKIPPED when
+    //                         the baseline is above 2: software rendering)
     //   --selftest=resume     expects the last file reopened paused within
     //                         --expect-tolerance (default 2.5) seconds of
     //                         --expect-time=SECONDS; with --expect-entry=I
@@ -711,6 +721,8 @@ Window {
             return svpTick()
         if (selftest.mode === "vpy")
             return vpyTick()
+        if (selftest.mode === "speed")
+            return speedTick()
         functionalTick()
     }
 
@@ -774,6 +786,66 @@ Window {
             else
                 t.check("picture_upright", r.upright < 30 && r.upright < r.flipped
                             && r.upright < r.mirrored && r.upright < r.rotated, detail)
+            t.finish()
+            break
+        }
+        }
+    }
+
+    function speedTick() {
+        const t = selftest
+        const s = t.status()
+        const at = Number(player.option("speed-at") || "1")
+        // Counts increments only: a seek restarts mpv's counter.
+        const countDrops = () => {
+            const count = s.frame_drop_count === null ? 0 : s.frame_drop_count
+            t.dropTotal += count >= t.dropLast ? count - t.dropLast : count
+            t.dropLast = count
+        }
+        switch (t.step) {
+        case 0:
+            t.next()
+            break
+        case 1:
+            if (t.waitFor("file_playing", () => s.loaded && s.video_width > 0 && s.time >= at, 30000,
+                          () => "time " + s.time)) {
+                t.dropTotal = 0
+                t.dropLast = s.frame_drop_count === null ? 0 : s.frame_drop_count
+            }
+            break
+        case 2:
+            // The baseline: 1.5 s of steady playback.
+            countDrops()
+            if (Date.now() - t.stepStarted >= 1500) {
+                t.before = { baseline: t.dropTotal }
+                Tools.log("speed_up_at=" + s.time)
+                player.run_action("speed-up")
+                t.next()
+            }
+            break
+        case 3:
+            if (Date.now() - t.stepStarted >= 1500) {
+                player.run_action("speed-default")
+                t.dropTotal = 0
+                t.dropLast = s.frame_drop_count === null ? 0 : s.frame_drop_count
+                t.next()
+            }
+            break
+        case 4: {
+            countDrops()
+            if (Date.now() - t.stepStarted < 1500)
+                break
+            const d = JSON.parse(player.diagnostics())
+            const baseline = t.before.baseline
+            Tools.log("baseline_drops=" + baseline + " speed_back_drops=" + t.dropTotal
+                      + " speed_back_avsync=" + d.avsync + " time=" + s.time + " normalizer=" + s.normalizer)
+            if (baseline > 2)
+                Tools.log("check speed_back_steady=SKIPPED this machine drops " + baseline
+                          + " frames in 1.5 s of steady playback (after the change " + t.dropTotal + ")")
+            else
+                t.check("speed_back_steady", t.dropTotal <= baseline + 2 && d.avsync !== null
+                            && Math.abs(d.avsync) < 0.1,
+                        "dropped " + t.dropTotal + " (baseline " + baseline + "), avsync " + d.avsync)
             t.finish()
             break
         }
@@ -1263,16 +1335,8 @@ Window {
                       () => "speed " + s.speed)
             break
         case 205:
-            if (root.settled("speed_back")) {
-                // Goal H's carry-over: with the normalizer on, the return to
-                // 1x left audio and video 0.6 s apart, which the Ubuntu boot
-                // paid for with 14 dropped frames. One read of mpv's A/V
-                // offset, 1.5 s after the change.
-                const d = JSON.parse(player.diagnostics())
-                t.check("speed_back_in_sync", d.avsync !== null && Math.abs(d.avsync) < 0.1,
-                        "avsync " + d.avsync + " normalizer " + s.normalizer)
+            if (root.settled("speed_back"))
                 player.key(Qt.Key_F5, 0)
-            }
             break
         case 206:
             // F5 opens the settings window.

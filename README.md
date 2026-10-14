@@ -59,9 +59,9 @@ defaults to PotPlayer's installed BlackSpace; on Linux set `skin` or pass
 `--skin`.
 
 `rvp --selftest` runs a scripted check of the window and prints the
-usability measurements; `--selftest=playback`, `resume`, `upright`, `svp`
-and `vpy` are the kit's playback, restart, orientation, SVP and script
-slot checks (see `shell/qml/Main.qml`).
+usability measurements; `--selftest=playback`, `resume`, `upright`, `svp`,
+`vpy` and `speed` are the kit's playback, restart, orientation, SVP,
+script slot and speed-change checks (see `shell/qml/Main.qml`).
 
 ## Skins
 

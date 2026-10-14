@@ -1,12 +1,13 @@
 //! The normalizer chain on synthetic audio (S5, docs/PLAN.md goal F): a
 //! quiet tone followed by a loud one goes through mpv with RVP's `af` entry
 //! and `ao=pcm`; Boost raises the quiet part, without Boost the normalizer
-//! only lowers, and nothing clips.
+//! only lowers, nothing clips, and the tempo filter that follows the
+//! normalizer in the player leaves the levels as they were.
 
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
-use rvp_app::normalizer::{LABEL, Normalizer};
+use rvp_app::normalizer::{LABEL, Normalizer, TEMPO_ENTRY, TEMPO_LABEL};
 use rvp_engine::{EndReason, Engine, EngineEvent, EngineOptions, PlayerModel, PropertyId};
 
 const RATE: u32 = 48_000;
@@ -97,8 +98,12 @@ fn rms_db(samples: &[f64]) -> f64 {
 
 /// Plays `input` through the normalizer into a WAV and returns the RMS
 /// level (dBFS) of the settled middle of each tone and the peak.
-fn render(dir: &Path, input: &Path, normalizer: &Normalizer) -> (f64, f64, f64) {
-    let output = dir.join(format!("out-{}.wav", u8::from(normalizer.boost)));
+fn render(dir: &Path, input: &Path, normalizer: &Normalizer, tempo: bool) -> (f64, f64, f64) {
+    let output = dir.join(format!(
+        "out-{}-{}.wav",
+        u8::from(normalizer.boost),
+        u8::from(tempo)
+    ));
     let mut options = EngineOptions::headless();
     options.extra = vec![
         ("ao".to_owned(), "pcm".to_owned()),
@@ -111,6 +116,11 @@ fn render(dir: &Path, input: &Path, normalizer: &Normalizer) -> (f64, f64, f64) 
     engine
         .set_audio_filter(LABEL, Some(&normalizer.chain_entry()))
         .expect("af add");
+    if tempo {
+        engine
+            .set_audio_filter(TEMPO_LABEL, Some(TEMPO_ENTRY))
+            .expect("af add tempo");
+    }
     engine
         .load(&input.display().to_string(), false)
         .expect("loadfile");
@@ -164,7 +174,7 @@ fn boost_raises_quiet_passages_and_nothing_clips() {
     // A sine's RMS is 3 dB below its peak.
     let (quiet_in, loud_in) = (-33.0, -9.0);
 
-    let boost = render(&dir, &input, &Normalizer::default());
+    let boost = render(&dir, &input, &Normalizer::default(), false);
     let without = render(
         &dir,
         &input,
@@ -172,7 +182,20 @@ fn boost_raises_quiet_passages_and_nothing_clips() {
             boost: false,
             ..Normalizer::default()
         },
+        false,
     );
+    // The tempo filter RVP keeps after the normalizer changes nothing at
+    // 1x (goal H).
+    let with_tempo = render(&dir, &input, &Normalizer::default(), true);
+    for (part, a, b) in [
+        ("quiet", boost.0, with_tempo.0),
+        ("loud", boost.1, with_tempo.1),
+    ] {
+        assert!(
+            (a - b).abs() < 0.2,
+            "{part} part with the tempo filter: {a} vs {b} dB"
+        );
+    }
     eprintln!("boost: {boost:?}, without boost: {without:?}");
     // Boost: the quiet tone gets the maximum gain, 5x (+14 dB); the loud
     // one (peak -6 dBFS) is raised towards a full-scale peak (up to +6 dB).

@@ -9,7 +9,9 @@
 //! `all`), so the chain is not rebuilt and the normalizer keeps its ten
 //! seconds of look-ahead; switching the equalizer on or off rebuilds the
 //! chain and plays on from the current position, as a normalizer toggle
-//! does. Choosing a preset or moving a band switches it on.
+//! does (in the last half second of a file both wait for the next file,
+//! `App::defer_chain_change`). Choosing a preset or moving a band switches
+//! it on.
 
 use std::fmt::Write as _;
 
@@ -170,7 +172,10 @@ impl App {
         ))
     }
 
-    pub(crate) fn equalizer_chain_changed(&self, engine: &Engine) {
+    pub(crate) fn equalizer_chain_changed(&mut self, engine: &Engine) {
+        if self.defer_chain_change() {
+            return;
+        }
         self.apply_equalizer(engine);
         // Rebuilding the chain drops what the normalizer had decoded ahead.
         if self.settings.normalizer.enabled {
@@ -214,11 +219,12 @@ impl App {
     }
 
     /// Sends the band gains to the running filter.
-    pub fn update_equalizer_bands(&self, engine: &Engine) {
+    pub fn update_equalizer_bands(&mut self, engine: &Engine) {
         let gains = self.settings.equalizer.gain_entry();
         if engine
             .command("af-command", &[LABEL, "gain_entry", &gains, INSTANCE])
             .is_err()
+            && !self.defer_chain_change()
         {
             // Not running yet (no audio): rebuild it with the new gains.
             self.apply_equalizer(engine);

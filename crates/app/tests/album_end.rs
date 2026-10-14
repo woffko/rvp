@@ -1,8 +1,8 @@
-//! The album moves on at the end of a file even when the audio chain
-//! changes right then (goal H, found by the Windows VM's self-test): a
-//! resync seek that reached mpv after the end but before RVP saw it left
-//! mpv's `eof-reached` false for good, and playback stopped on the last
-//! frame. Headless libmpv, no window, no sound.
+//! The album moves on at the end of a file even when the audio chain or
+//! the speed changes right then (goal H, found by the Windows VM's
+//! self-test): a resync seek that reached mpv after the end but before RVP
+//! saw it left mpv's `eof-reached` false for good, and playback stopped on
+//! the last frame. Headless libmpv, no window, no sound.
 
 use std::time::{Duration, Instant};
 
@@ -34,8 +34,10 @@ fn playing_long(app: &App) -> bool {
 
 /// Plays the short fixture before the long one; once it is past
 /// `seconds`, mpv plays on unwatched for a moment (it reaches the end),
-/// then `action` runs before RVP sees what happened.
-fn change_at_the_end(name: &str, seconds: f64, action: Action) {
+/// then `action` runs before RVP sees what happened. `chain` checks mpv's
+/// audio filters once the next file plays: a change made at the end waits
+/// for it.
+fn change_at_the_end(name: &str, seconds: f64, action: Action, chain: impl Fn(&str) -> bool) {
     let dir = std::env::temp_dir().join(format!("rvp-end-{name}-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
     let engine = Engine::new(&EngineOptions::headless()).expect("engine");
@@ -66,20 +68,29 @@ fn change_at_the_end(name: &str, seconds: f64, action: Action) {
         );
         pump(&mut app, &engine, 20);
     }
+    pump(&mut app, &engine, 300);
+    let filters = engine.get_text("af").unwrap_or_default();
+    assert!(chain(&filters), "{name}: audio filters {filters:?}");
     let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[test]
 fn the_album_moves_on_when_the_normalizer_toggles_at_the_end() {
-    change_at_the_end("normalizer", 2.7, Action::ToggleNormalizer);
+    change_at_the_end("normalizer", 2.7, Action::ToggleNormalizer, |af| {
+        !af.contains("@rvpnorm:") && !af.contains("@rvptempo:")
+    });
 }
 
 #[test]
 fn the_album_moves_on_when_the_equalizer_toggles_at_the_end() {
-    change_at_the_end("equalizer", 2.7, Action::ToggleEqualizer);
+    change_at_the_end("equalizer", 2.7, Action::ToggleEqualizer, |af| {
+        af.starts_with("@rvpeq:") && af.contains("@rvpnorm:")
+    });
 }
 
 #[test]
 fn the_album_moves_on_when_the_speed_changes_at_the_end() {
-    change_at_the_end("speed", 2.7, Action::Speed(Speed::Faster));
+    change_at_the_end("speed", 2.7, Action::Speed(Speed::Faster), |af| {
+        af.contains("@rvpnorm:")
+    });
 }

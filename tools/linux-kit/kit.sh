@@ -41,7 +41,9 @@
 #   m6      milestone M6: the functional self-test's control panel (F7),
 #           colour, equalizer, shader and SVP diagnostic checks; the
 #           orientation check (--selftest=upright on a clip with a corner
-#           mark); a VapourSynth script slot in RVP with SVP's VapourSynth
+#           mark); the speed carry-over (--selftest=speed: frames dropped
+#           after 1.1x -> 1x at a set moment); a VapourSynth script slot in
+#           RVP with SVP's VapourSynth
 #           (RVP's own get_core script, and RVP_VPY with the kit's mvtools
 #           when set); and the headless video tests (cargo)
 #   m6svp   SVP's acceptance (section 7, start SVP first): RVP in SVP mode
@@ -808,7 +810,7 @@ step_m4() {
         "--mpv-options=hwdec=$(m2_hwdec)" "$(test_video)" "$(s1_video)" >> "$log" 2>&1
     functional=$?
     for name in context_menu_keys context_menu_marks playlist_menu_keys context_menu_builds \
-        menu_command_runs speed_back_in_sync f5_opens_settings settings_pages_load keys_page_rows \
+        menu_command_runs f5_opens_settings settings_pages_load keys_page_rows \
         setting_applies_at_once settings_window_closes; do
         grep -q "^check $name=PASS" "$log" || missing=$((missing + 1))
     done
@@ -840,7 +842,7 @@ step_m4() {
 }
 
 step_m6() {
-    local log=$LOG_DIR/m6.log out=$LOG_DIR/m6-grabs functional upright vpy tests vsscript
+    local log=$LOG_DIR/m6.log out=$LOG_DIR/m6-grabs functional upright speed vpy tests vsscript
     local missing=0 name summary
     m2_ready m6 || return 0
     m2_env
@@ -865,6 +867,15 @@ step_m6() {
     "$(rvp_bin)" --selftest=upright "--out=$out" "--skin=${RVP_SKIN:-}" \
         "--mpv-options=hwdec=$(m2_hwdec)" "$REPO/testdata/media/fixture-marker.mkv" >> "$log" 2>&1
     upright=$?
+    # Goal H's carry-over: 1.1x and back to 1x one second into the
+    # film-rate clip (a moment at which the normalizer used to leave audio
+    # and video 0.6 s apart); the frames dropped afterwards.
+    echo "== speed" >> "$log"
+    rm -rf "$RVP_STATE_DIR"
+    kit_settings
+    "$(rvp_bin)" --selftest=speed --speed-at=1 "--out=$out" "--skin=${RVP_SKIN:-}" \
+        "--mpv-options=hwdec=$(m2_hwdec)" "$(s1_video)" >> "$log" 2>&1
+    speed=$?
     # A script slot in RVP with SVP's VapourSynth (SKIPPED without it):
     # RVP's own PotPlayer-style script, then PotPlayer's when RVP_VPY names
     # it (with the kit's mvtools).
@@ -896,9 +907,9 @@ step_m6() {
             cargo test --release -p rvp-app --test video --test equalizer -- --nocapture
     ) >> "$log" 2>&1
     tests=$?
-    summary="functional=$functional m6_missing=$missing upright=$upright vpy=$vpy tests=$tests vsscript=${vsscript:-none} $(grep -E '^check (picture_upright|vpy_slot_runs)' "$log" | tr '\n' ' ')"
-    if [ "$functional" -eq 0 ] && [ "$missing" -eq 0 ] && [ "$upright" -eq 0 ] && [ "$vpy" -eq 0 ] &&
-        [ "$tests" -eq 0 ]; then
+    summary="functional=$functional m6_missing=$missing upright=$upright speed=$speed vpy=$vpy tests=$tests vsscript=${vsscript:-none} $(grep -E '^(check (picture_upright|vpy_slot_runs)|speed_back_drops)' "$log" | tr '\n' ' ')"
+    if [ "$functional" -eq 0 ] && [ "$missing" -eq 0 ] && [ "$upright" -eq 0 ] && [ "$speed" -eq 0 ] &&
+        [ "$vpy" -eq 0 ] && [ "$tests" -eq 0 ]; then
         record m6 PASS "$summary"
     else
         record m6 FAIL "$summary $(grep -E '=FAIL|FAILED|panicked' "$log" | tr '\n' ' ')"

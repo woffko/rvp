@@ -18,16 +18,27 @@
 //! ten seconds ahead: mpv decodes that much audio before playing on after a
 //! seek (about 50 ms more per seek on a local file), and changing the chain
 //! during playback dropped that audio, so a toggle seeks to the current
-//! position (`App`). A speed change does the same: the audio held in the
-//! filter, played at the new speed, put audio and video out of step (mpv:
-//! "Audio/Video desynchronisation detected"; 14 dropped frames on the
-//! Ubuntu boot).
+//! position (`App`).
+//!
+//! Speed changes: with only the normalizer in the chain, mpv applies a
+//! speed other than 1x with a tempo filter of its own, and at some moments
+//! the return to 1x left audio and video about 0.6 s apart, which a real
+//! video output pays for with dropped frames (14 on the Ubuntu boot, 13-16
+//! on the Ubuntu VM with `ao=null`; goal H). With a `scaletempo2` of RVP's
+//! own after the normalizer ([`TEMPO_ENTRY`]), mpv uses that filter for the
+//! speed: the offset stays under 0.02 s and no frames drop, without a
+//! seek.
 
 use serde::{Deserialize, Serialize};
 
 /// The label of RVP's filter in mpv's `af` chain; other filters (SVP's
 /// `@svp` is video, but any user filter) are left alone.
 pub const LABEL: &str = "rvpnorm";
+/// The label of the tempo filter that follows the normalizer.
+pub const TEMPO_LABEL: &str = "rvptempo";
+/// mpv's pitch-correcting tempo filter, kept in the chain after the
+/// normalizer while it is on, so that speed changes retune it.
+pub const TEMPO_ENTRY: &str = "@rvptempo:scaletempo2";
 
 /// Normalizer settings, as PotPlayer's Preferences page names them.
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
