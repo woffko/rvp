@@ -8,7 +8,11 @@
 //!   window, `/new`, or another mpv), RVP uses the name SVP's
 //!   `mpvSockets.lua` gives a process, `<temp>/mpvSockets/<pid>`; SVP's own
 //!   `mpv.conf` names that script as the way to run several mpv windows at
-//!   once.
+//!   once. SVP 4 for Windows connects only to the pipe its settings name
+//!   (`mpvpipe`; goal H's host runs: neither `<temp>/mpvSockets/<pid>` nor
+//!   `mpvSockets/<pid>` was found), so there it processes the window that
+//!   holds the pipe, and the other window says so (owner decision
+//!   2026-10-14).
 //! * SVP needs frames in memory: in SVP mode decoding uses the copy-back
 //!   variant of the chosen hardware decoder ([`copy_back`]), and mpv's
 //!   `hr-seek-framedrop` stays off (the engine sets it).
@@ -229,6 +233,12 @@ pub enum Problem {
     ManagerNotRunning,
     /// RVP listens on an endpoint SVP does not look for.
     EndpointMismatch(String),
+    /// Another player holds the configured endpoint (`configured`), so this
+    /// window listens on `endpoint`.
+    EndpointTaken {
+        endpoint: String,
+        configured: String,
+    },
     /// mpv could not open the endpoint.
     NoEndpoint,
     /// No VapourSynth runtime for SVP's filter.
@@ -249,6 +259,13 @@ impl Problem {
             Problem::EndpointMismatch(endpoint) => format!(
                 "SVP did not attach: RVP listens on {endpoint}, SVP looks for {} (settings, SVP page)",
                 rvp_engine::default_ipc_server()
+            ),
+            Problem::EndpointTaken {
+                endpoint,
+                configured,
+            } => format!(
+                "SVP did not attach: another player holds {configured}, so this window listens on \
+                 {endpoint}; SVP processes the window on {configured}"
             ),
             Problem::NoEndpoint => {
                 "SVP did not attach: RVP could not open its IPC endpoint".to_owned()
@@ -297,6 +314,8 @@ impl Status {
 pub struct Facts {
     /// The endpoint RVP opened (`None`: none).
     pub endpoint: Option<String>,
+    /// The endpoint the settings name.
+    pub configured: String,
     pub vapoursynth: bool,
     pub filter_in_chain: bool,
     /// The filtered frame rate is above the source's.
@@ -314,6 +333,12 @@ pub fn diagnose(facts: &Facts, manager: Option<bool>) -> Option<Problem> {
     };
     if manager == Some(false) {
         return Some(Problem::ManagerNotRunning);
+    }
+    if !facts.configured.is_empty() && *endpoint != facts.configured {
+        return Some(Problem::EndpointTaken {
+            endpoint: endpoint.clone(),
+            configured: facts.configured.clone(),
+        });
     }
     if !is_known_endpoint(endpoint) {
         return Some(Problem::EndpointMismatch(endpoint.clone()));
@@ -410,6 +435,7 @@ impl App {
         let filtered = self.model.double(PropertyId::EstimatedVfFps).unwrap_or(0.0);
         let facts = Facts {
             endpoint: watch.endpoint.clone(),
+            configured: self.settings.ipc_server.trim().to_owned(),
             vapoursynth: watch.vapoursynth.is_some(),
             filter_in_chain,
             interpolating: source > 0.0 && filtered > source * 1.2,
@@ -505,6 +531,7 @@ mod tests {
     fn diagnoses_in_order_of_likelihood() {
         let facts = Facts {
             endpoint: Some(rvp_engine::default_ipc_server().to_owned()),
+            configured: rvp_engine::default_ipc_server().to_owned(),
             vapoursynth: true,
             filter_in_chain: false,
             interpolating: false,
@@ -516,11 +543,22 @@ mod tests {
         assert_eq!(diagnose(&facts, Some(true)), Some(Problem::Unknown));
         let custom = Facts {
             endpoint: Some("/tmp/other".to_owned()),
+            configured: "/tmp/other".to_owned(),
             ..facts.clone()
         };
         assert_eq!(
             diagnose(&custom, Some(true)),
             Some(Problem::EndpointMismatch("/tmp/other".to_owned()))
+        );
+        // A second window: the default is taken, mpvSockets is used.
+        let second = Facts {
+            endpoint: Some("/tmp/mpvSockets/42".to_owned()),
+            ..facts.clone()
+        };
+        let taken = diagnose(&second, Some(true));
+        assert!(
+            matches!(&taken, Some(Problem::EndpointTaken { endpoint, .. }) if endpoint == "/tmp/mpvSockets/42"),
+            "{taken:?}"
         );
         let no_vs = Facts {
             vapoursynth: false,

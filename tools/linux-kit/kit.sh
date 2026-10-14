@@ -41,8 +41,9 @@
 #   m6      milestone M6: the functional self-test's control panel (F7),
 #           colour, equalizer, shader and SVP diagnostic checks; the
 #           orientation check (--selftest=upright on a clip with a corner
-#           mark); and the headless video tests, with SVP's VapourSynth for
-#           the script slot (cargo; MPV_LIB_DIR is the kit's libmpv)
+#           mark); a VapourSynth script slot in RVP with SVP's VapourSynth
+#           (RVP's own get_core script, and RVP_VPY with the kit's mvtools
+#           when set); and the headless video tests (cargo)
 #   m6svp   SVP's acceptance (section 7, start SVP first): RVP in SVP mode
 #           on the film-rate clip reaches SVP's frame rate and stays in sync
 #           after seeks; a second window (/new) on its own endpoint too
@@ -839,7 +840,7 @@ step_m4() {
 }
 
 step_m6() {
-    local log=$LOG_DIR/m6.log out=$LOG_DIR/m6-grabs functional upright tests vsscript
+    local log=$LOG_DIR/m6.log out=$LOG_DIR/m6-grabs functional upright vpy tests vsscript
     local missing=0 name summary
     m2_ready m6 || return 0
     m2_env
@@ -864,10 +865,28 @@ step_m6() {
     "$(rvp_bin)" --selftest=upright "--out=$out" "--skin=${RVP_SKIN:-}" \
         "--mpv-options=hwdec=$(m2_hwdec)" "$REPO/testdata/media/fixture-marker.mkv" >> "$log" 2>&1
     upright=$?
-    # The headless video tests; the script slot runs with SVP's VapourSynth
-    # when it is installed.
-    echo "== cargo test (video, equalizer)" >> "$log"
+    # A script slot in RVP with SVP's VapourSynth (SKIPPED without it):
+    # RVP's own PotPlayer-style script, then PotPlayer's when RVP_VPY names
+    # it (with the kit's mvtools).
     vsscript=$(find_vsscript)
+    echo "== vpy" >> "$log"
+    rm -rf "$RVP_STATE_DIR"
+    kit_settings
+    VSSCRIPT_PATH=${vsscript:-${VSSCRIPT_PATH:-}} PYTHONDONTWRITEBYTECODE=1 \
+        "$(rvp_bin)" --selftest=vpy "--out=$out" "--skin=${RVP_SKIN:-}" \
+        "--mpv-options=hwdec=$(m2_hwdec)" "$(s1_video)" >> "$log" 2>&1
+    vpy=$?
+    if [ -n "${RVP_VPY:-}" ] && [ -e "$RVP_VPY" ] && [ -s "$(mvtools_lib)" ]; then
+        echo "== vpy (PotPlayer's script)" >> "$log"
+        rm -rf "$RVP_STATE_DIR"
+        VSSCRIPT_PATH=${vsscript:-${VSSCRIPT_PATH:-}} PYTHONDONTWRITEBYTECODE=1 \
+            "$(rvp_bin)" --selftest=vpy "--vpy=$RVP_VPY" "--vpy-plugins=$(mvtools_lib)" \
+            "--out=$out" "--skin=${RVP_SKIN:-}" "--mpv-options=hwdec=$(m2_hwdec)" \
+            "$(s1_video)" >> "$log" 2>&1 || vpy=1
+    fi
+    # The headless video tests; the script slot test runs with SVP's
+    # VapourSynth when it is installed.
+    echo "== cargo test (video, equalizer)" >> "$log"
     (
         cd "$REPO" || exit 1
         export QMAKE MPV_LIB_DIR
@@ -877,8 +896,9 @@ step_m6() {
             cargo test --release -p rvp-app --test video --test equalizer -- --nocapture
     ) >> "$log" 2>&1
     tests=$?
-    summary="functional=$functional m6_missing=$missing upright=$upright tests=$tests vsscript=${vsscript:-none} $(grep -E '^check picture_upright' "$log" | head -1)"
-    if [ "$functional" -eq 0 ] && [ "$missing" -eq 0 ] && [ "$upright" -eq 0 ] && [ "$tests" -eq 0 ]; then
+    summary="functional=$functional m6_missing=$missing upright=$upright vpy=$vpy tests=$tests vsscript=${vsscript:-none} $(grep -E '^check (picture_upright|vpy_slot_runs)' "$log" | tr '\n' ' ')"
+    if [ "$functional" -eq 0 ] && [ "$missing" -eq 0 ] && [ "$upright" -eq 0 ] && [ "$vpy" -eq 0 ] &&
+        [ "$tests" -eq 0 ]; then
         record m6 PASS "$summary"
     else
         record m6 FAIL "$summary $(grep -E '=FAIL|FAILED|panicked' "$log" | tr '\n' ' ')"

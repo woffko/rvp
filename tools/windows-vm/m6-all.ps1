@@ -1,7 +1,8 @@
 # M6 checks on the Windows test VM (session 0 over SSH, software OpenGL):
 # the functional self-test with M6's checks (the control panel, a colour and
 # an equalizer change, a shader toggle, SVP's diagnostic), then the
-# orientation check, which is SKIPPED here: session-0 grabs show no video.
+# orientation check, which is SKIPPED here (session-0 grabs show no video),
+# and a VapourSynth script slot.
 #
 # Layout as m4-all.ps1, plus fixture-marker.mkv and fixture-marker.png in
 # the bundle. SVP mode is off ("ipc-server": "") as in the kit's runs.
@@ -30,3 +31,16 @@ Set-Content -Path C:\rvp-test\config\settings.json -Value '{ "ipc-server": "", "
 & "$PSScriptRoot\run.ps1" -Extra (@('--selftest=upright') + $common + @("$bundle\fixture-marker.mkv")) |
     Select-String -NotMatch $filter | Select-String -Pattern '^(check |failures=|exit=)' |
     ForEach-Object { Write-Host $_.Line }
+
+# A VapourSynth script slot with spike S2's runtime (VapourSynth R73 with
+# its Python, in C:\rvp-spikes\s2-bundle; SVP's installer puts its own on
+# PATH the same way).
+Write-Host '== VapourSynth slot'
+Remove-Item -Recurse -Force C:\rvp-test\state -ErrorAction SilentlyContinue
+Set-Content -Path C:\rvp-test\config\settings.json -Value '{ "ipc-server": "" }' -Encoding ascii
+$env:VSSCRIPT_PATH = 'C:\rvp-spikes\s2-bundle\VSScript.dll'
+$env:PATH = "C:\rvp-spikes\s2-bundle;$env:PATH"
+& "$PSScriptRoot\run.ps1" -Extra (@('--selftest=vpy') + $common + @($long)) |
+    Select-String -NotMatch $filter | Select-String -Pattern '^(check |vpy_|failures=|exit=)' |
+    ForEach-Object { Write-Host $_.Line }
+Remove-Item Env:VSSCRIPT_PATH

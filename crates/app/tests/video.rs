@@ -190,7 +190,8 @@ fn a_potplayer_style_script_runs_in_its_slot() {
     }
     let dir = scratch("vpy");
     // PotPlayer's scripts call get_core(), which VapourSynth R73 removed;
-    // this one doubles the frame rate so that the result shows.
+    // this one doubles the frame rate so that the result shows (mpv gives
+    // the rate as `container_fps`: `video_in` has none).
     let script = dir.join("double.vpy");
     std::fs::write(
         &script,
@@ -198,7 +199,8 @@ fn a_potplayer_style_script_runs_in_its_slot() {
          core = vs.get_core()\n\
          clip = video_in\n\
          clip = core.std.Interleave([clip, clip])\n\
-         clip = core.std.AssumeFPS(clip, fpsnum=clip.fps.numerator * 2, fpsden=clip.fps.denominator)\n\
+         rate = int(round(container_fps * 1000))\n\
+         clip = core.std.AssumeFPS(clip, fpsnum=rate * 2, fpsden=1000)\n\
          clip.set_output()\n",
     )
     .expect("write script");

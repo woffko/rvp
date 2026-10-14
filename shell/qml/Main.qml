@@ -595,10 +595,18 @@ Window {
     //                         not flipped or mirrored; SKIPPED when the grab
     //                         has no video (Windows session 0)
     //   --selftest=svp        SVP's acceptance (section 7): SVP attaches
-    //                         (@svp), the frame rate reaches at least
+    //                         (@svp) within --svp-wait seconds (default
+    //                         90), the frame rate reaches at least
     //                         --svp-factor (default 1.9) times the file's,
     //                         and after seeks audio and video stay
     //                         together (|avsync| under 0.1 s)
+    //   --selftest=vpy        a VapourSynth script slot (M6): RVP writes a
+    //                         PotPlayer-style script (vs.get_core()) that
+    //                         doubles the frame rate, or runs --vpy=SCRIPT
+    //                         with --vpy-plugins=DLL;DLL (PotPlayer's
+    //                         motioninterpolation.vpy with mvtools), in its
+    //                         slot and checks that the rate rose; SKIPPED
+    //                         without a VapourSynth runtime
     //   --selftest=resume     expects the last file reopened paused within
     //                         --expect-tolerance (default 2.5) seconds of
     //                         --expect-time=SECONDS; with --expect-entry=I
@@ -697,6 +705,8 @@ Window {
             return uprightTick()
         if (selftest.mode === "svp")
             return svpTick()
+        if (selftest.mode === "vpy")
+            return vpyTick()
         functionalTick()
     }
 
@@ -766,6 +776,63 @@ Window {
         }
     }
 
+    function vpyTick() {
+        const t = selftest
+        const s = t.status()
+        switch (t.step) {
+        case 0:
+            t.next()
+            break
+        case 1:
+            t.waitFor("file_playing", () => s.loaded && s.video_width > 0 && s.time > 0.5, 20000,
+                      () => "time " + s.time)
+            break
+        case 2: {
+            const runtime = JSON.parse(player.settings_view(false)).vapoursynth_runtime
+            if (!runtime) {
+                Tools.log("check vpy_slot_runs=SKIPPED no VapourSynth runtime")
+                t.finish()
+                break
+            }
+            const given = player.option("vpy")
+            const plugins = player.option("vpy-plugins").split(";").filter(p => p !== "")
+            const path = given !== "" ? given : Tools.write_file(t.outDir + "/selftest-double.vpy",
+                "import vapoursynth as vs\n"
+                + "core = vs.get_core()\n"
+                + "clip = video_in\n"
+                + "clip = core.std.Interleave([clip, clip])\n"
+                + "rate = int(round(container_fps * 1000))\n"
+                + "clip = core.std.AssumeFPS(clip, fpsnum=rate * 2, fpsden=1000)\n"
+                + "clip.set_output()\n")
+            const result = JSON.parse(player.set_setting("vapoursynth", JSON.stringify({
+                "enabled": true, "slots": [path], "script": path, "plugins": plugins,
+                "library": null, "buffered-frames": 4 })))
+            Tools.log("vpy_runtime=" + runtime + " script=" + path)
+            t.check("vpy_slot_set", !result.error, result.error || "")
+            t.next()
+            break
+        }
+        case 3:
+            t.waitFor("vpy_slot_runs", () => s.vf !== null && s.vf.indexOf("@rvpvs") >= 0
+                          && s.container_fps > 0 && s.estimated_vf_fps >= s.container_fps * 1.8, 20000,
+                      () => "vf " + s.vf + ", " + s.container_fps + " fps in, " + s.estimated_vf_fps + " fps out")
+            break
+        case 4: {
+            // Off again: the slot leaves the chain.
+            const result = JSON.parse(player.set_setting("vapoursynth.enabled", "false"))
+            t.check("vpy_slot_set_off", !result.error, result.error || "")
+            t.next()
+            break
+        }
+        case 5:
+            t.waitFor("vpy_slot_off", () => (s.vf || "").indexOf("@rvpvs") < 0, 3000, () => "vf " + s.vf)
+            break
+        case 6:
+            t.finish()
+            break
+        }
+    }
+
     function svpTick() {
         const t = selftest
         const s = t.status()
@@ -781,7 +848,8 @@ Window {
             break
         case 2:
             // SVP's first run of a profile may build its engine for a while.
-            t.waitFor("svp_attached", () => s.vf !== null && s.vf.indexOf("@svp") >= 0, 90000,
+            t.waitFor("svp_attached", () => s.vf !== null && s.vf.indexOf("@svp") >= 0,
+                      Number(player.option("svp-wait") || "90") * 1000,
                       () => "after " + Math.round((Date.now() - t.stepStarted) / 100) / 10 + " s, vf "
                           + s.vf + ", status " + s.svp_status)
             break
@@ -816,13 +884,15 @@ Window {
             t.next()
             break
         }
-        case 10: {
-            t.check("svp_still_interpolating", s.estimated_vf_fps >= s.container_fps * factor && s.playing,
-                    s.estimated_vf_fps + " fps, playing " + s.playing)
+        case 10:
+            // mpv's estimate needs a few seconds of frames after a seek.
+            t.waitFor("svp_still_interpolating", () => s.estimated_vf_fps >= s.container_fps * factor
+                          && s.playing, 10000, () => s.estimated_vf_fps + " fps, playing " + s.playing)
+            break
+        case 11:
             Tools.log("diagnostics_end=" + player.diagnostics())
             t.finish()
             break
-        }
         }
     }
 
@@ -1017,10 +1087,12 @@ Window {
             }
             break
         case 24:
+            // 300 ms later the window may take the video's shape (M3), which
+            // moves the size by a few pixels.
             t.waitFor("relayout_on_resize", () => player.video_rect.width > 0
                           && player.video_rect.x + player.video_rect.width <= root.width
                           && player.video_rect.y + player.video_rect.height <= root.height
-                          && root.width === 900, 3000,
+                          && Math.abs(root.width - 900) <= 40 && root.height <= 500, 3000,
                       () => "video " + player.video_rect.width + "x" + player.video_rect.height
                           + " window " + root.width + "x" + root.height)
             break

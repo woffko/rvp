@@ -310,10 +310,11 @@ What the M6 steps show (about three minutes, plus SVP's first start):
   and off, and with an endpoint SVP does not know RVP says why SVP did
   not attach. Then `--selftest=upright` plays a clip with a white mark at
   the top left and compares the picture with ffmpeg's frame (the
-  upside-down picture of the last Ubuntu run would fail it). Last, the
-  headless video and equalizer tests; with SVP's VapourSynth found, a
-  PotPlayer-style script (`vs.get_core()`) doubles the frame rate in its
-  slot.
+  upside-down picture of the last Ubuntu run would fail it). Then a
+  VapourSynth script slot in RVP with SVP's VapourSynth: RVP's own
+  PotPlayer-style script (`vs.get_core()`) doubles the frame rate, and with
+  `RVP_VPY` set (as for `s2`) PotPlayer's `motioninterpolation.vpy` runs
+  with the kit's mvtools. Last, the headless video and equalizer tests.
 - `m6gpu` (GPU only): the 4K60 clip in fullscreen with colours, deband, a
   shader and the equalizer on; the dropped frames are in the detail.
 - `m6svp` (SVP running): SVP's acceptance. RVP in SVP mode
@@ -368,7 +369,7 @@ Then try by hand (this is M6's acceptance on Linux):
 | `m2svp` | SVP 4 Manager running | SVP's `@svp` filter appeared and RVP exited with status 0 |
 | `m3` | graphical session | the functional self-test including M3's checks passes (playlist panel, albums, normalizer, volume above 100 %, key editor, second instance, aspect lock), and all three kill tests reopen the album's second entry paused within 5 s of the last position |
 | `m4` | graphical session | the functional self-test passes with all of M4's and M5's checks (menus with the bound keys and check marks, a menu command, the settings window with every page, a setting that applies at once), and a portable copy kept its settings next to the executable |
-| `m6` | graphical session, cargo | the functional self-test passes with all of M6's checks (control panel, colour, equalizer, shader, SVP diagnostic), the picture is upright, and the headless video and equalizer tests pass (the script slot test runs with SVP's VapourSynth when it is found) |
+| `m6` | graphical session, cargo | the functional self-test passes with all of M6's checks (control panel, colour, equalizer, shader, SVP diagnostic), the picture is upright, a script slot raises the frame rate (SKIPPED without SVP's VapourSynth; PotPlayer's script too when `RVP_VPY` is set), and the headless video and equalizer tests pass |
 | `m6gpu` | hardware GPU | no dropped frames over `RVP_M2_SECONDS` in fullscreen with colours, deband, a shader and the equalizer on |
 | `m6svp` | SVP 4 Manager running | SVP attached to both windows (the second one on its `mpvSockets` endpoint), the frame rate reached 1.9 times the file's, and audio and video stayed within 0.1 s after each seek |
 | `m3desktop` | `m2build` | the desktop entry was written |
