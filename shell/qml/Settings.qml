@@ -314,6 +314,11 @@ ApplicationWindow {
         fileChooser.nameFilters = filters
         fileChooser.open()
     }
+    Dialogs.FontDialog {
+        id: subtitleFontChooser
+        title: "Subtitle Font"
+        onAccepted: win.set("subtitle-font", selectedFont.family)
+    }
     Dialogs.FileDialog {
         id: skinChooser
         title: "PotPlayer skin"
@@ -662,6 +667,20 @@ ApplicationWindow {
                                   "fuzzy": "Containing the video's name", "all": "All in the folder" })
                     }
                     Number { label: "Size"; path: "subtitle-scale"; unit: "%"; factor: 100 }
+                    Field {
+                        label: "Font"
+                        path: "subtitle-font"
+                        placeholder: "mpv's default (sans-serif)"
+                        Button {
+                            text: "Choose…"
+                            onClicked: {
+                                const family = win.value("subtitle-font")
+                                subtitleFontChooser.currentFont = Qt.font({
+                                    family: family ? family : "sans-serif", pointSize: 20 })
+                                subtitleFontChooser.open()
+                            }
+                        }
+                    }
                     Number { label: "Sync step (< and >)"; path: "subtitle-delay-step"; unit: "s" }
                 }
 

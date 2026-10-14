@@ -52,7 +52,7 @@ const CONTEXT_REASONS: &[(&str, &str)] = &[
     ("101_0_10_8", "mpv (libass) renders every subtitle"),
     (
         "101_0_10_9",
-        "bold, fonts, spacing and sideways moves are not in RVP yet (mpv cannot move subtitles sideways)",
+        "bold, spacing and sideways moves are not in RVP yet (mpv cannot move subtitles sideways)",
     ),
     (
         "101_0_10_10",
@@ -435,6 +435,7 @@ pub const DISPLAY: &[(&str, &str)] = &[
     ),
     ("CMD_EQ_PRESET_MESSAGE", "the equalizer's preset"),
     ("CMD_CAPTION_SIZE_MESSAGE", "the subtitle size"),
+    ("CMD_CAPTION_FONT_MESSAGE", "the subtitle font"),
     ("CMD_REPEAT_START_MESSAGE", "A-B point A"),
     ("CMD_REPEAT_END_MESSAGE", "A-B point B"),
 ];
@@ -477,8 +478,8 @@ pub fn skin_reason(command: &str) -> &'static str {
         }
         "ID_PLAYLIST_SAVE" => "saving albums as playlist files is not in RVP yet",
         "ID_CAPTION_MOVE_LEFT" | "ID_CAPTION_MOVE_RIGHT" => "mpv cannot move subtitles sideways",
-        "ID_CAPTION_FONT_SELECT" | "CMD_CAPTION_FONT_MESSAGE" | "CMD_POPUPMENU_CAPTION_FONT" => {
-            "subtitle fonts are not in RVP yet"
+        "CMD_POPUPMENU_CAPTION_FONT" => {
+            "the subtitle font is chosen in a font dialog (subtitle-font, Alt+F), not from a menu"
         }
         "CMD_POPUPMENU_AUDIO_CHANNEL" | "CMD_POPUPMENU_AUDIO_SAMPLE" => {
             "output channels and resampling are mpv's (not in RVP yet)"

@@ -118,7 +118,22 @@ impl Settings {
         let mut notes = Vec::new();
         self.validate_numbers(&mut notes);
         self.validate_texts(&mut notes);
+        self.validate_subtitle_font(&mut notes);
         notes
+    }
+
+    /// A font family name: one line of printable text.
+    fn validate_subtitle_font(&mut self, notes: &mut Vec<String>) {
+        let trimmed = self.subtitle_font.trim();
+        if trimmed.len() > 100 || trimmed.chars().any(char::is_control) {
+            notes.push(format!(
+                "subtitle-font {:?} is not a font family: mpv's default used",
+                self.subtitle_font
+            ));
+            self.subtitle_font.clear();
+        } else if trimmed.len() != self.subtitle_font.len() {
+            self.subtitle_font = trimmed.to_owned();
+        }
     }
 
     fn validate_numbers(&mut self, notes: &mut Vec<String>) {
@@ -441,6 +456,16 @@ impl App {
         }
         if (old.subtitle_scale - new.subtitle_scale).abs() > f64::EPSILON {
             set("sub-scale", &format!("{:.2}", new.subtitle_scale));
+        }
+        if old.subtitle_font != new.subtitle_font {
+            let font = if new.subtitle_font.is_empty() {
+                engine
+                    .get_text("option-info/sub-font/default-value")
+                    .unwrap_or_else(|| "sans-serif".to_owned())
+            } else {
+                new.subtitle_font.clone()
+            };
+            set("sub-font", &font);
         }
         if old.normalizer != new.normalizer && !self.defer_chain_change() {
             self.apply_normalizer(engine);

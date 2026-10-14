@@ -120,6 +120,11 @@ impl App {
             .double(PropertyId::SubScale)
             .unwrap_or(self.settings.subtitle_scale);
         data.set_text("CMD_CAPTION_SIZE_MESSAGE", format!("{:.0}%", scale * 100.0));
+        let font = self.settings.subtitle_font.as_str();
+        data.set_text(
+            "CMD_CAPTION_FONT_MESSAGE",
+            if font.is_empty() { "Default" } else { font },
+        );
         let point = |seconds: Option<f64>| seconds.map_or_else(String::new, format_time);
         data.set_text("CMD_REPEAT_START_MESSAGE", point(self.session.point_a));
         data.set_text("CMD_REPEAT_END_MESSAGE", point(self.session.point_b));
@@ -147,6 +152,35 @@ impl App {
                 None => {}
             }
         }
+    }
+
+    /// Sets the subtitle font chosen in the font dialog (empty: mpv's
+    /// default).
+    pub fn set_subtitle_font(&mut self, engine: &Engine, family: &str) -> UiRequest {
+        let mut changed = self.settings.clone();
+        family.clone_into(&mut changed.subtitle_font);
+        let applied = self.apply_settings(engine, changed);
+        let shown = if self.settings.subtitle_font.is_empty() {
+            "default"
+        } else {
+            self.settings.subtitle_font.as_str()
+        };
+        match applied.notes.into_iter().next() {
+            Some(note) => UiRequest::Message(note),
+            None => UiRequest::Osd(format!("Subtitle font: {shown}")),
+        }
+    }
+
+    /// The panel's window moved (screen coordinates): it opens there next
+    /// time.
+    pub fn set_panel_position(&mut self, x: i32, y: i32) {
+        self.store_mut().set_panel((x, y));
+    }
+
+    /// Where the panel's window was last, when known.
+    #[must_use]
+    pub fn panel_position(&self) -> Option<(i32, i32)> {
+        self.store().state().panel
     }
 
     /// The panel's window closed by other means than F7 or its close

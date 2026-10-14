@@ -1,6 +1,6 @@
 // The file dialogs, loaded on first use (Qt Quick Dialogs is not needed to
-// start RVP): media files to open or add, a subtitle file to load, and
-// where to save the current frame.
+// start RVP): media files to open or add, a subtitle file to load, where
+// to save the current frame, and the subtitle font.
 import QtQuick
 import QtQuick.Dialogs
 import Rvp
@@ -21,6 +21,18 @@ Item {
     function askSubtitle() {
         subtitleDialog.open()
     }
+    // `family`: the current subtitle font (empty: mpv's default).
+    function askFont(family) {
+        fontDialog.currentFont = Qt.font({ family: family !== "" ? family : "sans-serif", pointSize: 20 })
+        fontDialog.open()
+    }
+
+    FontDialog {
+        id: fontDialog
+        title: "Subtitle Font"
+        onAccepted: holder.player.apply_subtitle_font(selectedFont.family)
+    }
+
     // `suggested`: a file URL in the image folder.
     function askFrame(suggested) {
         frameDialog.selectedFile = suggested

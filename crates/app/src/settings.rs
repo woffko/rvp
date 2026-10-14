@@ -90,6 +90,8 @@ pub struct Settings {
     pub subtitle_auto: String,
     /// Subtitle size (mpv `sub-scale`).
     pub subtitle_scale: f64,
+    /// Subtitle font family (mpv `sub-font`); empty: mpv's default.
+    pub subtitle_font: String,
     /// Colour adjustments (brightness, contrast, saturation, hue, gamma).
     pub color: Color,
     /// mpv's deinterlacing.
@@ -138,6 +140,7 @@ impl Default for Settings {
             subtitle_languages: String::new(),
             subtitle_auto: "fuzzy".to_owned(),
             subtitle_scale: 1.0,
+            subtitle_font: String::new(),
             color: Color::default(),
             deinterlace: Deinterlace::default(),
             effects: BTreeSet::new(),

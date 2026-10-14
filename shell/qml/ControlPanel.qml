@@ -12,8 +12,9 @@ Window {
     id: panel
     required property Player player
     required property Window owner
-    // The first time it shows, the panel goes to the bottom right of the
-    // video; later it stays where it was.
+    // The first time it shows, the panel goes where it was last (saved in
+    // the state; not on Wayland, which reports no positions) or to the
+    // bottom right of the video; later it stays where it was.
     property bool placed: false
 
     width: Math.max(1, player.panel_width)
@@ -37,7 +38,10 @@ Window {
             const screen = owner.screen
             let px = owner.x + video.x + video.width - width - 16
             let py = owner.y + video.y + video.height - height - 16
-            if (screen) {
+            if (player.panel_has_position && panel.onScreen(player.panel_x, player.panel_y)) {
+                px = player.panel_x
+                py = player.panel_y
+            } else if (screen) {
                 px = Math.max(screen.virtualX, Math.min(px, screen.virtualX + screen.desktopAvailableWidth - width))
                 py = Math.max(screen.virtualY, Math.min(py, screen.virtualY + screen.desktopAvailableHeight - height))
             }
@@ -50,6 +54,28 @@ Window {
 
     function startMove() {
         panel.startSystemMove()
+    }
+
+    // True when the point lies on one of the screens.
+    function onScreen(px, py) {
+        for (const screen of Qt.application.screens) {
+            if (px >= screen.virtualX && py >= screen.virtualY
+                    && px < screen.virtualX + screen.width && py < screen.virtualY + screen.height)
+                return true
+        }
+        return false
+    }
+
+    // Saves the place shortly after a move settles.
+    onXChanged: placeTimer.restart()
+    onYChanged: placeTimer.restart()
+    Timer {
+        id: placeTimer
+        interval: 500
+        onTriggered: {
+            if (panel.visible && panel.placed && Qt.platform.pluginName !== "wayland")
+                panel.player.panel_moved(panel.x, panel.y)
+        }
     }
 
     SkinView {

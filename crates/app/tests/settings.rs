@@ -184,3 +184,42 @@ fn the_settings_window_gets_values_choices_and_the_file() {
     assert_eq!(view["choices"]["audio-device"], json!([]));
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+#[test]
+fn the_subtitle_font_reaches_mpv_and_the_control_panel() {
+    let dir = scratch("font");
+    let dirs = Dirs::inside(&dir);
+    let engine = Engine::new(&EngineOptions::headless()).expect("engine");
+    let mut app = App::load(&dirs).expect("load");
+    let label = |app: &App| {
+        let mut data = rvp_skin::DataModel::default();
+        app.panel_data(&mut data);
+        data.text("CMD_CAPTION_FONT_MESSAGE").map(str::to_owned)
+    };
+    assert_eq!(label(&app).as_deref(), Some("Default"));
+    // From the font dialog.
+    assert_eq!(
+        app.set_subtitle_font(&engine, " DejaVu Sans "),
+        rvp_app::UiRequest::Osd("Subtitle font: DejaVu Sans".to_owned())
+    );
+    assert_eq!(engine.get_text("sub-font").as_deref(), Some("DejaVu Sans"));
+    assert_eq!(label(&app).as_deref(), Some("DejaVu Sans"));
+    // Not a family: mpv's default, with a note.
+    assert!(matches!(
+        app.set_subtitle_font(&engine, "Bad\u{7}Font"),
+        rvp_app::UiRequest::Message(_)
+    ));
+    assert_eq!(app.settings.subtitle_font, "");
+    assert_eq!(
+        engine.get_text("sub-font"),
+        engine.get_text("option-info/sub-font/default-value")
+    );
+    // The control panel's place survives a restart.
+    app.set_subtitle_font(&engine, "DejaVu Sans");
+    app.set_panel_position(120, 340);
+    app.shutdown(&engine, Instant::now()).expect("shutdown");
+    let again = App::load(&dirs).expect("reload");
+    assert_eq!(again.settings.subtitle_font, "DejaVu Sans");
+    assert_eq!(again.panel_position(), Some((120, 340)));
+    let _ = std::fs::remove_dir_all(&dir);
+}

@@ -280,6 +280,12 @@ impl Harness {
             Action::OpenSubtitle => {
                 assert_eq!(self.dispatch(action), Some(UiRequest::OpenSubtitleDialog));
             }
+            Action::SubtitleFont => {
+                assert_eq!(
+                    self.dispatch(action),
+                    Some(UiRequest::SubtitleFontDialog(String::new()))
+                );
+            }
             Action::Preferences => {
                 assert_eq!(self.dispatch(action), Some(UiRequest::Preferences(None)));
             }

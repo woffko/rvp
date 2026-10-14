@@ -43,6 +43,7 @@ Window {
     readonly property int requestAbout: 22
     readonly property int requestPanelMove: 23
     readonly property int requestSaveFrameAs: 24
+    readonly property int requestSubtitleFont: 25
 
     property bool wasMaximized: false
     // The window state RVP last asked for and when (see applyVisibility).
@@ -220,6 +221,10 @@ Window {
         case requestSaveFrameAs:
             dialogLoader.active = true
             dialogLoader.item.askFrame(player.frame_path)
+            break
+        case requestSubtitleFont:
+            dialogLoader.active = true
+            dialogLoader.item.askFont(player.subtitle_font)
             break
         case requestAlbumName:
             albumLoader.active = true

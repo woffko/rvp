@@ -53,6 +53,9 @@ pub struct ResumeState {
     pub volume: Option<f64>,
     pub mute: bool,
     pub window: Option<WindowGeometry>,
+    /// Where the control panel's window was last (screen coordinates;
+    /// platforms that report positions only).
+    pub panel: Option<(i32, i32)>,
     pub positions: BTreeMap<String, Position>,
     pub sequence: u64,
 }
@@ -65,6 +68,7 @@ impl Default for ResumeState {
             volume: None,
             mute: false,
             window: None,
+            panel: None,
             positions: BTreeMap::new(),
             sequence: 0,
         }
@@ -180,6 +184,13 @@ impl ResumeStore {
     pub fn set_window(&mut self, window: WindowGeometry) {
         if self.state.window != Some(window) {
             self.state.window = Some(window);
+            self.dirty = true;
+        }
+    }
+
+    pub fn set_panel(&mut self, position: (i32, i32)) {
+        if self.state.panel != Some(position) {
+            self.state.panel = Some(position);
             self.dirty = true;
         }
     }

@@ -74,6 +74,9 @@ pub mod request {
     /// The save dialog for the current frame (`frame_path` suggests the
     /// file).
     pub const SAVE_FRAME_AS: i32 = 24;
+    /// The font dialog for the subtitles (`subtitle_font` is the current
+    /// family).
+    pub const SUBTITLE_FONT: i32 = 25;
 }
 
 /// The skin, loaded once for the process (the painters read it on the
@@ -221,6 +224,10 @@ pub struct PlayerRust {
     pub(crate) panel_height: i32,
     pub(crate) panel_tooltip: QString,
     pub(crate) frame_path: QString,
+    pub(crate) subtitle_font: QString,
+    pub(crate) panel_has_position: bool,
+    pub(crate) panel_x: i32,
+    pub(crate) panel_y: i32,
     /// The command line, parsed by `start`.
     cli: Cli,
     core: Option<Core>,
@@ -525,6 +532,11 @@ impl qobject::Player {
 
         if let Some(window) = app.store().state().window {
             self.as_mut().restore_window(window);
+        }
+        if let Some((x, y)) = app.panel_position() {
+            self.as_mut().set_panel_x(x);
+            self.as_mut().set_panel_y(y);
+            self.as_mut().set_panel_has_position(true);
         }
         self.as_mut().set_has_skin(chrome.is_some());
         self.as_mut().set_window_title(QString::from("RVP"));
@@ -897,6 +909,21 @@ impl qobject::Player {
                 })
             })
             .map_or_else(QRectF::default, |node| to_rectf(node.rect))
+    }
+
+    pub(crate) fn apply_subtitle_font(mut self: Pin<&mut Self>, family: &QString) {
+        let Some(core) = self.as_mut().core_mut() else {
+            return;
+        };
+        let request = core.app.set_subtitle_font(core.engine, &family.to_string());
+        self.as_mut().handle_request(request);
+        self.sync_chrome();
+    }
+
+    pub(crate) fn panel_moved(mut self: Pin<&mut Self>, x: i32, y: i32) {
+        if let Some(core) = self.as_mut().core_mut() {
+            core.app.set_panel_position(x, y);
+        }
     }
 
     pub(crate) fn save_frame_to(self: Pin<&mut Self>, path: &QString) {
@@ -1438,6 +1465,10 @@ impl qobject::Player {
                 self.ui_request(request::ALBUM_NAME, i32::from(rename));
             }
             UiRequest::ControlPanel(shown) => self.show_panel(shown),
+            UiRequest::SubtitleFontDialog(family) => {
+                self.as_mut().set_subtitle_font(QString::from(&family));
+                self.ui_request(request::SUBTITLE_FONT, 0);
+            }
             UiRequest::SaveFrameDialog(path) => {
                 self.as_mut()
                     .set_frame_path(QString::from(&file_url(&path)));

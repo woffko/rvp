@@ -75,6 +75,9 @@ pub enum UiRequest {
     /// A save dialog for the current frame, suggesting this file (then
     /// `Player.save_frame_to`).
     SaveFrameDialog(PathBuf),
+    /// A font dialog for the subtitles, showing this family (empty: mpv's
+    /// default; then `Player.apply_subtitle_font`).
+    SubtitleFontDialog(String),
     /// Ask for PotPlayer's playlist folder to import.
     ImportPlaylists,
     /// Ask for files to add to the shown album.
@@ -251,6 +254,11 @@ impl App {
             "sub-scale".to_owned(),
             format!("{:.2}", settings.subtitle_scale),
         ));
+        if !settings.subtitle_font.is_empty() {
+            options
+                .extra
+                .push(("sub-font".to_owned(), settings.subtitle_font.clone()));
+        }
         options
     }
 
@@ -270,6 +278,10 @@ impl App {
     #[must_use]
     pub fn store(&self) -> &ResumeStore {
         &self.store
+    }
+
+    pub(crate) fn store_mut(&mut self) -> &mut ResumeStore {
+        &mut self.store
     }
 
     /// No import of PotPlayer's playlists at this start (the self-test

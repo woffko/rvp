@@ -239,6 +239,8 @@ pub enum Action {
     OpenUrl,
     /// Load a subtitle file for the playing video.
     OpenSubtitle,
+    /// Choose the subtitle font (a font dialog).
+    SubtitleFont,
     /// Open the playing (or last) entry again.
     Reopen,
     /// Stop and unload the current file (PotPlayer "Close Playback").
@@ -910,6 +912,14 @@ pub const ACTIONS: &[ActionInfo] = &[
         None,
         &[10145],
         &["ID_CAPTION_ALIGN_RIGHT"],
+    ),
+    info(
+        Action::SubtitleFont,
+        "subtitle-font",
+        "Font Settings...",
+        Some("Alt+F"),
+        &[10139],
+        &["ID_CAPTION_FONT_SELECT"],
     ),
     // Video.
     info(

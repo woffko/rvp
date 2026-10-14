@@ -51,6 +51,10 @@ pub mod qobject {
         #[qproperty(i32, panel_height)]
         #[qproperty(QString, panel_tooltip)]
         #[qproperty(QString, frame_path)]
+        #[qproperty(QString, subtitle_font)]
+        #[qproperty(bool, panel_has_position)]
+        #[qproperty(i32, panel_x)]
+        #[qproperty(i32, panel_y)]
         type Player = super::PlayerRust;
 
         /// Loads settings, the skin and libmpv; sets the `restore_*`
@@ -124,6 +128,15 @@ pub mod qobject {
         /// Saves the current frame to a file chosen in the save dialog.
         #[qinvokable]
         fn save_frame_to(self: Pin<&mut Self>, path: &QString);
+
+        /// Sets the subtitle font chosen in the font dialog (empty: mpv's
+        /// default).
+        #[qinvokable]
+        fn apply_subtitle_font(self: Pin<&mut Self>, family: &QString);
+
+        /// The control panel's window moved (screen coordinates).
+        #[qinvokable]
+        fn panel_moved(self: Pin<&mut Self>, x: i32, y: i32);
 
         /// A key press (`QKeyEvent::key()`, `modifiers()`); true when bound.
         #[qinvokable]

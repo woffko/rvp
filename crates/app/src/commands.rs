@@ -206,6 +206,9 @@ impl App {
             }
             Action::ToggleEqualizer => Some(self.toggle_equalizer(engine)),
             Action::SaveFrameAs => self.frame_path().map(UiRequest::SaveFrameDialog),
+            Action::SubtitleFont => Some(UiRequest::SubtitleFontDialog(
+                self.settings.subtitle_font.clone(),
+            )),
             other => self.view_command(engine, other),
         }
     }
