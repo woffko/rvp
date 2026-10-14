@@ -808,7 +808,7 @@ step_m4() {
         "--mpv-options=hwdec=$(m2_hwdec)" "$(test_video)" "$(s1_video)" >> "$log" 2>&1
     functional=$?
     for name in context_menu_keys context_menu_marks playlist_menu_keys context_menu_builds \
-        menu_command_runs f5_opens_settings settings_pages_load keys_page_rows \
+        menu_command_runs speed_back_in_sync f5_opens_settings settings_pages_load keys_page_rows \
         setting_applies_at_once settings_window_closes; do
         grep -q "^check $name=PASS" "$log" || missing=$((missing + 1))
     done

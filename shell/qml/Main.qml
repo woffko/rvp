@@ -1263,8 +1263,16 @@ Window {
                       () => "speed " + s.speed)
             break
         case 205:
-            if (root.settled("speed_back"))
+            if (root.settled("speed_back")) {
+                // Goal H's carry-over: with the normalizer on, the return to
+                // 1x left audio and video 0.6 s apart, which the Ubuntu boot
+                // paid for with 14 dropped frames. One read of mpv's A/V
+                // offset, 1.5 s after the change.
+                const d = JSON.parse(player.diagnostics())
+                t.check("speed_back_in_sync", d.avsync !== null && Math.abs(d.avsync) < 0.1,
+                        "avsync " + d.avsync + " normalizer " + s.normalizer)
                 player.key(Qt.Key_F5, 0)
+            }
             break
         case 206:
             // F5 opens the settings window.
