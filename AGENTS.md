@@ -62,10 +62,11 @@ each goal writes `docs/goals/goal-<letter>-status.md`.
 
 ## Shell notes
 
-- `rvp --selftest` (also `=playback` and `=resume`, see `shell/qml/Main.qml`)
-  is the functional check for the VMs, the kit and the host. It drives RVP
-  through its own input handlers, never through the window system, and
-  prints `check`, `metric` and `status` lines.
+- `rvp --selftest` (also `=playback`, `=resume`, `=upright`, `=svp` and
+  `=vpy`, see `shell/qml/Main.qml`) is the functional check for the VMs,
+  the kit and the host. It drives RVP through its own input handlers,
+  never through the window system, and prints `check`, `metric` and
+  `status` lines.
 - Keep the GUI thread free during playback: no blocking mpv calls in loops
   (`Player::diagnostics` is for rare reads), no disk flushes (use
   `storage::Writer`), and chrome updates through `Player::damaged` only.
@@ -85,8 +86,22 @@ each goal writes `docs/goals/goal-<letter>-status.md`.
   `QLocalServer` channel `rvp-<user>`). The self-test neither forwards nor
   listens unless `--instance=NAME` names a separate channel, so test runs
   never reach the owner's player.
-- The Windows test VM's checks are `tools/windows-vm/m3-all.ps1` and
-  `m4-all.ps1` (copy them and `run.ps1` to `C:\rvp-test` with the bundle).
+- The Windows test VM's checks are `tools/windows-vm/m3-all.ps1`,
+  `m4-all.ps1` and `m6-all.ps1` (copy them and `run.ps1` to `C:\rvp-test`
+  with the bundle and `testdata/media/fixture-marker.*`).
+- Video filters: RVP adds and removes only its own, by label (`@rvp*`,
+  `vf pre`), and never touches SVP's `@svp` (goal H's rule 4). Seeks that
+  resync audio after a chain change go through `App::resync_audio`: a seek
+  at the very end of a file leaves mpv's `eof-reached` false and the album
+  stops.
+- The VapourSynth runtime is chosen before any thread starts
+  (`point_at_vapoursynth` sets `VSSCRIPT_PATH` through `rvp_set_env`); do
+  not set environment variables later or from Rust (`set_var` is unsafe).
+- The control panel (F7) is a second window (`shell/qml/ControlPanel.qml`)
+  with its own `Chrome` in `Mode::ControlBox`, painted whole
+  (`SkinView.surface` 1, `panelDamaged`).
+- SVP 4 for Windows connects only to the pipe its settings name
+  (`mpvpipe`); a second RVP window cannot get SVP there (goal H).
 - Every action is one row of `ACTIONS` (`crates/app/src/action.rs`): its
   settings name, PotPlayer's menu text, numeric IDs and skin `CmdID`s.
   Menus are built from that table and R1's trees (`crates/app/src/menu.rs`)

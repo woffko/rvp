@@ -5,12 +5,14 @@ the BlackSpace skin and works with SVP 4 for frame interpolation. Playback
 uses libmpv; the interface is drawn by RVP's own engine for PotPlayer `.dsf`
 skins.
 
-Status: milestone M2, the player window. `rvp` plays files in the classic
-BlackSpace window with PotPlayer's default keys and mouse actions and
-resumes every file where it stopped. The playlist panel shows mpv's
-playlist; editing it, menus and settings come in later milestones. See
-[docs/PLAN.md](docs/PLAN.md) for the plan and [docs/goals](docs/goals) for
-progress reports.
+Status: milestones M1-M6. `rvp` plays files in the classic BlackSpace
+window with PotPlayer's keys, mouse actions, menus and a settings window;
+albums in the playlist panel and every file's position survive restarts
+and crashes; the normalizer and a ten-band equalizer; SVP 4 mode,
+VapourSynth scripts (PotPlayer's `.vpy` files), GLSL shaders, colour
+controls and the F7 control panel. Next: RVP's own logo and default skin
+(M7). See [docs/PLAN.md](docs/PLAN.md) for the plan and
+[docs/goals](docs/goals) for progress reports.
 
 ## Layout
 
@@ -57,8 +59,9 @@ defaults to PotPlayer's installed BlackSpace; on Linux set `skin` or pass
 `--skin`.
 
 `rvp --selftest` runs a scripted check of the window and prints the
-usability measurements; `--selftest=playback` and `--selftest=resume` are
-the kit's playback and restart checks (see `shell/qml/Main.qml`).
+usability measurements; `--selftest=playback`, `resume`, `upright`, `svp`
+and `vpy` are the kit's playback, restart, orientation, SVP and script
+slot checks (see `shell/qml/Main.qml`).
 
 ## Skins
 

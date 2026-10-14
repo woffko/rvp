@@ -599,7 +599,11 @@ Window {
     //                         90), the frame rate reaches at least
     //                         --svp-factor (default 1.9) times the file's,
     //                         and after seeks audio and video stay
-    //                         together (|avsync| under 0.1 s)
+    //                         together (|avsync| under 0.1 s); then RVP's
+    //                         sharpen filter and deinterlacing go on and
+    //                         off while SVP works: RVP's filter runs before
+    //                         @svp, SVP keeps interpolating and its entry
+    //                         is unchanged
     //   --selftest=vpy        a VapourSynth script slot (M6): RVP writes a
     //                         PotPlayer-style script (vs.get_core()) that
     //                         doubles the frame rate, or runs --vpy=SCRIPT
@@ -886,10 +890,35 @@ Window {
         }
         case 10:
             // mpv's estimate needs a few seconds of frames after a seek.
-            t.waitFor("svp_still_interpolating", () => s.estimated_vf_fps >= s.container_fps * factor
-                          && s.playing, 10000, () => s.estimated_vf_fps + " fps, playing " + s.playing)
+            if (t.waitFor("svp_still_interpolating", () => s.estimated_vf_fps >= s.container_fps * factor
+                              && s.playing, 10000, () => s.estimated_vf_fps + " fps, playing " + s.playing)) {
+                // Filter order with SVP attached (M6 d): RVP's own filter
+                // and deinterlacing on.
+                t.before = { svp: s.vf.substring(s.vf.indexOf("@svp")) }
+                player.run_action("sharpen")
+                player.run_action("deinterlace-on")
+            }
             break
-        case 11:
+        case 11: {
+            const sharpen = s.vf.indexOf("@rvpsharpen")
+            if (Date.now() - t.stepStarted < 5000)
+                break
+            const d = JSON.parse(player.diagnostics())
+            t.check("svp_after_rvp_filter", sharpen >= 0 && sharpen < s.vf.indexOf("@svp")
+                        && d.deinterlace === "yes" && s.estimated_vf_fps >= s.container_fps * factor,
+                    "vf " + s.vf + ", deinterlace " + d.deinterlace + ", " + s.estimated_vf_fps + " fps")
+            player.run_action("sharpen")
+            player.run_action("deinterlace-auto")
+            t.next()
+            break
+        }
+        case 12:
+            t.waitFor("svp_entry_untouched", () => s.vf.indexOf("@rvpsharpen") < 0
+                          && s.vf.substring(s.vf.indexOf("@svp")) === t.before.svp
+                          && s.estimated_vf_fps >= s.container_fps * factor, 10000,
+                      () => "vf " + s.vf + ", " + s.estimated_vf_fps + " fps")
+            break
+        case 13:
             Tools.log("diagnostics_end=" + player.diagnostics())
             t.finish()
             break
