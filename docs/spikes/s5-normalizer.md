@@ -1,5 +1,10 @@
 # Spike S5: normalizer parity with PotPlayer
 
+> **Superseded (2026-10-15, D13).** PotPlayer's normalizer is TomSteady's
+> gain control, which RVP now runs itself; see "Follow-up: PotPlayer's
+> normalizer is TomSteady" at the end. The `dynaudnorm` chain below was RVP's
+> normalizer until then.
+
 Question (PLAN.md M0): which filter chain and parameters match PotPlayer's
 normalizer with boost (Level 75 %, Release time 10), compared by EBU R128
 short-term loudness over the same clips?
@@ -112,3 +117,47 @@ time.
    and drive mpv's volume from Rust with an instant attack and a release of
    about 0.5-0.7 dB/s. The simple model in `agc_model.py` shows the shape is
    right but needs a better detector before it beats dynaudnorm.
+
+## Follow-up: PotPlayer's normalizer is TomSteady (2026-10-15)
+
+After M7 the owner found RVP's normalizer quieter than PotPlayer's, with
+voices raised less, and asked how PotPlayer's works. Its method is named
+after TomSteady, Tom St Denis's freeware Winamp DSP plugin ("TomSteady
+Automatic Gain Controller", 2001). The owner supplied version 1.4 of the
+plugin; its gain control was reconstructed from the binary (owner decision:
+the author gave the plugin and its source away freely; the source is no
+longer online). The rules are in `crates/app/src/tomsteady.rs`. PotPlayer
+keeps Release time as `AudioNormalizeSmooth`, the name of the plugin's
+"Volume Slide Smoothness", which is its stepping.
+
+`tools/s5/tomsteady_fit.py` runs those rules over the source clips in
+blocks of N samples (48 kHz) and compares the gain with PotPlayer's in the
+recordings above (recording minus source in 100 ms windows, one offset for
+all clips). RMS difference in dB, Level 75 %:
+
+| Block (samples) | Stepping | All clips | Dialogue / music / steps |
+|-----------------|----------|-----------|--------------------------|
+| 576 | 10 | 5.04 | 4.95 / 5.32 / 4.83 |
+| 1024 | 10 | 2.89 | 2.96 / 2.83 / 2.87 |
+| 1152 | 11 | 0.77 | 0.87 / 0.69 / 0.76 |
+| 1536 | 11 | 0.84 | 0.69 / 0.87 / 0.95 |
+| **2048** | **10** | **0.08** | **0.09 / 0.02 / 0.12** |
+| 2048 | 9 | 1.98 | 1.87 / 1.92 / 2.16 |
+| 2048 | 11 | 1.90 | 1.63 / 1.87 / 2.19 |
+| 4096 | 8 | 1.25 | 1.30 / 1.13 / 1.31 |
+
+Near 2048 the fit falls off on both sides (1920: 0.29, 2016: 0.11, 2040 and
+2056: 0.08, 2112: 0.20, 2304: 0.58), and Level 75 % fits best (70: 0.10,
+80: 0.17). At 2048, stepping 10 and Level 75 % the difference stays within
+0.06 / 0.03 / 0.21 dB in 95 % of the windows, against 2.2 LU for the
+`dynaudnorm` chain.
+
+So PotPlayer runs TomSteady over blocks of 2048 samples, Release time is
+its stepping and Level its target level. What S5 saw follows from the
+rules: the fast attack is the cut of a block that would clip, the slow
+release TomSteady's one-unit raises (1/1024 of unity per block at
+stepping 10, ten units after 128 raises in a row), the slow start its gain
+of 1 at the start, and the bounded range only how far the gain got within
+the clips. RVP runs these rules since this follow-up (`crates/app/src/normalizer.rs`,
+D13).
+

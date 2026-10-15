@@ -266,9 +266,12 @@ impl Harness {
                     self.dispatch(action),
                     Some(UiRequest::Osd("Normalizer: On, Boost: Off".into()))
                 );
-                self.wait("boost off", |m| audio_filters(m).contains("m=1"));
-                self.dispatch(action);
-                self.wait("boost on", |m| audio_filters(m).contains("m=5"));
+                // Only the gain control changes; the chain stays.
+                assert!(audio_filters(&self.app.model).contains("rvpnorm"));
+                assert_eq!(
+                    self.dispatch(action),
+                    Some(UiRequest::Osd("Normalizer: On, Boost: On".into()))
+                );
             }
             Action::ImportPlaylists => {
                 assert_eq!(self.dispatch(action), Some(UiRequest::ImportPlaylists));

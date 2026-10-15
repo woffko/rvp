@@ -152,8 +152,8 @@ impl Settings {
         );
         clamp(
             &mut self.normalizer.release,
-            1.0,
-            50.0,
+            5.0,
+            10.0,
             "normalizer release time",
             notes,
         );
@@ -467,10 +467,14 @@ impl App {
             };
             set("sub-font", &font);
         }
-        if old.normalizer != new.normalizer && !self.defer_chain_change() {
-            self.apply_normalizer(engine);
-            // As a toggle does: play on from here with the new chain.
-            self.resync_audio(engine);
+        if old.normalizer.enabled != new.normalizer.enabled {
+            if !self.defer_chain_change() {
+                self.apply_normalizer(engine);
+                // As a toggle does: play on from here with the new chain.
+                self.resync_audio(engine);
+            }
+        } else if old.normalizer != new.normalizer {
+            self.configure_normalizer();
         }
         if (&old.keys, &old.mouse, &old.playlist_keys)
             != (&new.keys, &new.mouse, &new.playlist_keys)

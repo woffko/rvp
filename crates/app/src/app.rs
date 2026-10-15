@@ -186,6 +186,8 @@ pub struct App {
     state_dir: PathBuf,
     /// SVP mode's watch over the file that plays (M6).
     pub(crate) svp: crate::svp::Watch,
+    /// The normalizer's gain control (`App::start` starts it).
+    normalizer: Option<crate::normalizer::Control>,
 }
 
 impl App {
@@ -233,6 +235,7 @@ impl App {
             session: Session::default(),
             state_dir: state_dir.to_path_buf(),
             svp: crate::svp::Watch::default(),
+            normalizer: None,
         })
     }
 
@@ -326,6 +329,10 @@ impl App {
         engine.set_mute(state.mute)?;
         self.started = true;
         let last_file = state.last_file.clone();
+        match crate::normalizer::Control::start(engine, self.settings.normalizer) {
+            Ok(control) => self.normalizer = Some(control),
+            Err(error) => self.warnings.push(format!("Normalizer: {error}")),
+        }
         self.apply_normalizer(engine);
         self.apply_equalizer(engine);
         if let Err(error) = self.apply_picture_settings(engine) {
@@ -624,11 +631,17 @@ impl App {
             Action::ToggleSubtitles => engine.toggle_subtitles(),
             Action::ToggleNormalizer => {
                 self.settings.normalizer.enabled = !self.settings.normalizer.enabled;
-                return Some(self.normalizer_changed(engine));
+                if !self.defer_chain_change() {
+                    self.apply_normalizer(engine);
+                    self.resync_audio(engine);
+                }
+                return Some(self.normalizer_notice());
             }
             Action::ToggleBoost => {
                 self.settings.normalizer.boost = !self.settings.normalizer.boost;
-                return Some(self.normalizer_changed(engine));
+                // Only the gain control needs it: the chain stays.
+                self.configure_normalizer();
+                return Some(self.normalizer_notice());
             }
             Action::PlayPause => {
                 if !self.model.media_loaded() {
@@ -896,12 +909,19 @@ impl App {
             .unwrap_or_else(|| name.to_owned())
     }
 
-    /// Applies the normalizer settings to mpv's audio filters: the
-    /// normalizer, then the tempo filter that keeps speed changes from
-    /// putting audio and video out of step (`crate::normalizer`).
+    /// Applies the normalizer settings to its gain control and to mpv's
+    /// audio filters: the normalizer, starting at the gain it reached, then
+    /// the tempo filter that keeps speed changes from putting audio and
+    /// video out of step (`crate::normalizer`).
     pub fn apply_normalizer(&self, engine: &Engine) {
-        let enabled = self.settings.normalizer.enabled;
-        let entry = enabled.then(|| self.settings.normalizer.chain_entry());
+        let normalizer = self.settings.normalizer;
+        self.configure_normalizer();
+        let enabled = normalizer.enabled;
+        let gain = self
+            .normalizer
+            .as_ref()
+            .map_or(1.0, crate::normalizer::Control::gain);
+        let entry = enabled.then(|| normalizer.chain_entry(gain));
         if let Err(error) = engine.set_audio_filter(crate::normalizer::LABEL, entry.as_deref()) {
             eprintln!("rvp: cannot set the normalizer: {error}");
         }
@@ -909,6 +929,15 @@ impl App {
         let tempo = enabled.then_some(crate::normalizer::TEMPO_ENTRY);
         if let Err(error) = engine.set_audio_filter(crate::normalizer::TEMPO_LABEL, tempo) {
             eprintln!("rvp: cannot set the tempo filter: {error}");
+        }
+    }
+
+    /// Gives the normalizer's settings to its gain control. Boost, level and
+    /// release time need nothing else; switching it on or off changes the
+    /// chain too (`App::apply_normalizer`).
+    pub(crate) fn configure_normalizer(&self) {
+        if let Some(control) = &self.normalizer {
+            control.configure(self.settings.normalizer);
         }
     }
 
@@ -953,20 +982,16 @@ impl App {
     }
 
     /// Plays on from the current position: the audio chain changed and
-    /// the audio mpv had decoded ahead for the old one (the normalizer looks
-    /// ten seconds ahead) would put audio and video out of step. Never near
-    /// the end (`App::defer_chain_change`).
+    /// the audio mpv had filtered ahead with the old one would put audio and
+    /// video out of step. Never near the end (`App::defer_chain_change`).
     pub(crate) fn resync_audio(&self, engine: &Engine) {
         if self.model.media_loaded() && !self.near_end() {
             drop(engine.seek(Seek::Relative(0.0)));
         }
     }
 
-    fn normalizer_changed(&mut self, engine: &Engine) -> UiRequest {
-        if !self.defer_chain_change() {
-            self.apply_normalizer(engine);
-            self.resync_audio(engine);
-        }
+    /// Saves a normalizer change made from a key or menu and tells it.
+    fn normalizer_notice(&self) -> UiRequest {
         self.save_settings();
         let normalizer = self.settings.normalizer;
         let on_off = |on: bool| if on { "On" } else { "Off" };

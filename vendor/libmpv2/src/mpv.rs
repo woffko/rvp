@@ -390,6 +390,35 @@ impl Mpv {
         })
     }
 
+    /// RVP patch: like [`create_client`](Mpv::create_client), but the handle
+    /// is a weak reference: it does not keep the core alive. When the last
+    /// other handle is destroyed, the weak one receives `Event::Shutdown`.
+    pub fn create_weak_client(&self, name: Option<&str>) -> Result<Mpv> {
+        let name = name.map(CString::new).transpose()?;
+        let mpv_handle = unsafe {
+            libmpv2_sys::mpv_create_weak_client(
+                self.ctx.as_ptr(),
+                name.as_ref().map_or(ptr::null(), |name| name.as_ptr()),
+            )
+        };
+        let ctx = NonNull::new(mpv_handle).ok_or(Error::Null)?;
+
+        Ok(Mpv {
+            ctx,
+            wakeup_callback_cleanup: None,
+        })
+    }
+
+    /// RVP patch: receive log messages of `min_level` and more severe as
+    /// `Event::LogMessage` on this handle (`mpv_request_log_messages`).
+    /// `"no"` turns them off again.
+    pub fn request_log_messages(&self, min_level: &str) -> Result<()> {
+        let min_level = CString::new(min_level)?;
+        mpv_err((), unsafe {
+            libmpv2_sys::mpv_request_log_messages(self.ctx.as_ptr(), min_level.as_ptr())
+        })
+    }
+
     /// Send a command to the player. Commands are the same as those used in
     /// input.conf.
     pub fn command(&self, name: &str, args: &[&str]) -> Result<()> {

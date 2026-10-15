@@ -92,6 +92,7 @@ fn changes_apply_to_the_player_and_survive_a_restart() {
         ("subtitle-languages", json!("en,ru")),
         ("subtitle-auto", json!("exact")),
         ("normalizer.boost", json!(false)),
+        ("normalizer.enabled", json!(false)),
         ("seek-seconds.0", json!(10)),
     ] {
         let (changed, notes) = change(&settings, path, value).expect(path);
@@ -111,7 +112,8 @@ fn changes_apply_to_the_player_and_survive_a_restart() {
     assert_eq!(text("sub-scale"), "1.500000");
     assert_eq!(text("slang"), "en,ru");
     assert_eq!(text("sub-auto"), "exact");
-    assert!(text("af").contains("m=1"), "{}", text("af"));
+    // The normalizer is off: its chain and the tempo filter are gone.
+    assert!(!text("af").contains("@rvpnorm"), "{}", text("af"));
     assert_eq!(
         app.bindings
             .key(&rvp_app::KeyChord::parse("Ctrl+B").expect("key")),

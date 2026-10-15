@@ -184,6 +184,7 @@ playback state between the two systems possible (open question 2).
 | D10 | RVP shows its own logo everywhere: its window and application icons, its idle screen, its About box, and in place of the Daum logo in a loaded skin's title bar. RVP draws its logo over that sprite and leaves the user's `.dsf` unchanged. | RVP is not a Daum or Kakao product, and their marks in its window would suggest that it is. Owner request, 2026-10-13. | Owner |
 | D11 | RVP's logo is a play triangle cut into three facets (amber, orange, copper), drawn as SVG in `crates/look/art/logo`; its colours are the accent of RVP Default. | The owner chose it from three drafts (goal I; draft A "Facet", after first picking C), 2026-10-15. | Owner |
 | D12 | With no skin set, RVP shows RVP Default, which is built into the program; PotPlayer's installed BlackSpace is no longer the fallback on Windows. A skin that fails to load falls back to RVP Default with a message. | M7: RVP must work without PotPlayer installed. | Goal I |
+| D13 | The normalizer is TomSteady, the method PotPlayer names: the gain control of Tom St Denis's freeware Winamp plugin (version 1.4), reconstructed from the plugin and run over blocks of 2048 samples, as PotPlayer runs it, by a thread of RVP's that reads each block's peak from mpv's log and sets the gain of a `volume` filter. It replaces S5's `dynaudnorm`. | It follows S5's recordings of PotPlayer within 0.1 dB (Level 75 %, Release time 10, `docs/spikes/s5-normalizer.md`); `dynaudnorm` differed by 2.2 LU and the owner heard it (quieter, voices raised less). The author gave the plugin and its source away freely; the owner allowed the reconstruction. | Owner, 2026-10-15 |
 
 ## 4. Usability requirements
 
@@ -252,11 +253,13 @@ observations, for example `media-title`, `playlist-pos`, `playlist-count`,
 `audio-params` (channels, sample rate), `audio-bitrate`, `container-fps`,
 `estimated-vf-fps`.
 
-Audio normalizer: implemented as an mpv audio filter chain built from FFmpeg
-filters (candidates: `dynaudnorm` for gain riding with a maximum gain for the
-boost, followed by a limiter; `loudnorm` is unsuitable for live playback).
-PotPlayer's "Level" and "Release time" map to filter parameters chosen in S5.
-Volume above 100% uses mpv's `volume-max`.
+Audio normalizer: TomSteady, PotPlayer's method (D13). mpv's filter chain
+cuts the audio into blocks of 2048 samples and prints each block's peak to
+mpv's log; a thread of RVP's reads it, runs TomSteady's gain control and sets
+the gain of a `volume` filter in the chain (`af-command`), followed by a
+limiter at TomSteady's ceiling. PotPlayer's "Level" is TomSteady's target
+level and "Release time" its stepping. (Before D13: `dynaudnorm` with S5's
+parameters.) Volume above 100% uses mpv's `volume-max`.
 
 ## 6. Milestones
 
@@ -520,7 +523,7 @@ translation, streaming via yt-dlp, other `.dsf` skins.
 |------|--------|------------|
 | SVP rejects a process that is not `mpv` | Breaks a core requirement | S1 first; fallbacks listed there |
 | libmpv builds without VapourSynth, or Python version mismatch | No SVP | S2; ship our own libmpv |
-| Normalizer sounds different from PotPlayer's | Daily-use complaint | S5 measurement and A/B test; tunable parameters |
+| Normalizer sounds different from PotPlayer's | Daily-use complaint | S5 measurement; PotPlayer's own method reproduced and checked against S5's recordings (D13) |
 | Parser quirks that only PotPlayer's behavior defines | Visual differences | Golden images from R1; fix by observation |
 | cxx-qt gaps (painted items, menus, popups) | Shell rework | S3; fallback to Qt Widgets |
 | Render API performance with chrome repaints | Dropped frames | S3 measurements; repaint only changed regions |
@@ -553,10 +556,6 @@ Deferred items (owner decisions, picked up when they become relevant):
 - Dropped frames after mpv loops a file (`loop-file`; goal E saw about 30
   per second in fullscreen on the Windows host after the loop). Deferred
   until looping becomes a feature (2026-10-11).
-- An RVP-side normalizer without look-ahead (S5's sketch: measure loudness
-  in mpv's filter chain, drive the gain from Rust), if the trial or the
-  blind test shows that `dynaudnorm`'s behaviour matters. Its ten-second
-  look-ahead costs about 50 ms per seek on a local file (2026-10-11).
 
 ## 10. Goals for `/goal`
 

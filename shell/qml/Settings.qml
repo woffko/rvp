@@ -490,7 +490,7 @@ ApplicationWindow {
                     Check { path: "normalizer.enabled"; text: "Normalize the volume (Shift+N)" }
                     Check { path: "normalizer.boost"; text: "Boost audio (raise quiet passages)" }
                     Number { label: "Level"; path: "normalizer.level"; unit: "% (10-100)" }
-                    Number { label: "Release time"; path: "normalizer.release"; unit: "(1-50)" }
+                    Number { label: "Release time"; path: "normalizer.release"; unit: "(5-10)" }
                     Heading { text: "Volume" }
                     Number { label: "Step (Up, Down, wheel)"; path: "volume-step"; unit: "%" }
                     Number { label: "Maximum (above 100 amplifies)"; path: "volume-max"; unit: "%" }

@@ -1,35 +1,42 @@
-//! The audio normalizer with boost (S5, `docs/spikes/s5-normalizer.md`).
+//! The audio normalizer: TomSteady, the gain control PotPlayer's normalizer
+//! runs ([`crate::tomsteady`], owner decision 2026-10-15; it replaced S5's
+//! `dynaudnorm` approximation, `docs/spikes/s5-normalizer.md`).
 //!
-//! PotPlayer's normalizer ("Tomsteady 32-bit floating point arithmetic")
-//! is approximated with ffmpeg's `dynaudnorm` in mpv's audio filter chain.
-//! With PotPlayer's defaults (Level 75 %, Release time 10, Boost on) the
-//! chain is `dynaudnorm=f=5000:g=3:p=1.0:m=5`, the closest of about 2300
-//! candidates. Boost sets the maximum gain (`m=5`, up to +14 dB; off:
-//! `m=1`, the normalizer only lowers loud passages). Level and Release time
-//! map to the target peak and the frame length around those defaults; the
-//! owner's blind A/B test (`tools/s5/ab_test.py`) decides whether the
-//! defaults are close enough.
+//! mpv runs no code of RVP's on its audio, so the gain control closes a loop
+//! through mpv's filter chain ([`chain_entry`](Normalizer::chain_entry)):
+//! ffmpeg cuts the audio into blocks of [`BLOCK`] samples (PotPlayer's block
+//! size, measured in S5's recordings), `astats` measures each block's peak
+//! and `ametadata` prints it to mpv's log. [`Control`] reads it there on a
+//! thread of its own (a weak client handle that asks for mpv's log at level
+//! `v`), feeds it to TomSteady and sends the gain for the next block to the
+//! `volume` filter that follows (`af-command`). In steady playback the gain
+//! arrives in time for the next block (measured on libmpv: 1 block after
+//! its peak was read, rarely 2), which is when TomSteady applies it too.
+//! Only TomSteady's cut of a block that would clip comes one block late;
+//! `alimiter` at TomSteady's ceiling holds such a block meanwhile. After a
+//! seek mpv filters a few blocks at once, and the gain catches up with them.
 //!
-//! In a player, two things differ from S5's offline measurement. mpv
-//! restarts the filter at every seek, and `dynaudnorm` assumes a gain of 1
-//! for the frames it has not seen, so the level climbed from the raw level
-//! for about ten seconds after each seek; `b=1` (its alternative boundary
-//! mode) starts at the computed gain instead. And the filter looks about
-//! ten seconds ahead: mpv decodes that much audio before playing on after a
-//! seek (about 50 ms more per seek on a local file), and changing the chain
-//! during playback dropped that audio, so a toggle seeks to the current
-//! position (`App`).
+//! The gain carries over from file to file and through seeks, as in the
+//! plugin; switching the normalizer on starts again at gain 1. A chain that
+//! is built again (the equalizer switched, a setting changed) starts at the
+//! gain the thread sent last.
 //!
 //! Speed changes: with only the normalizer in the chain, mpv applies a
-//! speed other than 1x with a tempo filter of its own, and at some moments
-//! the return to 1x left audio and video about 0.6 s apart, which a real
-//! video output pays for with dropped frames (14 on the Ubuntu boot, 13-16
-//! on the Ubuntu VM with `ao=null`; goal H). With a `scaletempo2` of RVP's
-//! own after the normalizer ([`TEMPO_ENTRY`]), mpv uses that filter for the
-//! speed: the offset stays under 0.02 s and no frames drop, without a
-//! seek.
+//! speed other than 1x with a tempo filter of its own, and with S5's
+//! `dynaudnorm` the return to 1x left audio and video about 0.6 s apart,
+//! which a real video output paid for with dropped frames (goal H). RVP
+//! keeps a `scaletempo2` of its own after the normalizer ([`TEMPO_ENTRY`]),
+//! which mpv then uses for the speed: no offset, no dropped frames, no seek.
 
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, Mutex, PoisonError};
+
+use rvp_engine::Engine;
+use rvp_engine::libmpv2::Mpv;
+use rvp_engine::libmpv2::events::Event;
 use serde::{Deserialize, Serialize};
+
+use crate::tomsteady::{STEPPING_RANGE, Tomsteady};
 
 /// The label of RVP's filter in mpv's `af` chain; other filters (SVP's
 /// `@svp` is video, but any user filter) are left alone.
@@ -39,6 +46,18 @@ pub const TEMPO_LABEL: &str = "rvptempo";
 /// mpv's pitch-correcting tempo filter, kept in the chain after the
 /// normalizer while it is on, so that speed changes retune it.
 pub const TEMPO_ENTRY: &str = "@rvptempo:scaletempo2";
+/// Samples per block, as PotPlayer runs TomSteady.
+pub const BLOCK: u32 = 2048;
+/// The filter that prints each block's peak, and the start of its lines in
+/// mpv's log.
+const PEAK_INSTANCE: &str = "ametadata@rvppeak";
+const PEAK_LINE: &str = "ametadata@rvppeak: lavfi.astats.Overall.Peak_level=";
+/// The filter that applies the gain.
+const GAIN_INSTANCE: &str = "volume@rvpgain";
+/// TomSteady's ceiling, 30000 of the 16-bit full scale (-0.77 dBFS).
+const CEILING: f64 = 30_000.0 / 32_768.0;
+/// How long the thread waits for mpv's log before it looks at its stop flag.
+const WAIT: f64 = 0.25;
 
 /// Normalizer settings, as PotPlayer's Preferences page names them.
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
@@ -47,9 +66,10 @@ pub struct Normalizer {
     pub enabled: bool,
     /// "Boost audio": quiet passages may be raised.
     pub boost: bool,
-    /// Target level in percent (PotPlayer's "Level"), 10-100.
+    /// Target peak in percent of full scale (PotPlayer's "Level"), 10-100.
     pub level: f64,
-    /// PotPlayer's "Release time", 1-50: how slowly the gain follows.
+    /// PotPlayer's "Release time": TomSteady's stepping, the fractional bits
+    /// of its gain (5-10); at 10 the gain moves by 1/1024 per block.
     pub release: f64,
 }
 
@@ -66,23 +86,167 @@ impl Default for Normalizer {
     }
 }
 
+/// `value` rounded to a whole number within `low..=high`.
+fn whole(value: f64, low: u32, high: u32) -> u32 {
+    let value = value.round().clamp(f64::from(low), f64::from(high));
+    // Clamped to a u32 range above, and whole.
+    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+    let value = value as u32;
+    value
+}
+
 impl Normalizer {
-    /// The `dynaudnorm` filter for these settings.
+    /// The target peak in whole percent.
     #[must_use]
-    pub fn filter(&self) -> String {
-        // Level 75 % is S5's p=1.0 (peak at full scale); lower levels
-        // lower the peak target proportionally.
-        let peak = (self.level.clamp(10.0, 100.0) / 75.0).min(1.0);
-        // Release time 10 is S5's 5000 ms frame; the frame scales with it.
-        let frame = (self.release.clamp(1.0, 50.0) * 500.0).round();
-        let max_gain = if self.boost { 5 } else { 1 };
-        format!("dynaudnorm=f={frame:.0}:g=3:p={peak:.2}:m={max_gain}:b=1")
+    pub fn level_percent(&self) -> u32 {
+        whole(self.level, 1, 100)
     }
 
-    /// The `af` entry: label and filter.
+    /// TomSteady's stepping for the release time.
     #[must_use]
-    pub fn chain_entry(&self) -> String {
-        format!("@{LABEL}:lavfi=[{}]", self.filter())
+    pub fn stepping(&self) -> u32 {
+        whole(self.release, STEPPING_RANGE.0, STEPPING_RANGE.1)
+    }
+
+    /// The `af` entry, its gain starting at `gain`: blocks, their peak in
+    /// mpv's log, the gain [`Control`] sets, the ceiling.
+    #[must_use]
+    pub fn chain_entry(&self, gain: f64) -> String {
+        format!(
+            "@{LABEL}:lavfi=[asetnsamples=n={BLOCK}:p=0,\
+             astats=metadata=1:reset=1:measure_perchannel=none:measure_overall=Peak_level,\
+             {PEAK_INSTANCE}=mode=print:key=lavfi.astats.Overall.Peak_level,\
+             {GAIN_INSTANCE}=volume={gain:.9}:precision=float,\
+             alimiter=limit={CEILING:.5}:level=0]"
+        )
+    }
+}
+
+/// A block's peak (full scale 1) from a line `ametadata` printed to mpv's
+/// log.
+fn block_peak(text: &str) -> Option<f64> {
+    let decibels: f64 = text.strip_prefix(PEAK_LINE)?.trim().parse().ok()?;
+    // A silent block measures -inf.
+    Some(if decibels.is_finite() {
+        10f64.powf(decibels / 20.0)
+    } else {
+        0.0
+    })
+}
+
+/// What the thread and the application share.
+#[derive(Debug)]
+struct Shared {
+    settings: Normalizer,
+    /// Start over at gain 1 with the next block.
+    restart: bool,
+    /// The gain sent last.
+    gain: f64,
+}
+
+/// The thread that keeps the chain's gain at TomSteady's.
+#[derive(Debug)]
+pub struct Control {
+    shared: Arc<Mutex<Shared>>,
+    stop: Arc<AtomicBool>,
+}
+
+impl Control {
+    /// Starts the thread on a weak client handle of `engine`'s player.
+    ///
+    /// # Errors
+    /// Fails when libmpv refuses the handle or its log messages.
+    pub fn start(engine: &Engine, settings: Normalizer) -> Result<Self, String> {
+        let client = engine
+            .mpv()
+            .create_weak_client(Some("rvp_normalizer"))
+            .map_err(|e| format!("normalizer client: {e}"))?;
+        client
+            .request_log_messages("v")
+            .map_err(|e| format!("normalizer log: {e}"))?;
+        let shared = Arc::new(Mutex::new(Shared {
+            settings,
+            restart: true,
+            gain: 1.0,
+        }));
+        let stop = Arc::new(AtomicBool::new(false));
+        let (thread_shared, thread_stop) = (Arc::clone(&shared), Arc::clone(&stop));
+        std::thread::Builder::new()
+            .name("rvp-normalizer".to_owned())
+            .spawn(move || run(&client, &thread_shared, &thread_stop))
+            .map_err(|e| format!("normalizer thread: {e}"))?;
+        Ok(Self { shared, stop })
+    }
+
+    /// New settings for the next block; switching the normalizer on starts
+    /// again at gain 1.
+    pub fn configure(&self, settings: Normalizer) {
+        let mut shared = self.shared.lock().unwrap_or_else(PoisonError::into_inner);
+        if settings.enabled && !shared.settings.enabled {
+            shared.restart = true;
+            shared.gain = 1.0;
+        }
+        shared.settings = settings;
+    }
+
+    /// The gain sent last, for a chain built again.
+    #[must_use]
+    pub fn gain(&self) -> f64 {
+        self.shared
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .gain
+    }
+}
+
+impl Drop for Control {
+    fn drop(&mut self) {
+        // The thread notices within `WAIT` and drops its handle.
+        self.stop.store(true, Ordering::Relaxed);
+    }
+}
+
+/// The thread: each block's peak in, the next block's gain out.
+fn run(client: &Mpv, shared: &Mutex<Shared>, stop: &AtomicBool) {
+    let mut agc = Tomsteady::new(75, 10, true);
+    let mut applied = None;
+    while !stop.load(Ordering::Relaxed) {
+        let peak = match client.wait_event(WAIT) {
+            Some(Ok(Event::Shutdown)) => return,
+            Some(Ok(Event::LogMessage {
+                prefix: "ffmpeg",
+                text,
+                ..
+            })) => block_peak(text),
+            _ => None,
+        };
+        let Some(peak) = peak else {
+            continue;
+        };
+        let gain = {
+            let mut shared = shared.lock().unwrap_or_else(PoisonError::into_inner);
+            let settings = shared.settings;
+            let wanted = (
+                settings.level_percent(),
+                settings.stepping(),
+                settings.boost,
+            );
+            if std::mem::take(&mut shared.restart) {
+                agc = Tomsteady::new(wanted.0, wanted.1, wanted.2);
+            } else if applied != Some(wanted) {
+                agc.set(wanted.0, wanted.1, wanted.2);
+            }
+            applied = Some(wanted);
+            let gain = agc.block(peak);
+            shared.gain = gain;
+            gain
+        };
+        // Sent for every block: mpv builds the graph again when the audio
+        // format changes, and the new one starts at the entry's gain.
+        drop(client.command(
+            "af-command",
+            &[LABEL, "volume", &format!("{gain:.9}"), GAIN_INSTANCE],
+        ));
     }
 }
 
@@ -91,28 +255,58 @@ mod tests {
     use super::*;
 
     #[test]
-    fn defaults_are_the_s5_chain() {
+    fn the_chain_measures_blocks_and_applies_the_gain() {
         assert_eq!(
-            Normalizer::default().filter(),
-            "dynaudnorm=f=5000:g=3:p=1.00:m=5:b=1"
+            Normalizer::default().chain_entry(1.0),
+            "@rvpnorm:lavfi=[asetnsamples=n=2048:p=0,\
+             astats=metadata=1:reset=1:measure_perchannel=none:measure_overall=Peak_level,\
+             ametadata@rvppeak=mode=print:key=lavfi.astats.Overall.Peak_level,\
+             volume@rvpgain=volume=1.000000000:precision=float,\
+             alimiter=limit=0.91553:level=0]"
         );
-        let without_boost = Normalizer {
-            boost: false,
+        assert!(
+            Normalizer::default()
+                .chain_entry(2.5)
+                .contains("volume@rvpgain=volume=2.500000000:")
+        );
+    }
+
+    #[test]
+    fn potplayer_settings_map_to_tomsteady() {
+        let normalizer = Normalizer::default();
+        assert_eq!(
+            (normalizer.level_percent(), normalizer.stepping()),
+            (75, 10)
+        );
+        let odd = Normalizer {
+            level: 60.4,
+            release: 50.0,
             ..Normalizer::default()
         };
-        assert_eq!(
-            without_boost.filter(),
-            "dynaudnorm=f=5000:g=3:p=1.00:m=1:b=1"
-        );
-        let quieter = Normalizer {
-            level: 50.0,
-            release: 4.0,
+        assert_eq!((odd.level_percent(), odd.stepping()), (60, 10));
+        let fast = Normalizer {
+            release: 1.0,
             ..Normalizer::default()
         };
-        assert_eq!(quieter.filter(), "dynaudnorm=f=2000:g=3:p=0.67:m=5:b=1");
+        assert_eq!(fast.stepping(), 5);
+    }
+
+    #[test]
+    fn peaks_come_from_ametadata_lines() {
+        let peak = block_peak("ametadata@rvppeak: lavfi.astats.Overall.Peak_level=-6.020600\n")
+            .expect("a peak");
+        assert!((peak - 0.5).abs() < 1e-6, "{peak}");
         assert_eq!(
-            Normalizer::default().chain_entry(),
-            "@rvpnorm:lavfi=[dynaudnorm=f=5000:g=3:p=1.00:m=5:b=1]"
+            block_peak("ametadata@rvppeak: lavfi.astats.Overall.Peak_level=-inf\n"),
+            Some(0.0)
+        );
+        assert_eq!(
+            block_peak("ametadata@rvppeak: frame:3 pts:6144 pts_time:0.128\n"),
+            None
+        );
+        assert_eq!(
+            block_peak("Parsed_ametadata_2: lavfi.astats.Overall.Peak_level=-1.0\n"),
+            None
         );
     }
 }

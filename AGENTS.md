@@ -121,6 +121,14 @@ each goal writes `docs/goals/goal-<letter>-status.md`.
   `NEAR_END` (1.5 s) they wait for the next file. While a file loads, the
   old file's end is ignored (`Tracking::Loading`), or the album moves on
   twice.
+- The normalizer is TomSteady (D13, `crates/app/src/tomsteady.rs`, its
+  rules checked against S5's PotPlayer recordings by
+  `tools/s5/tomsteady_fit.py`). Its chain prints each 2048-sample block's
+  peak to mpv's log; `normalizer::Control` (a weak client on a thread of
+  its own) reads it and sends the gain back with `af-command`. libmpv gives
+  ffmpeg's log to the first player core of a process only: keep one core
+  per process, and give tests that need the log a test binary of their
+  own (`tests/normalizer_live.rs`).
 - The VapourSynth runtime is chosen before any thread starts
   (`point_at_vapoursynth` sets `VSSCRIPT_PATH` through `rvp_set_env`); do
   not set environment variables later or from Rust (`set_var` is unsafe).

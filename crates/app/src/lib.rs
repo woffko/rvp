@@ -28,6 +28,7 @@ mod resume;
 mod settings;
 mod storage;
 pub mod svp;
+pub mod tomsteady;
 pub mod video;
 pub mod view;
 
