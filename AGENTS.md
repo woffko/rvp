@@ -60,6 +60,27 @@ each goal writes `docs/goals/goal-<letter>-status.md`.
 - `cargo run --release -p rvp-skin --example compare_reference -- RENDER REF OUT`
   aligns a render with a scaled screenshot and writes side-by-side crops.
 
+## Own look (crates/look)
+
+- RVP's logo and its default skin RVP Default are vector sources in
+  `crates/look/art` (SVG, the skin's markup and `sprites.xml`); M7's
+  originality rules apply: draw every asset for RVP, take nothing from
+  PotPlayer's skins, and list each new asset in `art/SOURCES.md`.
+- Built files are not committed: `shell/build.rs` draws the icons, logo
+  images, Windows icon resource and `RVP Default.dsf` into its `OUT_DIR`;
+  `cargo xtask look DIR` writes them for packages and reviews.
+- `crates/look/src/svg.rs` renders only the SVG subset its module comment
+  lists and rejects the rest; check new art with
+  `cargo run --release -p rvp-look --example render_svg -- IN.svg OUT.png SIZE`.
+- RVP Default's geometry snapshots and golden renders are in
+  `crates/look/tests` (no fonts, so no text); `RVP_BLESS=1 cargo test -p
+  rvp-look --test default_skin` rewrites them after a deliberate change,
+  and `RVP_BLESS=1 cargo test -p rvp-app --test coverage` rewrites
+  `docs/coverage/rvp-default.md`.
+- With no skin set (or `--skin=` with no path) RVP shows RVP Default. In
+  other skins RVP draws its logo on title-bar `CMD_POPUPMENU_ETC` buttons
+  (D10, `Skin::replace_sprite`); RVP Default marks its own `RvpLogo='1'`.
+
 ## Shell notes
 
 - `rvp --selftest` (also `=playback`, `=resume`, `=upright`, `=svp`,

@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["crates/skin", "crates/engine", "crates/app", "crates/platform", "shell", "xtask"]
+members = ["crates/skin", "crates/look", "crates/engine", "crates/app", "crates/platform", "shell", "xtask"]
 # Throwaway goal B spikes (their own workspace with relaxed lints) and the
 # patched libmpv2 (used through [patch.crates-io] below).
 exclude = ["spikes", "vendor"]
@@ -27,6 +27,9 @@ png = "=0.18.1"
 serde = { version = "=1.0.229", features = ["derive"] }
 serde_json = "=1.0.151"
 swash = "=0.2.10"
+# Fills and strokes the paths of RVP's own vector art (crates/look); already
+# in the tree as swash's glyph rasterizer.
+zeno = "=0.3.3"
 zip = { version = "=9.0.0", default-features = false, features = ["deflate-flate2"] }
 
 [patch.crates-io]

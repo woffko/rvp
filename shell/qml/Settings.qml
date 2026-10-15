@@ -695,7 +695,7 @@ ApplicationWindow {
                         label: "PotPlayer skin (.dsf)"
                         path: "skin"
                         optional: true
-                        placeholder: win.view.windows ? "PotPlayer's BlackSpace" : "not set"
+                        placeholder: "RVP Default (built in)"
                         Button {
                             text: "Browse…"
                             onClicked: skinChooser.open()
@@ -710,7 +710,7 @@ ApplicationWindow {
                             onClicked: win.set("skin", modelData)
                         }
                     }
-                    Note { text: "RVP draws PotPlayer's .dsf skins (BlackSpace is the one it is made for). The skin changes at the next start." }
+                    Note { text: "Empty: RVP Default, RVP's own skin. RVP also draws PotPlayer's .dsf skins (BlackSpace is the one it is made for). The skin changes at the next start." }
                 }
             }
         }

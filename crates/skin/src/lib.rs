@@ -37,7 +37,7 @@ pub use image::Image;
 pub use layout::{Layout, layout};
 pub use paint::{DisplayList, paint};
 pub use render::rasterize;
-pub use skin::Skin;
+pub use skin::{LogoSlot, Skin};
 pub use state::{DataModel, Playlist, PlaylistEntry, SliderValue, UiState};
 
 /// Lays out, paints and rasterizes one skin area in a single call.

@@ -1,0 +1,17 @@
+[package]
+name = "rvp-look"
+description = "RVP's own look: the logo, the icons and the default skin, drawn as vector sources and built into PNG, ICO and .dsf files."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[dependencies]
+rvp-skin = { path = "../skin" }
+zeno.workspace = true
+zip.workspace = true
+
+[lints]
+workspace = true

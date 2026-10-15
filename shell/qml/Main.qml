@@ -360,6 +360,40 @@ Window {
         z: 1
     }
 
+    // RVP's logo on the idle screen (D10): while no video picture shows,
+    // after a moment so that it does not flash between files.
+    Image {
+        id: idleLogo
+        readonly property bool idle: !player.has_video
+        property bool shown: idle
+        source: "qrc:/qt/qml/Rvp/look/logo/symbol.png"
+        fillMode: Image.PreserveAspectFit
+        smooth: true
+        mipmap: true
+        height: Math.round(Math.min(200, player.video_rect.height * 0.25))
+        width: Math.round(height * implicitWidth / Math.max(1, implicitHeight))
+        x: Math.round(player.video_rect.x + (player.video_rect.width - width) / 2)
+        y: Math.round(player.video_rect.y + (player.video_rect.height - height) / 2)
+        z: 1.5
+        opacity: shown ? 1 : 0
+        visible: opacity > 0 && height >= 16
+        Behavior on opacity {
+            NumberAnimation { duration: 200 }
+        }
+        onIdleChanged: {
+            idleDelay.stop()
+            if (idle)
+                idleDelay.start()
+            else
+                shown = false
+        }
+        Timer {
+            id: idleDelay
+            interval: 400
+            onTriggered: idleLogo.shown = idleLogo.idle
+        }
+    }
+
     Repeater {
         id: regionItems
         model: player.region_count
@@ -1086,6 +1120,8 @@ Window {
         switch (t.step) {
         case 0:
             t.stepStarted = Date.now()
+            // RVP's own art comes from the build's Qt resources.
+            t.check("logo_resources", idleLogo.status === Image.Ready, "idle logo status " + idleLogo.status)
             t.next()
             break
         case 1:

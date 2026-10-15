@@ -28,7 +28,7 @@ use rvp_app::{
     WindowGeometry, view,
 };
 use rvp_engine::{Engine, EngineEvent, PropertyId};
-use rvp_skin::Skin;
+use rvp_skin::{Skin, SkinArchive};
 
 use crate::player_qobject::qobject;
 use crate::video::ENGINE;
@@ -277,26 +277,58 @@ fn pixel(value: f64) -> i32 {
     pixel
 }
 
-/// The skin to load: `--skin`, the setting, `RVP_SKIN`, or PotPlayer's
-/// installed BlackSpace on Windows.
-fn skin_path(cli: &Cli, settings: &Settings) -> Option<PathBuf> {
+/// RVP Default, RVP's own skin, drawn and packed by build.rs from
+/// crates/look/art/skin.
+const DEFAULT_SKIN: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/look/skins/RVP Default.dsf"));
+
+/// Where the skin comes from.
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum SkinSource {
+    File(PathBuf),
+    /// RVP Default, built in.
+    Default,
+}
+
+/// The skin to load: `--skin=PATH`, the setting, `RVP_SKIN`, or RVP
+/// Default. `--skin=` with no path asks for RVP Default whatever else is
+/// set (the Linux kit's RVP Default check).
+fn skin_source(cli: &Cli, settings: &Settings) -> SkinSource {
+    if cli.flag("skin") && cli.value("skin").is_none() {
+        return SkinSource::Default;
+    }
     cli.value("skin")
         .map(PathBuf::from)
         .or_else(|| settings.skin.clone())
-        .or_else(|| std::env::var_os("RVP_SKIN").map(PathBuf::from))
         .or_else(|| {
-            cfg!(windows)
-                .then(|| PathBuf::from(r"C:\Program Files\DAUM\PotPlayer\Skins\BlackSpace_en.dsf"))
+            std::env::var_os("RVP_SKIN")
+                .filter(|value| !value.is_empty())
+                .map(PathBuf::from)
         })
+        .map_or(SkinSource::Default, SkinSource::File)
 }
 
 type SkinLoad = std::thread::JoinHandle<Result<Skin, String>>;
 
-/// The skin being loaded since the process started, and its path.
-static PRELOAD: Mutex<Option<(PathBuf, SkinLoad)>> = Mutex::new(None);
+/// The skin being loaded since the process started, and its source.
+static PRELOAD: Mutex<Option<(SkinSource, SkinLoad)>> = Mutex::new(None);
 
-fn open_skin(path: &Path) -> Result<Skin, String> {
-    Skin::open(path).map_err(|error| format!("{}: {error}", path.display()))
+fn open_skin(source: &SkinSource) -> Result<Skin, String> {
+    let mut skin = match source {
+        SkinSource::File(path) => {
+            Skin::open(path).map_err(|error| format!("{}: {error}", path.display()))?
+        }
+        SkinSource::Default => {
+            let archive = SkinArchive::from_zip_bytes(rvp_look::skin::NAME, DEFAULT_SKIN.to_vec())
+                .map_err(|error| format!("{}: {error}", rvp_look::skin::NAME))?;
+            Skin::load(archive, "VideoSkin.xml")
+                .map_err(|error| format!("{}: {error}", rvp_look::skin::NAME))?
+        }
+    };
+    // D10: RVP's logo in place of the skin's title-bar logo.
+    if let Err(error) = rvp_look::brand::brand_skin(&mut skin) {
+        eprintln!("rvp: cannot draw the logo: {error}");
+    }
+    Ok(skin)
 }
 
 /// The VapourSynth runtime (VSScript) the process points libmpv at.
@@ -340,29 +372,27 @@ pub fn preload_skin() {
         .flatten()
         .unwrap_or_default();
     point_at_vapoursynth(&settings);
-    let Some(path) = skin_path(&cli, &settings) else {
-        return;
-    };
-    let thread_path = path.clone();
+    let source = skin_source(&cli, &settings);
+    let thread_source = source.clone();
     let spawned = std::thread::Builder::new()
         .name("rvp-skin".to_owned())
-        .spawn(move || open_skin(&thread_path));
+        .spawn(move || open_skin(&thread_source));
     if let (Ok(handle), Ok(mut slot)) = (spawned, PRELOAD.lock()) {
-        *slot = Some((path, handle));
+        *slot = Some((source, handle));
     }
 }
 
-fn load_skin(path: &Path) -> Result<&'static Skin, String> {
+fn load_skin(source: &SkinSource) -> Result<&'static Skin, String> {
     let preloaded = PRELOAD
         .lock()
         .ok()
         .and_then(|mut slot| slot.take())
-        .filter(|(preloaded_path, _)| preloaded_path == path);
+        .filter(|(preloaded, _)| preloaded == source);
     let skin = match preloaded {
         Some((_, handle)) => handle
             .join()
             .map_err(|_| "the skin loader stopped".to_owned())??,
-        None => open_skin(path)?,
+        None => open_skin(source)?,
     };
     // The skin lives for the whole process: the layout borrows it and the
     // render thread paints from it.
@@ -411,12 +441,28 @@ fn settings_result(notes: &[String], restart: bool, error: Option<&str>) -> QStr
     QString::from(&value.to_string())
 }
 
-fn load_chrome(cli: &Cli, settings: &Settings) -> Result<Chrome, String> {
-    let path = skin_path(cli, settings).ok_or_else(|| {
-        "no skin configured: set \"skin\" in settings.json or pass --skin=PATH".to_owned()
-    })?;
-    let skin = load_skin(&path).map_err(|error| format!("cannot load the skin {error}"))?;
-    Ok(Chrome::new(skin))
+/// The chrome with the configured skin, or with RVP Default when that
+/// skin cannot be loaded (the reason goes to `messages`).
+fn load_chrome(cli: &Cli, settings: &Settings, messages: &mut Vec<String>) -> Option<Chrome> {
+    let source = skin_source(cli, settings);
+    match load_skin(&source) {
+        Ok(skin) => return Some(Chrome::new(skin)),
+        Err(error) => messages.push(if source == SkinSource::Default {
+            format!("cannot load the skin {error}")
+        } else {
+            format!("cannot load the skin {error}; RVP Default is shown instead")
+        }),
+    }
+    if source == SkinSource::Default {
+        return None;
+    }
+    match load_skin(&SkinSource::Default) {
+        Ok(skin) => Some(Chrome::new(skin)),
+        Err(error) => {
+            messages.push(format!("cannot load the skin {error}"));
+            None
+        }
+    }
 }
 
 /// A JSON string literal (for the self-test's status lines).
@@ -487,13 +533,7 @@ impl qobject::Player {
             app.skip_first_import();
         }
         crate::metrics::mark("settings_loaded_ms");
-        let chrome = match load_chrome(&cli, &app.settings) {
-            Ok(chrome) => Some(chrome),
-            Err(error) => {
-                messages.push(error);
-                None
-            }
-        };
+        let chrome = load_chrome(&cli, &app.settings, &mut messages);
         crate::metrics::mark("skin_loaded_ms");
 
         crate::ffi::bridge::rvp_set_c_numeric_locale();

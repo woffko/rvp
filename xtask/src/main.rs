@@ -2,6 +2,8 @@
 //!
 //! `cargo xtask ci` runs the same checks as the GitHub Actions workflow:
 //! formatting, clippy with warnings denied, the test suite and `cargo deny`.
+//! `cargo xtask look DIR` writes the files built from RVP's own art (the
+//! icons, the logo images and the default skin) to `DIR`.
 //!
 //! The engine links libmpv and the shell links Qt 6: when `MPV_LIB_DIR` is
 //! set (a libmpv outside the system paths), and when `QMAKE` names a Qt
@@ -15,9 +17,15 @@ fn main() -> ExitCode {
     let mut args = std::env::args().skip(1);
     let result = match args.next().as_deref() {
         Some("ci") => ci(),
+        Some("look") => match args.next() {
+            Some(dir) => look(&PathBuf::from(dir)),
+            None => Err("usage: cargo xtask look DIR".to_owned()),
+        },
         Some("help") | None => {
             println!(
-                "xtask commands:\n  ci     run fmt, clippy, tests and cargo deny as CI does\n  help   show this message"
+                "xtask commands:\n  ci        run fmt, clippy, tests and cargo deny as CI does\n  \
+                 look DIR  write the icons, logo images and default skin to DIR\n  \
+                 help      show this message"
             );
             Ok(())
         }
@@ -79,6 +87,19 @@ fn run(program: &str, args: &[&str]) -> Result<(), String> {
     } else {
         Err(format!("{program} {} failed with {status}", args.join(" ")))
     }
+}
+
+fn look(dir: &std::path::Path) -> Result<(), String> {
+    for (name, bytes) in rvp_look::outputs::outputs()? {
+        let path = dir.join(&name);
+        if let Some(parent) = path.parent() {
+            std::fs::create_dir_all(parent)
+                .map_err(|error| format!("{}: {error}", parent.display()))?;
+        }
+        std::fs::write(&path, bytes).map_err(|error| format!("{}: {error}", path.display()))?;
+        println!("{}", path.display());
+    }
+    Ok(())
 }
 
 fn ci() -> Result<(), String> {

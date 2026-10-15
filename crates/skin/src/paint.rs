@@ -9,7 +9,13 @@
 //! * Inactive windows use `AltImageLeft`/`AltImageTop` for statics.
 //! * Button sprites hold their states side by side, each as wide as the
 //!   button: normal, hover, pressed, disabled. A missing state falls back to
-//!   normal. Toggle buttons (`DownFlag`) show the pressed state while on.
+//!   normal. Toggle buttons (`DownFlag`) show the pressed state while on;
+//!   a `CMD_SELECT_PAGE` toggle is on while its page shows (an RVP
+//!   extension for RVP Default's page tabs: BlackSpace's page buttons have
+//!   no `DownFlag`).
+//!   RVP can give a button a picture of its own ([`Skin::replace_sprite`]):
+//!   it draws its logo on title-bar logo buttons this way (decision D10),
+//!   with the states side by side from the image's left edge.
 //! * `Label` text colour is the atlas pixel at `ColorX`/`ColorY`
 //!   (`OverColorX`/`OverColorY` on hover). `HoriAlignment` 0/1/2 is
 //!   left/centre/right, `VertAlignment` 0/1/2 is top/centre/bottom.
@@ -252,7 +258,8 @@ fn paint_static(
 
 fn paint_button(list: &mut DisplayList, skin: &Skin, node: &Node<'_>, state: &UiState) {
     let attrs = &node.element.attrs;
-    if !has_sprite(attrs) {
+    let replaced = skin.replaced_sprite(node.element.id);
+    if !has_sprite(attrs) && replaced.is_none() {
         return;
     }
     let width = attrs
@@ -263,7 +270,14 @@ fn paint_button(list: &mut DisplayList, skin: &Skin, node: &Node<'_>, state: &Ui
         .int("ImageHeight")
         .filter(|h| *h > 0)
         .unwrap_or(node.rect.h);
-    let toggled = attrs.flag("DownFlag") && node.command().is_some_and(|cmd| state.flag(cmd));
+    let toggled = attrs.flag("DownFlag")
+        && node.command().is_some_and(|cmd| {
+            if cmd == "CMD_SELECT_PAGE" {
+                attrs.int("PageIndex") == Some(state.current_page)
+            } else {
+                state.flag(cmd)
+            }
+        });
     let index = if attrs.int("Enabled") == Some(0) {
         3
     } else if state.pressed == Some(node.element.id) || toggled {
@@ -271,6 +285,12 @@ fn paint_button(list: &mut DisplayList, skin: &Skin, node: &Node<'_>, state: &Ui
     } else {
         i32::from(state.hover == Some(node.element.id))
     };
+    if let Some(image) = replaced {
+        // RVP's own picture (D10): states side by side from the left edge.
+        let src = Rect::new(index * node.rect.w, 0, node.rect.w, node.rect.h);
+        list.image(image, src, node.rect, node.clip);
+        return;
+    }
     let left = attrs.int_or("ImageLeft", 0);
     let top = attrs.int_or("ImageTop", 0);
     let atlas_width = skin

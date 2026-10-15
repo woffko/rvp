@@ -18,11 +18,14 @@ cxx-qt.workspace = true
 cxx-qt-lib.workspace = true
 rvp-app = { path = "../crates/app" }
 rvp-engine = { path = "../crates/engine" }
+rvp-look = { path = "../crates/look" }
 rvp-skin = { path = "../crates/skin" }
 serde_json.workspace = true
 
 [build-dependencies]
 cxx-qt-build.workspace = true
+# Draws the icons, the logo images and the default skin from their sources.
+rvp-look = { path = "../crates/look" }
 
 # Not the workspace lints: cxx-qt's generated bridge code needs `unsafe`
 # (owner decision 2026-10-10, AGENTS.md), so it is denied here instead of

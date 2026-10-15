@@ -85,6 +85,7 @@ bool rvp_has_windows();
 bool rvp_instance_send(rust::Str name, rust::Str message);
 bool rvp_instance_listen(rust::Str name);
 void rvp_set_c_numeric_locale();
+void rvp_set_window_icon();
 void rvp_set_env(rust::Str name, rust::Str value);
 std::size_t rvp_gl_get_proc_address(rust::Str name);
 void rvp_video_request_update();

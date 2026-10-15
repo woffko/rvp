@@ -18,8 +18,8 @@ use crate::video::{Color, Deinterlace, Shaders, VapourSynth, VideoEffect};
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(default, rename_all = "kebab-case")]
 pub struct Settings {
-    /// The `.dsf` skin to load. Unset: PotPlayer's installed BlackSpace on
-    /// Windows; on Linux a skin must be configured.
+    /// The `.dsf` skin to load. Unset: RVP Default, the skin built into
+    /// RVP.
     pub skin: Option<PathBuf>,
     /// mpv `hwdec`.
     pub hwdec: String,

@@ -1,17 +1,19 @@
-//! The dispatcher's coverage reports (M4) in `docs/coverage/`: PotPlayer's
-//! menus as R1 recorded them, and BlackSpace's live commands. The menu
-//! report is always checked; the skin report only when the third-party skin
-//! is there (`RVP_TEST_SKIN`, default: the PotPlayer folder seen from WSL).
-//! `RVP_BLESS=1` rewrites both.
+//! The dispatcher's coverage reports (M4, M7) in `docs/coverage/`:
+//! PotPlayer's menus as R1 recorded them, RVP Default's commands, and
+//! BlackSpace's live commands. The menu and RVP Default reports are always
+//! checked; BlackSpace's only when the third-party skin is there
+//! (`RVP_TEST_SKIN`, default: the PotPlayer folder seen from WSL).
+//! `RVP_BLESS=1` rewrites them.
 
 use std::path::{Path, PathBuf};
 
 use rvp_app::Action;
 use rvp_app::coverage::{
-    ItemStatus, commands, item_status, menu_report, skin_covered, skin_reason, skin_report,
+    BLACKSPACE_INTRO, DEFAULT_SKIN_INTRO, ItemStatus, commands, item_status, menu_report,
+    skin_covered, skin_reason, skin_report,
 };
 use rvp_app::menu::{context_tree, playlist_tree};
-use rvp_skin::Skin;
+use rvp_skin::{Skin, SkinArchive};
 
 const DEFAULT_SKIN: &str = "/mnt/c/Program Files/DAUM/PotPlayer/Skins/BlackSpace_en.dsf";
 
@@ -112,5 +114,55 @@ fn the_blackspace_report_is_current() {
     );
     let menus = skin.user_menus();
     assert_eq!(menus.len(), 19, "BlackSpace has 19 skin menus");
-    check("blackspace.md", &skin_report("BlackSpace", &commands));
+    check(
+        "blackspace.md",
+        &skin_report("BlackSpace", BLACKSPACE_INTRO, &commands),
+    );
+}
+
+/// Commands RVP Default keeps for the classic layout's sake although RVP
+/// does not carry them out yet; any other must work.
+const DEFAULT_SKIN_GAPS: [&str; 16] = [
+    "CMD_POPUPMENU_AUDIO_CHANNEL",
+    "CMD_POPUPMENU_AUDIO_SAMPLE",
+    "CMD_POPUPMENU_CAPTION_FONT",
+    "CMD_POPUPMENU_CAPTION_MARGIN",
+    "CMD_POPUPMENU_CAPTION_PARA",
+    "ID_CAPTION_MOVE_LEFT",
+    "ID_CAPTION_MOVE_RIGHT",
+    "ID_ETC_CLOSE_SYSTEM_FILE",
+    "ID_ETC_CLOSE_SYSTEM_LIST",
+    "ID_ETC_RESTORE_POS",
+    "ID_OPEN_DVD",
+    "ID_PLAYLIST_SAVE",
+    "ID_SKIN_AUTO_HIDE",
+    "ID_VIDEO_ADV_CAPTURE",
+    "ID_VIDEO_CAPTURE_CAPTION",
+    "ID_VIDEO_IMAGE_THUMBNAIL",
+];
+
+#[test]
+fn the_rvp_default_report_is_current() {
+    let bytes = rvp_look::skin::dsf().expect("RVP Default builds");
+    let archive =
+        SkinArchive::from_zip_bytes(rvp_look::skin::NAME, bytes).expect("a readable archive");
+    let skin = Skin::load(archive, "VideoSkin.xml").expect("RVP Default loads");
+    let commands = skin.commands();
+    let gaps: Vec<&str> = commands
+        .keys()
+        .map(String::as_str)
+        .filter(|command| !skin_covered(command))
+        .collect();
+    let unexpected: Vec<&&str> = gaps
+        .iter()
+        .filter(|command| !DEFAULT_SKIN_GAPS.contains(command))
+        .collect();
+    assert!(
+        unexpected.is_empty(),
+        "RVP does not carry out {unexpected:?}"
+    );
+    check(
+        "rvp-default.md",
+        &skin_report("RVP Default", DEFAULT_SKIN_INTRO, &commands),
+    );
 }

@@ -23,6 +23,7 @@
 #include <QtCore/QTimer>
 #include <QtGui/QFontMetrics>
 #include <QtGui/QGuiApplication>
+#include <QtGui/QIcon>
 #include <QtGui/QImage>
 #include <QtGui/QOpenGLContext>
 #include <QtGui/QOpenGLFunctions>
@@ -457,6 +458,16 @@ void rvp_set_c_numeric_locale()
     // libmpv refuses to start unless LC_NUMERIC is "C"; Qt sets the user
     // locale on Unix.
     std::setlocale(LC_NUMERIC, "C");
+}
+
+void rvp_set_window_icon()
+{
+    // RVP's icon in every size the build drew (shell/build.rs); the window
+    // system picks the one that fits.
+    QIcon icon;
+    for (const int size : {16, 24, 32, 48, 64, 128, 256})
+        icon.addFile(QStringLiteral(":/qt/qml/Rvp/look/icons/rvp-%1.png").arg(size), QSize(size, size));
+    QGuiApplication::setWindowIcon(icon);
 }
 
 void rvp_set_env(rust::Str name, rust::Str value)

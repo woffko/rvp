@@ -14,5 +14,9 @@ rvp-skin = { path = "../skin" }
 serde.workspace = true
 serde_json.workspace = true
 
+[dev-dependencies]
+# Builds RVP Default for its coverage report.
+rvp-look = { path = "../look" }
+
 [lints]
 workspace = true

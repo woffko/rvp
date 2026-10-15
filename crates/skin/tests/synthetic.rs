@@ -472,3 +472,74 @@ fn skin_menus_and_commands() {
         other => panic!("unexpected hit {other:?}"),
     }
 }
+
+/// D10: RVP draws its own picture on a title bar's logo button
+/// (`CMD_POPUPMENU_ETC`) and leaves buttons marked `RvpLogo='1'` alone.
+#[test]
+fn logo_buttons_take_a_replacement_sprite() {
+    let markup = "<Skin><MainSkinArea Image='Atlas.png'><Control>
+\t<Static Align='Top' Height='10' IsTitleBar='1'>
+\t\t<Button CmdID='CMD_POPUPMENU_ETC' Left='2' Top='1' Width='6' Height='8' ImageLeft='0' ImageTop='10' />
+\t\t<Button CmdID='CMD_POPUPMENU_ETC' RvpLogo='1' Left='20' Top='1' Width='6' Height='8' ImageLeft='0' ImageTop='10' />
+\t</Static>
+\t<Static Align='Client'><Button CmdID='CMD_POPUPMENU_ETC' Left='0' Top='0' Width='6' Height='8' ImageLeft='0' ImageTop='10' /></Static>
+</Control></MainSkinArea></Skin>";
+    let archive = SkinArchive::from_files(
+        "Logo",
+        [
+            ("VideoSkin.xml", markup.as_bytes().to_vec()),
+            ("atlas.png", atlas()),
+        ],
+    );
+    let mut skin = Skin::load(archive, "VideoSkin.xml").expect("load");
+    let slots = skin.logo_slots();
+    assert_eq!(slots.len(), 1, "{slots:?}");
+    assert_eq!((slots[0].width, slots[0].height), (6, 8));
+    // Normal state red, hover state blue, as RVP's strip would hold them.
+    let mut strip = Image::new(24, 8);
+    put(&mut strip, Rect::new(0, 0, 6, 8), [255, 0, 0, 255]);
+    put(&mut strip, Rect::new(6, 0, 6, 8), [0, 0, 255, 255]);
+    skin.replace_sprite(slots[0].element, strip);
+    let mut state = UiState::default();
+    let draw = |skin: &Skin, state: &UiState| {
+        let placed = layout(skin, "MainSkinArea", 40, 20, state).expect("layout");
+        let list = paint(skin, &placed, state, &DataModel::default());
+        rasterize(&list, skin, &mut Fonts::new(Vec::new()))
+    };
+    assert_eq!(draw(&skin, &state).pixel(4, 4), [255, 0, 0, 255]);
+    // The marked button keeps the atlas sprite (button state colour).
+    assert_eq!(draw(&skin, &state).pixel(22, 4), BUTTON_STATES[0]);
+    state.hover = Some(slots[0].element);
+    assert_eq!(draw(&skin, &state).pixel(4, 4), [0, 0, 255, 255]);
+}
+
+/// A page button with `DownFlag` shows its pressed state while its page
+/// shows (RVP Default's control panel tabs).
+#[test]
+fn page_toggles_show_the_current_page() {
+    let markup = "<Skin><ControlBoxSkinArea Image='Atlas.png' Width='20' Height='10'><Control>
+\t<Button CmdID='CMD_SELECT_PAGE' PageIndex='0' DownFlag='1' Left='0' Top='0' Width='8' Height='8' ImageLeft='0' ImageTop='10' />
+\t<Button CmdID='CMD_SELECT_PAGE' PageIndex='1' DownFlag='1' Left='10' Top='0' Width='8' Height='8' ImageLeft='0' ImageTop='10' />
+</Control></ControlBoxSkinArea></Skin>";
+    let archive = SkinArchive::from_files(
+        "Pages",
+        [
+            ("VideoSkin.xml", markup.as_bytes().to_vec()),
+            ("atlas.png", atlas()),
+        ],
+    );
+    let skin = Skin::load(archive, "VideoSkin.xml").expect("load");
+    let mut state = UiState::default();
+    let draw = |state: &UiState| {
+        let placed = layout(&skin, "ControlBoxSkinArea", 20, 10, state).expect("layout");
+        let list = paint(&skin, &placed, state, &DataModel::default());
+        rasterize(&list, &skin, &mut Fonts::new(Vec::new()))
+    };
+    let image = draw(&state);
+    assert_eq!(image.pixel(1, 1), BUTTON_STATES[2]);
+    assert_eq!(image.pixel(11, 1), BUTTON_STATES[0]);
+    state.current_page = 1;
+    let image = draw(&state);
+    assert_eq!(image.pixel(1, 1), BUTTON_STATES[0]);
+    assert_eq!(image.pixel(11, 1), BUTTON_STATES[2]);
+}

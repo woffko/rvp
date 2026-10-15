@@ -5,25 +5,27 @@ the BlackSpace skin and works with SVP 4 for frame interpolation. Playback
 uses libmpv; the interface is drawn by RVP's own engine for PotPlayer `.dsf`
 skins.
 
-Status: milestones M1-M6. `rvp` plays files in the classic BlackSpace
-window with PotPlayer's keys, mouse actions, menus and a settings window;
-albums in the playlist panel and every file's position survive restarts
-and crashes; the normalizer and a ten-band equalizer; SVP 4 mode,
-VapourSynth scripts (PotPlayer's `.vpy` files), GLSL shaders, colour
-controls and the F7 control panel. Next: RVP's own logo and default skin
-(M7). See [docs/PLAN.md](docs/PLAN.md) for the plan and
-[docs/goals](docs/goals) for progress reports.
+Status: milestones M1-M7. `rvp` plays files in the classic PotPlayer
+window, drawn by its own skin RVP Default or by the BlackSpace skin, with
+PotPlayer's keys, mouse actions, menus and a settings window; albums in
+the playlist panel and every file's position survive restarts and
+crashes; the normalizer and a ten-band equalizer; SVP 4 mode, VapourSynth
+scripts (PotPlayer's `.vpy` files), GLSL shaders, colour controls and the
+F7 control panel. Next: platform integration and packages (M8). See
+[docs/PLAN.md](docs/PLAN.md) for the plan and [docs/goals](docs/goals) for
+progress reports.
 
 ## Layout
 
 | Path | Contents |
 |------|----------|
 | `crates/skin` | `.dsf` loader, tolerant markup parser, preprocessor, layout, display list, headless renderer, hit testing |
+| `crates/look` | RVP's own art: the logo and the default skin RVP Default as vector sources (`art/`), an SVG renderer, and the builder of the icons and the skin |
 | `crates/engine` | libmpv wrapper: options, observed properties, events, commands |
 | `crates/app` | actions, PotPlayer key and mouse bindings, settings, crash-safe resume store, the window's chrome and mouse logic |
 | `crates/platform` | operating system integration (placeholder) |
 | `shell` | `rvp`: the Qt Quick window (cxx-qt, QML, the libmpv video item) |
-| `xtask` | `cargo xtask ci` |
+| `xtask` | `cargo xtask ci`, `cargo xtask look DIR` (writes the icons, logo images and `RVP Default.dsf`) |
 
 ## Building and checks
 
@@ -54,9 +56,10 @@ their defaults on the first start: the skin, hardware decoding, the seek
 steps, the volume step, and key and mouse bindings that override
 PotPlayer's defaults (`docs/r1/hotkeys.tsv`). The playback state (last file,
 positions, volume, window) is in `~/.local/state/rvp/state.json`.
-`RVP_CONFIG_DIR` and `RVP_STATE_DIR` move them. On Windows the skin
-defaults to PotPlayer's installed BlackSpace; on Linux set `skin` or pass
-`--skin`.
+`RVP_CONFIG_DIR` and `RVP_STATE_DIR` move them. Without a skin set RVP
+shows RVP Default, its own skin, which is built into the program; set
+`skin` (or pass `--skin`) to use a PotPlayer `.dsf` skin such as
+BlackSpace.
 
 `rvp --selftest` runs a scripted check of the window and prints the
 usability measurements; `--selftest=playback`, `resume`, `upright`, `svp`,
@@ -65,8 +68,11 @@ script slot and speed-change checks (see `shell/qml/Main.qml`).
 
 ## Skins
 
-RVP reads `.dsf` skins that you already have; it does not ship PotPlayer
-skins or artwork. To render a skin to PNG:
+RVP ships one skin of its own, RVP Default, drawn for RVP from the sources
+in `crates/look/art/skin` (`crates/look/art/SOURCES.md` lists every asset).
+It also reads the `.dsf` skins that you already have; it does not ship
+PotPlayer skins or artwork, and in their title bar it shows RVP's logo
+instead of the player's. To render a skin to PNG:
 
 ```sh
 cargo run --release -p rvp-skin --example render_skin -- BlackSpace_en.dsf out.png 1920 1080

@@ -1,0 +1,257 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  The sprites of RVP Default: for each atlas, what each sprite is and how it
+  is drawn. crates/look/src/sprites.rs draws the kinds:
+
+    bar      a vertical gradient (top, bottom) with optional one-pixel
+             lines at the top (line) and the bottom (shade)
+    fill     a solid colour with optional edge lines (left, right, top,
+             bottom)
+    cover    rows offset .. offset + height of a bar `total` high, with an
+             optional rounded outline (outline, radius) inside
+    panel    a rounded rectangle (fill, border, radius), optionally with a
+             header strip (header, header-top, header-bottom)
+    swatch   one pixel of a colour, for ColorX/ColorY attributes
+    button   four states side by side (normal, hover, pressed or on,
+             disabled) in a style: round, play, flat, close, tool, toggle,
+             field, grip, tab or logo; with an icon (icons.svg) or a
+             caption (font.svg)
+    track    a rounded bar `thickness` thick for slider backs and fills,
+             along the width or (vertical="1") the height
+    thumb    a slider thumb: circle or pill
+    digits   22 cells with the characters % to : (PotPlayer's PicLabel
+             font)
+    cells    one caption per cell (an image strip or a MappingDB font)
+    caption  one line of text; its width follows the text
+    labels   captions centred on given x positions
+    icon     an icon without states
+    logo     RVP's wordmark
+
+  Colours are #rrggbb or the names defined below. Sizes are pixels; icon
+  sizes are the icon's side, caption sizes the cap height.
+-->
+<sprites>
+  <color name="text" value="#E8E5E0"/>
+  <color name="text-dim" value="#9A9EA4"/>
+  <color name="text-faint" value="#5D6168"/>
+  <color name="label" value="#8E9298"/>
+  <color name="accent" value="#F2741E"/>
+  <color name="accent-light" value="#FF9B33"/>
+  <color name="amber" value="#FFB547"/>
+  <color name="accent-deep" value="#B63A12"/>
+  <color name="bar-top" value="#262A30"/>
+  <color name="bar-bottom" value="#1A1C20"/>
+  <color name="bar-line" value="#33373E"/>
+  <color name="edge" value="#0E0F11"/>
+  <color name="frame" value="#1F2226"/>
+  <color name="track" value="#363A42"/>
+  <color name="track-off" value="#272A2F"/>
+  <color name="panel" value="#1C1F23"/>
+  <color name="page" value="#22252A"/>
+  <color name="page-border" value="#2E3238"/>
+  <color name="list" value="#16181B"/>
+
+  <atlas file="Main.png" width="512">
+    <sprite name="title" kind="bar" width="32" height="30" top="#2A2E34" bottom="#1E2125" line="#363A41" shade="edge"/>
+    <sprite name="title-inactive" kind="bar" width="32" height="30" top="#222529" bottom="#1B1D20" line="#2B2E33" shade="edge"/>
+    <sprite name="bottom-bar" kind="bar" width="16" height="76" top="bar-top" bottom="bar-bottom" line="bar-line"/>
+    <sprite name="time-cover" kind="cover" width="108" height="26" top="bar-top" bottom="bar-bottom" total="76" offset="45"/>
+    <sprite name="clock-cover" kind="cover" width="80" height="22" top="bar-top" bottom="bar-bottom" total="76" offset="47"/>
+    <sprite name="video-page" kind="cover" width="392" height="48" top="bar-top" bottom="bar-bottom" total="76" offset="26" outline="page-border" fill="#1F2226" radius="5"/>
+    <sprite name="border-bottom" kind="fill" width="16" height="4" color="frame" bottom="edge"/>
+    <sprite name="border-left" kind="fill" width="4" height="16" color="frame" left="edge"/>
+    <sprite name="border-right" kind="fill" width="4" height="16" color="frame" right="edge"/>
+    <sprite name="splitter" kind="fill" width="6" height="16" color="#191B1F" left="#25282D" right="edge"/>
+    <sprite name="grip-open" kind="button" style="grip" width="4" height="56"/>
+    <sprite name="grip-close" kind="button" style="grip" width="6" height="56"/>
+
+    <sprite name="c-title" kind="swatch" color="#C9C6C1"/>
+    <sprite name="c-info" kind="swatch" color="label"/>
+
+    <sprite name="btn-aspect" kind="button" style="flat" width="28" height="22" icon="aspect" icon-size="16"/>
+    <sprite name="btn-logo" kind="button" style="logo" height="20" logo-height="15"/>
+    <sprite name="btn-min" kind="button" style="flat" width="34" height="26" icon="minimize" icon-size="16"/>
+    <sprite name="btn-max" kind="button" style="flat" width="34" height="26" icon="maximize" icon-size="16"/>
+    <sprite name="btn-restore" kind="button" style="flat" width="34" height="26" icon="restore" icon-size="16"/>
+    <sprite name="btn-close" kind="button" style="close" width="34" height="26" icon="close" icon-size="16"/>
+
+    <sprite name="seek-back" kind="track" width="24" height="6" thickness="4" color="track"/>
+    <sprite name="seek-fill" kind="track" width="24" height="6" thickness="4" color="accent" color2="accent-light"/>
+    <sprite name="seek-off" kind="track" width="24" height="6" thickness="4" color="track-off"/>
+    <sprite name="seek-thumb" kind="thumb" shape="circle" width="14" height="14" color="#F4F1EC" ring="accent"/>
+    <sprite name="vol-thumb" kind="thumb" shape="circle" width="12" height="12" color="#F4F1EC" ring="accent"/>
+    <sprite name="btn-mute" kind="button" style="flat" width="22" height="20" icon="volume" icon-on="mute" icon-size="16"/>
+
+    <sprite name="file-types" kind="cells" style="badge" width="30" height="12" size="6" color="text-dim" border="#454A52" items="DVD,CAM,CAP,ATV,DTV,ASF,MKV,REAL,MP4,OGG,AVI,MPG,ETC,UCC,TS"/>
+    <sprite name="audio-codecs" kind="cells" style="badge" width="34" height="12" size="6" color="text-dim" border="#454A52" items="MP3,MP2,AC3,DTS,WMA,OGG,AAC,COOK,TTA,FLAC,WV,PCM,ADPCM"/>
+    <sprite name="digits-tiny" kind="digits" width="7" height="10" size="8" stroke="1" color="#A6A9AF"/>
+    <sprite name="cap-kbps" kind="caption" text="KBPS" height="10" size="6" color="text-faint"/>
+    <sprite name="cap-ch" kind="caption" text="CH" height="10" size="6" color="text-faint"/>
+    <sprite name="cap-hz" kind="caption" text="HZ" height="10" size="6" color="text-faint"/>
+    <sprite name="digits-time" kind="digits" width="12" height="22" size="16" stroke="1.8" color="text"/>
+    <sprite name="digits-time-alt" kind="digits" width="12" height="22" size="16" stroke="1.8" color="amber"/>
+    <sprite name="time-minus" kind="caption" text="-" height="22" size="16" stroke="1.8" color="amber"/>
+    <sprite name="cap-slash" kind="caption" text="/" height="14" size="10" stroke="1.2" color="text-faint"/>
+    <sprite name="digits-small" kind="digits" width="8" height="14" size="10" stroke="1.25" color="text-dim"/>
+    <sprite name="digits-small-alt" kind="digits" width="8" height="14" size="10" stroke="1.25" color="amber"/>
+
+    <sprite name="btn-play" kind="button" style="play" width="48" height="48" icon="play" icon-size="22"/>
+    <sprite name="btn-pause" kind="button" style="play" width="48" height="48" icon="pause" icon-size="20"/>
+    <sprite name="btn-prev" kind="button" style="round" width="36" height="36" icon="previous" icon-size="18"/>
+    <sprite name="btn-next" kind="button" style="round" width="36" height="36" icon="next" icon-size="18"/>
+    <sprite name="btn-audio" kind="button" style="round" width="36" height="36" icon="audio" icon-size="18"/>
+    <sprite name="btn-subtitles" kind="button" style="round" width="36" height="36" icon="subtitles" icon-size="18"/>
+    <sprite name="btn-playlist" kind="button" style="round" width="36" height="36" icon="playlist" icon-size="18"/>
+    <sprite name="t-info" kind="button" style="toggle" width="52" height="16" text="INFO" size="7"/>
+    <sprite name="t-eq" kind="button" style="toggle" width="52" height="16" text="EQ" size="7"/>
+    <sprite name="t-video" kind="button" style="toggle" width="52" height="16" text="VIDEO" size="7"/>
+    <sprite name="t-panel" kind="button" style="toggle" width="52" height="16" text="PANEL" size="7"/>
+
+    <sprite name="cap-brightness" kind="caption" text="BRIGHTNESS" height="10" size="6" color="label"/>
+    <sprite name="cap-contrast" kind="caption" text="CONTRAST" height="10" size="6" color="label"/>
+    <sprite name="cap-saturation" kind="caption" text="SATURATION" height="10" size="6" color="label"/>
+    <sprite name="cap-hue" kind="caption" text="HUE" height="10" size="6" color="label"/>
+    <sprite name="line-back" kind="track" width="16" height="4" thickness="3" color="track"/>
+    <sprite name="line-fill" kind="track" width="16" height="4" thickness="3" color="accent" color2="accent-light"/>
+    <sprite name="line-thumb" kind="thumb" shape="circle" width="10" height="10" color="#F4F1EC" ring="accent"/>
+    <sprite name="btn-reset-small" kind="button" style="flat" width="16" height="16" icon="reset" icon-size="12"/>
+    <sprite name="t-filters" kind="button" style="toggle" width="64" height="16" text="FILTERS" size="7"/>
+    <sprite name="btn-capture-small" kind="button" style="flat" width="30" height="16" icon="camera" icon-size="14"/>
+    <sprite name="btn-close-page" kind="button" style="flat" width="30" height="16" icon="close" icon-size="12"/>
+  </atlas>
+
+  <atlas file="PlayList.png" width="512">
+    <sprite name="c-list" kind="swatch" color="list"/>
+    <sprite name="c-select" kind="swatch" color="#3A2817"/>
+    <sprite name="c-frame" kind="swatch" color="accent"/>
+    <sprite name="c-row" kind="swatch" color="#C9C6C1"/>
+    <sprite name="c-row-selected" kind="swatch" color="#F4F1EC"/>
+    <sprite name="c-row-current" kind="swatch" color="amber"/>
+    <sprite name="c-row-played" kind="swatch" color="#7D8187"/>
+    <sprite name="c-tab" kind="swatch" color="text-dim"/>
+    <sprite name="c-tab-selected" kind="swatch" color="#F4F1EC"/>
+
+    <sprite name="pl-title" kind="bar" width="32" height="28" top="#2A2E34" bottom="#1E2125" line="#363A41" shade="edge"/>
+    <sprite name="cap-playlist" kind="caption" text="PLAYLIST" height="10" size="7" color="text-dim"/>
+    <sprite name="pl-close" kind="button" style="close" width="30" height="24" icon="close" icon-size="14"/>
+    <sprite name="pl-border-bottom" kind="fill" width="16" height="4" color="frame" bottom="edge"/>
+    <sprite name="pl-border-left" kind="fill" width="4" height="16" color="frame" left="edge"/>
+    <sprite name="pl-border-right" kind="fill" width="4" height="16" color="frame" right="edge"/>
+
+    <sprite name="tab-bar" kind="bar" width="40" height="24" top="#1D2024" bottom="#1A1C20" shade="#2A2D33"/>
+    <sprite name="tab" kind="button" style="tab" width="84" height="24"/>
+    <sprite name="tab-delete" kind="icon" icon="close" width="8" height="8" icon-size="10" color="text-dim" stroke="2.6"/>
+    <sprite name="tab-left" kind="icon" icon="left" width="16" height="24" icon-size="14" color="text-dim"/>
+    <sprite name="tab-right" kind="icon" icon="right" width="16" height="24" icon-size="14" color="text-dim"/>
+
+    <sprite name="pl-toolbar" kind="bar" width="16" height="76" top="bar-top" bottom="bar-bottom" line="bar-line"/>
+    <sprite name="btn-top" kind="button" style="tool" width="26" height="24" icon="top" icon-size="16"/>
+    <sprite name="btn-up" kind="button" style="tool" width="26" height="24" icon="up" icon-size="16"/>
+    <sprite name="btn-down" kind="button" style="tool" width="26" height="24" icon="down" icon-size="16"/>
+    <sprite name="btn-bottom" kind="button" style="tool" width="26" height="24" icon="bottom" icon-size="16"/>
+    <sprite name="btn-settings" kind="button" style="tool" width="26" height="24" icon="settings" icon-size="16"/>
+    <sprite name="btn-save" kind="button" style="tool" width="26" height="24" icon="save" icon-size="16"/>
+    <sprite name="btn-add" kind="button" style="tool" width="26" height="24" icon="plus" icon-size="16"/>
+    <sprite name="btn-remove" kind="button" style="tool" width="26" height="24" icon="minus" icon-size="16"/>
+
+    <sprite name="cap-fps" kind="caption" text="FPS" height="10" size="6" color="text-faint"/>
+    <sprite name="cap-slash-tiny" kind="caption" text="/" height="10" size="7" stroke="1" color="text-faint"/>
+    <sprite name="cap-size" kind="caption" text="SIZE" height="10" size="6" color="text-faint"/>
+    <sprite name="cap-percent" kind="caption" text="%" height="10" size="7" stroke="1" color="text-faint"/>
+    <sprite name="pl-digits" kind="digits" width="7" height="10" size="8" stroke="1" color="#A6A9AF"/>
+    <sprite name="pl-digits-alt" kind="digits" width="7" height="10" size="8" stroke="1" color="amber"/>
+  </atlas>
+
+  <atlas file="Control.png" width="640">
+    <sprite name="cp-back" kind="panel" width="40" height="44" radius="0" fill="panel" border="#383C44" header="30" header-top="#2A2E34" header-bottom="#1E2125"/>
+    <sprite name="cp-logo" kind="logo" height="13"/>
+    <sprite name="cap-control-panel" kind="caption" text="CONTROL PANEL" height="10" size="7" color="text-dim"/>
+    <sprite name="cp-close" kind="button" style="close" width="30" height="24" icon="close" icon-size="14"/>
+    <sprite name="cp-text" kind="swatch" color="text"/>
+    <sprite name="page-audio" kind="button" style="toggle" width="66" height="22" text="AUDIO" size="7"/>
+    <sprite name="page-video" kind="button" style="toggle" width="66" height="22" text="VIDEO" size="7"/>
+    <sprite name="page-subtitles" kind="button" style="toggle" width="66" height="22" text="SUBTITLES" size="7"/>
+    <sprite name="page-playback" kind="button" style="toggle" width="66" height="22" text="PLAYBACK" size="7"/>
+    <sprite name="page-aspect" kind="button" style="toggle" width="66" height="22" text="ASPECT" size="7"/>
+    <sprite name="cp-page" kind="panel" width="24" height="24" radius="5" fill="page" border="page-border"/>
+
+    <sprite name="t-eq-panel" kind="button" style="toggle" width="36" height="20" text="EQ" size="7"/>
+    <sprite name="field-100" kind="button" style="field" width="100" height="20"/>
+    <sprite name="t-preset" kind="button" style="toggle" width="44" height="20" text="PRESET" size="6"/>
+    <sprite name="btn-settings-small" kind="button" style="tool" width="22" height="20" icon="settings" icon-size="14"/>
+    <sprite name="eq-back" kind="track" vertical="1" width="4" height="24" thickness="4" color="track"/>
+    <sprite name="eq-fill" kind="track" vertical="1" width="4" height="24" thickness="4" color="accent" color2="accent-light"/>
+    <sprite name="eq-thumb" kind="thumb" shape="pill" width="14" height="6" color="#F4F1EC" ring="accent"/>
+    <sprite name="eq-scale" kind="labels" width="222" height="10" size="6" color="label" items="VOL@13,60@39,170@58,310@77,600@96,1K@115,3K@134,6K@153,12K@172,14K@191,16K@210"/>
+
+    <sprite name="t-soften" kind="button" style="toggle" width="56" height="20" text="SOFTEN" size="6"/>
+    <sprite name="t-sharpen" kind="button" style="toggle" width="56" height="20" text="SHARPEN" size="6"/>
+    <sprite name="t-deblock" kind="button" style="toggle" width="56" height="20" text="DEBLOCK" size="6"/>
+    <sprite name="btn-capture" kind="button" style="tool" width="26" height="20" icon="camera" icon-size="16"/>
+    <sprite name="cp-cap-brightness" kind="caption" text="BRIGHTNESS" height="10" size="6" color="label"/>
+    <sprite name="cp-cap-contrast" kind="caption" text="CONTRAST" height="10" size="6" color="label"/>
+    <sprite name="cp-cap-saturation" kind="caption" text="SATURATION" height="10" size="6" color="label"/>
+    <sprite name="cp-cap-hue" kind="caption" text="HUE" height="10" size="6" color="label"/>
+    <sprite name="cp-line-back" kind="track" width="16" height="4" thickness="3" color="track"/>
+    <sprite name="cp-line-fill" kind="track" width="16" height="4" thickness="3" color="accent" color2="accent-light"/>
+    <sprite name="cp-line-thumb" kind="thumb" shape="circle" width="12" height="12" color="#F4F1EC" ring="accent"/>
+    <sprite name="btn-reset" kind="button" style="tool" width="24" height="18" icon="reset" icon-size="14"/>
+
+    <sprite name="field-140" kind="button" style="field" width="140" height="22"/>
+    <sprite name="btn-plus-tall" kind="button" style="tool" width="20" height="22" icon="plus" icon-size="14"/>
+    <sprite name="btn-minus-tall" kind="button" style="tool" width="20" height="22" icon="minus" icon-size="14"/>
+    <sprite name="cap-position" kind="caption" text="POSITION" height="10" size="6" color="label"/>
+    <sprite name="cap-align" kind="caption" text="ALIGN" height="10" size="6" color="label"/>
+    <sprite name="cap-sync" kind="caption" text="SYNC" height="10" size="6" color="label"/>
+    <sprite name="btn-up-small" kind="button" style="tool" width="24" height="20" icon="up" icon-size="14"/>
+    <sprite name="btn-down-small" kind="button" style="tool" width="24" height="20" icon="down" icon-size="14"/>
+    <sprite name="btn-left-small" kind="button" style="tool" width="24" height="20" icon="left" icon-size="14"/>
+    <sprite name="btn-right-small" kind="button" style="tool" width="24" height="20" icon="right" icon-size="14"/>
+    <sprite name="btn-align-left" kind="button" style="tool" width="34" height="20" icon="align-left" icon-size="16"/>
+    <sprite name="btn-align-center" kind="button" style="tool" width="34" height="20" icon="align-center" icon-size="16"/>
+    <sprite name="btn-align-right" kind="button" style="tool" width="34" height="20" icon="align-right" icon-size="16"/>
+    <sprite name="btn-earlier" kind="button" style="tool" width="34" height="20" icon="left" icon-size="14"/>
+    <sprite name="btn-later" kind="button" style="tool" width="34" height="20" icon="right" icon-size="14"/>
+    <sprite name="btn-reset-wide" kind="button" style="tool" width="34" height="20" icon="reset" icon-size="14"/>
+
+    <sprite name="cap-repeat" kind="caption" text="A-B" height="10" size="6" color="label"/>
+    <sprite name="t-a" kind="button" style="tool" width="22" height="20" text="A" size="7"/>
+    <sprite name="t-b" kind="button" style="tool" width="22" height="20" text="B" size="7"/>
+    <sprite name="btn-reset-tiny" kind="button" style="tool" width="20" height="20" icon="reset" icon-size="13"/>
+    <sprite name="cap-seek" kind="caption" text="SEEK" height="10" size="6" color="label"/>
+    <sprite name="t-back-1m" kind="button" style="tool" width="40" height="20" text="-1M" size="6"/>
+    <sprite name="t-back-5s" kind="button" style="tool" width="40" height="20" text="-5S" size="6"/>
+    <sprite name="t-forward-5s" kind="button" style="tool" width="40" height="20" text="+5S" size="6"/>
+    <sprite name="t-forward-1m" kind="button" style="tool" width="40" height="20" text="+1M" size="6"/>
+    <sprite name="cap-speed" kind="caption" text="SPEED" height="10" size="6" color="label"/>
+    <sprite name="btn-minus" kind="button" style="tool" width="40" height="20" icon="minus" icon-size="14"/>
+    <sprite name="t-speed-1x" kind="button" style="tool" width="40" height="20" text="1X" size="6"/>
+    <sprite name="btn-plus" kind="button" style="tool" width="40" height="20" icon="plus" icon-size="14"/>
+    <sprite name="cap-audio-sync" kind="caption" text="AUDIO SYNC" height="10" size="6" color="label"/>
+    <sprite name="btn-earlier-wide" kind="button" style="tool" width="40" height="20" icon="left" icon-size="14"/>
+    <sprite name="btn-reset-40" kind="button" style="tool" width="40" height="20" icon="reset" icon-size="14"/>
+    <sprite name="btn-later-wide" kind="button" style="tool" width="40" height="20" icon="right" icon-size="14"/>
+
+    <sprite name="t-ratio-source" kind="button" style="toggle" width="50" height="20" text="SOURCE" size="6"/>
+    <sprite name="t-ratio-4-3" kind="button" style="toggle" width="50" height="20" text="4:3" size="7"/>
+    <sprite name="t-ratio-16-9" kind="button" style="toggle" width="50" height="20" text="16:9" size="7"/>
+    <sprite name="t-ratio-16-10" kind="button" style="toggle" width="50" height="20" text="16:10" size="7"/>
+    <sprite name="t-ratio-185" kind="button" style="toggle" width="50" height="20" text="1.85" size="7"/>
+    <sprite name="t-ratio-235" kind="button" style="toggle" width="50" height="20" text="2.35" size="7"/>
+    <sprite name="btn-wider" kind="button" style="tool" width="24" height="20" icon="wider" icon-size="16"/>
+    <sprite name="btn-narrower" kind="button" style="tool" width="24" height="20" icon="narrower" icon-size="16"/>
+    <sprite name="btn-taller" kind="button" style="tool" width="24" height="20" icon="taller" icon-size="16"/>
+    <sprite name="btn-shorter" kind="button" style="tool" width="24" height="20" icon="shorter" icon-size="16"/>
+    <sprite name="btn-zoom-in" kind="button" style="tool" width="24" height="20" icon="zoom-in" icon-size="16"/>
+    <sprite name="btn-zoom-out" kind="button" style="tool" width="24" height="20" icon="zoom-out" icon-size="16"/>
+    <sprite name="btn-reset-24" kind="button" style="tool" width="24" height="20" icon="reset" icon-size="15"/>
+  </atlas>
+
+  <!-- PotPlayer reads the playlist's scroll bar from fixed places here. -->
+  <atlas file="ScrollBar.bmp" width="138" height="113" fixed="1">
+    <sprite name="sb-track" kind="scroll" part="track" x="0" y="83" width="12" height="30"/>
+    <sprite name="sb-up" kind="scroll" part="up" x="72" y="0" width="12" height="12"/>
+    <sprite name="sb-down" kind="scroll" part="down" x="72" y="20" width="12" height="12"/>
+    <sprite name="sb-thumb" kind="scroll" part="thumb" x="126" y="0" width="12" height="19"/>
+  </atlas>
+</sprites>

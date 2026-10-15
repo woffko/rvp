@@ -1,0 +1,37 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256">
+  <title>RVP application icon</title>
+  <!-- The symbol (symbol.svg) at 74 % on a graphite tile with rounded corners. -->
+  <defs>
+    <linearGradient id="tile" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#2C3037"/>
+      <stop offset="1" stop-color="#14161A"/>
+    </linearGradient>
+    <clipPath id="rvp-outline">
+      <path d="M103.02 59.12 A22 22 0 0 0 70 78.16 L70 177.84 A22 22 0 0 0 103.02 196.88
+               L189.11 147.04 A22 22 0 0 0 189.11 108.96 Z"/>
+    </clipPath>
+    <linearGradient id="rvp-facet-left" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FFD37F"/>
+      <stop offset="1" stop-color="#FFA837"/>
+    </linearGradient>
+    <linearGradient id="rvp-facet-top" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#FF9B33"/>
+      <stop offset="1" stop-color="#F2741E"/>
+    </linearGradient>
+    <linearGradient id="rvp-facet-bottom" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#DC541C"/>
+      <stop offset="1" stop-color="#B63A12"/>
+    </linearGradient>
+  </defs>
+  <rect x="8" y="8" width="240" height="240" rx="56" fill="url(#tile)"/>
+  <rect x="9" y="9" width="238" height="238" rx="55" fill="none" stroke="#FFFFFF" stroke-opacity="0.1" stroke-width="2"/>
+  <g transform="translate(128 128) scale(0.74) translate(-133 -128)">
+    <g clip-path="url(#rvp-outline)">
+      <path fill="#F2741E" d="M103.02 59.12 A22 22 0 0 0 70 78.16 L70 177.84 A22 22 0 0 0 103.02 196.88
+                              L189.11 147.04 A22 22 0 0 0 189.11 108.96 Z"/>
+      <polygon points="70,40 70,216 110,128" fill="url(#rvp-facet-left)"/>
+      <polygon points="70,40 222,128 110,128" fill="url(#rvp-facet-top)"/>
+      <polygon points="70,216 222,128 110,128" fill="url(#rvp-facet-bottom)"/>
+    </g>
+  </g>
+</svg>

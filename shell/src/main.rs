@@ -41,6 +41,7 @@ fn main() {
     metrics::mark("gui_application_ms");
     single_instance(&Cli::parse(std::env::args().skip(1)));
     ffi::bridge::rvp_set_c_numeric_locale();
+    ffi::bridge::rvp_set_window_icon();
     ffi::bridge::rvp_register_native_types();
     let mut engine = QQmlApplicationEngine::new();
     metrics::mark("qml_engine_ms");

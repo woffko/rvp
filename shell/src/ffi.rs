@@ -33,6 +33,8 @@ pub mod bridge {
         fn rvp_instance_listen(name: &str) -> bool;
         /// libmpv needs `LC_NUMERIC=C`; Qt sets the user locale on Unix.
         fn rvp_set_c_numeric_locale();
+        /// Gives every window RVP's icon (`QGuiApplication::setWindowIcon`).
+        fn rvp_set_window_icon();
         /// Sets an environment variable (`qputenv`); only while no other
         /// thread runs.
         fn rvp_set_env(name: &str, value: &str);

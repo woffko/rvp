@@ -515,6 +515,7 @@ name = "rvp-app"
 version = "0.0.1"
 dependencies = [
  "rvp-engine",
+ "rvp-look",
  "rvp-skin",
  "serde",
  "serde_json",
@@ -526,6 +527,15 @@ version = "0.0.1"
 dependencies = [
  "libmpv2",
  "serde_json",
+]
+
+[[package]]
+name = "rvp-look"
+version = "0.0.1"
+dependencies = [
+ "rvp-skin",
+ "zeno",
+ "zip",
 ]
 
 [[package]]
@@ -542,6 +552,7 @@ dependencies = [
  "cxx-qt-lib",
  "rvp-app",
  "rvp-engine",
+ "rvp-look",
  "rvp-skin",
  "serde_json",
 ]
@@ -772,6 +783,9 @@ dependencies = [
 [[package]]
 name = "xtask"
 version = "0.0.1"
+dependencies = [
+ "rvp-look",
+]
 
 [[package]]
 name = "yazi"

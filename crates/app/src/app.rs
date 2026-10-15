@@ -123,6 +123,13 @@ pub struct Drained {
     pub events: Vec<EngineEvent>,
 }
 
+/// The last stretch of a file, in seconds, in which changes of RVP's
+/// audio filters wait for the next file (`App::defer_chain_change`). The
+/// position RVP sees lags playback, and on the Windows VM a change and its
+/// resync seek reached mpv after the end when made 0.7 s before it (goal
+/// I), so the margin is wide.
+const NEAR_END: f64 = 1.5;
+
 /// Resume-position tracking around file loads.
 #[derive(Debug, Clone, Copy, PartialEq)]
 enum Tracking {
@@ -154,8 +161,8 @@ pub struct App {
     tracking: Tracking,
     /// The end of the file that plays was handled (moved on or stayed).
     end_handled: bool,
-    /// RVP's audio filters changed in the last half second of a file or at
-    /// its end and wait for the next file or for playback to leave the end
+    /// RVP's audio filters changed near the end of a file ([`NEAR_END`])
+    /// and wait for the next file or for playback to leave the end
     /// (`App::defer_chain_change`).
     chain_pending: bool,
     /// The entry being loaded is to play: mpv may still carry the pause
@@ -899,7 +906,8 @@ impl App {
         }
     }
 
-    /// True in the last half second of the loaded file or at its end.
+    /// True in the last [`NEAR_END`] seconds of the loaded file or at its
+    /// end.
     fn near_end(&self) -> bool {
         if !self.model.media_loaded() {
             return false;
@@ -910,11 +918,11 @@ impl App {
         let time = self.model.double(PropertyId::TimePos).unwrap_or(0.0);
         self.model
             .double(PropertyId::Duration)
-            .is_some_and(|duration| duration - time < 0.5)
+            .is_some_and(|duration| duration - time < NEAR_END)
     }
 
     /// Whether a change of RVP's audio filters waits: a chain change or a
-    /// seek in the last half second of a file can leave mpv's
+    /// seek that reaches mpv at the very end of a file can leave its
     /// `eof-reached` false for good (seen on the Windows VM), and the album
     /// would not move on. The filters are applied when the next file starts
     /// or playback leaves the end.
@@ -1163,7 +1171,14 @@ impl App {
                 self.store.set_position(path, time, duration);
             }
         }
-        if at_end && !self.end_handled && self.model.media_loaded() {
+        // While the next file loads, the model still holds the old one's
+        // end until mpv reports the load: moving on again then would skip
+        // an entry (goal I, seen on the Windows VM).
+        if at_end
+            && !self.end_handled
+            && self.model.media_loaded()
+            && self.tracking != Tracking::Loading
+        {
             // keep-open stops on the last frame; the album moves on.
             self.end_handled = true;
             return self.end_of_file(engine);

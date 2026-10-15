@@ -1,0 +1,200 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 312 120" width="624" height="240">
+  <title>RVP Default: icons</title>
+  <!--
+    Drawn for RVP on a 24-unit grid. Strokes take their width from the
+    element that uses the icon (the skin builder sets it per sprite, 2 by
+    default) and their colour from `color`, so one icon serves every
+    button state. The grid below the definitions previews them all.
+  -->
+  <defs>
+    <symbol id="icon-play" viewBox="0 0 24 24">
+      <path d="M8.5 5.5 L18.5 12 L8.5 18.5 Z" fill="currentColor" stroke="currentColor" stroke-linejoin="round"/>
+    </symbol>
+    <symbol id="icon-pause" viewBox="0 0 24 24">
+      <rect x="6.5" y="5" width="4" height="14" rx="1.3" fill="currentColor"/>
+      <rect x="13.5" y="5" width="4" height="14" rx="1.3" fill="currentColor"/>
+    </symbol>
+    <symbol id="icon-previous" viewBox="0 0 24 24">
+      <path d="M18 6.5 L10.5 12 L18 17.5 Z" fill="currentColor" stroke="currentColor" stroke-linejoin="round"/>
+      <path d="M6.5 6 V18" fill="none" stroke="currentColor" stroke-linecap="round"/>
+    </symbol>
+    <symbol id="icon-next" viewBox="0 0 24 24">
+      <path d="M6 6.5 L13.5 12 L6 17.5 Z" fill="currentColor" stroke="currentColor" stroke-linejoin="round"/>
+      <path d="M17.5 6 V18" fill="none" stroke="currentColor" stroke-linecap="round"/>
+    </symbol>
+    <symbol id="icon-stop" viewBox="0 0 24 24">
+      <rect x="6.5" y="6.5" width="11" height="11" rx="2" fill="currentColor"/>
+    </symbol>
+    <symbol id="icon-volume" viewBox="0 0 24 24">
+      <path d="M4 9.5 H7.5 L12 5.5 V18.5 L7.5 14.5 H4 Z" fill="currentColor" stroke="currentColor" stroke-linejoin="round"/>
+      <path d="M15.5 9 C16.7 10.6 16.7 13.4 15.5 15 M18.3 6.5 C20.6 9.6 20.6 14.4 18.3 17.5" fill="none" stroke="currentColor" stroke-linecap="round"/>
+    </symbol>
+    <symbol id="icon-mute" viewBox="0 0 24 24">
+      <path d="M4 9.5 H7.5 L12 5.5 V18.5 L7.5 14.5 H4 Z" fill="currentColor" stroke="currentColor" stroke-linejoin="round"/>
+      <path d="M15.5 9.5 L20.5 14.5 M20.5 9.5 L15.5 14.5" fill="none" stroke="currentColor" stroke-linecap="round"/>
+    </symbol>
+    <symbol id="icon-subtitles" viewBox="0 0 24 24">
+      <rect x="3.5" y="5.5" width="17" height="13" rx="2.5" fill="none" stroke="currentColor"/>
+      <path d="M7 11 H12 M14.5 11 H17 M7 14.5 H9.5 M12 14.5 H17" fill="none" stroke="currentColor" stroke-linecap="round"/>
+    </symbol>
+    <symbol id="icon-playlist" viewBox="0 0 24 24">
+      <path d="M4 6.5 H17 M4 11.5 H17 M4 16.5 H10.5" fill="none" stroke="currentColor" stroke-linecap="round"/>
+      <path d="M14 14 L19.5 17.25 L14 20.5 Z" fill="currentColor" stroke="currentColor" stroke-linejoin="round" stroke-width="1"/>
+    </symbol>
+    <symbol id="icon-audio" viewBox="0 0 24 24">
+      <path d="M4.5 10.5 V13.5 M8.25 8 V16 M12 5 V19 M15.75 8.5 V15.5 M19.5 10.5 V13.5" fill="none" stroke="currentColor" stroke-linecap="round"/>
+    </symbol>
+    <symbol id="icon-minimize" viewBox="0 0 24 24">
+      <path d="M6.5 16.5 H17.5" fill="none" stroke="currentColor" stroke-linecap="round"/>
+    </symbol>
+    <symbol id="icon-maximize" viewBox="0 0 24 24">
+      <rect x="6.5" y="6.5" width="11" height="11" rx="1.5" fill="none" stroke="currentColor"/>
+    </symbol>
+    <symbol id="icon-restore" viewBox="0 0 24 24">
+      <rect x="5.5" y="8.5" width="10" height="10" rx="1.5" fill="none" stroke="currentColor"/>
+      <path d="M8.5 5.5 H17 C17.8 5.5 18.5 6.2 18.5 7 V15.5" fill="none" stroke="currentColor" stroke-linecap="round"/>
+    </symbol>
+    <symbol id="icon-close" viewBox="0 0 24 24">
+      <path d="M7 7 L17 17 M17 7 L7 17" fill="none" stroke="currentColor" stroke-linecap="round"/>
+    </symbol>
+    <symbol id="icon-aspect" viewBox="0 0 24 24">
+      <path d="M4 9 V6.5 C4 5.7 4.7 5 5.5 5 H8 M16 5 H18.5 C19.3 5 20 5.7 20 6.5 V9 M20 15 V17.5 C20 18.3 19.3 19 18.5 19 H16 M8 19 H5.5 C4.7 19 4 18.3 4 17.5 V15"
+            fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/>
+    </symbol>
+    <symbol id="icon-down" viewBox="0 0 24 24">
+      <path d="M7 9.5 L12 14.5 L17 9.5" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/>
+    </symbol>
+    <symbol id="icon-up" viewBox="0 0 24 24">
+      <path d="M7 14.5 L12 9.5 L17 14.5" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/>
+    </symbol>
+    <symbol id="icon-left" viewBox="0 0 24 24">
+      <path d="M14.5 7 L9.5 12 L14.5 17" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/>
+    </symbol>
+    <symbol id="icon-right" viewBox="0 0 24 24">
+      <path d="M9.5 7 L14.5 12 L9.5 17" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/>
+    </symbol>
+    <symbol id="icon-top" viewBox="0 0 24 24">
+      <path d="M6.5 6 H17.5 M7 16 L12 11 L17 16" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/>
+    </symbol>
+    <symbol id="icon-bottom" viewBox="0 0 24 24">
+      <path d="M6.5 18 H17.5 M7 8 L12 13 L17 8" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/>
+    </symbol>
+    <symbol id="icon-plus" viewBox="0 0 24 24">
+      <path d="M12 6 V18 M6 12 H18" fill="none" stroke="currentColor" stroke-linecap="round"/>
+    </symbol>
+    <symbol id="icon-minus" viewBox="0 0 24 24">
+      <path d="M6 12 H18" fill="none" stroke="currentColor" stroke-linecap="round"/>
+    </symbol>
+    <symbol id="icon-settings" viewBox="0 0 24 24">
+      <path fill="currentColor" fill-rule="evenodd"
+            d="M17.8 8.85 L18.38 10.29 L20.64 10.32 L20.64 13.68 L18.38 13.71 L18.33 13.87 L17.72 15.3
+               L19.3 16.92 L16.92 19.3 L15.3 17.72 L15.15 17.8 L13.71 18.38 L13.68 20.64 L10.32 20.64
+               L10.29 18.38 L10.13 18.33 L8.7 17.72 L7.08 19.3 L4.7 16.92 L6.28 15.3 L6.2 15.15 L5.62 13.71
+               L3.36 13.68 L3.36 10.32 L5.62 10.29 L5.67 10.13 L6.28 8.7 L4.7 7.08 L7.08 4.7 L8.7 6.28
+               L8.85 6.2 L10.29 5.62 L10.32 3.36 L13.68 3.36 L13.71 5.62 L13.87 5.67 L15.3 6.28 L16.92 4.7
+               L19.3 7.08 L17.72 8.7 Z
+               M12 9 A3 3 0 1 0 12 15 A3 3 0 1 0 12 9 Z"/>
+    </symbol>
+    <symbol id="icon-save" viewBox="0 0 24 24">
+      <path d="M12 4.5 V14 M8 10.5 L12 14.5 L16 10.5 M5 15.5 V18 C5 18.8 5.7 19.5 6.5 19.5 H17.5 C18.3 19.5 19 18.8 19 18 V15.5"
+            fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/>
+    </symbol>
+    <symbol id="icon-camera" viewBox="0 0 24 24">
+      <path d="M4 8.5 C4 7.7 4.7 7 5.5 7 H8 L9.5 5 H14.5 L16 7 H18.5 C19.3 7 20 7.7 20 8.5 V17 C20 17.8 19.3 18.5 18.5 18.5 H5.5 C4.7 18.5 4 17.8 4 17 Z"
+            fill="none" stroke="currentColor" stroke-linejoin="round"/>
+      <circle cx="12" cy="12.5" r="3.2" fill="none" stroke="currentColor"/>
+    </symbol>
+    <symbol id="icon-reset" viewBox="0 0 24 24">
+      <path d="M18.5 12 A6.5 6.5 0 1 1 16.6 7.4 M17.2 4 V7.9 H13.3" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/>
+    </symbol>
+    <symbol id="icon-align-left" viewBox="0 0 24 24">
+      <path d="M5 7.5 H19 M5 12 H13 M5 16.5 H16" fill="none" stroke="currentColor" stroke-linecap="round"/>
+    </symbol>
+    <symbol id="icon-align-center" viewBox="0 0 24 24">
+      <path d="M5 7.5 H19 M8 12 H16 M6.5 16.5 H17.5" fill="none" stroke="currentColor" stroke-linecap="round"/>
+    </symbol>
+    <symbol id="icon-align-right" viewBox="0 0 24 24">
+      <path d="M5 7.5 H19 M11 12 H19 M8 16.5 H19" fill="none" stroke="currentColor" stroke-linecap="round"/>
+    </symbol>
+    <symbol id="icon-font" viewBox="0 0 24 24">
+      <path d="M6 18.5 L12 5 L18 18.5 M8.4 13.5 H15.6" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/>
+    </symbol>
+    <symbol id="icon-info" viewBox="0 0 24 24">
+      <circle cx="12" cy="12" r="8" fill="none" stroke="currentColor"/>
+      <path d="M12 11 V16.2 M12 7.9 V8" fill="none" stroke="currentColor" stroke-linecap="round"/>
+    </symbol>
+    <symbol id="icon-equalizer" viewBox="0 0 24 24">
+      <path d="M6 5 V19 M12 5 V19 M18 5 V19" fill="none" stroke="currentColor" stroke-linecap="round"/>
+      <circle cx="6" cy="14.5" r="2.6" fill="currentColor"/>
+      <circle cx="12" cy="8.5" r="2.6" fill="currentColor"/>
+      <circle cx="18" cy="12" r="2.6" fill="currentColor"/>
+    </symbol>
+    <symbol id="icon-zoom-in" viewBox="0 0 24 24">
+      <circle cx="10.5" cy="10.5" r="5.5" fill="none" stroke="currentColor"/>
+      <path d="M14.6 14.6 L19 19 M8 10.5 H13 M10.5 8 V13" fill="none" stroke="currentColor" stroke-linecap="round"/>
+    </symbol>
+    <symbol id="icon-zoom-out" viewBox="0 0 24 24">
+      <circle cx="10.5" cy="10.5" r="5.5" fill="none" stroke="currentColor"/>
+      <path d="M14.6 14.6 L19 19 M8 10.5 H13" fill="none" stroke="currentColor" stroke-linecap="round"/>
+    </symbol>
+    <symbol id="icon-wider" viewBox="0 0 24 24">
+      <path d="M4 12 H20 M7.5 8.5 L4 12 L7.5 15.5 M16.5 8.5 L20 12 L16.5 15.5" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/>
+    </symbol>
+    <symbol id="icon-narrower" viewBox="0 0 24 24">
+      <path d="M3 12 H9.5 M6.5 9 L9.5 12 L6.5 15 M21 12 H14.5 M17.5 9 L14.5 12 L17.5 15 M12 6.5 V17.5" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/>
+    </symbol>
+    <symbol id="icon-taller" viewBox="0 0 24 24">
+      <path d="M12 4 V20 M8.5 7.5 L12 4 L15.5 7.5 M8.5 16.5 L12 20 L15.5 16.5" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/>
+    </symbol>
+    <symbol id="icon-shorter" viewBox="0 0 24 24">
+      <path d="M12 3 V9.5 M9 6.5 L12 9.5 L15 6.5 M12 21 V14.5 M9 17.5 L12 14.5 L15 17.5 M6.5 12 H17.5" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"/>
+    </symbol>
+    <symbol id="icon-capture-folder" viewBox="0 0 24 24">
+      <path d="M4 7.5 C4 6.7 4.7 6 5.5 6 H9.5 L11.5 8 H18.5 C19.3 8 20 8.7 20 9.5 V17 C20 17.8 19.3 18.5 18.5 18.5 H5.5 C4.7 18.5 4 17.8 4 17 Z"
+            fill="none" stroke="currentColor" stroke-linejoin="round"/>
+    </symbol>
+  </defs>
+  <rect width="312" height="120" fill="#1C1F23"/>
+  <g color="#E8E5E0" stroke-width="2">
+    <use href="#icon-play" x="4" y="4" width="24" height="24"/>
+    <use href="#icon-pause" x="32" y="4" width="24" height="24"/>
+    <use href="#icon-previous" x="60" y="4" width="24" height="24"/>
+    <use href="#icon-next" x="88" y="4" width="24" height="24"/>
+    <use href="#icon-stop" x="116" y="4" width="24" height="24"/>
+    <use href="#icon-volume" x="144" y="4" width="24" height="24"/>
+    <use href="#icon-mute" x="172" y="4" width="24" height="24"/>
+    <use href="#icon-subtitles" x="200" y="4" width="24" height="24"/>
+    <use href="#icon-playlist" x="228" y="4" width="24" height="24"/>
+    <use href="#icon-audio" x="256" y="4" width="24" height="24"/>
+    <use href="#icon-minimize" x="284" y="4" width="24" height="24"/>
+    <use href="#icon-maximize" x="4" y="32" width="24" height="24"/>
+    <use href="#icon-restore" x="32" y="32" width="24" height="24"/>
+    <use href="#icon-close" x="60" y="32" width="24" height="24"/>
+    <use href="#icon-aspect" x="88" y="32" width="24" height="24"/>
+    <use href="#icon-down" x="116" y="32" width="24" height="24"/>
+    <use href="#icon-up" x="144" y="32" width="24" height="24"/>
+    <use href="#icon-left" x="172" y="32" width="24" height="24"/>
+    <use href="#icon-right" x="200" y="32" width="24" height="24"/>
+    <use href="#icon-top" x="228" y="32" width="24" height="24"/>
+    <use href="#icon-bottom" x="256" y="32" width="24" height="24"/>
+    <use href="#icon-plus" x="284" y="32" width="24" height="24"/>
+    <use href="#icon-minus" x="4" y="60" width="24" height="24"/>
+    <use href="#icon-settings" x="32" y="60" width="24" height="24"/>
+    <use href="#icon-save" x="60" y="60" width="24" height="24"/>
+    <use href="#icon-camera" x="88" y="60" width="24" height="24"/>
+    <use href="#icon-reset" x="116" y="60" width="24" height="24"/>
+    <use href="#icon-align-left" x="144" y="60" width="24" height="24"/>
+    <use href="#icon-align-center" x="172" y="60" width="24" height="24"/>
+    <use href="#icon-align-right" x="200" y="60" width="24" height="24"/>
+    <use href="#icon-font" x="228" y="60" width="24" height="24"/>
+    <use href="#icon-info" x="256" y="60" width="24" height="24"/>
+    <use href="#icon-equalizer" x="284" y="60" width="24" height="24"/>
+    <use href="#icon-zoom-in" x="4" y="88" width="24" height="24"/>
+    <use href="#icon-zoom-out" x="32" y="88" width="24" height="24"/>
+    <use href="#icon-wider" x="60" y="88" width="24" height="24"/>
+    <use href="#icon-narrower" x="88" y="88" width="24" height="24"/>
+    <use href="#icon-taller" x="116" y="88" width="24" height="24"/>
+    <use href="#icon-shorter" x="144" y="88" width="24" height="24"/>
+    <use href="#icon-capture-folder" x="172" y="88" width="24" height="24"/>
+  </g>
+</svg>

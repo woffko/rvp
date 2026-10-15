@@ -13,6 +13,17 @@ use crate::preprocess::{Expanded, expand};
 /// Skin files tried, in order, when the caller does not name one.
 pub const VIDEO_SKIN_FILES: [&str; 3] = ["VideoSkin.xml", "ChildSkin.xml", "Skin.xml"];
 
+/// A title-bar button that shows the program's logo: PotPlayer's skins
+/// put their player's logo (Daum's, in BlackSpace) on a `CMD_POPUPMENU_ETC`
+/// button in a title bar (`IsTitleBar`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct LogoSlot {
+    /// The button's element id.
+    pub element: usize,
+    pub width: i32,
+    pub height: i32,
+}
+
 /// A skin ready for layout and rendering.
 #[derive(Debug)]
 pub struct Skin {
@@ -22,6 +33,8 @@ pub struct Skin {
     root: Element,
     strings: StringTable,
     images: BTreeMap<String, Image>,
+    /// Buttons drawn from an image RVP added (element id to image name).
+    sprites: BTreeMap<usize, String>,
     warnings: Vec<String>,
 }
 
@@ -83,6 +96,7 @@ impl Skin {
             root,
             strings,
             images,
+            sprites: BTreeMap::new(),
             warnings,
         })
     }
@@ -151,6 +165,50 @@ impl Skin {
     #[must_use]
     pub fn area_atlas<'a>(&'a self, area: &'a Element) -> &'a str {
         area.attrs.get("Image").unwrap_or("")
+    }
+
+    /// The logo buttons of every title bar, except those a skin marks
+    /// `RvpLogo='1'` because they already show RVP's logo.
+    #[must_use]
+    pub fn logo_slots(&self) -> Vec<LogoSlot> {
+        let mut slots = Vec::new();
+        self.root.walk(&mut |element| {
+            if !(element.is("Static") && element.attrs.flag("IsTitleBar")) {
+                return;
+            }
+            for child in &element.children {
+                let attrs = &child.attrs;
+                let width = attrs.int_or("Width", 0);
+                let height = attrs.int_or("Height", 0);
+                if child.is("Button")
+                    && attrs.get("CmdID") == Some("CMD_POPUPMENU_ETC")
+                    && !attrs.flag("RvpLogo")
+                    && width > 0
+                    && height > 0
+                {
+                    slots.push(LogoSlot {
+                        element: child.id,
+                        width,
+                        height,
+                    });
+                }
+            }
+        });
+        slots
+    }
+
+    /// Draws button `element` from `image` instead of its sprite; the image
+    /// holds the button states side by side, each as large as the button.
+    pub fn replace_sprite(&mut self, element: usize, image: Image) {
+        let name = format!("rvp-sprite-{element}");
+        self.images.insert(name.clone(), image);
+        self.sprites.insert(element, name);
+    }
+
+    /// The image that replaces the sprite of button `element`, if any.
+    #[must_use]
+    pub fn replaced_sprite(&self, element: usize) -> Option<&str> {
+        self.sprites.get(&element).map(String::as_str)
     }
 
     /// The colour of an atlas pixel, used for `ColorX`/`ColorY` attributes.

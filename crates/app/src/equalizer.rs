@@ -9,7 +9,7 @@
 //! `all`), so the chain is not rebuilt and the normalizer keeps its ten
 //! seconds of look-ahead; switching the equalizer on or off rebuilds the
 //! chain and plays on from the current position, as a normalizer toggle
-//! does (in the last half second of a file both wait for the next file,
+//! does (in the last moments of a file both wait for the next file,
 //! `App::defer_chain_change`). Choosing a preset or moving a band switches
 //! it on.
 

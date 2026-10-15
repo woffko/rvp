@@ -1,0 +1,7 @@
+			<Button Tooltip='Skin on/off< >Aspect ratio' CmdID='ID_SKIN_AUTO_HIDE' AltCmdID='CMD_POPUP_USER_MENU' AltUserMenuName='RatioMenu' Left='6' Top='4' Width='28' Height='22' ImageLeft='{btn-aspect.x}' ImageTop='{btn-aspect.y}' />
+			<Button Tooltip='Options< >On top: always, while playing, never' CmdID='CMD_POPUPMENU_ETC' AltCmdID='ID_ETC_NEXTONTOP' RvpLogo='1' Left='38' Top='5' Width='{btn-logo.w}' Height='{btn-logo.h}' ImageLeft='{btn-logo.x}' ImageTop='{btn-logo.y}' />
+			<Label CmdID='CMD_TITLE_MESSAGE' Left='104' Top='7' Width='-216' Height='16' HoriAlignment='1' VertAlignment='1' FontName='Segoe UI' FontSize='12' ColorX='{c-title.x}' ColorY='{c-title.y}' />
+			<Button Tooltip='Minimize' CmdID='CMD_MIN_WINDOW' Left='-112' Top='2' Width='34' Height='26' ImageLeft='{btn-min.x}' ImageTop='{btn-min.y}' />
+			<Button Tooltip='Maximize' CmdID='CMD_MAX_WINDOW' Left='-76' Top='2' Width='34' Height='26' ImageLeft='{btn-max.x}' ImageTop='{btn-max.y}' />
+			<Button Tooltip='Restore' CmdID='CMD_RESTORE_WINDOW' Left='-76' Top='2' Width='34' Height='26' ImageLeft='{btn-restore.x}' ImageTop='{btn-restore.y}' />
+			<Button Tooltip='Close' CmdID='ID_APP_EXIT' Left='-40' Top='2' Width='34' Height='26' ImageLeft='{btn-close.x}' ImageTop='{btn-close.y}' />

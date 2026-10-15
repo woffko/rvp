@@ -1,0 +1,33 @@
+# Preview content for RVP Default's renders (rvp_skin::demo format).
+text CMD_TITLE_MESSAGE = [3/5] Sample Film (2024) 1080p.mkv
+text CMD_CURRENTTIME_MESSAGE = 00:42:17
+text CMD_TOTALTIME_MESSAGE = 01:51:33
+text CMD_LEFTTIME_MESSAGE = 01:09:16
+text CMD_SYSTEM_TIME_MESSAGE = 21:05:42
+text CMD_PLAY_FILE_TYPE = MKV
+text CMD_VIDEO_CODEC_FOURCC_MESSAGE = HEVC
+text CMD_VIDEO_OUT_FOURCC_MESSAGE = DXVA
+text CMD_VIDEO_BIT_RATE_MESSAGE = 5621
+text CMD_AUDIO_CODEC_TAG_MESSAGE = 0x2000
+text CMD_AUDIO_IN_NUM_CHANNEL_MESSAGE = 5.1
+text CMD_AUDIO_OUT_SAMPLE_RATE_MESSAGE = 48000
+text CMD_AUDIO_BIT_RATE_MESSAGE = 448
+text CMD_VIDEO_CODEC_FPS_MESSAGE = 23.976
+text CMD_VIDEO_OUT_FPS_MESSAGE = 59.94
+text CMD_VIDEO_CODEC_SIZE_MESSAGE = 1920 800
+text CMD_PERCENTTIME_MESSAGE = 38
+text CMD_EQ_PRESET_MESSAGE = Rock
+text CMD_CAPTION_FONT_MESSAGE = Default
+text CMD_CAPTION_SIZE_MESSAGE = 100%
+slider CMD_TIMEBAR_CTRL = 0.38
+slider CMD_VOLUME_CTRL = 0.7
+album Default
+album* Films
+album Series
+entry 01:30:00 | Sample Film One.mkv
+entry ~ 01:37:11 | Another Sample Film (2023) 720p WEB.mkv
+entry *+ 01:51:33 | Sample Film (2024) 1080p.mkv
+entry 01:44:22 | Third Sample.avi
+entry ! - | Missing File.mkv
+playing
+media

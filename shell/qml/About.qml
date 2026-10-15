@@ -21,6 +21,19 @@ Item {
         anchors.centerIn: parent
         standardButtons: Dialog.Ok
         contentItem: ColumnLayout {
+            spacing: 12
+            // RVP's wordmark (D10), dark letters on a light dialog.
+            Image {
+                Layout.alignment: Qt.AlignHCenter
+                Layout.preferredHeight: 48
+                Layout.preferredWidth: Math.round(48 * implicitWidth / Math.max(1, implicitHeight))
+                source: aboutDialog.palette.window.hslLightness > 0.5
+                        ? "qrc:/qt/qml/Rvp/look/logo/wordmark-dark.png"
+                        : "qrc:/qt/qml/Rvp/look/logo/wordmark-light.png"
+                fillMode: Image.PreserveAspectFit
+                smooth: true
+                mipmap: true
+            }
             Label {
                 id: aboutText
                 Layout.preferredWidth: 360

@@ -52,6 +52,10 @@
 #   m6gpu   the 4K60 clip in fullscreen with M6's processing on (colours,
 #           deband, a shader, the equalizer) counts dropped frames (GPU
 #           machines only)
+#   m7      milestone M7: the functional self-test on RVP Default, RVP's
+#           own skin (--skin= with no path, whatever RVP_SKIN says): its
+#           logo resources, the playlist tabs and the control panel's
+#           checks
 #   m3desktop  optional, not in m3all: an "RVP (kit)" entry in
 #           ~/.local/share/applications so that Files can open videos in
 #           the running RVP (single instance); delete the file to undo
@@ -62,13 +66,15 @@
 #   m4all   check deps mpv m2build m2 m3 m4 m2input m2gpu m2svp report
 #   m6all   check deps mpv mvtools m2build m2 m3 m4 m6 m2input m2gpu m6gpu
 #           m2svp m6svp report
+#   m7all   m6all with m7 after m6
 #
 # environment:
 #   RVP_KIT_DIR     build and download directory (default ~/.cache/rvp-kit)
 #   RVP_LOG_DIR     logs (default $RVP_KIT_DIR/logs)
 #   RVP_VIDEO       test video for S3 (default: generated 4K60 or 1080p60)
 #   RVP_S1_VIDEO    film-rate test video for S1 (default: generated 23.976 fps)
-#   RVP_SKIN        .dsf skin for S3 (default: none, the shell paints nothing)
+#   RVP_SKIN        .dsf skin for S3 and the m-steps (default: none for S3,
+#                   which then paints nothing; RVP Default for RVP)
 #   RVP_VPY         motion interpolation script for S2
 #   VSSCRIPT_PATH   libvapoursynth-script.so to use (default: searched)
 #   RVP_VS_PLUGINS  extra VapourSynth plugins for S2, ':' separated (default:
@@ -917,6 +923,31 @@ step_m6() {
     fi
 }
 
+step_m7() {
+    local log=$LOG_DIR/m7.log out=$LOG_DIR/m7-grabs functional missing=0 name summary
+    m2_ready m7 || return 0
+    m2_env
+    export RVP_CONFIG_DIR=$LOG_DIR/m7-config RVP_STATE_DIR=$LOG_DIR/m7-state
+    rm -rf "$RVP_CONFIG_DIR" "$RVP_STATE_DIR" "$out"
+    kit_settings
+    : > "$log"
+    echo "== functional (RVP Default)" >> "$log"
+    "$(rvp_bin)" --selftest "--out=$out" --skin= \
+        "--mpv-options=hwdec=$(m2_hwdec)" "$(test_video)" "$(s1_video)" >> "$log" 2>&1
+    functional=$?
+    for name in logo_resources tab_click_shows_album f7_opens_panel color_slider_applies \
+        color_reset_applies equalizer_slider_applies equalizer_button_toggles f7_closes_panel; do
+        grep -q "^check $name=PASS" "$log" || missing=$((missing + 1))
+    done
+    summary="functional=$functional m7_missing=$missing $(grep -E '^check f7_opens_panel=' "$log" | tr '\n' ' ')"
+    if [ "$functional" -eq 0 ] && [ "$missing" -eq 0 ]; then
+        record m7 PASS "$summary"
+    else
+        record m7 FAIL "$summary $(grep -E '=FAIL' "$log" | tr '\n' ' ')"
+        return 1
+    fi
+}
+
 step_m6svp() {
     local log=$LOG_DIR/m6svp.log out=$LOG_DIR/m6-grabs vsscript first second pid
     m2_ready m6svp || return 0
@@ -1034,7 +1065,7 @@ step_report() {
         echo "| Time | Step | Result | Detail |"
         echo "|------|------|--------|--------|"
         awk -F'\t' '{ printf "| %s | %s | %s | %s |\n", $1, $2, $3, $4 }' "$RESULTS" 2> /dev/null
-        for step in s2 s3 input s1 m2 m3 m4 m6 m2input m2gpu m6gpu m2svp m6svp; do
+        for step in s2 s3 input s1 m2 m3 m4 m6 m7 m2input m2gpu m6gpu m2svp m6svp; do
             [ -s "$LOG_DIR/$step.log" ] || continue
             echo
             echo "## $step output"
@@ -1048,7 +1079,7 @@ step_report() {
 }
 
 if [ "$#" -eq 0 ]; then
-    sed -n '2,78p' "$KIT_SCRIPT"
+    sed -n '2,87p' "$KIT_SCRIPT"
     exit 2
 fi
 for step in "$@"; do
@@ -1058,15 +1089,16 @@ for step in "$@"; do
         m3all) set -- check deps mpv m2build m2 m3 m2input m2gpu m2svp report ;;
         m4all) set -- check deps mpv m2build m2 m3 m4 m2input m2gpu m2svp report ;;
         m6all) set -- check deps mpv mvtools m2build m2 m3 m4 m6 m2input m2gpu m6gpu m2svp m6svp report ;;
+        m7all) set -- check deps mpv mvtools m2build m2 m3 m4 m6 m7 m2input m2gpu m6gpu m2svp m6svp report ;;
     esac
 done
 overall=0
 for step in "$@"; do
     case $step in
-        check | deps | mpv | mvtools | build | s1 | s2 | s3 | input | m2build | m2 | m2input | m2gpu | m2svp | m3 | m4 | m6 | m6svp | m6gpu | m3desktop | report)
+        check | deps | mpv | mvtools | build | s1 | s2 | s3 | input | m2build | m2 | m2input | m2gpu | m2svp | m3 | m4 | m6 | m7 | m6svp | m6gpu | m3desktop | report)
             "step_$step" || overall=1
             ;;
-        all | m2all | m3all | m4all | m6all) ;;
+        all | m2all | m3all | m4all | m6all | m7all) ;;
         *) say "unknown step $step"; exit 2 ;;
     esac
 done

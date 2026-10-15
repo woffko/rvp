@@ -7,5 +7,9 @@ rust-version.workspace = true
 license.workspace = true
 publish.workspace = true
 
+[dependencies]
+# `cargo xtask look` writes the files built from RVP's own art.
+rvp-look = { path = "../crates/look" }
+
 [lints]
 workspace = true

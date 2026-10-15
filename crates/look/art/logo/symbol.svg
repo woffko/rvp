@@ -1,0 +1,35 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="70 56.16 130.09 143.68" width="130" height="144">
+  <title>RVP symbol</title>
+  <!--
+    A play triangle cut into three facets, lit from the upper left. Drawn
+    for RVP (goal I, draft A "Facet", chosen by the owner on 2026-10-15).
+    Construction on a 256 grid: corners (70, 40), (70, 216) and
+    (222, 128) rounded by 22; the facets meet at (110, 128). The plain
+    fill under the facets keeps their shared edges free of seams.
+  -->
+  <defs>
+    <clipPath id="rvp-outline">
+      <path d="M103.02 59.12 A22 22 0 0 0 70 78.16 L70 177.84 A22 22 0 0 0 103.02 196.88
+               L189.11 147.04 A22 22 0 0 0 189.11 108.96 Z"/>
+    </clipPath>
+    <linearGradient id="rvp-facet-left" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FFD37F"/>
+      <stop offset="1" stop-color="#FFA837"/>
+    </linearGradient>
+    <linearGradient id="rvp-facet-top" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#FF9B33"/>
+      <stop offset="1" stop-color="#F2741E"/>
+    </linearGradient>
+    <linearGradient id="rvp-facet-bottom" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#DC541C"/>
+      <stop offset="1" stop-color="#B63A12"/>
+    </linearGradient>
+  </defs>
+  <g clip-path="url(#rvp-outline)">
+    <path fill="#F2741E" d="M103.02 59.12 A22 22 0 0 0 70 78.16 L70 177.84 A22 22 0 0 0 103.02 196.88
+                            L189.11 147.04 A22 22 0 0 0 189.11 108.96 Z"/>
+    <polygon points="70,40 70,216 110,128" fill="url(#rvp-facet-left)"/>
+    <polygon points="70,40 222,128 110,128" fill="url(#rvp-facet-top)"/>
+    <polygon points="70,216 222,128 110,128" fill="url(#rvp-facet-bottom)"/>
+  </g>
+</svg>
