@@ -64,6 +64,21 @@ Windows VM's timing; both are fixed in `crates/app/src/app.rs`.
 | The album skipped an entry: after the 3-second fixture the third file played, not the second (one run in four) | `play_entry` cleared "end handled" when it asked for the next file, while the model still held the old file's end; when RVP looked again before mpv reported the new file, it moved on a second time. RVP now ignores the old end while a file loads (`Tracking::Loading`). `tests/album_end.rs` reproduces it every time by looking without pause (it fails without the fix) |
 | The album stopped at the end of the short fixture after the normalizer was switched off and on 0.7 s before its end (one run) | The resync seek after the first change reached mpv after the end, which leaves mpv's `eof-reached` false (goal H's pitfall); RVP waited only in the last 0.5 s. Changes of RVP's audio filters now wait in the last 1.5 s (`NEAR_END`) |
 
+## Found by the owner after the hand-over
+
+In fullscreen the picture turned black (the sound played on) as soon as the
+pointer moved over it. RVP Default's `MainSkinAreaOscInside` had a video
+slot (`Contain='CMD_VIDEO_WINDOW'`); in fullscreen the skin lies over the
+video, the slot counted as a bar (so the pointer over the picture showed
+the bars), and the engine painted the slot black. Fixed three ways: the
+skin's fullscreen area has no slot (as in BlackSpace); a video slot in
+`MainSkinAreaOscInside` draws nothing (`paint.rs`, synthetic test); and it
+is not a bar (`Chrome::bar_rects`, chrome test). `--selftest=upright` now
+also checks the picture with the pointer over it in the window, and in
+fullscreen without and with the bars; the kit's `m7` runs it on RVP
+Default (Ubuntu VM: all four PASS). Windows VM grabs show no video, so
+they cannot catch it there.
+
 ## Notes
 
 - The owner asked whether VLC, mpv and even classic Winamp skins are

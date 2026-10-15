@@ -356,10 +356,15 @@ impl Chrome {
         let Some(placed) = &self.layout else {
             return Vec::new();
         };
+        // The video slot is not a bar: over it the bars hide.
         placed
             .nodes
             .iter()
-            .filter(|node| node.parent.is_none() && !node.rect.is_empty())
+            .filter(|node| {
+                node.parent.is_none()
+                    && !node.rect.is_empty()
+                    && node.slot() != Some("CMD_VIDEO_WINDOW")
+            })
             .map(|node| node.rect)
             .collect()
     }

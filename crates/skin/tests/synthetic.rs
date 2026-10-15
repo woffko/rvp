@@ -543,3 +543,34 @@ fn page_toggles_show_the_current_page() {
     assert_eq!(image.pixel(1, 1), BUTTON_STATES[0]);
     assert_eq!(image.pixel(11, 1), BUTTON_STATES[2]);
 }
+
+/// The video slot is black under the video in the window and draws
+/// nothing in `MainSkinAreaOscInside`, whose bars lie over the video in
+/// fullscreen.
+#[test]
+fn the_fullscreen_video_slot_draws_nothing() {
+    let markup = "<Skin><MainSkinArea Image='Atlas.png'><Control>
+\t<Static Align='Client' Contain='CMD_VIDEO_WINDOW' />
+</Control></MainSkinArea><MainSkinAreaOscInside Image='Atlas.png'><Control>
+\t<Static Align='Bottom' Height='4' ImageLeft='0' ImageTop='0' ImageWidth='30' ImageHeight='10' />
+\t<Static Align='Client' Contain='CMD_VIDEO_WINDOW' />
+</Control></MainSkinAreaOscInside></Skin>";
+    let archive = SkinArchive::from_files(
+        "Slot",
+        [
+            ("VideoSkin.xml", markup.as_bytes().to_vec()),
+            ("atlas.png", atlas()),
+        ],
+    );
+    let skin = Skin::load(archive, "VideoSkin.xml").expect("load");
+    let state = UiState::default();
+    let draw = |area: &str| {
+        let placed = layout(&skin, area, 20, 20, &state).expect("layout");
+        let list = paint(&skin, &placed, &state, &DataModel::default());
+        rasterize(&list, &skin, &mut Fonts::new(Vec::new()))
+    };
+    assert_eq!(draw("MainSkinArea").pixel(10, 10), [0, 0, 0, 255]);
+    let fullscreen = draw("MainSkinAreaOscInside");
+    assert_eq!(fullscreen.pixel(10, 10)[3], 0, "the video shows through");
+    assert_eq!(fullscreen.pixel(1, 18), TITLE_LEFT, "the bar still draws");
+}

@@ -73,6 +73,7 @@ const VIDEO_SKIN: &str = "<Skin Version='1.0'>
 \t\t<Button CmdID='CMD_MEDIA_PLAY' Left='0' Top='8' Width='8' Height='8' ImageLeft='0' ImageTop='10' HoriCenter='1' />
 \t\t<Button CmdID='CMD_MEDIA_PAUSE' Left='0' Top='8' Width='8' Height='8' ImageLeft='0' ImageTop='10' HoriCenter='1' />
 \t</Static>
+\t<Static Align='Client' Contain='CMD_VIDEO_WINDOW' />
 </Control>
 </MainSkinAreaOscInside>
 <ControlBoxSkinArea Image='Atlas.png' Width='60' Height='40'>
@@ -471,7 +472,18 @@ fn fullscreen_uses_the_overlay_bars() {
         .resize(Mode::Fullscreen, WIDTH, HEIGHT)
         .expect("overlay layout");
     assert_eq!(chrome.video_rect(), Rect::new(0, 0, WIDTH, HEIGHT));
+    // The bars lie over the video: a video slot there is neither a bar
+    // (the pointer over the video would show the bars) nor black.
     assert_eq!(chrome.bar_rects(), vec![Rect::new(0, 100, WIDTH, 20)]);
+    let frame = chrome.frame();
+    assert!(
+        !frame.list.ops.iter().any(|op| matches!(
+            op,
+            rvp_skin::paint::Op::Fill { rect, .. } if rect.intersect(&Rect::new(0, 0, WIDTH, 100)).w > 0
+        )),
+        "something covers the video: {:?}",
+        frame.list.ops
+    );
     let (x, y) = center(&chrome, "CMD_MEDIA_PLAY");
     let mut pointer = Pointer::default();
     let shown = Context {

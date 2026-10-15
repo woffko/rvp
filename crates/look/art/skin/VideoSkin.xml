@@ -147,7 +147,6 @@
 			<Static Align='Bottom' Height='76' LeftMargin='4' RightMargin='4' ImageLeft='{bottom-bar.x}' ImageTop='{bottom-bar.y}' ImageWidth='{bottom-bar.w}' ImageHeight='{bottom-bar.h}'>
 #include<ControlBar.txt>
 			</Static>
-			<Static Align='Client' Contain='CMD_VIDEO_WINDOW' />
 		</Control>
 	</MainSkinAreaOscInside>
 

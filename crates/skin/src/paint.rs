@@ -7,6 +7,9 @@
 //!   middle is tiled. Sprites are never scaled; tiling keeps patterned
 //!   sprites (the dotted seek bar) intact.
 //! * Inactive windows use `AltImageLeft`/`AltImageTop` for statics.
+//! * The video slot (`Contain='CMD_VIDEO_WINDOW'`) is black in the window,
+//!   where the skin lies under the video. In `MainSkinAreaOscInside`,
+//!   whose bars lie over the video in fullscreen, it draws nothing.
 //! * Button sprites hold their states side by side, each as wide as the
 //!   button: normal, hover, pressed, disabled. A missing state falls back to
 //!   normal. Toggle buttons (`DownFlag`) show the pressed state while on;
@@ -222,10 +225,15 @@ fn paint_static(
     let attrs = &node.element.attrs;
     match node.slot() {
         Some("CMD_VIDEO_WINDOW") => {
-            list.ops.push(Op::Fill {
-                rect: node.clip,
-                color: [0, 0, 0, 255],
-            });
+            // Black under the video in the window; in fullscreen the bars
+            // of `MainSkinAreaOscInside` lie over the video, so its slot
+            // there draws nothing.
+            if !node.area.is("MainSkinAreaOscInside") {
+                list.ops.push(Op::Fill {
+                    rect: node.clip,
+                    color: [0, 0, 0, 255],
+                });
+            }
             return;
         }
         Some("CMD_PLAY_LIST_ALBUM_TAB") => {

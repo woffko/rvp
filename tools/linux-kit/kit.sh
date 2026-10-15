@@ -55,7 +55,9 @@
 #   m7      milestone M7: the functional self-test on RVP Default, RVP's
 #           own skin (--skin= with no path, whatever RVP_SKIN says): its
 #           logo resources, the playlist tabs and the control panel's
-#           checks
+#           checks; then the orientation check on it, with the pointer over
+#           the picture in the window and in fullscreen with and without
+#           the bars
 #   m3desktop  optional, not in m3all: an "RVP (kit)" entry in
 #           ~/.local/share/applications so that Files can open videos in
 #           the running RVP (single instance); delete the file to undo
@@ -924,7 +926,7 @@ step_m6() {
 }
 
 step_m7() {
-    local log=$LOG_DIR/m7.log out=$LOG_DIR/m7-grabs functional missing=0 name summary
+    local log=$LOG_DIR/m7.log out=$LOG_DIR/m7-grabs functional upright missing=0 name summary
     m2_ready m7 || return 0
     m2_env
     export RVP_CONFIG_DIR=$LOG_DIR/m7-config RVP_STATE_DIR=$LOG_DIR/m7-state
@@ -935,12 +937,21 @@ step_m7() {
     "$(rvp_bin)" --selftest "--out=$out" --skin= \
         "--mpv-options=hwdec=$(m2_hwdec)" "$(test_video)" "$(s1_video)" >> "$log" 2>&1
     functional=$?
+    # The picture with the pointer over it, in the window and in fullscreen
+    # with and without the bars (the bars once hid it with black).
+    echo "== upright (RVP Default)" >> "$log"
+    rm -rf "$RVP_STATE_DIR"
+    kit_settings '"fit-window-to-video": false'
+    "$(rvp_bin)" --selftest=upright "--out=$out" --skin= \
+        "--mpv-options=hwdec=$(m2_hwdec)" "$REPO/testdata/media/fixture-marker.mkv" >> "$log" 2>&1
+    upright=$?
     for name in logo_resources tab_click_shows_album f7_opens_panel color_slider_applies \
-        color_reset_applies equalizer_slider_applies equalizer_button_toggles f7_closes_panel; do
+        color_reset_applies equalizer_slider_applies equalizer_button_toggles f7_closes_panel \
+        picture_upright picture_with_pointer picture_fullscreen picture_fullscreen_bars; do
         grep -q "^check $name=PASS" "$log" || missing=$((missing + 1))
     done
-    summary="functional=$functional m7_missing=$missing $(grep -E '^check f7_opens_panel=' "$log" | tr '\n' ' ')"
-    if [ "$functional" -eq 0 ] && [ "$missing" -eq 0 ]; then
+    summary="functional=$functional upright=$upright m7_missing=$missing $(grep -E '^check (f7_opens_panel|picture_fullscreen_bars)=' "$log" | tr '\n' ' ')"
+    if [ "$functional" -eq 0 ] && [ "$upright" -eq 0 ] && [ "$missing" -eq 0 ]; then
         record m7 PASS "$summary"
     else
         record m7 FAIL "$summary $(grep -E '=FAIL' "$log" | tr '\n' ' ')"
@@ -1079,7 +1090,7 @@ step_report() {
 }
 
 if [ "$#" -eq 0 ]; then
-    sed -n '2,87p' "$KIT_SCRIPT"
+    sed -n '2,89p' "$KIT_SCRIPT"
     exit 2
 fi
 for step in "$@"; do

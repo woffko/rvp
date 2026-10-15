@@ -682,6 +682,8 @@ Window {
         property var before: ({})
         property var dragTo: ({})
         property bool nextSent: false
+        // The orientation check saw video in the window's grab.
+        property bool seesVideo: false
         property string outDir: "rvp-selftest"
 
         function begin() {
@@ -807,28 +809,74 @@ Window {
             t.waitFor("file_playing", () => s.loaded && s.video_width > 0 && s.time > 0.5
                           && s.video_aspect > 0, 20000, () => "time " + s.time)
             break
-        case 2: {
+        case 2:
             // A second for the picture to settle in the window.
             if (Date.now() - t.stepStarted < 1000)
                 break
-            const reference = player.option("reference") !== "" ? player.option("reference")
-                : String(s.path).replace(/\.[^.\/\\]+$/, ".png")
-            const r = JSON.parse(Tools.compare_frame(video, s.video_aspect, reference))
-            Tools.grab(t.outDir, "upright")
-            const detail = "reference " + reference + " distances upright " + r.upright
-                + " flipped " + r.flipped + " mirrored " + r.mirrored + " rotated " + r.rotated
-                + " picture " + JSON.stringify(r.picture)
-            if (r.error)
-                t.check("picture_upright", false, r.error + " " + reference)
-            else if (r.dark)
-                Tools.log("check picture_upright=SKIPPED the grab shows no video (" + detail + ")")
-            else
-                t.check("picture_upright", r.upright < 30 && r.upright < r.flipped
-                            && r.upright < r.mirrored && r.upright < r.rotated, detail)
+            t.seesVideo = root.checkPicture("picture_upright", "upright", s, false)
+            // The pointer over the picture changes nothing.
+            player.mouse_move(player.video_rect.x + player.video_rect.width / 2,
+                              player.video_rect.y + player.video_rect.height / 2)
+            t.next()
+            break
+        case 3:
+            if (Date.now() - t.stepStarted < 700)
+                break
+            root.checkPicture("picture_with_pointer", "pointer", s, !t.seesVideo)
+            player.key(Qt.Key_Return, 0)
+            t.next()
+            break
+        case 4:
+            if (t.waitFor("upright_fullscreen", () => root.isFullscreen && s.fullscreen, 3000,
+                          () => "visibility " + root.visibility))
+                // Over the picture the bars stay hidden.
+                player.mouse_move(root.width / 2, root.height / 2)
+            break
+        case 5:
+            if (Date.now() - t.stepStarted < 1000)
+                break
+            root.checkPicture("picture_fullscreen", "fullscreen", s, !t.seesVideo)
+            // Over the bottom edge the bars show, over the picture.
+            player.mouse_move(root.width / 2, root.height - 4)
+            t.next()
+            break
+        case 6:
+            if (Date.now() - t.stepStarted < 700)
+                break
+            root.checkPicture("picture_fullscreen_bars", "fullscreen-bars", s, !t.seesVideo)
+            player.key(Qt.Key_Return, 0)
             t.finish()
             break
         }
+    }
+
+    // Grabs the window and compares the picture in the video item with the
+    // reference image (the clip's `.png`); records `name`. Returns false
+    // when the grab shows no video at all. `skip` only notes the result
+    // (session-0 grabs show no video).
+    function checkPicture(name, grab, s, skip) {
+        const t = selftest
+        const reference = player.option("reference") !== "" ? player.option("reference")
+            : String(s.path).replace(/\.[^.\/\\]+$/, ".png")
+        const r = JSON.parse(Tools.compare_frame(video, s.video_aspect, reference))
+        Tools.grab(t.outDir, grab)
+        const detail = "reference " + reference + " distances upright " + r.upright
+            + " flipped " + r.flipped + " mirrored " + r.mirrored + " rotated " + r.rotated
+            + " picture " + JSON.stringify(r.picture)
+        if (r.error) {
+            t.check(name, false, r.error + " " + reference)
+            return false
         }
+        if (skip || r.dark) {
+            if (skip)
+                Tools.log("check " + name + "=SKIPPED the grabs show no video (" + detail + ")")
+            else
+                t.check(name, false, "the picture is black (" + detail + ")")
+            return false
+        }
+        t.check(name, r.upright < 30 && r.upright < r.flipped && r.upright < r.mirrored
+                    && r.upright < r.rotated, detail)
+        return true
     }
 
     function speedTick() {
