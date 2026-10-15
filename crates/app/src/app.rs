@@ -161,6 +161,10 @@ pub struct App {
     tracking: Tracking,
     /// The end of the file that plays was handled (moved on or stayed).
     end_handled: bool,
+    /// `start` restored the saved volume and mute. Until then mpv's reports
+    /// (its defaults) must not replace them: the window starts the app only
+    /// once its video output is ready, and mpv reports its volume before.
+    started: bool,
     /// RVP's audio filters changed near the end of a file ([`NEAR_END`])
     /// and wait for the next file or for playback to leave the end
     /// (`App::defer_chain_change`).
@@ -219,6 +223,7 @@ impl App {
             library: Library::open(state_dir)?,
             tracking: Tracking::On,
             end_handled: false,
+            started: false,
             play_on_load: false,
             chain_pending: false,
             settings_path: None,
@@ -319,6 +324,7 @@ impl App {
         let state = self.store.state();
         engine.set_volume(state.volume.unwrap_or(100.0))?;
         engine.set_mute(state.mute)?;
+        self.started = true;
         let last_file = state.last_file.clone();
         self.apply_normalizer(engine);
         self.apply_equalizer(engine);
@@ -1087,12 +1093,13 @@ impl App {
             requests.push(UiRequest::OnTop(top));
         }
         requests.extend(self.watch_svp(now));
-        if changes.contains(PropertyId::Volume)
+        if self.started
+            && changes.contains(PropertyId::Volume)
             && let Some(volume) = self.model.double(PropertyId::Volume)
         {
             self.store.set_volume(volume);
         }
-        if changes.contains(PropertyId::Mute) {
+        if self.started && changes.contains(PropertyId::Mute) {
             self.store
                 .set_mute(self.model.flag(PropertyId::Mute) == Some(true));
         }

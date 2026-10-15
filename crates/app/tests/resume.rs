@@ -181,6 +181,14 @@ fn clean_restart_resumes_paused_at_the_last_file() {
     // No files on the command line: the last file opens paused near 6 s.
     let mut app = App::new(Settings::default(), &dir).expect("app");
     let engine = Engine::new(&EngineOptions::headless()).expect("engine");
+    // The window starts the app only once its video output is ready; mpv's
+    // first reports (its default volume, 100) come before that and must
+    // not replace the saved volume.
+    let ready = Instant::now() + Duration::from_millis(500);
+    while Instant::now() < ready {
+        std::thread::sleep(Duration::from_millis(20));
+        app.drain(&engine, Instant::now());
+    }
     app.start(&engine, &[]).expect("start");
     let deadline = Instant::now() + Duration::from_secs(20);
     loop {
