@@ -108,15 +108,19 @@ each goal writes `docs/goals/goal-<letter>-status.md`.
   listens unless `--instance=NAME` names a separate channel, so test runs
   never reach the owner's player.
 - The Windows test VM's checks are `tools/windows-vm/m3-all.ps1`,
-  `m4-all.ps1` and `m6-all.ps1` (copy them and `run.ps1` to `C:\rvp-test`
-  with the bundle and `testdata/media/fixture-marker.*`).
+  `m4-all.ps1`, `m6-all.ps1` and `m7-all.ps1` (RVP Default with no skin
+  set, then the test copy of BlackSpace; copy them and `run.ps1` to
+  `C:\rvp-test` with the bundle and `testdata/media/fixture-marker.*`).
 - Video filters: RVP adds and removes only its own, by label (`@rvp*`,
   `vf pre`), and never touches SVP's `@svp` (goal H's rule 4).
 - Audio filters: the equalizer first, the normalizer, then `@rvptempo`
   (`scaletempo2`, which keeps speed changes from putting audio and video
   out of step). Changes go through `App::defer_chain_change` and
   `App::resync_audio`: a chain change or seek at the very end of a file
-  leaves mpv's `eof-reached` false and the album stops.
+  leaves mpv's `eof-reached` false and the album stops, so in the last
+  `NEAR_END` (1.5 s) they wait for the next file. While a file loads, the
+  old file's end is ignored (`Tracking::Loading`), or the album moves on
+  twice.
 - The VapourSynth runtime is chosen before any thread starts
   (`point_at_vapoursynth` sets `VSSCRIPT_PATH` through `rvp_set_env`); do
   not set environment variables later or from Rust (`set_var` is unsafe).
