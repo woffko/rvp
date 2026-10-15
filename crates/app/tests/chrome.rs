@@ -342,6 +342,18 @@ fn sliders_follow_the_pointer() {
         pointer.moved(&mut chrome, window(), rect.right() + 50, y),
         vec![Effect::SeekFraction(1.0)]
     );
+    // Let go: the seek bar seeks for good there.
+    assert_eq!(
+        pointer.release(
+            &mut chrome,
+            &Bindings::potplayer_defaults(),
+            window(),
+            rect.right() + 50,
+            y,
+            Button::Left
+        ),
+        vec![Effect::SeekRelease(1.0)]
+    );
     let rect = chrome
         .layout()
         .and_then(|placed| placed.find_command("CMD_VOLUME_CTRL"))

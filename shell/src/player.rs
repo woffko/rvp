@@ -759,6 +759,7 @@ impl qobject::Player {
             return;
         };
         let mut data = view::data_model(&core.app.model, core.app.library().lists());
+        core.app.seek_bar_data(&mut data);
         data.playlist.drop_before = core.drop_before;
         if !core.clock.is_empty() {
             data.set_text("CMD_SYSTEM_TIME_MESSAGE", core.clock.as_str());
@@ -1205,7 +1206,19 @@ impl qobject::Player {
         for effect in effects {
             match *effect {
                 Effect::Action(action) => self.as_mut().perform(action),
-                Effect::SeekFraction(fraction) => self.as_mut().seek_fraction(fraction),
+                Effect::SeekFraction(fraction) => {
+                    if let Some(core) = self.as_mut().core_mut() {
+                        crate::metrics::seek_issued();
+                        core.app.drag_seek_bar(core.engine, fraction);
+                    }
+                }
+                Effect::SeekRelease(fraction) => {
+                    if let Some(core) = self.as_mut().core_mut() {
+                        crate::metrics::seek_issued();
+                        core.app
+                            .release_seek_bar(core.engine, fraction, Instant::now());
+                    }
+                }
                 Effect::VolumeFraction(fraction) => {
                     if let Some(core) = self.as_mut().core_mut() {
                         core.app.set_volume_fraction(core.engine, fraction);

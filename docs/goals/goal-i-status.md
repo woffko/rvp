@@ -79,6 +79,27 @@ fullscreen without and with the bars; the kit's `m7` runs it on RVP
 Default (Ubuntu VM: all four PASS). Windows VM grabs show no video, so
 they cannot catch it there.
 
+The volume started at 100 % after a restart: the window starts the
+application only once its video output is ready, and mpv's report of its
+default volume reached the resume store first. The store now takes volume
+and mute only after `App::start` (8b91d8b).
+
+The normalizer sounded quieter than PotPlayer's, with voices raised less.
+PotPlayer's method turned out to be TomSteady's gain control, which RVP
+now runs itself (D13, 88e8118, `docs/spikes/s5-normalizer.md`).
+
+The seek bar moved in jerks while dragged: it showed where the video was
+after each seek. It now follows the mouse at once while held (the video
+jumps to keyframes meanwhile), seeks for good where it is let go, and
+shows that place until the video gets there (`App::drag_seek_bar`,
+`tests/seek_bar.rs`).
+
+The context menu had no list of what plays the file, which PotPlayer shows
+under Filters. RVP's Filters submenu now lists the source, the video
+decoder (hardware or software), the video filters and output, the audio
+decoder, the audio filters and the audio output (`menu.rs`,
+`tests/menus.rs`).
+
 ## Notes
 
 - The owner asked whether VLC, mpv and even classic Winamp skins are

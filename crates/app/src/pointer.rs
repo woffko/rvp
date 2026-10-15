@@ -17,6 +17,10 @@
 //!   volume sliders set the volume, the others (the control panel's
 //!   equalizer bands and colours) set their value ([`Effect::Slider`]).
 //!   Vertical sliders (`Vert='1'`) read the pointer from the bottom up.
+//!   The seek bar follows the mouse at once while it is held and seeks
+//!   for good where it is let go ([`Effect::SeekRelease`]; owner,
+//!   2026-10-15: the bar shows where it is wanted, not where the video
+//!   already is).
 //! * The frame edges resize the window; dragging the title bar, an empty
 //!   skin area or the video moves it ("prevent window from being dragged
 //!   outside of the title bar" is off). The move starts once the pointer
@@ -84,8 +88,10 @@ pub enum Cursor {
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Effect {
     Action(Action),
-    /// Seek to this fraction of the duration.
+    /// The seek bar is held at this fraction of the duration.
     SeekFraction(f64),
+    /// The seek bar was let go at this fraction of the duration.
+    SeekRelease(f64),
     /// Set the volume to this fraction of 100 %.
     VolumeFraction(f64),
     /// Another slider moved to this fraction of its range (from the left
@@ -336,6 +342,7 @@ fn slider_effect(
     command: &'static str,
     x: i32,
     y: i32,
+    released: bool,
 ) -> Option<Effect> {
     let node = chrome.layout()?.nodes.get(node)?;
     let rect = node.rect;
@@ -351,6 +358,7 @@ fn slider_effect(
         0.0
     };
     Some(match command {
+        "CMD_TIMEBAR_CTRL" if released => Effect::SeekRelease(fraction),
         "CMD_TIMEBAR_CTRL" => Effect::SeekFraction(fraction),
         "CMD_VOLUME_CTRL" | "CMD_MASTER_VOLUME" => Effect::VolumeFraction(fraction),
         _ => Effect::Slider { command, fraction },
@@ -412,7 +420,7 @@ impl Pointer {
                     .is_some_and(|n| n.kind == rvp_skin::layout::Kind::Slider);
                 if is_slider {
                     self.drag = Drag::Slider { node, command };
-                    slider_effect(chrome, node, command, x, y)
+                    slider_effect(chrome, node, command, x, y, false)
                         .into_iter()
                         .collect()
                 } else {
@@ -573,7 +581,7 @@ impl Pointer {
     pub fn moved(&mut self, chrome: &mut Chrome, ctx: Context, x: i32, y: i32) -> Vec<Effect> {
         match self.drag {
             Drag::Slider { node, command } => {
-                return slider_effect(chrome, node, command, x, y)
+                return slider_effect(chrome, node, command, x, y, false)
                     .into_iter()
                     .collect();
             }
@@ -675,7 +683,7 @@ impl Pointer {
                         Vec::new()
                     }
                 }
-                Drag::Slider { node, command } => slider_effect(chrome, node, command, x, y)
+                Drag::Slider { node, command } => slider_effect(chrome, node, command, x, y, true)
                     .into_iter()
                     .collect(),
                 Drag::Press { click: true, .. } => {

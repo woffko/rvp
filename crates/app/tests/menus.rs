@@ -7,7 +7,7 @@ use std::path::PathBuf;
 
 use rvp_app::menu::{Command, Live, MenuItem, to_json};
 use rvp_app::{Action, App, Repeat, Settings};
-use rvp_engine::{Chapter, Track, TrackKind};
+use rvp_engine::{Chapter, PropertyId, Track, TrackKind, Value};
 use rvp_skin::menu::{UserMenu, UserMenuItem};
 
 const DEFAULT_SKIN: &str = "/mnt/c/Program Files/DAUM/PotPlayer/Skins/BlackSpace_en.dsf";
@@ -240,6 +240,75 @@ fn run_time_lists_take_potplayers_place() {
             .iter()
             .all(|item| item.label != "Chapter/Bookmark")
     );
+}
+
+#[test]
+fn filters_list_what_plays_the_file() {
+    let (mut app, _dir) = new_app("filters", Settings::default());
+    // mpv quotes values with commas as %N% plus N bytes, or in brackets.
+    let sharpen = "unsharp=5:5:0.8:5:5:0.0";
+    let script = "C:/svp/svp.vpy";
+    let normalizer = "asetnsamples=n=2048:p=0,astats=metadata=1,volume@rvpgain=volume=1.5";
+    let state = [
+        (PropertyId::IdleActive, Value::Flag(false)),
+        (PropertyId::Path, Value::Text("/films/film.mkv".to_owned())),
+        (PropertyId::FileFormat, Value::Text("mkv".to_owned())),
+        (
+            PropertyId::HwdecCurrent,
+            Value::Text("d3d11va-copy".to_owned()),
+        ),
+        (
+            PropertyId::VideoFilters,
+            Value::Text(format!(
+                "@rvpsharpen:lavfi=graph=%{}%{sharpen},@svp:vapoursynth=file=%{}%{script}:buffered-frames=4",
+                sharpen.len(),
+                script.len()
+            )),
+        ),
+        (
+            PropertyId::AudioFilters,
+            Value::Text(format!(
+                "@rvpeq:lavfi=graph=[firequalizer@eq=gain_entry='entry(60,3.0);entry(170,0)'],\
+                 @rvpnorm:lavfi=graph=%{}%{normalizer},@rvptempo:scaletempo2",
+                normalizer.len()
+            )),
+        ),
+        (PropertyId::CurrentAo, Value::Text("wasapi".to_owned())),
+    ];
+    for (id, value) in state {
+        app.model.set(id, Some(value));
+    }
+    let mut video = track(1, TrackKind::Video, "und", true);
+    video.codec = Some("h264".to_owned());
+    let live = Live {
+        tracks: vec![video, track(1, TrackKind::Audio, "eng", true)],
+        ..Live::default()
+    };
+    let menu = app.context_menu(&live);
+    assert_tidy(&menu);
+    let filters = item(&menu, &["Filters"]);
+    assert_eq!(
+        labels(&filters.children),
+        [
+            "Source: mkv",
+            "Video decoder: h264 (hardware, d3d11va-copy)",
+            "Video filter: Sharpen",
+            "Video filter: SVP",
+            "Video output: libmpv render API (OpenGL)",
+            "Audio decoder: aac",
+            "Audio filter: Equalizer",
+            "Audio filter: Normalizer (TomSteady)",
+            "Audio filter: Tempo (scaletempo2)",
+            "Audio output: wasapi",
+        ]
+    );
+    // Information only, as PotPlayer's lines without a property page.
+    assert!(filters.children.iter().all(|line| line.command.is_none()));
+    // Nothing plays: no Filters menu.
+    app.model
+        .set(PropertyId::IdleActive, Some(Value::Flag(true)));
+    let idle = app.context_menu(&Live::default());
+    assert!(idle.iter().all(|item| item.label != "Filters"));
 }
 
 #[test]

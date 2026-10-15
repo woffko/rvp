@@ -12,7 +12,7 @@
 
 use std::io;
 use std::path::{Path, PathBuf};
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use rvp_engine::{
     Changes, EndReason, Engine, EngineError, EngineEvent, EngineOptions, PlayerModel, PropertyId,
@@ -130,6 +130,21 @@ pub struct Drained {
 /// I), so the margin is wide.
 const NEAR_END: f64 = 1.5;
 
+/// How long a released seek bar may show where it was let go before it
+/// shows the playback position again, should mpv not get there (a
+/// keyframe seek lands before the target).
+const SEEK_BAR_HOLD: Duration = Duration::from_secs(2);
+
+/// The seek bar held by the mouse, and after it is let go until the video
+/// gets there: the bar and the time show this place, not where the video
+/// is, so the bar follows the mouse at once (owner, 2026-10-15).
+#[derive(Debug, Clone, Copy, PartialEq)]
+struct SeekBarHold {
+    fraction: f64,
+    /// When the mouse let go.
+    released: Option<Instant>,
+}
+
 /// Resume-position tracking around file loads.
 #[derive(Debug, Clone, Copy, PartialEq)]
 enum Tracking {
@@ -188,6 +203,8 @@ pub struct App {
     pub(crate) svp: crate::svp::Watch,
     /// The normalizer's gain control (`App::start` starts it).
     normalizer: Option<crate::normalizer::Control>,
+    /// The seek bar while the mouse holds it (`App::drag_seek_bar`).
+    seek_bar: Option<SeekBarHold>,
 }
 
 impl App {
@@ -236,6 +253,7 @@ impl App {
             state_dir: state_dir.to_path_buf(),
             svp: crate::svp::Watch::default(),
             normalizer: None,
+            seek_bar: None,
         })
     }
 
@@ -1049,9 +1067,84 @@ impl App {
             .map(|()| UiRequest::Osd(format!("Volume: {volume:.0} %")))
     }
 
-    /// The seek bar was clicked or dragged to `fraction` (0.0 to 1.0).
+    /// Seeks to `fraction` (0.0 to 1.0) of the file.
     pub fn seek_to_fraction(&mut self, engine: &Engine, fraction: f64) {
         drop(self.seek_to(engine, Seek::Fraction(fraction)));
+    }
+
+    /// The mouse pressed or dragged the seek bar to `fraction`: the bar
+    /// shows there at once ([`App::seek_bar_data`]) and the video jumps to
+    /// the nearest keyframe meanwhile, which is quick.
+    pub fn drag_seek_bar(&mut self, engine: &Engine, fraction: f64) {
+        if !self.model.media_loaded() {
+            return;
+        }
+        self.seek_bar = Some(SeekBarHold {
+            fraction,
+            released: None,
+        });
+        if matches!(self.tracking, Tracking::Resuming(_)) {
+            self.tracking = Tracking::On;
+        }
+        drop(engine.seek_with(Seek::Fraction(fraction), false));
+    }
+
+    /// The mouse let the seek bar go at `fraction`: the last seek (exact
+    /// unless keyframe seeks are on); the bar stays there until the video
+    /// gets there.
+    pub fn release_seek_bar(&mut self, engine: &Engine, fraction: f64, now: Instant) {
+        if !self.model.media_loaded() {
+            return;
+        }
+        self.seek_bar = Some(SeekBarHold {
+            fraction,
+            released: Some(now),
+        });
+        drop(self.seek_to(engine, Seek::Fraction(fraction)));
+    }
+
+    /// Shows a held seek bar, and its time, in the skin's data.
+    pub fn seek_bar_data(&self, data: &mut rvp_skin::DataModel) {
+        let Some(hold) = self.seek_bar else {
+            return;
+        };
+        let Some(duration) = self.model.double(PropertyId::Duration).filter(|d| *d > 0.0) else {
+            return;
+        };
+        let time = hold.fraction * duration;
+        data.set_text("CMD_CURRENTTIME_MESSAGE", crate::view::format_time(time));
+        data.set_text(
+            "CMD_LEFTTIME_MESSAGE",
+            crate::view::format_time(duration - time),
+        );
+        if let Some(slider) = data.sliders.get_mut("CMD_TIMEBAR_CTRL") {
+            // f32 is far finer than a pixel of the bar.
+            #[allow(clippy::cast_possible_truncation)]
+            let value = hold.fraction.clamp(0.0, 1.0) as f32;
+            slider.value = value;
+        }
+    }
+
+    /// Lets a released seek bar show the playback position again once the
+    /// video got near the place it was let go, or after [`SEEK_BAR_HOLD`].
+    fn settle_seek_bar(&mut self, now: Instant) {
+        let Some(SeekBarHold {
+            fraction,
+            released: Some(released),
+        }) = self.seek_bar
+        else {
+            return;
+        };
+        let arrived = match (
+            self.model.double(PropertyId::TimePos),
+            self.model.double(PropertyId::Duration),
+        ) {
+            (Some(time), Some(duration)) => (time - fraction * duration).abs() < 1.0,
+            _ => false,
+        };
+        if arrived || now.saturating_duration_since(released) > SEEK_BAR_HOLD {
+            self.seek_bar = None;
+        }
     }
 
     /// The volume slider was set to `fraction` (0.0 to 1.0 of 100 %).
@@ -1072,6 +1165,7 @@ impl App {
             match event {
                 EngineEvent::StartFile => {
                     self.tracking = Tracking::Loading;
+                    self.seek_bar = None;
                     // A-B points belong to one file.
                     self.session.point_a = None;
                     self.session.point_b = None;
@@ -1114,6 +1208,7 @@ impl App {
         }
 
         requests.extend(self.track_position(engine));
+        self.settle_seek_bar(now);
         if let Some(top) = self.on_top_change() {
             requests.push(UiRequest::OnTop(top));
         }

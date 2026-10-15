@@ -12,7 +12,10 @@
 //!   video and subtitle tracks (in "Select Audio Stream", "Select Video
 //!   Stream" and "Add/Select Subtitles"), the chapters ("Chapter/Bookmark"),
 //!   the albums ("Album/Favorites") and the equalizer's presets ("Equalizer
-//!   Presets").
+//!   Presets"). "Filters" lists what plays the file, as PotPlayer lists its
+//!   filter graph there: the source, the video decoder (hardware or
+//!   software), the video filters, the video output, the audio decoder, the
+//!   audio filters and the audio output, as lines without a command.
 //! * A skin menu item names a command (`ID_OPEN_URL`), a built-in submenu
 //!   (`CMD_POPUPMENU_PLAY_GOTO`, in place with `NoSubMenu='1'`) or nothing
 //!   (a separator). [`popup_source`] says which part of PotPlayer's menu
@@ -25,7 +28,7 @@
 
 use std::sync::OnceLock;
 
-use rvp_engine::{Chapter, Engine, Track, TrackKind};
+use rvp_engine::{Chapter, Engine, PropertyId, Track, TrackKind};
 use serde_json::{Value, json};
 
 use crate::action::{Action, ListAction};
@@ -264,6 +267,59 @@ impl MenuItem {
 }
 
 /// Drops separators at the start and end and doubled ones.
+/// The filters of an mpv `af` or `vf` value (`@label:name=...,...`): label
+/// and filter name, in order. Values may be quoted as `%N%` followed by N
+/// bytes, or in brackets.
+fn chain_entries(text: &str) -> Vec<(Option<&str>, &str)> {
+    let bytes = text.as_bytes();
+    let mut entries = Vec::new();
+    let (mut start, mut i) = (0, 0);
+    while i <= bytes.len() {
+        if i == bytes.len() || bytes[i] == b',' {
+            let entry = &text[start..i];
+            let (label, rest) = match entry.strip_prefix('@').and_then(|e| e.split_once(':')) {
+                Some((label, rest)) => (Some(label), rest),
+                None => (None, entry),
+            };
+            let name = rest.split(['=', ':']).next().unwrap_or("");
+            if !name.is_empty() {
+                entries.push((label, name));
+            }
+            start = i + 1;
+            i += 1;
+        } else if bytes[i] == b'%'
+            && let Some(len) = text[i + 1..].find('%')
+            && let Ok(count) = text[i + 1..i + 1 + len].parse::<usize>()
+        {
+            i = (i + len + 2 + count).min(bytes.len());
+        } else if bytes[i] == b'[' {
+            i = text[i..].find(']').map_or(bytes.len(), |end| i + end + 1);
+        } else {
+            i += 1;
+        }
+    }
+    entries
+}
+
+/// What a filter of RVP's is, or mpv's name of another one.
+fn filter_text(label: Option<&str>, name: &str) -> String {
+    match label {
+        Some(crate::equalizer::LABEL) => "Equalizer".to_owned(),
+        Some(crate::normalizer::LABEL) => "Normalizer (TomSteady)".to_owned(),
+        Some(crate::normalizer::TEMPO_LABEL) => "Tempo (scaletempo2)".to_owned(),
+        Some(crate::video::SCRIPT_LABEL) => "VapourSynth script".to_owned(),
+        Some("svp") => "SVP".to_owned(),
+        Some(label) => crate::video::VideoEffect::ALL
+            .iter()
+            .find(|effect| effect.label() == label)
+            .map_or_else(
+                || format!("{name} (@{label})"),
+                |effect| effect.text().to_owned(),
+            ),
+        None => name.to_owned(),
+    }
+}
+
 fn tidy(items: Vec<MenuItem>) -> Vec<MenuItem> {
     let mut out: Vec<MenuItem> = Vec::with_capacity(items.len());
     for item in items {
@@ -437,6 +493,7 @@ impl App {
                 "101_0_11_0" => self.tracks(live, TrackKind::Video),
                 "101_0_10_0" => self.tracks(live, TrackKind::Subtitle),
                 "101_0_3" => self.albums(),
+                "101_0_13" => self.pipeline(live),
                 _ => Vec::new(),
             };
             if !extra.is_empty() {
@@ -510,6 +567,59 @@ impl App {
         }
         let _ = self;
         items
+    }
+
+    /// What plays the file, from the source to the outputs ("Filters").
+    fn pipeline(&self, live: &Live) -> Vec<MenuItem> {
+        if !self.model.media_loaded() {
+            return Vec::new();
+        }
+        let info = |label: String| MenuItem {
+            label,
+            ..MenuItem::default()
+        };
+        let codec = |kind: TrackKind| {
+            live.tracks
+                .iter()
+                .find(|track| track.kind == kind && track.selected)
+                .and_then(|track| track.codec.clone())
+        };
+        let mut lines = Vec::new();
+        if let Some(format) = self.model.text(PropertyId::FileFormat) {
+            lines.push(info(format!("Source: {format}")));
+        }
+        if let Some(video) = codec(TrackKind::Video) {
+            let decoding = match self.model.text(PropertyId::HwdecCurrent) {
+                Some(hwdec) if !hwdec.is_empty() && hwdec != "no" => {
+                    format!("hardware, {hwdec}")
+                }
+                _ => "software".to_owned(),
+            };
+            lines.push(info(format!("Video decoder: {video} ({decoding})")));
+            for (label, name) in
+                chain_entries(self.model.text(PropertyId::VideoFilters).unwrap_or(""))
+            {
+                lines.push(info(format!("Video filter: {}", filter_text(label, name))));
+            }
+            lines.push(info("Video output: libmpv render API (OpenGL)".to_owned()));
+        }
+        let audio = codec(TrackKind::Audio).or_else(|| {
+            self.model
+                .text(PropertyId::AudioCodecName)
+                .map(str::to_owned)
+        });
+        if let Some(audio) = audio {
+            lines.push(info(format!("Audio decoder: {audio}")));
+            for (label, name) in
+                chain_entries(self.model.text(PropertyId::AudioFilters).unwrap_or(""))
+            {
+                lines.push(info(format!("Audio filter: {}", filter_text(label, name))));
+            }
+            if let Some(output) = self.model.text(PropertyId::CurrentAo) {
+                lines.push(info(format!("Audio output: {output}")));
+            }
+        }
+        lines
     }
 
     fn chapters(&self, live: &Live) -> Vec<MenuItem> {
