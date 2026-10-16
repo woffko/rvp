@@ -22,6 +22,16 @@ rvp-look = { path = "../crates/look" }
 rvp-skin = { path = "../crates/skin" }
 serde_json.workspace = true
 
+[target.'cfg(target_os = "linux")'.dependencies]
+# MPRIS and idle inhibit (M8).
+rvp-platform = { path = "../crates/platform" }
+
+[target.'cfg(unix)'.dependencies]
+libc.workspace = true
+
+[target.'cfg(windows)'.dependencies]
+windows.workspace = true
+
 [build-dependencies]
 cxx-qt-build.workspace = true
 # Draws the icons, the logo images and the default skin from their sources.

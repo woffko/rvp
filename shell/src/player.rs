@@ -146,6 +146,9 @@ struct Core {
     portable: bool,
     /// The control panel, once it was shown.
     panel: Option<Panel>,
+    /// The desktop's media controls (MPRIS, Windows' controls), once the
+    /// application started.
+    desktop: Option<crate::desktop::Integration>,
 }
 
 /// Fitting the window to a video the user opened: requested, then the new
@@ -602,6 +605,7 @@ impl qobject::Player {
             clock: String::new(),
             portable,
             panel: None,
+            desktop: None,
         });
         if let Some(message) = messages.first() {
             self.as_mut().show_message(message);
@@ -625,12 +629,18 @@ impl qobject::Player {
 
     /// The render context exists: open the files.
     fn render_ready(mut self: Pin<&mut Self>) {
+        let thread = self.qt_thread();
         let Some(core) = self.as_mut().core_mut() else {
             return;
         };
         let Some(request) = core.pending.take() else {
             return;
         };
+        // The desktop's media controls follow the application from here.
+        match crate::desktop::Integration::start(thread, crate::ffi::bridge::rvp_main_window_id()) {
+            Ok(desktop) => core.desktop = Some(desktop),
+            Err(error) => eprintln!("rvp: {error}"),
+        }
         let plays = request.mode == rvp_app::instance::Mode::Play && !request.files.is_empty();
         if plays {
             core.request_fit();
@@ -659,6 +669,9 @@ impl qobject::Player {
         };
         core.drain_queued.store(false, Ordering::Release);
         let drained = core.app.drain(core.engine, Instant::now());
+        if let Some(desktop) = core.desktop.as_mut() {
+            desktop.sync(&core.app, &drained.events);
+        }
         for event in &drained.events {
             match event {
                 EngineEvent::PlaybackRestart => crate::metrics::playback_restarted(),
@@ -1294,6 +1307,18 @@ impl qobject::Player {
         }
     }
 
+    /// A command from the desktop's media controls (MPRIS, Windows'
+    /// controls), queued to the window's thread.
+    pub(crate) fn media_command(mut self: Pin<&mut Self>, command: rvp_app::media::MediaCommand) {
+        let Some(core) = self.as_mut().core_mut() else {
+            return;
+        };
+        if let Some(request) = core.app.media_command(core.engine, command) {
+            self.as_mut().handle_request(request);
+        }
+        self.sync_chrome();
+    }
+
     pub(crate) fn seek_fraction(mut self: Pin<&mut Self>, fraction: f64) {
         if let Some(core) = self.as_mut().core_mut() {
             crate::metrics::seek_issued();
@@ -1480,6 +1505,7 @@ impl qobject::Player {
                 }
             }
             UiRequest::Exit => self.ui_request(request::EXIT, 0),
+            UiRequest::Raise => self.ui_request(request::RAISE, 0),
             UiRequest::ContextMenu => self.ui_request(request::CONTEXT_MENU, 0),
             UiRequest::TogglePlaylist => {
                 if let Some(chrome) = core.chrome.as_mut() {
@@ -1823,7 +1849,7 @@ impl qobject::Player {
             .unwrap_or_default();
         QString::from(&format!(
             "RVP {}\nA PotPlayer-style media player\n{mpv}",
-            env!("CARGO_PKG_VERSION")
+            rvp_app::crash::version_text()
         ))
     }
 

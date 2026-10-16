@@ -1,0 +1,49 @@
+# RVP for Arch Linux, built from source with Arch's Qt 6 and libmpv (M8).
+# Not published: the repository is private. Make the source archive from a
+# checkout with
+#   git archive --prefix=rvp-$pkgver/ -o rvp-$pkgver.tar.gz HEAD
+# next to this file, with RVP_COMMIT set to that commit for `makepkg`.
+pkgname=rvp
+pkgver=0.0.1
+pkgrel=1
+pkgdesc='PotPlayer-style media player on libmpv, with .dsf skins and SVP 4 support'
+arch=('x86_64')
+url='https://github.com/woffko/rvp'
+license=('GPL-3.0-or-later')
+depends=('mpv' 'qt6-base' 'qt6-declarative' 'qt6-wayland' 'hicolor-icon-theme')
+makedepends=('rustup' 'clang' 'python')
+options=('!lto')
+source=("rvp-$pkgver.tar.gz")
+sha256sums=('SKIP')
+
+build() {
+    cd "rvp-$pkgver"
+    export QMAKE=/usr/bin/qmake6
+    export RVP_COMMIT="${RVP_COMMIT:-unknown}"
+    # rust-toolchain.toml names the toolchain rustup installs.
+    cargo build --release --locked -p rvp-shell
+    cargo xtask look "$srcdir/look"
+}
+
+check() {
+    cd "rvp-$pkgver"
+    export QMAKE=/usr/bin/qmake6
+    cargo test --release --locked -p rvp-app --lib
+}
+
+package() {
+    cd "rvp-$pkgver"
+    install -Dm755 target/release/rvp "$pkgdir/usr/bin/rvp"
+    local mime
+    mime=$(python3 tools/packaging/package.py mime-types)
+    sed "s|@MIME_TYPES@|$mime|" packaging/linux/rvp.desktop |
+        install -Dm644 /dev/stdin "$pkgdir/usr/share/applications/rvp.desktop"
+    local icon size
+    for icon in "$srcdir"/look/icons/rvp-*.png; do
+        size=${icon##*/rvp-}
+        size=${size%.png}
+        install -Dm644 "$icon" "$pkgdir/usr/share/icons/hicolor/${size}x${size}/apps/rvp.png"
+    done
+    install -Dm644 "$srcdir/look/icons/rvp.svg" "$pkgdir/usr/share/icons/hicolor/scalable/apps/rvp.svg"
+    install -Dm644 LICENSE "$pkgdir/usr/share/licenses/rvp/LICENSE"
+}

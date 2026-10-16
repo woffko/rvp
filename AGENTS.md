@@ -108,9 +108,10 @@ each goal writes `docs/goals/goal-<letter>-status.md`.
   listens unless `--instance=NAME` names a separate channel, so test runs
   never reach the owner's player.
 - The Windows test VM's checks are `tools/windows-vm/m3-all.ps1`,
-  `m4-all.ps1`, `m6-all.ps1` and `m7-all.ps1` (RVP Default with no skin
+  `m4-all.ps1`, `m6-all.ps1`, `m7-all.ps1` (RVP Default with no skin
   set, then the test copy of BlackSpace; copy them and `run.ps1` to
-  `C:\rvp-test` with the bundle and `testdata/media/fixture-marker.*`).
+  `C:\rvp-test` with the bundle and `testdata/media/fixture-marker.*`) and
+  `m8-all.ps1` (the packages, see below).
 - Video filters: RVP adds and removes only its own, by label (`@rvp*`,
   `vf pre`), and never touches SVP's `@svp` (goal H's rule 4).
 - Audio filters: the equalizer first, the normalizer, then `@rvptempo`
@@ -152,6 +153,38 @@ each goal writes `docs/goals/goal-<letter>-status.md`.
   module (`FolderDialog.qml`): import Qt's under a qualifier.
 - Portable mode: `rvp.portable` next to the executable keeps the settings
   there; `RVP_CONFIG_DIR` and `RVP_STATE_DIR` still win (test runs).
+
+## Packages and the desktop (M8)
+
+- `tools/packaging/package.py` makes the packages from a release build:
+  `windows` (the folder, the portable ZIP with `rvp.portable`, the NSIS
+  installer of `packaging/windows/rvp.nsi`) and `linux` (AppDir, AppImage,
+  .deb, on Ubuntu 22.04: kit steps `m8package` and `m8`). In WSL, makensis
+  is Ubuntu's nsis package unpacked into `~/rvp-deps/nsis` (`--makensis
+  ~/rvp-deps/nsis/usr/bin/makensis --nsisdir ~/rvp-deps/nsis/usr/share/nsis`)
+  and the C++ runtime is `~/rvp-deps/win/msvc-runtime`. CI builds both as
+  artifacts; nothing is published.
+- The registered types are `packaging/associations.tsv` (the installer,
+  the `.desktop` file, MPRIS). RVP only registers itself as a handler and
+  never makes itself the default (owner, 2026-10-16). The installer is per
+  user (HKCU); its uninstaller removes only the files it installed and,
+  of shared keys, those it created (`Software\RVP\Created`).
+- Linux packages bundle Qt, libmpv and the libraries a desktop may lack,
+  and use the system's for the rest (`SYSTEM` in package.py). RVP's binary
+  for them carries `-Wl,-rpath,$ORIGIN/../lib -Wl,--disable-new-dtags`:
+  no LD_LIBRARY_PATH, which programs RVP starts would inherit.
+- MPRIS and idle inhibit: `crates/platform` (zbus; zbus's builder queues a
+  taken name instead of failing, so RVP asks for its name itself with
+  DoNotQueue), shown by `shell/src/desktop.rs`. Windows' media controls:
+  `shell/src/media_controls.rs` (one FFI point, `GetForWindow`). Both send
+  `MediaCommand`s to the window's thread (`App::media_command`).
+- Crash logs go to RVP's state folder: panics (`rvp_app::crash`), fatal
+  signals and unhandled exceptions with a minidump (`shell/src/crash.rs`).
+  `rvp --crash-test=panic` or `=native` crashes on purpose.
+- The Windows VM's M8 check is `tools/windows-vm/m8-all.ps1` (the
+  installer, registry before and after, the portable ZIP). The VM has no
+  desktop session, so Windows' media controls are checked on the host,
+  with permission.
 
 ## Test environments
 

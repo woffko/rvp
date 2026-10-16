@@ -1,0 +1,85 @@
+# The video and audio types RVP registers for: the types PotPlayer is
+# registered for on the owner's Windows host (its PotPlayerMini64.* ProgIDs,
+# read 2026-10-16), without subtitles, playlists, disc files, Flash, its
+# bookmarks and .dsf (PotPlayer's skins share it with DSD audio). RVP only
+# registers itself as a handler, never as the default (goal J). MIME types
+# are shared-mime-info's, newest name first and the older alias after it;
+# "-" where it has none.
+# extension	kind	mime types
+3g2	video	video/3gpp2
+3gp	video	video/3gpp
+3gp2	video	video/3gpp2
+3gpp	video	video/3gpp
+amv	video	-
+asf	video	application/vnd.ms-asf;video/x-ms-asf
+avi	video	video/vnd.avi;video/x-msvideo
+divx	video	video/vnd.avi;video/x-msvideo
+dpg	video	-
+dvr-ms	video	-
+evo	video	-
+f4v	video	video/mp4
+flv	video	video/x-flv
+k3g	video	-
+lmp4	video	-
+m1v	video	video/mpeg
+m2t	video	video/mp2t
+m2ts	video	video/mp2t
+m2v	video	video/mpeg
+m4v	video	video/mp4;video/x-m4v
+mkv	video	video/x-matroska
+mod	video	video/mpeg
+mov	video	video/quicktime
+mp2v	video	video/mpeg
+mp4	video	video/mp4
+mpe	video	video/mpeg
+mpeg	video	video/mpeg
+mpg	video	video/mpeg
+mpv2	video	video/mpeg
+mqv	video	video/quicktime
+mts	video	video/mp2t
+mxf	video	application/mxf
+nsv	video	video/x-nsv
+ogm	video	video/x-ogm+ogg
+ogv	video	video/ogg
+qt	video	video/quicktime
+rm	video	application/vnd.rn-realmedia
+rmvb	video	application/vnd.rn-realmedia
+skm	video	-
+tp	video	video/mp2t
+tpr	video	-
+trp	video	video/mp2t
+ts	video	video/mp2t
+vob	video	video/mpeg
+webm	video	video/webm
+wm	video	video/x-ms-wmv
+wmp	video	-
+wmv	video	video/x-ms-wmv
+wtv	video	-
+aac	audio	audio/aac
+ac3	audio	audio/ac3
+aif	audio	audio/x-aiff
+aiff	audio	audio/x-aiff
+amr	audio	audio/AMR
+ape	audio	audio/x-ape
+dts	audio	audio/vnd.dts
+dtshd	audio	audio/vnd.dts.hd
+eac3	audio	-
+flac	audio	audio/flac
+m1a	audio	audio/mpeg
+m2a	audio	audio/mpeg
+m4a	audio	audio/mp4
+m4b	audio	audio/x-m4b
+m4p	audio	audio/mp4
+mka	audio	audio/x-matroska
+mp2	audio	audio/mp2
+mp3	audio	audio/mpeg
+mpa	audio	audio/mpeg
+mpc	audio	audio/x-musepack
+ogg	audio	audio/ogg
+opus	audio	audio/x-opus+ogg
+ra	audio	audio/vnd.rn-realaudio
+tak	audio	audio/x-tak
+tta	audio	audio/x-tta
+wav	audio	audio/vnd.wave;audio/x-wav
+wma	audio	audio/x-ms-wma
+wv	audio	audio/x-wavpack

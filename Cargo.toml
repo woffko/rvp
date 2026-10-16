@@ -30,7 +30,28 @@ swash = "=0.2.10"
 # Fills and strokes the paths of RVP's own vector art (crates/look); already
 # in the tree as swash's glyph rasterizer.
 zeno = "=0.3.3"
-zip = { version = "=9.0.0", default-features = false, features = ["deflate-flate2"] }
+zip = { version = "=9.0.3", default-features = false, features = ["deflate-flate2"] }
+# D-Bus for MPRIS and idle inhibit on Linux (M8, crates/platform): pure Rust,
+# so the packages need no libdbus; MIT.
+zbus = "=5.19.0"
+# Fatal signal handlers for the crash log on Linux (M8, shell/src/crash.rs);
+# already in the tree.
+libc = "=0.2.190"
+# Microsoft's bindings for Windows' media controls and the crash minidump
+# (M8, shell/src/media_controls.rs and crash.rs); MIT or Apache-2.0.
+windows = { version = "=0.62.2", features = [
+    "Foundation",
+    "Media",
+    "Win32_Foundation",
+    "Win32_Security",
+    "Win32_Storage_FileSystem",
+    "Win32_System_Diagnostics_Debug",
+    "Win32_System_IO",
+    "Win32_System_Kernel",
+    "Win32_System_Memory",
+    "Win32_System_Threading",
+    "Win32_System_WinRT",
+] }
 
 [patch.crates-io]
 # One fix in the event conversion; see vendor/libmpv2/RVP-PATCH.md.

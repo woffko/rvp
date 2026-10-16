@@ -18,7 +18,11 @@
 // pipe or file that the caller redirects to.
 #![cfg_attr(windows, windows_subsystem = "windows")]
 
+mod crash;
+mod desktop;
 mod ffi;
+#[cfg(windows)]
+mod media_controls;
 mod metrics;
 mod player;
 mod player_qobject;
@@ -28,18 +32,23 @@ mod video;
 
 use std::time::{Duration, Instant};
 
-use cxx_qt_lib::{QGuiApplication, QQmlApplicationEngine, QUrl};
+use cxx_qt_lib::{QGuiApplication, QQmlApplicationEngine, QString, QUrl};
 use rvp_app::Cli;
 use rvp_app::instance::{self, Request};
 use rvp_engine::EngineEvent;
 
 fn main() {
     metrics::start();
+    let cli = Cli::parse(std::env::args().skip(1));
+    install_crash_logs(&cli);
     player::preload_skin();
     ffi::bridge::rvp_setup_graphics();
     let mut app = QGuiApplication::new();
     metrics::mark("gui_application_ms");
-    single_instance(&Cli::parse(std::env::args().skip(1)));
+    // The window's app ID: the desktop finds rvp.desktop (its icon, MPRIS's
+    // DesktopEntry) by it.
+    QGuiApplication::set_desktop_file_name(&QString::from("rvp"));
+    single_instance(&cli);
     ffi::bridge::rvp_set_c_numeric_locale();
     ffi::bridge::rvp_set_window_icon();
     ffi::bridge::rvp_register_native_types();
@@ -60,6 +69,21 @@ fn main() {
     finish();
     drop(app);
     std::process::exit(code);
+}
+
+/// Crash logs in RVP's state folder (M8): panics, then fatal signals or
+/// unhandled exceptions. `--crash-test=panic` or `=native` crashes on
+/// purpose once they are in place, for the package checks.
+fn install_crash_logs(cli: &Cli) {
+    if let Ok(dirs) = rvp_app::Dirs::from_env() {
+        rvp_app::crash::install_panic_hook(&dirs.state);
+        crash::install(&dirs.state);
+    }
+    match cli.options.get("crash-test").map(String::as_str) {
+        Some("panic") => panic!("crash test (--crash-test=panic)"),
+        Some("native") => ffi::bridge::rvp_crash_test(),
+        _ => {}
+    }
 }
 
 /// Hands the command line to a running instance and exits, or becomes the

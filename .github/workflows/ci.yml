@@ -65,3 +65,105 @@ jobs:
       - uses: EmbarkStudios/cargo-deny-action@v2
         with:
           command: check advisories licenses bans sources
+
+  # M8: the packages as artifacts of this private repository (never
+  # published). Linux on the oldest system they support, through the
+  # Linux kit (its Qt and libmpv, cached); Windows natively, with NSIS.
+  package-linux:
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-22.04
+    env:
+      RVP_KIT_DIR: ${{ github.workspace }}/../rvp-kit
+    steps:
+      - uses: actions/checkout@v5
+      - name: Toolchain
+        run: |
+          rustup toolchain install
+          rustup show active-toolchain
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: package
+      - name: The kit's build packages
+        run: |
+          eval "$(sed -n '/^PACKAGES=/,/"$/p' tools/linux-kit/kit.sh)"
+          sudo apt-get update
+          sudo apt-get install -y $PACKAGES squashfs-tools
+      - name: The kit's versions
+        id: kit
+        run: |
+          echo "key=$(grep -E '^(QT_VERSION|MPV_COMMIT)=' tools/linux-kit/kit.sh | tr '\n' '-')" >> "$GITHUB_OUTPUT"
+      - name: Qt and libmpv cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ${{ env.RVP_KIT_DIR }}/qt
+            ${{ env.RVP_KIT_DIR }}/mpv
+          key: kit-ubuntu-22.04-${{ steps.kit.outputs.key }}
+      - name: Qt and libmpv
+        run: tools/linux-kit/kit.sh deps mpv
+      - name: Packages
+        run: tools/linux-kit/kit.sh m8package
+      - name: Logs of a failed step
+        if: failure()
+        run: tail -n 60 "$RVP_KIT_DIR"/logs/*.log
+      - uses: actions/upload-artifact@v4
+        with:
+          name: rvp-linux
+          path: |
+            ${{ env.RVP_KIT_DIR }}/logs/m8-packages/*.AppImage
+            ${{ env.RVP_KIT_DIR }}/logs/m8-packages/*.deb
+          retention-days: 14
+
+  package-windows:
+    if: github.event_name != 'pull_request'
+    runs-on: windows-2025
+    steps:
+      - uses: actions/checkout@v5
+      - name: Toolchain
+        run: |
+          rustup toolchain install
+          rustup show active-toolchain
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: package
+      - name: Qt
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: '6.10.3'
+          cache: true
+      - name: libmpv cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ runner.temp }}/libmpv/*.7z
+          key: libmpv-shinchiro-20261010
+      - name: libmpv
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: ./.github/scripts/windows-libmpv.ps1
+      - name: NSIS
+        shell: pwsh
+        run: |
+          $nsis = "${env:ProgramFiles(x86)}\NSIS\makensis.exe"
+          if (-not (Test-Path $nsis)) { choco install nsis -y --no-progress | Out-Null }
+          "MAKENSIS=$nsis" | Out-File -Append -Encoding utf8 $env:GITHUB_ENV
+      - name: Packages
+        shell: pwsh
+        run: |
+          cargo build --release --locked -p rvp-shell
+          cargo xtask look look
+          $runtime = Join-Path $env:RUNNER_TEMP 'msvc-runtime'
+          New-Item -ItemType Directory -Force $runtime | Out-Null
+          foreach ($dll in 'concrt140', 'msvcp140', 'msvcp140_1', 'msvcp140_2', 'vcruntime140', 'vcruntime140_1') {
+            Copy-Item "$env:SystemRoot\System32\$dll.dll" $runtime
+          }
+          python tools/packaging/package.py windows --exe target/release/rvp.exe --qt $env:QT_ROOT_DIR `
+            --mpv "$env:MPV_LIB_DIR\libmpv-2.dll" --runtime $runtime --look look --out packages `
+            --makensis $env:MAKENSIS --objdump 'C:\Program Files\LLVM\bin\llvm-objdump.exe'
+      - uses: actions/upload-artifact@v4
+        with:
+          name: rvp-windows
+          path: |
+            packages/*.zip
+            packages/*-setup.exe
+          retention-days: 14

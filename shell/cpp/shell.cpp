@@ -470,6 +470,21 @@ void rvp_set_window_icon()
     QGuiApplication::setWindowIcon(icon);
 }
 
+std::size_t rvp_main_window_id()
+{
+    for (QWindow *window : QGuiApplication::topLevelWindows())
+        if (window->objectName() == QLatin1String("rvpMain"))
+            return static_cast<std::size_t>(window->winId());
+    return 0;
+}
+
+void rvp_crash_test()
+{
+    // Undefined behaviour on purpose: the crash the handler must report.
+    volatile int *nowhere = nullptr;
+    *nowhere = 1;
+}
+
 void rvp_set_env(rust::Str name, rust::Str value)
 {
     const std::string key(name.data(), name.size());

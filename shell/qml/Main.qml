@@ -9,6 +9,8 @@ import RvpNative
 
 Window {
     id: root
+    // The media controls find the main window by this name (M8).
+    objectName: "rvpMain"
     width: 1280
     height: 720
     minimumWidth: 320

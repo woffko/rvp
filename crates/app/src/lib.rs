@@ -9,15 +9,18 @@
 
 mod action;
 mod app;
+pub mod associations;
 pub mod binding_editor;
 pub mod chrome;
 mod cli;
 mod commands;
 pub mod coverage;
+pub mod crash;
 pub mod dpl;
 pub mod equalizer;
 mod input;
 pub mod instance;
+pub mod media;
 pub mod menu;
 pub mod normalizer;
 pub mod panel;

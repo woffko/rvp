@@ -41,6 +41,8 @@ pub enum UiRequest {
     Minimize,
     MaximizeRestore,
     Exit,
+    /// Bring the window to the front (the media controls' Raise).
+    Raise,
     ContextMenu,
     TogglePlaylist,
     /// The settings window, at a page (`input`) or where it was.
@@ -205,6 +207,8 @@ pub struct App {
     normalizer: Option<crate::normalizer::Control>,
     /// The seek bar while the mouse holds it (`App::drag_seek_bar`).
     seek_bar: Option<SeekBarHold>,
+    /// Counts the files loaded: the media controls' track ID (`media`).
+    pub(crate) media_track: u64,
 }
 
 impl App {
@@ -254,6 +258,7 @@ impl App {
             svp: crate::svp::Watch::default(),
             normalizer: None,
             seek_bar: None,
+            media_track: 0,
         })
     }
 
@@ -1172,6 +1177,7 @@ impl App {
                     self.session.ab_active = false;
                 }
                 EngineEvent::FileLoaded { path } => {
+                    self.media_track += 1;
                     self.file_loaded(engine, path, now);
                     save_now = true;
                 }

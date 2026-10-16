@@ -1,12 +1,16 @@
 [package]
 name = "rvp-platform"
-description = "Operating system integration behind traits: MPRIS, media transport controls, screensaver inhibit (milestone M7)."
+description = "Desktop integration on Linux: MPRIS and idle inhibit over D-Bus (milestone M8)."
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
 publish.workspace = true
+
+[target.'cfg(target_os = "linux")'.dependencies]
+rvp-app = { path = "../app" }
+zbus.workspace = true
 
 [lints]
 workspace = true

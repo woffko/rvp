@@ -58,6 +58,21 @@
 #           checks; then the orientation check on it, with the pointer over
 #           the picture in the window and in fullscreen with and without
 #           the bars
+#   m8package  milestone M8: RVP built again with its library folder in
+#           its run path (target/package), then the AppImage and the .deb
+#           from this system's Qt and libmpv (tools/packaging/package.py),
+#           in the log directory's m8-packages
+#   m8      milestone M8 on those packages: the AppImage's functional
+#           self-test; the .deb installed (passwordless sudo, as on the
+#           shared VM; elsewhere install it first: the step names the
+#           command), its self-test, desktop entry, registration for the
+#           media types (no default changed), MPRIS and the screen kept on
+#           while video plays (on the desktop's session bus; MPRIS alone on
+#           a private bus where there is none), crash logs, and removed
+#           again leaving only RVP's settings and state
+#   m8removed  after `sudo apt remove rvp` where m8 could not remove the
+#           .deb itself: nothing of the package is left, RVP's settings
+#           and state are
 #   m3desktop  optional, not in m3all: an "RVP (kit)" entry in
 #           ~/.local/share/applications so that Files can open videos in
 #           the running RVP (single instance); delete the file to undo
@@ -69,6 +84,7 @@
 #   m6all   check deps mpv mvtools m2build m2 m3 m4 m6 m2input m2gpu m6gpu
 #           m2svp m6svp report
 #   m7all   m6all with m7 after m6
+#   m8all   m7all with m8package and m8 after m7
 #
 # environment:
 #   RVP_KIT_DIR     build and download directory (default ~/.cache/rvp-kit)
@@ -959,6 +975,254 @@ step_m7() {
     fi
 }
 
+# The packages m8package makes.
+m8_dir() { echo "$LOG_DIR/m8-packages"; }
+
+step_m8package() {
+    local log=$LOG_DIR/m8package.log out runtime url
+    out=$(m8_dir)
+    runtime=$KIT_DIR/appimage-runtime-x86_64
+    url=$(sed -n 's/^    "\(https:.*runtime-x86_64\)"$/\1/p' "$REPO/tools/packaging/package.py")
+    (
+        set -e
+        cd "$REPO"
+        export QMAKE MPV_LIB_DIR CARGO_TARGET_DIR RUSTFLAGS
+        QMAKE=$(qt_dir)/bin/qmake
+        MPV_LIB_DIR=$(mpv_lib_dir)
+        # Its own build: the run path finds the bundled libraries without
+        # LD_LIBRARY_PATH (DT_RPATH, which libmpv's own dependencies use).
+        CARGO_TARGET_DIR=$REPO/target/package
+        RUSTFLAGS='-C link-arg=-Wl,-rpath,$ORIGIN/../lib -C link-arg=-Wl,--disable-new-dtags'
+        cargo build --release -p rvp-shell
+        rm -rf "$out"
+        mkdir -p "$out"
+        cargo xtask look "$out/look" > /dev/null
+        [ -s "$runtime" ] || curl -fsSL "$url" -o "$runtime"
+        python3 tools/packaging/package.py linux --exe "$CARGO_TARGET_DIR/release/rvp" \
+            --qt "$(qt_dir)" --mpv "$(mpv_lib_dir)" --look "$out/look" --out "$out" \
+            --runtime "$runtime"
+    ) > "$log" 2>&1
+    local appimage deb
+    appimage=$(ls "$out"/RVP-*-x86_64.AppImage 2> /dev/null | head -1)
+    deb=$(ls "$out"/rvp_*_amd64.deb 2> /dev/null | head -1)
+    if [ -n "$appimage" ] && [ -n "$deb" ]; then
+        record m8package PASS "$(basename "$appimage") $(du -h "$appimage" | cut -f1), $(basename "$deb") $(du -h "$deb" | cut -f1)"
+    else
+        record m8package FAIL "see $log"
+        return 1
+    fi
+}
+
+# The bus name of the RVP with process `pid` on the session bus, if any.
+m8_mpris_name() {
+    local pid=$1 name owner
+    for name in "org.mpris.MediaPlayer2.rvp" "org.mpris.MediaPlayer2.rvp.instance$pid"; do
+        owner=$(gdbus call --session --dest org.freedesktop.DBus --object-path /org/freedesktop/DBus \
+            --method org.freedesktop.DBus.GetConnectionUnixProcessID "$name" 2> /dev/null)
+        case $owner in *" $pid,"*) echo "$name"; return ;; esac
+    done
+}
+
+m8_get() {
+    gdbus call --session --dest "$1" --object-path /org/mpris/MediaPlayer2 \
+        --method org.freedesktop.DBus.Properties.Get org.mpris.MediaPlayer2.Player "$2" 2> /dev/null
+}
+
+m8_idle_inhibited() {
+    gdbus call --session --dest org.gnome.SessionManager --object-path /org/gnome/SessionManager \
+        --method org.gnome.SessionManager.IsInhibited 8 2> /dev/null
+}
+
+# MPRIS and idle inhibit while `rvp` plays the test video on its own
+# instance channel; prints check lines.
+m8_mpris() {
+    local rvp=$1 pid name status before during paused deadline
+    before=$(m8_idle_inhibited)
+    "$rvp" --instance=m8 --skin= "--mpv-options=hwdec=$(m2_hwdec),ao=null" "$(test_video)" \
+        > "$LOG_DIR/m8-mpris-rvp.log" 2>&1 &
+    pid=$!
+    deadline=$((SECONDS + 40))
+    while [ $SECONDS -lt $deadline ]; do
+        name=$(m8_mpris_name "$pid")
+        status=${name:+$(m8_get "$name" PlaybackStatus)}
+        case $status in *Playing*) break ;; esac
+        sleep 0.5
+    done
+    case $status in
+        *Playing*) echo "check mpris_playing=PASS $name" ;;
+        *) echo "check mpris_playing=FAIL name '$name' status '$status'" ;;
+    esac
+    if [ -n "$name" ]; then
+        case $(m8_get "$name" Metadata) in
+            *xesam:title*) echo "check mpris_metadata=PASS" ;;
+            *) echo "check mpris_metadata=FAIL" ;;
+        esac
+        sleep 2
+        during=$(m8_idle_inhibited)
+        gdbus call --session --dest "$name" --object-path /org/mpris/MediaPlayer2 \
+            --method org.mpris.MediaPlayer2.Player.Pause 2>&1
+        deadline=$((SECONDS + 10))
+        while [ $SECONDS -lt $deadline ]; do
+            status=$(m8_get "$name" PlaybackStatus)
+            case $status in *Paused*) break ;; esac
+            sleep 0.5
+        done
+        case $status in
+            *Paused*) echo "check mpris_pause=PASS" ;;
+            *) echo "check mpris_pause=FAIL status '$status'" ;;
+        esac
+        paused=$(m8_idle_inhibited)
+        if [ -z "$during" ]; then
+            echo "check idle_inhibit=SKIPPED no GNOME session manager on this bus"
+        elif [ "$during" = "(true,)" ] && { [ "$before" != "(false,)" ] || [ "$paused" = "(false,)" ]; }; then
+            echo "check idle_inhibit=PASS before $before playing $during paused $paused"
+        else
+            echo "check idle_inhibit=FAIL before $before playing $during paused $paused"
+        fi
+        gdbus call --session --dest "$name" --object-path /org/mpris/MediaPlayer2 \
+            --method org.mpris.MediaPlayer2.Quit > /dev/null 2>&1
+    fi
+    deadline=$((SECONDS + 20))
+    while kill -0 "$pid" 2> /dev/null && [ $SECONDS -lt $deadline ]; do sleep 0.5; done
+    if kill -0 "$pid" 2> /dev/null; then
+        echo "check mpris_quit=FAIL"
+        kill "$pid" 2> /dev/null
+    else
+        echo "check mpris_quit=PASS"
+    fi
+}
+
+# The crash logs of `rvp`: a panic and a fatal signal.
+m8_crash() {
+    local rvp=$1 kind text
+    for kind in panic native; do
+        rm -rf "$RVP_STATE_DIR"
+        "$rvp" "--crash-test=$kind" > /dev/null 2>&1
+        text=$(cat "$RVP_STATE_DIR"/crash-*.log 2> /dev/null)
+        case $kind:$text in
+            panic:*"panic in thread 'main'"*) echo "check crash_log_panic=PASS" ;;
+            native:*"fatal signal 11"*) echo "check crash_log_native=PASS" ;;
+            *) echo "check crash_log_$kind=FAIL $text" ;;
+        esac
+    done
+}
+
+step_m8() {
+    local log=$LOG_DIR/m8.log out appimage deb installed=0 default_before bus=""
+    out=$(m8_dir)
+    appimage=$(ls "$out"/RVP-*-x86_64.AppImage 2> /dev/null | head -1)
+    deb=$(ls "$out"/rvp_*_amd64.deb 2> /dev/null | head -1)
+    if [ -z "$appimage" ] || [ -z "$deb" ]; then
+        record m8 SKIPPED "run m8package first"
+        return 0
+    fi
+    if [ -z "${WAYLAND_DISPLAY:-}" ] && [ -z "${DISPLAY:-}" ]; then
+        record m8 SKIPPED "no graphical session"
+        return 0
+    fi
+    # The packages bring their own Qt and libmpv.
+    unset LD_LIBRARY_PATH
+    export RVP_CONFIG_DIR=$LOG_DIR/m8-config RVP_STATE_DIR=$LOG_DIR/m8-state
+    : > "$log"
+    {
+        echo "== AppImage $(basename "$appimage")"
+        rm -rf "$RVP_CONFIG_DIR" "$RVP_STATE_DIR"
+        kit_settings
+        chmod +x "$appimage"
+        if "$appimage" --selftest "--out=$LOG_DIR/m8-grabs" --skin= \
+            "--mpv-options=hwdec=$(m2_hwdec)" "$(test_video)" "$(s1_video)" > "$LOG_DIR/m8-appimage.log" 2>&1; then
+            echo "check appimage_selftest=PASS"
+        else
+            echo "check appimage_selftest=FAIL $(grep -E '=FAIL|^failures=' "$LOG_DIR/m8-appimage.log" | tr '\n' ' ')"
+        fi
+        echo "== .deb $(basename "$deb")"
+        default_before=$(xdg-mime query default video/x-matroska 2> /dev/null)
+        if dpkg -s rvp > /dev/null 2>&1; then
+            echo "check deb_installed=PASS installed before this step"
+        elif sudo -n true 2> /dev/null; then
+            if sudo -n apt-get install -y "$deb" > "$LOG_DIR/m8-apt.log" 2>&1; then
+                installed=1
+                echo "check deb_installed=PASS"
+            else
+                echo "check deb_installed=FAIL see $LOG_DIR/m8-apt.log"
+            fi
+        else
+            echo "check deb_installed=SKIPPED install it first: sudo apt install $deb"
+        fi
+        if dpkg -s rvp > /dev/null 2>&1; then
+            [ "$(readlink /usr/bin/rvp)" = /opt/rvp/bin/rvp ] && [ -x /opt/rvp/bin/rvp ] &&
+                echo "check deb_files=PASS" || echo "check deb_files=FAIL"
+            if command -v desktop-file-validate > /dev/null 2>&1; then
+                desktop-file-validate /usr/share/applications/rvp.desktop > /dev/null 2>&1 &&
+                    echo "check desktop_entry=PASS" ||
+                    echo "check desktop_entry=FAIL $(desktop-file-validate /usr/share/applications/rvp.desktop 2>&1 | head -3 | tr '\n' ' ')"
+            fi
+            gio mime video/x-matroska 2> /dev/null | grep -q 'rvp\.desktop' &&
+                echo "check registered_mkv=PASS" || echo "check registered_mkv=FAIL"
+            [ "$(xdg-mime query default video/x-matroska 2> /dev/null)" = "$default_before" ] &&
+                echo "check default_unchanged=PASS $default_before" ||
+                echo "check default_unchanged=FAIL $default_before"
+            rm -rf "$RVP_CONFIG_DIR" "$RVP_STATE_DIR"
+            kit_settings
+            if /usr/bin/rvp --selftest "--out=$LOG_DIR/m8-grabs" --skin= \
+                "--mpv-options=hwdec=$(m2_hwdec)" "$(test_video)" "$(s1_video)" > "$LOG_DIR/m8-deb.log" 2>&1; then
+                echo "check deb_selftest=PASS"
+            else
+                echo "check deb_selftest=FAIL $(grep -E '=FAIL|^failures=' "$LOG_DIR/m8-deb.log" | tr '\n' ' ')"
+            fi
+            # MPRIS on the desktop's session bus, or on a private one.
+            if ! gdbus call --session --dest org.freedesktop.DBus --object-path /org/freedesktop/DBus \
+                --method org.freedesktop.DBus.ListNames > /dev/null 2>&1; then
+                bus=$(dbus-daemon --session --fork --print-address=1 --print-pid=1 2> /dev/null)
+                export DBUS_SESSION_BUS_ADDRESS=${bus%%$'\n'*}
+                echo "(a private session bus: $DBUS_SESSION_BUS_ADDRESS)"
+            fi
+            m8_mpris /usr/bin/rvp
+            if [ -n "$bus" ]; then
+                kill "${bus##*$'\n'}" 2> /dev/null
+                unset DBUS_SESSION_BUS_ADDRESS
+            fi
+            m8_crash /usr/bin/rvp
+        fi
+        if [ "$installed" = 1 ]; then
+            sudo -n apt-get remove -y rvp >> "$LOG_DIR/m8-apt.log" 2>&1
+            if [ ! -e /opt/rvp ] && [ ! -e /usr/bin/rvp ] && [ ! -e /usr/share/applications/rvp.desktop ] &&
+                [ -z "$(find /usr/share/icons -name 'rvp.*' 2> /dev/null)" ]; then
+                echo "check deb_removed=PASS"
+            else
+                echo "check deb_removed=FAIL"
+            fi
+            [ -d "$RVP_STATE_DIR" ] && echo "check user_state_kept=PASS" || echo "check user_state_kept=FAIL"
+        fi
+    } >> "$log" 2>&1
+    local failed passed
+    failed=$(grep -c '=FAIL' "$log")
+    passed=$(grep -c '=PASS' "$log")
+    if [ "$failed" -eq 0 ]; then
+        record m8 PASS "$passed checks passed $(grep -E '=SKIPPED' "$log" | tr '\n' ' ')"
+    else
+        record m8 FAIL "$(grep -E '=FAIL' "$log" | tr '\n' ' ')"
+        return 1
+    fi
+}
+
+step_m8removed() {
+    local left
+    left=$( { ls -d /opt/rvp /usr/bin/rvp /usr/share/applications/rvp.desktop 2> /dev/null
+        find /usr/share/icons -name 'rvp.*' 2> /dev/null; } | tr '\n' ' ')
+    if dpkg -s rvp > /dev/null 2>&1; then
+        record m8removed FAIL "rvp is still installed: sudo apt remove rvp"
+        return 1
+    elif [ -n "$left" ]; then
+        record m8removed FAIL "left: $left"
+        return 1
+    elif [ -d "$LOG_DIR/m8-state" ]; then
+        record m8removed PASS "nothing of the package left, RVP's state kept"
+    else
+        record m8removed PASS "nothing of the package left"
+    fi
+}
+
 step_m6svp() {
     local log=$LOG_DIR/m6svp.log out=$LOG_DIR/m6-grabs vsscript first second pid
     m2_ready m6svp || return 0
@@ -1090,7 +1354,7 @@ step_report() {
 }
 
 if [ "$#" -eq 0 ]; then
-    sed -n '2,89p' "$KIT_SCRIPT"
+    sed -n '2,102p' "$KIT_SCRIPT"
     exit 2
 fi
 for step in "$@"; do
@@ -1101,15 +1365,16 @@ for step in "$@"; do
         m4all) set -- check deps mpv m2build m2 m3 m4 m2input m2gpu m2svp report ;;
         m6all) set -- check deps mpv mvtools m2build m2 m3 m4 m6 m2input m2gpu m6gpu m2svp m6svp report ;;
         m7all) set -- check deps mpv mvtools m2build m2 m3 m4 m6 m7 m2input m2gpu m6gpu m2svp m6svp report ;;
+        m8all) set -- check deps mpv mvtools m2build m2 m3 m4 m6 m7 m8package m8 m2input m2gpu m6gpu m2svp m6svp report ;;
     esac
 done
 overall=0
 for step in "$@"; do
     case $step in
-        check | deps | mpv | mvtools | build | s1 | s2 | s3 | input | m2build | m2 | m2input | m2gpu | m2svp | m3 | m4 | m6 | m7 | m6svp | m6gpu | m3desktop | report)
+        check | deps | mpv | mvtools | build | s1 | s2 | s3 | input | m2build | m2 | m2input | m2gpu | m2svp | m3 | m4 | m6 | m7 | m8package | m8 | m8removed | m6svp | m6gpu | m3desktop | report)
             "step_$step" || overall=1
             ;;
-        all | m2all | m3all | m4all | m6all | m7all) ;;
+        all | m2all | m3all | m4all | m6all | m7all | m8all) ;;
         *) say "unknown step $step"; exit 2 ;;
     esac
 done

@@ -35,6 +35,12 @@ pub mod bridge {
         fn rvp_set_c_numeric_locale();
         /// Gives every window RVP's icon (`QGuiApplication::setWindowIcon`).
         fn rvp_set_window_icon();
+        /// The main window's native handle (`QWindow::winId`), 0 before it
+        /// exists; Windows' media controls belong to it.
+        fn rvp_main_window_id() -> usize;
+        /// Crashes on purpose (`--crash-test=native`): a write through a
+        /// null pointer, which the native crash handler reports.
+        fn rvp_crash_test();
         /// Sets an environment variable (`qputenv`); only while no other
         /// thread runs.
         fn rvp_set_env(name: &str, value: &str);

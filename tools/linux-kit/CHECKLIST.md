@@ -352,6 +352,47 @@ Then try by hand (this is M6's acceptance on Linux):
       mpv's shader collections), switch it on with Shift+P.
 - [ ] The picture is upright and not mirrored with a real video.
 
+## 9. Milestone M8: packages and the desktop (goal J)
+
+One session for M6, M7 and M8 (section 8's preparation). From a terminal
+inside the GNOME session:
+
+```sh
+cd ~/rvp && git pull
+tools/linux-kit/kit.sh m8all
+```
+
+`m8all` is `m7all` with `m8package` and `m8` after `m7`. `m8package`
+builds RVP again with its library folder in its run path and makes the
+AppImage and the .deb from the kit's Qt and libmpv (a few minutes). `m8`
+runs the AppImage's self-test, then asks for the .deb: install it
+
+```sh
+sudo apt install ./<the .deb the step names>
+```
+
+and run `tools/linux-kit/kit.sh m8 report` again. It checks the installed
+copy (self-test, desktop entry, registration for the media types with no
+default changed), MPRIS on GNOME's bus while the test video plays (playing,
+metadata, Pause, Quit) and that GNOME keeps the screen on meanwhile
+(`IsInhibited` of the session manager), and writes crash logs on purpose.
+Afterwards remove the package (`sudo apt remove rvp`) and run
+`tools/linux-kit/kit.sh m8removed report`.
+
+Then try by hand (M8's acceptance on Linux):
+
+- [ ] RVP is in the applications grid with its icon; a window shows RVP's
+      icon in the dash.
+- [ ] Files, a video's context menu, "Open With": RVP is listed; your
+      default player is still the default.
+- [ ] While a film plays: the top bar's media controls show RVP with the
+      title; play, pause, next and previous work there and on the media
+      keys; the screen does not blank (wait past the blank-screen delay).
+      Paused, it may blank again.
+- [ ] The AppImage (`chmod +x` it, run it) plays a film the same way.
+- [ ] `rvp --crash-test=native` ends at once and leaves
+      `crash-<time>-native.log` in `~/.local/state/rvp`; delete it after.
+
 ## Steps and what they record
 
 | Step | Needs | PASS means |
@@ -375,6 +416,10 @@ Then try by hand (this is M6's acceptance on Linux):
 | `m6` | graphical session, cargo | the functional self-test passes with all of M6's checks (control panel, colour, equalizer, shader, SVP diagnostic), the picture is upright, at most 2 frames more than in steady playback drop after the speed returns to 1x, a script slot raises the frame rate (SKIPPED without SVP's VapourSynth; PotPlayer's script too when `RVP_VPY` is set), and the headless video and equalizer tests pass |
 | `m6gpu` | hardware GPU | no dropped frames over `RVP_M2_SECONDS` in fullscreen with colours, deband, a shader and the equalizer on |
 | `m6svp` | SVP 4 Manager running | SVP attached to both windows (the second one on its `mpvSockets` endpoint), the frame rate reached 1.9 times the file's, and audio and video stayed within 0.1 s after each seek |
+| `m7` | graphical session | the functional self-test on RVP Default with M7's checks, and the picture upright in the window and in fullscreen with the pointer over it |
+| `m8package` | `mpv`, network once (the AppImage runtime) | the AppImage and the .deb were made |
+| `m8` | graphical session, `m8package` | the AppImage's self-test passes; with the .deb installed: its files, a valid desktop entry, the registration for the media types with the default unchanged, the self-test, MPRIS (playing, metadata, Pause, Quit), the screen kept on while video plays (SKIPPED without GNOME's session manager on the bus), the crash logs, and, where the step installed it, its removal |
+| `m8removed` | `sudo apt remove rvp` | nothing of the package is left |
 | `m3desktop` | `m2build` | the desktop entry was written |
 | `report` | — | the Markdown report was written |
 
