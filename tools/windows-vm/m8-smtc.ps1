@@ -1,6 +1,9 @@
 # M8: Windows' media controls (System Media Transport Controls) in a
-# desktop session. The test VM has none, so this runs on the host, with the
-# owner's permission every time (AGENTS.md).
+# desktop session. Windows' media session manager runs as a per-user
+# service (NPSMSvc) only for a user signed in at a desktop, which the test
+# VM's SSH sessions are not; CI's hosted runners are, so CI's
+# package-windows job runs this script. On the owner's host it runs only
+# with the owner's permission, every time (AGENTS.md).
 #
 # It starts the portable RVP from this folder without sound (ao=null), on an
 # instance channel of its own (it never reaches the owner's RVP) with SVP's
@@ -121,13 +124,17 @@ try {
     if ($session) {
         $shown = WaitFor { param($s) $s.Status -eq 'Playing' -and $s.Title -match 'clip-a' }
         Check 'playing_title' ($shown.Status -eq 'Playing' -and $shown.Title -match 'clip-a') "$($shown.Status) '$($shown.Title)'"
+        # Windows offers the button that fits the status: Pause while
+        # playing, Play while paused.
         $controls = $session.GetPlaybackInfo().Controls
-        Check 'buttons' ($controls.IsPlayEnabled -and $controls.IsPauseEnabled -and $controls.IsNextEnabled) `
-            "play $($controls.IsPlayEnabled) pause $($controls.IsPauseEnabled) next $($controls.IsNextEnabled) previous $($controls.IsPreviousEnabled)"
+        Check 'buttons_playing' ($controls.IsPauseEnabled -and $controls.IsNextEnabled) `
+            "pause $($controls.IsPauseEnabled) next $($controls.IsNextEnabled) previous $($controls.IsPreviousEnabled)"
 
         $null = Await ($session.TryPauseAsync()) ([bool])
         $shown = WaitFor { param($s) $s.Status -eq 'Paused' }
         Check 'pause' ($shown.Status -eq 'Paused') $shown.Status
+        $controls = (Session).GetPlaybackInfo().Controls
+        Check 'buttons_paused' ($controls.IsPlayEnabled) "play $($controls.IsPlayEnabled)"
         $null = Await ((Session).TryPlayAsync()) ([bool])
         $shown = WaitFor { param($s) $s.Status -eq 'Playing' }
         Check 'play' ($shown.Status -eq 'Playing') $shown.Status
@@ -154,3 +161,4 @@ try {
     Remove-Item -Force $clips -ErrorAction SilentlyContinue
 }
 Write-Host "failures=$script:failures"
+if ($script:failures -gt 0) { exit 1 }

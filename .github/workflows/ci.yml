@@ -168,6 +168,16 @@ jobs:
           python tools/packaging/package.py windows --exe target/release/rvp.exe --qt $env:QT_ROOT_DIR `
             --mpv "$env:MPV_LIB_DIR\libmpv-2.dll" --runtime $runtime --look look --out packages `
             --makensis $env:MAKENSIS --objdump 'C:\Program Files\LLVM\bin\llvm-objdump.exe'
+      - name: Windows' media controls
+        shell: powershell
+        run: |
+          # The hosted runner works in a desktop session, which Windows'
+          # media session manager needs (the test VM's SSH sessions lack it).
+          $base = Join-Path $env:RUNNER_TEMP 'm8-smtc'
+          Expand-Archive -Path (Get-ChildItem packages\*-portable.zip).FullName -DestinationPath $base
+          Copy-Item testdata\media\fixture-60s.mkv, tools\windows-vm\m8-smtc.ps1 $base
+          $env:QT_OPENGL = 'software'
+          & "$base\m8-smtc.ps1"
       - uses: actions/upload-artifact@v4
         with:
           name: rvp-windows

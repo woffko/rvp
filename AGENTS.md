@@ -189,8 +189,11 @@ each goal writes `docs/goals/goal-<letter>-status.md`.
   `rvp --crash-test=panic` or `=native` crashes on purpose.
 - The Windows VM's M8 check is `tools/windows-vm/m8-all.ps1` (the
   installer, `m7-all.ps1` on the installed copy, registry before and
-  after, the portable ZIP). The VM has no desktop session, so Windows'
-  media controls are checked on the host (`m8-smtc.ps1`), with permission.
+  after, the portable ZIP). Windows' media session manager runs only for a
+  user signed in at a desktop (the per-user service NPSMSvc), which the
+  VM's SSH sessions are not: CI's `package-windows` job, whose hosted
+  runner is, checks the media controls (`m8-smtc.ps1`); on the owner's
+  host it runs only with permission.
 - `tools/packaging/check-deb.sh` checks the Linux packages on another
   Ubuntu release inside a container (CI: `ubuntu:26.10`): install,
   libraries, the self-tests under Xvfb.
