@@ -153,7 +153,9 @@ Near 2048 the fit falls off on both sides (1920: 0.29, 2016: 0.11, 2040 and
 `dynaudnorm` chain.
 
 So PotPlayer runs TomSteady over blocks of 2048 samples, Release time is
-its stepping and Level its target level. What S5 saw follows from the
+its stepping and Level its target level. PotPlayer's Release time slider
+runs from 5 to 10, as the plugin's stepping slider does (owner,
+2026-10-16). What S5 saw follows from the
 rules: the fast attack is the cut of a block that would clip, the slow
 release TomSteady's one-unit raises (1/1024 of unity per block at
 stepping 10, ten units after 128 raises in a row), the slow start its gain

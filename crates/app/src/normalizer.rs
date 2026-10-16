@@ -69,7 +69,9 @@ pub struct Normalizer {
     /// Target peak in percent of full scale (PotPlayer's "Level"), 10-100.
     pub level: f64,
     /// PotPlayer's "Release time": TomSteady's stepping, the fractional bits
-    /// of its gain (5-10); at 10 the gain moves by 1/1024 per block.
+    /// of its gain. 5-10, the range of PotPlayer's slider (owner,
+    /// 2026-10-16) and the plugin's; at 10 the gain moves by 1/1024 per
+    /// block.
     pub release: f64,
 }
 
