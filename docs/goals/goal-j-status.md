@@ -1,14 +1,17 @@
 # Goal J status: milestone M8 (platform integration and packaging)
 
-Date: 2026-10-16. Result: **done**. Tests and CI are green; the packages
-install, run and uninstall cleanly on the Windows VM (installer and
-portable ZIP) and the Ubuntu VM (AppImage and .deb). Precondition met:
-`goal-i-status.md` records goal I as done.
+Date: 2026-10-16. Result: **done**, but one check is outstanding: Windows'
+media controls need a desktop session, which the VM lacks; that run waits
+for the owner's permission on the host (below). Tests and CI are green;
+CI's packages of 3eb93e6 install, run and uninstall cleanly on the Windows
+VM (installer and portable ZIP) and the Ubuntu VM (AppImage and .deb), and
+the .deb installs and runs on Ubuntu 26.10 in a container (CI checks it on
+every push). Precondition met: `goal-i-status.md` records goal I as done.
 
 **M8's acceptance on Linux, like M6's, still needs the owner's Ubuntu boot
 run** (`tools/linux-kit/kit.sh m8all`, checklist sections 8 and 9; the
-`/goal` text is in PLAN.md section 10). Windows' media controls still need
-one short run on the host, with the owner's permission (below).
+`/goal` text is in PLAN.md section 10): GNOME 26.10's media controls,
+screen and associations with the installed package.
 
 ## M8 summary
 
@@ -24,7 +27,7 @@ one short run on the host, with the owner's permission (below).
 | Linux packages | An AppImage (the type2 runtime release 20251108, checked by SHA-256) and a .deb for Ubuntu 22.04 and later: `/opt/rvp`, `/usr/bin/rvp`, the desktop entry and hicolor icons, `Depends` with the t64 names as alternatives (checked on 22.04; 26.10 waits for the boot run). Both carry Qt, libmpv and what they reach that a desktop may lack, found through the run path; the system's libraries for the rest. Built on Ubuntu 22.04 with the kit's Qt and libmpv | `packaging/linux/rvp.desktop`, `package.py linux`, kit `m8package` |
 | AUR | A PKGBUILD that builds RVP from a source archive of the repository (`git archive`) with Arch's Qt 6 and libmpv; not tested (no Arch container runs here without changing the system) and not published | `packaging/aur/PKGBUILD` |
 | CI | `package-linux` (Ubuntu 22.04, the kit with Qt and libmpv cached) and `package-windows` (windows-2025, NSIS) keep the packages as artifacts for 14 days (d18ffb7: `rvp-linux` 98 MB, `rvp-windows` 159 MB); nothing is published | `.github/workflows/ci.yml` |
-| Kit and checks | Kit steps `m8package`, `m8`, `m8removed` and `m8all` (`m7all` plus M8), checklist section 9; Windows VM `tools/windows-vm/m8-all.ps1`; host `tools/windows-vm/m8-smtc.ps1` | `tools/` |
+| Kit and checks | Kit steps `m8package`, `m8`, `m8removed` and `m8all` (`m7all` plus M8), checklist section 9; Windows VM `tools/windows-vm/m8-all.ps1` (it runs `m7-all.ps1` on the installed copy); other Ubuntu releases `tools/packaging/check-deb.sh` in a container; host `tools/windows-vm/m8-smtc.ps1` | `tools/` |
 
 ## Tests
 
@@ -43,9 +46,10 @@ one short run on the host, with the owner's permission (below).
 
 | Machine | Result |
 |---------|--------|
-| Windows VM | `m8-all.ps1`, 20 checks, 0 failures: install (files, Start menu, `OpenWithProgids`, the open command, Default apps, capabilities, uninstall entry), every type's default unchanged, the installed copy's self-test, crash logs (a panic; a native crash `0xc0000005` with a 61 KB minidump), uninstall (folder and Start menu gone, every key the installer touched as before, keys of other programs kept), the portable ZIP's self-test with its settings beside `rvp.exe` |
+| Windows VM | `m8-all.ps1` with CI's packages of 3eb93e6, 21 checks, 0 failures: install (files, Start menu, `OpenWithProgids`, the open command, Default apps, capabilities, uninstall entry), every type's default unchanged, the installed copy's self-test and `m7-all.ps1` on it (the self-tests on RVP Default and on BlackSpace, the icon of `rvp.exe`), crash logs (a panic; a native crash `0xc0000005` with a 60 KB minidump), uninstall (folder and Start menu gone, every key the installer touched as before, keys of other programs kept), the portable ZIP's self-test with its settings beside `rvp.exe`. RVP's media controls start there without an error, but session 0 has no media session manager to show them (findings) |
 | Ubuntu VM, kit as the kit's user | `m8package PASS` (AppImage 57 MB, .deb 43 MB; 78 libraries bundled, 50 from the system); `m8 PASS`, 15 checks on a private bus (idle inhibit skipped there); `m8removed PASS` |
-| Ubuntu VM, kit as the desktop's user | `m8` on GNOME's own session bus, 14 checks: the AppImage's and the installed copy's self-tests, files, desktop entry, registration for `video/x-matroska` with Totem still the default, MPRIS (playing, metadata, Pause, Quit), the screen kept on while playing and released when paused (`IsInhibited 8`), crash logs; then `m8removed PASS` |
+| Ubuntu VM, kit as the desktop's user | `m8` on GNOME's own session bus, 14 checks: the AppImage's and the installed copy's self-tests, files, desktop entry, registration for `video/x-matroska` with Totem still the default, MPRIS (playing, metadata, Pause, Quit), the screen kept on while playing and released when paused (`IsInhibited 8`), crash logs; then `m8removed PASS`. Run with the VM's build of the fix and again with CI's packages of 3eb93e6 |
+| Ubuntu 26.10 (container) | `tools/packaging/check-deb.sh` in `ubuntu:26.10` (an image made before the release; packages from the released archive) with CI's packages of 3eb93e6: the .deb installs with its dependencies, rvp and its 154 libraries resolve, and the functional self-test passes under Xvfb for the installed copy and the AppImage (69 checks each). Run on the Ubuntu VM's docker; CI's `package-linux` runs it on every push |
 
 ## Findings
 
@@ -78,6 +82,11 @@ one short run on the host, with the owner's permission (below).
   `package.py` passes absolute ones; `upload-artifact` takes no path with
   `..`, so the Linux job copies its packages into the workspace.
 - zip 9.0.0 to 9.0.2 were yanked: 9.0.3.
+- `ldd` on one of the package's libraries reports libraries as missing
+  that rvp's run path supplies at run time (glibc searches the
+  executable's `DT_RPATH` for libraries that name no path of their own,
+  such as Kerberos below Qt Network); `check-deb.sh` adds the package's
+  library folder to the search.
 
 ## Owner decisions in this goal
 

@@ -8,6 +8,9 @@
 #
 # Layout as m6-all.ps1 (copy this file and run.ps1 to C:\rvp-test with the
 # bundle in C:\rvp-test\rvp-bundle). SVP mode is off ("ipc-server": "").
+# `-Exe` runs another copy with the bundle's fixtures (m8-all.ps1: the
+# installed one).
+param([string]$Exe = 'C:\rvp-test\rvp-bundle\rvp.exe')
 $bundle = 'C:\rvp-test\rvp-bundle'
 $long = "$bundle\fixture-60s.mkv"
 $short = "$bundle\fixture-3s.mkv"
@@ -26,12 +29,12 @@ foreach ($run in $runs) {
     Set-Content -Path C:\rvp-test\config\settings.json -Value '{ "ipc-server": "" }' -Encoding ascii
     Write-Host "== functional ($($run.Name))"
     $extra = @('--selftest', "--out=$out", '--mpv-options=ao=null') + $run.Skin + @($long, $short)
-    & "$PSScriptRoot\run.ps1" -Extra $extra | Select-String -NotMatch $filter |
+    & "$PSScriptRoot\run.ps1" -Exe $Exe -Extra $extra | Select-String -NotMatch $filter |
         ForEach-Object { Write-Host $_.Line }
 }
 
 Write-Host '== exe icon'
 Add-Type -AssemblyName System.Drawing
-$icon = [System.Drawing.Icon]::ExtractAssociatedIcon("$bundle\rvp.exe")
+$icon = [System.Drawing.Icon]::ExtractAssociatedIcon($Exe)
 $icon.ToBitmap().Save('C:\rvp-test\out\exe-icon.png')
 Write-Host "exe_icon=$($icon.Width)x$($icon.Height)"

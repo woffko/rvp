@@ -107,6 +107,10 @@ jobs:
           # upload-artifact takes no path with "..".
           mkdir -p packages
           cp "$RVP_KIT_DIR"/logs/m8-packages/*.AppImage "$RVP_KIT_DIR"/logs/m8-packages/*.deb packages/
+      - name: The packages on Ubuntu 26.10
+        run: |
+          docker run --rm -v "$PWD:/src:ro" ubuntu:26.10 \
+            bash /src/tools/packaging/check-deb.sh /src/packages /src/testdata/media
       - name: Logs of a failed step
         if: failure()
         run: tail -n 60 "$RVP_KIT_DIR"/logs/*.log

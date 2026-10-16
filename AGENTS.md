@@ -188,9 +188,12 @@ each goal writes `docs/goals/goal-<letter>-status.md`.
   signals and unhandled exceptions with a minidump (`shell/src/crash.rs`).
   `rvp --crash-test=panic` or `=native` crashes on purpose.
 - The Windows VM's M8 check is `tools/windows-vm/m8-all.ps1` (the
-  installer, registry before and after, the portable ZIP). The VM has no
-  desktop session, so Windows' media controls are checked on the host,
-  with permission.
+  installer, `m7-all.ps1` on the installed copy, registry before and
+  after, the portable ZIP). The VM has no desktop session, so Windows'
+  media controls are checked on the host (`m8-smtc.ps1`), with permission.
+- `tools/packaging/check-deb.sh` checks the Linux packages on another
+  Ubuntu release inside a container (CI: `ubuntu:26.10`): install,
+  libraries, the self-tests under Xvfb.
 
 ## Test environments
 

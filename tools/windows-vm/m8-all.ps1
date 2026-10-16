@@ -4,14 +4,16 @@
 # The installer runs silently for this user: its files, the Start menu entry,
 # the uninstall entry and RVP's registration for the media types ("Open
 # with", Default apps), with no type's default changed. The installed copy
-# passes the functional self-test and writes crash logs (a panic, and a
-# native crash with a minidump). The uninstaller then removes all of it:
+# passes the functional self-test and m7-all.ps1's checks (RVP Default,
+# then BlackSpace) and writes crash logs (a panic, and a native crash with a
+# minidump). The uninstaller then removes all of it:
 # every registry key the installer touched reads as it did before, and the
 # folder is gone. Last, the portable ZIP runs its self-test with its
 # settings next to rvp.exe.
 #
-# Layout: this file in C:\rvp-test, RVP-*-setup.exe and RVP-*-portable.zip
-# in C:\rvp-test\m8, the fixtures in C:\rvp-test\rvp-bundle (m7-all.ps1).
+# Layout: this file, m7-all.ps1 and run.ps1 in C:\rvp-test; RVP-*-setup.exe,
+# RVP-*-portable.zip and associations.tsv in C:\rvp-test\m8; the fixtures
+# in C:\rvp-test\rvp-bundle (m7-all.ps1).
 $m8 = 'C:\rvp-test\m8'
 $fixtures = @('C:\rvp-test\rvp-bundle\fixture-60s.mkv', 'C:\rvp-test\rvp-bundle\fixture-3s.mkv')
 $setup = Get-ChildItem "$m8\RVP-*-setup.exe" | Select-Object -First 1
@@ -117,6 +119,13 @@ Remove-Item -Recurse -Force $installedBase -ErrorAction SilentlyContinue
 New-Item -ItemType Directory -Force "$installedBase\config" | Out-Null
 Set-Content -Path "$installedBase\config\settings.json" -Value '{ "ipc-server": "" }' -Encoding ascii
 SelfTest 'installed' "$dir\rvp.exe" $installedBase
+Write-Host '== m7-all.ps1 on the installed copy'
+$m7 = & "$PSScriptRoot\m7-all.ps1" -Exe "$dir\rvp.exe" 6>&1 | ForEach-Object { "$_" }
+$m7 | ForEach-Object { Write-Host "  $_" }
+$m7Results = @($m7 | Select-String '^failures=(\d+)')
+$m7Failed = @($m7Results | Where-Object { $_.Matches[0].Groups[1].Value -ne '0' })
+Check 'm7_installed' ($m7Results.Count -eq 2 -and $m7Failed.Count -eq 0 -and ($m7 -match '^exe_icon=')) `
+    "$(($m7Results | ForEach-Object { $_.Line }) -join ', ')"
 
 Write-Host '== crash logs'
 foreach ($kind in @('panic', 'native')) {
