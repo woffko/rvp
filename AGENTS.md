@@ -11,8 +11,8 @@ SVP 4 support. The plan, decisions and `/goal` texts are in `docs/PLAN.md`;
 each goal writes `docs/goals/goal-<letter>-status.md`.
 
 Since 2026-10-16 the work is PotPlayer parity, Windows first (D14, goals L
-to R): build and accept each part on Windows; keep Linux building and its
-headless tests green, and list Linux-only parts for M16 (goal R). By the
+to S): build and accept each part on Windows; keep Linux building and its
+headless tests green, and list Linux-only parts for M17 (goal S). By the
 end of each parity goal, every PotPlayer item of its area that RVP lacks
 keeps a reason in `crates/app/src/coverage.rs` that says why libmpv,
 FFmpeg, Qt or the platform cannot do it.

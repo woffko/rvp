@@ -7,9 +7,9 @@ packages and desktop integration), and the Ubuntu boot run of M3-M5
 passed on 2026-10-13; open: M3's one-week trial and one Ubuntu boot run for
 M6, M7 and M8, which M6's and M8's acceptance need. Results are in
 `docs/goals/`. Next (owner, 2026-10-16, D14): PotPlayer parity wherever
-libmpv, FFmpeg and Qt allow (M10-M14) and a remote control with a Unified
-Remote remote (M15), Windows first (goals L-Q), then other players' skins
-(goal K) and Linux (M16, goal R).
+libmpv, FFmpeg and Qt allow (M10-M14), a remote control with a Unified
+Remote remote (M15) and DVD and Blu-ray menus (M16), Windows first (goals
+L-R), then other players' skins (goal K) and Linux (M17, goal S).
 
 ## 1. Goal
 
@@ -34,9 +34,9 @@ Build RVP, a desktop media player for Linux and Windows written in Rust, that:
    2026-10-13.
 5. Does what PotPlayer does, wherever libmpv, FFmpeg, Qt and the platform
    allow: every PotPlayer command, hotkey and setting either works in RVP or
-   is listed with the reason it cannot (M10-M14). RVP can be controlled from
-   a phone through Unified Remote (M15). Windows comes first, Linux follows
-   (M16). Owner request, 2026-10-16 (D14).
+   is listed with the reason it cannot (M10-M14, and M16 for disc menus).
+   RVP can be controlled from a phone through Unified Remote (M15). Windows
+   comes first, Linux follows (M17). Owner request, 2026-10-16 (D14).
 
 Project facts: name RVP, license GPL-3.0-or-later, private GitHub repository
 for now.
@@ -49,16 +49,36 @@ PotPlayer's that RVP can do):
   (M7).
 - Copying the look of PotPlayer's Preferences window. Its options are in
   scope (R2, M10-M14); RVP's settings window keeps its own look.
-- DirectShow concepts (filter graphs, splitter and decoder priorities,
-  OpenCodec, video renderers, transform filters), AviSynth, PotPlayer's
-  AngelScript extensions and HLSL pixel shaders. RVP has libmpv's
-  counterparts: VapourSynth, GLSL shaders, yt-dlp.
+- A DirectShow playback engine. DirectShow is Windows' older media
+  framework, a whole engine of splitters, decoders and renderers. A second
+  engine beside libmpv would need a twin of everything RVP builds on mpv:
+  SVP's connection, TomSteady, the filter chains, the thumbnails, the
+  remote's status. Each DirectShow function has a counterpart instead:
+  - decoders and splitters: FFmpeg (LAV Filters are FFmpeg too), with a
+    decoders page in place of PotPlayer's filter priorities (M12);
+  - renderers (EVR, madVR, MPC-VR): libplacebo's renderer, and the
+    Direct3D 11 child window with HDR output (M12);
+  - transform filters: FFmpeg's filters (M10, M12);
+  - capture devices: FFmpeg's `dshow` input, which is DirectShow itself
+    (M11).
+
+  The owner may name a DirectShow filter that has no counterpart; then a
+  DirectShow engine is reconsidered, with MPC-HC's and MPC-BE's GPL code
+  as the reference.
 - The dead Daum services that skins still reference (broadcast, chat, login),
   and PotPlayer's broadcasting tools (capture areas, broadcast effects).
-- TV tuners (`WdmSkin.xml`, WDM/BDA channels), and DVD and Blu-ray menus,
-  which libmpv cannot show (titles and chapters play, M11).
-- Playing to a second audio device at the same time: libmpv has one audio
-  output.
+- TV tuners (`WdmSkin.xml`, WDM/BDA channels): FFmpeg cannot tune them.
+  Capture cards still open as devices (M11).
+
+On 2026-10-16 the owner asked why some former non-goals cannot be done.
+These moved into scope:
+
+- AviSynth (M12);
+- PotPlayer's HLSL pixel shaders, translated to GLSL (M12);
+- PotPlayer's AngelScript extensions, with the deferred online subtitles
+  (M13);
+- DVD and Blu-ray menus (M16);
+- playing to a second audio device at the same time (M10).
 
 ## 2. Findings that drive the design
 
@@ -202,7 +222,7 @@ playback state between the two systems possible (open question 2).
 | D11 | RVP's logo is a play triangle cut into three facets (amber, orange, copper), drawn as SVG in `crates/look/art/logo`; its colours are the accent of RVP Default. | The owner chose it from three drafts (goal I; draft A "Facet", after first picking C), 2026-10-15. | Owner |
 | D12 | With no skin set, RVP shows RVP Default, which is built into the program; PotPlayer's installed BlackSpace is no longer the fallback on Windows. A skin that fails to load falls back to RVP Default with a message. | M7: RVP must work without PotPlayer installed. | Goal I |
 | D13 | The normalizer is TomSteady, the method PotPlayer names: the gain control of Tom St Denis's freeware Winamp plugin (version 1.4), reconstructed from the plugin and run over blocks of 2048 samples, as PotPlayer runs it, by a thread of RVP's that reads each block's peak from mpv's log and sets the gain of a `volume` filter. It replaces S5's `dynaudnorm`. | It follows S5's recordings of PotPlayer within 0.1 dB (Level 75 %, Release time 10, `docs/spikes/s5-normalizer.md`); `dynaudnorm` differed by 2.2 LU and the owner heard it (quieter, voices raised less). The author gave the plugin and its source away freely; the owner allowed the reconstruction. | Owner, 2026-10-15 |
-| D14 | PotPlayer parity, Windows first. RVP takes over every PotPlayer command, hotkey and setting that libmpv, FFmpeg, Qt and the platform allow (M10-M14) and lists the rest with the reason it cannot. Each part is built and accepted on Windows first; Linux keeps building and passing its headless tests, and its own parts and checks follow in M16. | The audio audit found 495 of PotPlayer's 672 menu commands missing; the owner: "we will do everything possible", Windows first, then Linux. | Owner, 2026-10-16 |
+| D14 | PotPlayer parity, Windows first. RVP takes over every PotPlayer command, hotkey and setting that libmpv, FFmpeg, Qt and the platform allow (M10-M14) and lists the rest with the reason it cannot. Each part is built and accepted on Windows first; Linux keeps building and passing its headless tests, and its own parts and checks follow in M17. | The audio audit found 495 of PotPlayer's 672 menu commands missing; the owner: "we will do everything possible", Windows first, then Linux. | Owner, 2026-10-16 |
 | D15 | Remote control through a local HTTP API of RVP's (off by default, 127.0.0.1, a token on every request). The Unified Remote remote is a Lua remote that calls it with Unified Remote's `http` library. | One API serves Unified Remote on both systems and other clients. A remote that sends key presses needs RVP's window in front, and window messages exist only on Windows. | M15 (planned) |
 
 ## 4. Usability requirements
@@ -512,7 +532,7 @@ default skin on both systems without PotPlayer installed.
   list; the study records where the video goes in a window made for audio.
 
 Exit: the parts the owner chose work on both systems: on Windows in goal K,
-on Linux through M16 (D14).
+on Linux through M17 (D14).
 
 ### PotPlayer parity (M10 to M14)
 
@@ -535,7 +555,7 @@ keeps a reason:
 
 Each milestone is built and accepted on Windows: on the Windows VM, and on
 the host with permission. Linux keeps building and passing its headless
-tests, and its own parts are listed for M16.
+tests, and its own parts are listed for M17.
 
 - **R2. PotPlayer's Preferences (a read-only reference).** At the start of
   M10, `tools/r1/potplayer_tables.py` also reads from the installed files:
@@ -548,6 +568,19 @@ tests, and its own parts are listed for M16.
   It writes `docs/r1/preferences.tsv` and `docs/r1/command-line.tsv`. A
   test like the menus' one writes `docs/coverage/preferences.md`. No
   program is started.
+
+  The menus' coverage report also grows. Today it reads only the static
+  tree (`menu-static.tsv`, `menu-playlist.tsv`). PotPlayer builds 720
+  more commands at run time (`menu-runtime.tsv`), for example:
+  - Create subtitles from audio, with its Whisper engines and models;
+  - the Subtitle Translation modes;
+  - 360° Video Mode, and H.264 MVC 3D decoding;
+  - the A-B loop counts, the bookmark options, and the playlist's file
+    moves and copies;
+  - the context menu style.
+
+  These are counted too. A run-time list (devices, languages, shaders,
+  colour themes, presets) counts once, as the function that fills it.
 
 ### M10. PotPlayer parity: audio (M)
 
@@ -567,12 +600,26 @@ tests, and its own parts are listed for M16.
   - Virtual surround for headphones: `sofalizer` with an HRTF file where
     the build has libmysofa, else `headphone`, `crossfeed` or `bs2b`. The
     goal records the choice.
+- **A second device.** Audio Renderer (2nd Device) plays the same sound on
+  a second device at the same time. libmpv has one audio output, so a
+  second core without video plays the same file to that device:
+  - it has the same chain, and takes the normalizer's gain from the main
+    core (TomSteady reads the main core's log);
+  - it follows the main core: seeks, pauses, the speed and track changes
+    are mirrored;
+  - small speed changes correct the drift between the two devices'
+    clocks, and a delay per device lines up their latencies;
+  - it plays files and discs only, because a stream may not open twice.
+
+  On Linux, PipeWire can also combine two outputs (M17). The host has two
+  devices (the FiiO and the monitor's HDMI audio) for a check with
+  permission.
 - **Channels.** Both, Left or Right channel of a stereo track (a labelled
   `pan`), and Swap Stereo Channels.
 - **Volume.**
   - PotPlayer's "System Wave" and "System Master" volume control: the
     slider and keys drive the session's or the device's volume (Windows'
-    Core Audio through FFI in `shell/`; PipeWire in M16).
+    Core Audio through FFI in `shell/`; PipeWire in M17).
   - The System Volume menu: master and wave up, down and mute.
   - Individual volume: a volume per file, kept in the resume store.
   - Pre-amplifying AC3 and DTS, with PreAmp up and down (a labelled gain
@@ -611,8 +658,8 @@ tests, and its own parts are listed for M16.
   uses process loopback capture
   (`AUDIOCLIENT_ACTIVATION_TYPE_PROCESS_LOOPBACK`), which records RVP's
   own process only.
-- **Not possible.** A second audio device at the same time (non-goals);
-  the built-in audio transform filter (DirectShow).
+- **Not possible.** The built-in audio transform filter (DirectShow; its
+  functions are FFmpeg's filters above).
 - **Tests.**
   - Headless chain tests: labels, order, toggles while playing, the end
     of a file.
@@ -670,7 +717,7 @@ differences are listed.
   - DVD (`dvd://`, a folder or an `.IFO`) and Blu-ray (`bd://`, a folder
     or an `.MPLS`): titles, chapters, angles, audio and subtitle streams.
     DVD Control's speeds use `play-direction=backward` for reverse play
-    if it plays smoothly.
+    if it plays smoothly. The discs' menus are M16's.
   - Audio CDs (`cdda://`).
   - Webcams and other devices (FFmpeg's `dshow` on Windows), listed from
     the system.
@@ -700,8 +747,7 @@ differences are listed.
   file), and PotPlayer's file navigator and Open Box. Each goes in only if
   it keeps the album rules (mpv plays one entry at a time) and the GUI
   thread free.
-- **Not possible.** DVD and Blu-ray menus (libmpv has none); TV tuners
-  (WDM/BDA).
+- **Not possible.** TV tuners (WDM/BDA; non-goals).
 - **Tests.**
   - Headless tests on synthetic media: chapters, keyframes, subtitles,
     A-B lists, skips, the queue, sorting, playlist files, and a DVD folder
@@ -749,7 +795,35 @@ differences are listed.
   - swapping the eyes, full resolution, and detection from the file's
     stereo metadata.
 
-  3D subtitles are a study.
+  3D subtitles are a study, and so is H.264 MVC (3D Blu-ray) decoding:
+  FFmpeg decodes only the base view.
+- **360° video.** 360° Video Mode turns equirectangular, dual fisheye and
+  other projections into a flat view (FFmpeg's `v360`), and the mouse
+  turns the view.
+- **Shaders.** PotPlayer's pixel shaders (`PxShader`) are HLSL in MPC-HC's
+  single-pass `ps_2_0` form: `sampler s0`, the `p0` and `p1` constants,
+  `tex2D`. RVP translates them into mpv's GLSL hooks when they load, from
+  PotPlayer's folder or the user's.
+  - Pre-resize shaders hook before scaling (`MAIN`), and post-resize ones
+    after it (`OUTPUT`), so PotPlayer's two lists come back.
+  - A shader that does not translate is listed with the reason.
+    glslang's HLSL front end with SPIRV-Cross is the fallback for harder
+    ones.
+- **AviSynth.** The user installs AviSynth+. Then:
+  - RVP opens `.avs` scripts like files (the Windows libmpv's FFmpeg
+    reads them);
+  - PotPlayer's AviSynth processing of the playing video (Video >
+    AviSynth presets, with `potplayer_source()`) runs through RVP's
+    VapourSynth slot and a bridge that runs AviSynth inside VapourSynth.
+    One candidate is avsw's `Eval`, with the playing clip injected; a
+    study picks the bridge;
+  - VapourSynth scripts can load AviSynth plugins through
+    `avs.LoadPlugin`.
+
+  If no bridge runs the playing video well, that part keeps its reason.
+- **Decoders.** A decoders page takes the place of DirectShow's filter
+  priorities: per codec, hardware or software decoding (`hwdec-codecs`),
+  and mpv's decoder and demuxer choices.
 - **Rendering.** mpv's choices take the place of DirectShow's renderers:
   - `gpu-next` or `gpu` inside the render API;
   - the scalers (`scale`, `dscale`, `cscale`) and when to resize
@@ -780,9 +854,8 @@ differences are listed.
     `showwaves`, through `lavfi-complex`), chosen in a menu;
   - a slideshow of the folder's images, with previous and next slide.
 - **Not possible.**
-  - DirectShow renderers and transform filters.
-  - AviSynth; RVP runs VapourSynth.
-  - PotPlayer's HLSL pixel shaders; RVP's shaders are GLSL.
+  - DirectShow renderers and transform filters (non-goals; their
+    counterparts are above).
   - WMP visualizations, PotPlayer's floating ball, and downloading
     visualizations.
 - **Tests.**
@@ -826,23 +899,43 @@ differences are listed.
   - a subtitle browser and editor: the cues with their times, jumping,
     editing text and timing, saving;
   - Input Subtitles.
-- **Online.**
-  - Subtitle search and download through a service the owner picks.
-    OpenSubtitles.com's REST API needs the user's own API key and account.
-    Upload goes in if the service offers it.
-  - Translation of subtitles, shown as the second subtitle, through a
-    service the owner picks.
-  - Keys and accounts are the user's settings, never in the repository.
-    Tests use a local fake server.
+- **Generated subtitles.** PotPlayer's "Create subtitles from audio",
+  ahead of time or in real time, runs offline, with no account and no
+  service:
+  - speech recognition with whisper.cpp (MIT licence; on the CPU, Vulkan
+    or CUDA);
+  - Whisper models that the user downloads, from tiny to large-v3-turbo;
+  - the language chosen, or detected.
+
+  The text becomes a subtitle track and can be saved. PotPlayer's other
+  engines (Const-me, Faster-Whisper) are separate programs; RVP runs them
+  only if the study finds them worth it.
+- **Online (deferred).** The owner decided on 2026-10-16 that subtitles are
+  added by hand for now. When the owner asks for it, RVP gets search and
+  download, and translation with PotPlayer's display modes (translation
+  only, above or below the source), in one of two ways:
+  - PotPlayer's own extensions (OpenSubtitles, podnapisi, SubDL, DeepL,
+    Google, LibreTranslate, LM Studio and others), run by an AngelScript
+    host. AngelScript is zlib-licensed. The host implements the about 95
+    functions of `Extension/api.txt` and asks before an extension loads a
+    native library or starts a program. Extensions are read from the
+    user's PotPlayer folder or RVP's own, never shipped;
+  - services that RVP calls itself.
+
+  Keys and accounts are the user's settings.
 - **3D.** Subtitles for M12's 3D modes, if its study finds a way.
 - **Not possible.** A font renderer other than libass; turning off ASS
   animations (libass always animates).
-- **Tests.**
-  - Reader and writer round trips on synthetic files.
-  - The editor's model.
-  - The search and translation clients against a fake server.
-  - The style and placement properties on a headless player.
-  - The self-test and `m13-all.ps1` on the Windows VM.
+- **Tests.** No online service is used. The tests cover:
+  - reader and writer round trips on subtitle files that the tests
+    generate (SRT, ASS, WebVTT), and on free samples kept locally in
+    `~/rvp-reference`;
+  - the editor's model;
+  - the style and placement properties on a headless player;
+  - generated subtitles on a synthetic speech clip (made with a free
+    speech synthesizer such as espeak-ng) with the tiny model. They are
+    skipped where the model is absent;
+  - the self-test and `m13-all.ps1` on the Windows VM.
 
 ### M14. PotPlayer parity: preferences, skins and the rest (L)
 
@@ -883,6 +976,7 @@ differences are listed.
   - Removing the history of opened files, and Windows' jump list with
     recent files.
   - Disable default hotkeys.
+  - The context menu's style, including the system's dark mode.
   - Interface languages through Qt's translations: English and Russian,
     written for RVP, never taken from PotPlayer's language files.
   - Touch gestures (Qt's touch events, tested with synthetic events).
@@ -901,7 +995,7 @@ differences are listed.
 
 Exit (M10-M14): on Windows, every item of R1's menus and hotkeys and every
 R2 option works in RVP, or keeps a reason that says why libmpv, FFmpeg, Qt
-or the platform cannot do it. M16 brings Linux to the same level.
+or the platform cannot do it. M17 brings Linux to the same level.
 
 ### M15. Remote control: RVP's API and a Unified Remote remote (M)
 
@@ -923,8 +1017,8 @@ shows (D15).
   - seek, volume, open (a path or URL), the albums, and playing an entry;
   - a long poll for changes, so a remote need not poll fast.
 - **Rules.**
-  - It listens on 127.0.0.1 only. Another address is an explicit setting,
-    with a warning.
+  - It listens on 127.0.0.1 only (owner, 2026-10-16). Other devices reach
+    RVP through Unified Remote's server.
   - Every request carries a token that RVP generates per installation. It
     is kept in RVP's state folder, shown in the settings and renewable
     there.
@@ -966,13 +1060,63 @@ shows (D15).
   - On the host, with permission, the owner tries it from a phone.
 
 Exit: the owner controls RVP from Unified Remote on Windows. Linux
-follows in M16.
+follows in M17.
 
-### M16. Linux completion (M)
+### M16. DVD and Blu-ray menus (L)
 
-- **The Linux side of M10-M15**, and of M9 if goal K ran:
+mpv's developers disabled DVD and Blu-ray menus in 2014, and later removed
+them. The highlights never drew right, and keeping the disc's state while
+streams switched upset the playback core. libmpv now plays titles and
+chapters only (M11). RVP can drive the menus itself, with the open-source
+libraries that VLC and Kodi use.
+
+- **Study first.** A spike records its answers in
+  `docs/spikes/s7-disc-menus.md`:
+  - how VLC (`modules/access/dvdnav.c`), Kodi (its DVD navigator and
+    Blu-ray input stream) and mpv's removed `discnav` code handle
+    navigation, still frames, highlights and stream changes;
+  - whether RVP feeds mpv through a custom stream (libmpv's `stream_cb`,
+    which `vendor/libmpv2`'s `protocol` module wraps) or reopens it per
+    cell;
+  - how the highlights are drawn: mpv's `overlay-add`, or a layer over
+    the video.
+- **DVD.** libdvdnav and libdvdread (GPL-2.0-or-later) run the disc's
+  virtual machine:
+  - the menus show with their button highlights;
+  - the mouse and the keys (arrows, Enter) pick buttons;
+  - DVD Control's Title, Root, Chapter, Audio, Subtitle and Angle menus
+    work, and so does Previous Menu;
+  - still frames hold, and the machine's audio and subtitle choices
+    apply.
+
+  Encrypted discs need the user's own libdvdcss, which RVP never ships.
+- **Blu-ray.** libbluray (LGPL-2.1-or-later) runs HDMV menus and gives
+  their overlays to RVP. BD-J menus need libbluray's Java part and the
+  user's Java runtime, so they work only where those run. RVP ships no
+  AACS keys or libraries; encrypted discs play only with what the user
+  installed.
+- **Rules.** The libraries are GPL-compatible, but D8 waived the no-GPL
+  rule for libmpv and Qt only, so the goal asks the owner before adding
+  them. Their FFI goes into `shell/`, under the unsafe rule.
+- **Tests.**
+  - A DVD with menus, authored in WSL with free tools (`dvdauthor`,
+    `spumux`; synthetic video and buttons).
+  - Headless navigation tests on it: moving between buttons, activating
+    one, stills, starting a title, returning to the menu.
+  - Blu-ray HDMV menus on a free sample if one exists, otherwise on the
+    owner's discs on the host, with permission.
+  - The self-test and `m16-all.ps1` on the Windows VM.
+
+Exit: DVD menus work on Windows as in PotPlayer. Blu-ray HDMV menus work
+where the disc allows. BD-J and encrypted discs depend on what the user
+installed.
+
+### M17. Linux completion (M)
+
+- **The Linux side of M10-M16**, and of M9 if goal K ran:
   - the system's volume through PipeWire or PulseAudio;
   - audio recording from RVP's own PipeWire stream;
+  - the second audio device; PipeWire can also combine outputs;
   - devices through `v4l2`;
   - the screen as a source, as a study: Wayland needs the screencast
     portal;
@@ -981,15 +1125,18 @@ follows in M16.
   - in the kit's libmpv: DVD, Blu-ray and CD support (libdvdnav,
     libbluray, libcdio), the chosen audio filters' libraries (libmysofa,
     librubberband, libbs2b), and Lua if M9 needs it;
+  - M16's disc menus with the same libraries;
+  - AviSynth through AviSynth+ for Linux, if the user installs it;
+  - generated subtitles with whisper.cpp's CUDA or Vulkan build;
   - the window commands Wayland refuses, listed with their reason;
   - Unified Remote Server for Linux with the remote;
   - the translations.
 - **Checks.** The Ubuntu VM runs the self-test's new sections and kit
-  steps `m10` to `m15` (with `m16all` for all of them). The packages
+  steps `m10` to `m16` (with `m17all` for all of them). The packages
   (AppImage, `.deb`, PKGBUILD) carry the new parts. The checklist gains
   sections for the owner's Ubuntu boot.
 - **The Ubuntu boot run.** One session on the Ubuntu boot checks M6 to
-  M16 (section 10). It takes the place of the run for M6, M7 and M8 if
+  M17 (section 10). It takes the place of the run for M6, M7 and M8 if
   that has not happened by then.
 
 Exit: the kit passes on the Ubuntu VM, and the owner's Ubuntu boot run
@@ -1015,13 +1162,13 @@ passes.
 - Coverage reports (`docs/coverage/`): every PotPlayer menu item, hotkey,
   skin command and Preferences option (R2) maps to an RVP action or
   setting, or names the reason it cannot. After M14, no "not in RVP yet"
-  reasons remain for Windows; after M16, none remain for Linux.
+  reasons remain for Windows; after M17, none remain for Linux.
 - Actions that reach outside RVP run against test doubles: shutting down
   and sleeping (a dry-run hook), the Recycle Bin (temporary folders), and
   online services (a local fake server). The system's volume is changed
   only on the VMs.
 - From M10 on, each milestone has a Windows VM script
-  (`tools/windows-vm/mNN-all.ps1`); M16 adds the matching kit steps.
+  (`tools/windows-vm/mNN-all.ps1`); M17 adds the matching kit steps.
 
 ## 8. Risks
 
@@ -1045,9 +1192,11 @@ passes.
 | Other players' skins depend on those players' internals (VLC's variables, mpv's Lua scripts) | Partial support | M9 starts with a study; unsupported parts are listed as in BlackSpace's coverage report |
 | Codec patents when shipping FFmpeg in our builds | Legal, mainly for public binaries | Same practice as mpv and VLC builds; decide before any public release |
 | The size of PotPlayer parity (about 500 menu commands and the Preferences tree) | Goals that never end | One area per milestone (M10-M14); coverage reports give each gap a reason; Windows first (D14) |
-| Filters or protocols missing from a libmpv build (libmysofa, rubberband, bs2b, dvdnav, libbluray) | A function works on one system only | Check the build's filters first and list the gaps; the kit builds Linux's libmpv with them (M16) |
+| Filters or protocols missing from a libmpv build (libmysofa, rubberband, bs2b, dvdnav, libbluray) | A function works on one system only | Check the build's filters first and list the gaps; the kit builds Linux's libmpv with them (M17) |
 | The control API lets other programs control RVP | Unwanted control | Off by default, 127.0.0.1 only, a token on every request, browser requests refused (M15, D15) |
-| Online subtitle search and translation need accounts and keys | Cost and privacy | The owner picks the services; keys stay in the user's settings; tests use a fake server |
+| Online subtitle search and translation need accounts and keys | Cost and privacy | Deferred by the owner (2026-10-16); when it comes, the owner picks the services, keys stay in the user's settings, and tests use a fake server |
+| Disc menus: mpv's own menus failed and were removed (2014) | A large task that stalls | A study of VLC's and Kodi's code first; a synthetic DVD for tests; titles and chapters already play (M11) |
+| PotPlayer's extensions and shaders from its folder (M12, M13) | Extensions can load native libraries, start programs and reach the network | Load only from folders the user chose; ask before a native library or a program; shaders run as mpv's GLSL |
 | Shutting down, sleeping and deleting files | Lost work or files | A cancellable countdown, confirmations, the Recycle Bin; tests use a dry-run hook |
 
 ## 9. Open questions
@@ -1061,12 +1210,12 @@ passes.
    (`V:\` and `/mnt/media` both map to `Media:/`), with a fallback key from file
    size and a hash of the first and last megabyte for files outside known roots.
    If wanted, it belongs in M3.
-3. Online subtitles (M13): which service for search and download
-   (OpenSubtitles.com needs the user's API key and account), and which, if
-   any, for translation (most need a paid API key)?
-4. Remote control (M15): is Unified Remote on the same PC enough, so that
-   the API listens on 127.0.0.1 only, or should other devices on the local
-   network reach it?
+3. Online subtitles (M13): which services for search and translation?
+   The owner's answer, 2026-10-16: subtitles are added by hand for now,
+   with no online search or translation. Tests use generated files and
+   free samples. The online part waits until the owner asks for it.
+4. Remote control (M15): should only Unified Remote on the same PC reach
+   the API? The owner's answer, 2026-10-16: yes, 127.0.0.1 only for now.
 
 Deferred items (owner decisions, picked up when they become relevant):
 
@@ -1076,15 +1225,15 @@ Deferred items (owner decisions, picked up when they become relevant):
 
 ## 10. Goals for `/goal`
 
-The milestones are grouped into eighteen goals, A to R. Each goal is one
+The milestones are grouped into nineteen goals, A to S. Each goal is one
 `/goal` run, writes `docs/goals/goal-<letter>-status.md` and ends with a
 commit pushed to the private `origin`. Goals run in the order of the table
 below; C and D can swap. Goal I follows H so that the default skin can
 include M6's control panel. Goals I to K were added on 2026-10-13 at the
-owner's request, and packaging became M8 and goal J. Goals L to R were
-added on 2026-10-16 (D14): PotPlayer parity area by area and the remote
-control on Windows (L to Q), then goal K, then Linux (R) and one Ubuntu
-boot run for M6 to M16.
+owner's request, and packaging became M8 and goal J. Goals L to S were
+added on 2026-10-16 (D14): on Windows, PotPlayer parity area by area, the
+remote control and the disc menus (L to R); then goal K; then Linux (S)
+and one Ubuntu boot run for M6 to M17.
 
 | Stage | Goal | Covers | Where it runs | Needs the owner |
 |-------|------|--------|---------------|-----------------|
@@ -1101,11 +1250,12 @@ boot run for M6 to M16.
 | 7 | L | R2 (PotPlayer's Preferences), M10 audio parity; Windows keeps the display on during video | WSL, Windows VM, host | Permission for the host comparison |
 | 7 | M | M11 playback, playlist and opening | WSL, Windows VM | Tries each goal's build on Windows |
 | 7 | N | M12 video, picture and window | WSL, Windows VM, host | Permission for one host check |
-| 7 | O | M13 subtitles | WSL, Windows VM | Picks the online subtitle and translation services |
+| 7 | O | M13 subtitles (by hand and generated; online deferred) | WSL, Windows VM | Tries each goal's build on Windows |
 | 7 | P | M14 preferences, skins and the rest | WSL, Windows VM, host | Permission for one host check |
 | 7 | Q | M15 remote control: RVP's API and a Unified Remote remote | WSL, Windows VM, host | Tries the remote from a phone (permission for the host session) |
-| 8 | K | M9 other players' skins (VLC, mpv's on-screen controllers, classic Winamp) | WSL, Windows VM (Linux in R) | Picks the scope after the study |
-| 9 | R | M16 Linux completion | WSL, Ubuntu VM | Afterwards one Ubuntu boot session for M6 to M16 |
+| 7 | R | M16 DVD and Blu-ray menus | WSL, Windows VM, host | Approves the disc libraries (D8); discs for the Blu-ray check (permission) |
+| 8 | K | M9 other players' skins (VLC, mpv's on-screen controllers, classic Winamp) | WSL, Windows VM (Linux in S) | Picks the scope after the study |
+| 9 | S | M17 Linux completion | WSL, Ubuntu VM | Afterwards one Ubuntu boot session for M6 to M17 |
 
 A `/goal` condition holds at most 4000 characters; keep each goal's text
 below that (goal H's first text was 4382 and was refused).
@@ -1185,53 +1335,58 @@ Goal J:
 
 Ubuntu boot run for M6, M7 and M8 (after goal J; M6's and M8's acceptance
 need it; it can run whenever the owner boots Ubuntu, and if it has not run
-by goal R, the run for M6 to M16 below takes its place):
+by goal S, the run for M6 to M17 below takes its place):
 ```
 /goal On the owner's Ubuntu 26.10 boot (GNOME Wayland, RTX 30-series card), run the Linux kit for milestones M6, M7 and M8 of the private repository woffko/rvp in one session and record the results; this is the Ubuntu boot run that M6's and M8's acceptance need (docs/goals/goal-h-status.md, docs/goals/goal-j-status.md). Clone or pull the repository to ~/rvp and follow AGENTS.md and tools/linux-kit/CHECKLIST.md sections 1, 2, 8 and 9. The owner does the privileged steps the checklist lists (the packages `kit.sh check` prints, `ydotoold` running as root for m2input, SVP 4 Manager started for m2svp and m6svp, `sudo apt install` of the .deb that step m8 names and `sudo apt remove rvp` after it); never use sudo yourself and never handle NAS credentials. Set RVP_SKIN to BlackSpace_en.dsf from the PotPlayer folder on the Windows partition, mounted read-only, and RVP_VPY to PotPlayer's VapourSynth/motioninterpolation.vpy there. Run `tools/linux-kit/kit.sh m8all` from a terminal inside the GNOME session; before each step that opens windows, tell the owner what will appear and for how long (nobody touches the mouse or keyboard during m2input). When m8 asks for the .deb, let the owner install it and run `kit.sh m8` again; after the owner removes it, run `kit.sh m8removed`. If a step fails, find the cause in its log in the kit's log directory; fix RVP only when the cause is clear and the fix small, run `cargo xtask ci` and rerun the step; otherwise record it as an open item. Then record the results: `kit.sh report` writes docs/test-runs/<date>-<host>.md; add an "Ubuntu boot run" section to docs/goals/goal-h-status.md (M6: the M6 checks, the picture upright, the script slots with SVP's VapourSynth, SVP's acceptance and the second window on /tmp/mpvSockets/<pid>, the GPU checks against goal D's 6 dropped frames per 20 s at 4K60, the frames dropped after the speed returns to 1x) and one to docs/goals/goal-j-status.md (M8: the AppImage and the .deb on 26.10, MPRIS in GNOME's media controls, the screen kept on during playback, the associations, the removal), with what the owner found in the manual checks of sections 8 and 9. Commit with `git -c user.name=woffko -c user.email=2505149+woffko@users.noreply.github.com commit` and push. Done when the report and the status sections are committed and pushed. Do not: change SVP or system settings beyond the checklist's steps, commit PotPlayer or SVP files, scripts or captures, make the repository public, tag or release. Stop on blockers or when an owner decision is needed.
 ```
 
 Goal L:
 ```
-/goal Execute goal L of docs/PLAN.md (R2 and milestone M10, PotPlayer parity: audio) in ~/rvp, only if docs/goals/goal-j-status.md records goal J as done; otherwise stop and report. Follow AGENTS.md, the rules M2-M8 inherited (the goal status files), docs/audits/audio.md and D14. Windows first: build and check each part on Windows (the Windows VM <windows-vm> with a new tools/windows-vm/m10-all.ps1; the host only with advance notice and the owner's explicit permission for each run); keep Linux building with its headless tests and CI green, and list Linux-only parts for goal R instead of doing them. If the owner reported findings from the audio audit's build, fix what blocks daily use first. Then M8's Windows gap: keep the display on while video plays (SetThreadExecutionState), with Playback's "Prevent screen saver during playback". Then R2 as PLAN.md section 6 describes it: PotPlayer's Preferences tree and command-line switches, read read-only from its installed files into docs/r1/preferences.tsv and docs/r1/command-line.tsv, and a test that writes docs/coverage/preferences.md. Then M10 as section 6 lists it: output (devices, exclusive mode, pass-through, format and resampling, the remaining speaker layouts, Dolby Surround and Pro Logic II, virtual surround), channels, the system's volume, individual volume, preamp, PotPlayer's 19 equalizer presets with their values, the audio sync dialog and keeping sync changes, the effects in one defined chain order, the time-stretching modes, the normalizer's block per source and its remaining options, and audio recording. Coverage: every audio item of R1's menus and hotkeys and R2's audio pages either works (an ACTIONS row with PotPlayer's IDs and default keys; a setting with its check in Settings::validate, a page in shell/qml/Settings.qml and apply_settings when mpv takes it at run time) or keeps a reason in crates/app/src/coverage.rs that says why it cannot; rewrite docs/coverage/ (RVP_BLESS=1). Tests: headless chain tests (labels, order, toggles during playback, the end-of-file rule), level tests on synthetic tones as in crates/app/tests/speakers.rs, the presets, the recording, rvp --selftest additions, m10-all.ps1 on the Windows VM. Then one host session, with advance notice and permission, comparing RVP with PotPlayer on the audit's tones for the new effects, presets and block sizes (host-session audio; save and restore PotPlayer's state as the audit did). Done when: tests and CI are green, the comparison is in docs/audits/audio.md, the Windows build is in a new portable folder C:\Users\<user>\rvp-test\rvp-l on the host (file copies only), docs/goals/goal-l-status.md lists results, differences from PotPlayer, the Linux items for goal R and what the owner should try, and everything is committed and pushed. Do not: run anything on the Windows host desktop, including GUI programs from WSL, without advance notice and explicit permission; change PotPlayer's, SVP's or the system's settings on the host; commit PotPlayer or SVP files, recordings or captures; make the repository public, tag or release. Stop on blockers or when an owner decision is needed.
+/goal Execute goal L of docs/PLAN.md (R2 and milestone M10, PotPlayer parity: audio) in ~/rvp, only if docs/goals/goal-j-status.md records goal J as done; otherwise stop and report. Follow AGENTS.md, the rules M2-M8 inherited (the goal status files), docs/audits/audio.md and D14. Windows first: build and check each part on Windows (the Windows VM <windows-vm> with a new tools/windows-vm/m10-all.ps1; the host only with advance notice and the owner's explicit permission for each run); keep Linux building with its headless tests and CI green, and list Linux-only parts for goal S instead of doing them. If the owner reported findings from the audio audit's build, fix what blocks daily use first. Then M8's Windows gap: keep the display on while video plays (SetThreadExecutionState), with Playback's "Prevent screen saver during playback". Then R2 as PLAN.md section 6 describes it: PotPlayer's Preferences tree and command-line switches, read read-only from its installed files into docs/r1/preferences.tsv and docs/r1/command-line.tsv, and a test that writes docs/coverage/preferences.md; the menus' coverage also counts the 720 commands of docs/r1/menu-runtime.tsv that the static tree lacks. Then M10 as section 6 lists it: output (devices, exclusive mode, pass-through, format and resampling, the remaining speaker layouts, Dolby Surround and Pro Logic II, virtual surround), the second audio device, channels, the system's volume, individual volume, preamp, PotPlayer's 19 equalizer presets with their values, the audio sync dialog and keeping sync changes, the effects in one defined chain order, the time-stretching modes, the normalizer's block per source and its remaining options, and audio recording. Coverage: every audio item of R1's menus and hotkeys and R2's audio pages either works (an ACTIONS row with PotPlayer's IDs and default keys; a setting with its check in Settings::validate, a page in shell/qml/Settings.qml and apply_settings when mpv takes it at run time) or keeps a reason in crates/app/src/coverage.rs that says why it cannot; rewrite docs/coverage/ (RVP_BLESS=1). Tests: headless chain tests (labels, order, toggles during playback, the end-of-file rule), level tests on synthetic tones as in crates/app/tests/speakers.rs, the presets, the recording, rvp --selftest additions, m10-all.ps1 on the Windows VM. Then one host session, with advance notice and permission, comparing RVP with PotPlayer on the audit's tones for the new effects, presets and block sizes (host-session audio; save and restore PotPlayer's state as the audit did). Done when: tests and CI are green, the comparison is in docs/audits/audio.md, the Windows build is in a new portable folder C:\Users\<user>\rvp-test\rvp-l on the host (file copies only), docs/goals/goal-l-status.md lists results, differences from PotPlayer, the Linux items for goal S and what the owner should try, and everything is committed and pushed. Do not: run anything on the Windows host desktop, including GUI programs from WSL, without advance notice and explicit permission; change PotPlayer's, SVP's or the system's settings on the host; commit PotPlayer or SVP files, recordings or captures; make the repository public, tag or release. Stop on blockers or when an owner decision is needed.
 ```
 
 Goal M:
 ```
-/goal Execute goal M of docs/PLAN.md (milestone M11, PotPlayer parity: playback, playlist and opening) in ~/rvp, only if docs/goals/goal-l-status.md records goal L as done; otherwise stop and report. Follow AGENTS.md (its album rules: mpv plays one entry at a time), the rules M2-M10 inherited (the goal status files) and D14. Windows first: build and check each part on Windows (the Windows VM <windows-vm> with a new tools/windows-vm/m11-all.ps1; the host only with advance notice and the owner's explicit permission for each run); keep Linux building with its headless tests and CI green, and list Linux-only parts for goal R instead of doing them. If the owner reported findings from goal L's build, fix what blocks daily use first. Deliver M11 as PLAN.md section 6 lists it, starting with the thumbnail core (a second libmpv core without audio, the software render API, a thread of its own, a cache): seek bar previews, time tooltips and markers; the jump dialog, keyframe steps and scene browsers; A-B lists and fine moves, skips, shuffle and bookmarks; the actions when playback finishes, with shut down, sleep and hibernate behind a cancellable countdown and the shutdown timer; the Recycle Bin for played files, with confirmation; opening external audio, DVD and Blu-ray titles (no disc menus), audio CDs, devices, the screen, network addresses, streaming sites through the user's yt-dlp, the clipboard, recent items and favorites, with the open actions and "When Files Opened" rules; the playlist panel's queue, sorting, search, editing, copy and paste, file information, playlist files in and out, background durations and thumbnail views; PotPlayer's command-line switches that apply (R2). Study seamless playback and the file navigator, record the decision, and add them only if they keep the album rules and the GUI thread free. Coverage: every Playback, Open, Album/Favorites, DVD Control and playlist-panel item of R1's menus and hotkeys and R2's matching pages either works (an ACTIONS row with PotPlayer's IDs and default keys; a setting with its check in Settings::validate, a page in shell/qml/Settings.qml and apply_settings when mpv takes it at run time) or keeps a reason in crates/app/src/coverage.rs that says why it cannot; rewrite docs/coverage/ (RVP_BLESS=1). Tests: headless tests on synthetic media (chapters, keyframes, subtitles, A-B lists, skips, the queue, sorting, playlist files, a DVD folder made with free tools), the thumbnail core (sizes, timing, cancellation, never on the GUI thread), the power actions through a dry-run hook, the command line; rvp --selftest additions; m11-all.ps1 on the Windows VM. Done when: tests and CI are green, the Windows build is in a new portable folder C:\Users\<user>\rvp-test\rvp-m on the host (file copies only), docs/goals/goal-m-status.md lists results, differences from PotPlayer, the Linux items for goal R and what the owner should try, and everything is committed and pushed. Do not: shut down, suspend or hibernate the host or a VM (tests use the dry-run hook); run anything on the Windows host desktop, including GUI programs from WSL, without advance notice and explicit permission; change PotPlayer's, SVP's or the system's settings on the host; commit PotPlayer or SVP files or captures; make the repository public, tag or release. Stop on blockers or when an owner decision is needed.
+/goal Execute goal M of docs/PLAN.md (milestone M11, PotPlayer parity: playback, playlist and opening) in ~/rvp, only if docs/goals/goal-l-status.md records goal L as done; otherwise stop and report. Follow AGENTS.md (its album rules: mpv plays one entry at a time), the rules M2-M10 inherited (the goal status files) and D14. Windows first: build and check each part on Windows (the Windows VM <windows-vm> with a new tools/windows-vm/m11-all.ps1; the host only with advance notice and the owner's explicit permission for each run); keep Linux building with its headless tests and CI green, and list Linux-only parts for goal S instead of doing them. If the owner reported findings from goal L's build, fix what blocks daily use first. Deliver M11 as PLAN.md section 6 lists it, starting with the thumbnail core (a second libmpv core without audio, the software render API, a thread of its own, a cache): seek bar previews, time tooltips and markers; the jump dialog, keyframe steps and scene browsers; A-B lists and fine moves, skips, shuffle and bookmarks; the actions when playback finishes, with shut down, sleep and hibernate behind a cancellable countdown and the shutdown timer; the Recycle Bin for played files, with confirmation; opening external audio, DVD and Blu-ray titles (their menus are goal R's), audio CDs, devices, the screen, network addresses, streaming sites through the user's yt-dlp, the clipboard, recent items and favorites, with the open actions and "When Files Opened" rules; the playlist panel's queue, sorting, search, editing, copy and paste, file information, playlist files in and out, background durations and thumbnail views; PotPlayer's command-line switches that apply (R2). Study seamless playback and the file navigator, record the decision, and add them only if they keep the album rules and the GUI thread free. Coverage: every Playback, Open, Album/Favorites, DVD Control and playlist-panel item of R1's menus and hotkeys and R2's matching pages either works (an ACTIONS row with PotPlayer's IDs and default keys; a setting with its check in Settings::validate, a page in shell/qml/Settings.qml and apply_settings when mpv takes it at run time) or keeps a reason in crates/app/src/coverage.rs that says why it cannot; rewrite docs/coverage/ (RVP_BLESS=1). Tests: headless tests on synthetic media (chapters, keyframes, subtitles, A-B lists, skips, the queue, sorting, playlist files, a DVD folder made with free tools), the thumbnail core (sizes, timing, cancellation, never on the GUI thread), the power actions through a dry-run hook, the command line; rvp --selftest additions; m11-all.ps1 on the Windows VM. Done when: tests and CI are green, the Windows build is in a new portable folder C:\Users\<user>\rvp-test\rvp-m on the host (file copies only), docs/goals/goal-m-status.md lists results, differences from PotPlayer, the Linux items for goal S and what the owner should try, and everything is committed and pushed. Do not: shut down, suspend or hibernate the host or a VM (tests use the dry-run hook); run anything on the Windows host desktop, including GUI programs from WSL, without advance notice and explicit permission; change PotPlayer's, SVP's or the system's settings on the host; commit PotPlayer or SVP files or captures; make the repository public, tag or release. Stop on blockers or when an owner decision is needed.
 ```
 
 Goal N:
 ```
-/goal Execute goal N of docs/PLAN.md (milestone M12, PotPlayer parity: video, picture and window) in ~/rvp, only if docs/goals/goal-m-status.md records goal M as done; otherwise stop and report. Follow AGENTS.md (video filters: only RVP's own, by label; SVP's @svp is never touched), the rules M2-M11 inherited (the goal status files) and D14. Windows first: build and check each part on Windows (the Windows VM <windows-vm> with a new tools/windows-vm/m12-all.ps1; the host only with advance notice and the owner's explicit permission for each run); keep Linux building with its headless tests and CI green, and list Linux-only parts for goal R instead of doing them. If the owner reported findings from goal M's build, fix what blocks daily use first. Deliver M12 as PLAN.md section 6 lists it: frame, aspect and crop (custom ratios, frame sizes, the output's aspect correction, Extend/Crop with moves, bottom and screen margins, rotation by aspect ratio); the window (sizes and presets, moves, the size dialog, on top in fullscreen; Desktop Mode as a study); the remaining video effects as labelled filters; 3D video through FFmpeg's stereo3d (3D subtitles as a study); rendering choices (gpu-next or gpu, scalers and when to resize, HDR tone mapping, the display's ICC profile) and, after a study against S3's measurements and SVP's copy-back rule, D4's child-window Direct3D 11 path on Windows as a renderer choice; capture (the clipboard, Save As, BMP, file names, consecutive images, thumbnail images from M11's thumbnail core); Record Stream (stream-record), and Record Video only if a study shows that libmpv can encode in a second core; visualizations and the slideshow for audio files. Coverage: every Video, Frame Size, Aspect Ratio, Window Size and Visualization item of R1's menus and hotkeys and R2's matching pages either works (an ACTIONS row with PotPlayer's IDs and default keys; a setting with its check in Settings::validate, a page in shell/qml/Settings.qml and apply_settings when mpv takes it at run time) or keeps a reason in crates/app/src/coverage.rs that says why it cannot; rewrite docs/coverage/ (RVP_BLESS=1). Tests: headless property and filter tests (labels, order, @svp untouched, toggles during playback), the 3D modes on a synthetic side-by-side clip (pixel checks), capture formats and names, the contact sheet's geometry, window commands in rvp --selftest; m12-all.ps1 on the Windows VM; one host session, with advance notice and permission, for the renderer choice, HDR and SVP with the new filters. Done when: tests and CI are green, the Windows build is in a new portable folder C:\Users\<user>\rvp-test\rvp-n on the host (file copies only), docs/goals/goal-n-status.md lists results, differences from PotPlayer, the Linux items for goal R and what the owner should try, and everything is committed and pushed. Do not: run anything on the Windows host desktop, including GUI programs from WSL, without advance notice and explicit permission; change PotPlayer's, SVP's or the system's settings on the host; commit PotPlayer or SVP files or captures; make the repository public, tag or release. Stop on blockers or when an owner decision is needed.
+/goal Execute goal N of docs/PLAN.md (milestone M12, PotPlayer parity: video, picture and window) in ~/rvp, only if docs/goals/goal-m-status.md records goal M as done; otherwise stop and report. Follow AGENTS.md (video filters: only RVP's own, by label; SVP's @svp is never touched), the rules M2-M11 inherited (the goal status files) and D14. Windows first: build and check each part on Windows (the Windows VM <windows-vm> with a new tools/windows-vm/m12-all.ps1; the host only with advance notice and the owner's explicit permission for each run); keep Linux building with its headless tests and CI green, and list Linux-only parts for goal S instead of doing them. If the owner reported findings from goal M's build, fix what blocks daily use first. Deliver M12 as PLAN.md section 6 lists it: frame, aspect and crop (custom ratios, frame sizes, the output's aspect correction, Extend/Crop with moves, bottom and screen margins, rotation by aspect ratio); the window (sizes and presets, moves, the size dialog, on top in fullscreen; Desktop Mode as a study); the remaining video effects as labelled filters; 3D video through FFmpeg's stereo3d (3D subtitles and H.264 MVC as studies); 360° video (v360); PotPlayer's HLSL pixel shaders translated into mpv's GLSL hooks, with the pre- and post-resize lists; AviSynth with the user's AviSynth+ (opening .avs scripts, PotPlayer's AviSynth processing through a VapourSynth bridge a study picks, AviSynth plugins in VapourSynth scripts); a decoders page in place of DirectShow's filter priorities; rendering choices (gpu-next or gpu, scalers and when to resize, HDR tone mapping, the display's ICC profile) and, after a study against S3's measurements and SVP's copy-back rule, D4's child-window Direct3D 11 path on Windows as a renderer choice; capture (the clipboard, Save As, BMP, file names, consecutive images, thumbnail images from M11's thumbnail core); Record Stream (stream-record), and Record Video only if a study shows that libmpv can encode in a second core; visualizations and the slideshow for audio files. Coverage: every Video, Frame Size, Aspect Ratio, Window Size and Visualization item of R1's menus and hotkeys and R2's matching pages either works (an ACTIONS row with PotPlayer's IDs and default keys; a setting with its check in Settings::validate, a page in shell/qml/Settings.qml and apply_settings when mpv takes it at run time) or keeps a reason in crates/app/src/coverage.rs that says why it cannot; rewrite docs/coverage/ (RVP_BLESS=1). Tests: headless property and filter tests (labels, order, @svp untouched, toggles during playback), the 3D modes on a synthetic side-by-side clip (pixel checks), capture formats and names, the contact sheet's geometry, window commands in rvp --selftest; m12-all.ps1 on the Windows VM; one host session, with advance notice and permission, for the renderer choice, HDR and SVP with the new filters. Done when: tests and CI are green, the Windows build is in a new portable folder C:\Users\<user>\rvp-test\rvp-n on the host (file copies only), docs/goals/goal-n-status.md lists results, differences from PotPlayer, the Linux items for goal S and what the owner should try, and everything is committed and pushed. Do not: run anything on the Windows host desktop, including GUI programs from WSL, without advance notice and explicit permission; change PotPlayer's, SVP's or the system's settings on the host; commit PotPlayer or SVP files or captures; make the repository public, tag or release. Stop on blockers or when an owner decision is needed.
 ```
 
 Goal O:
 ```
-/goal Execute goal O of docs/PLAN.md (milestone M13, PotPlayer parity: subtitles) in ~/rvp, only if docs/goals/goal-n-status.md records goal N as done; otherwise stop and report. Follow AGENTS.md, the rules M2-M12 inherited (the goal status files) and D14. Windows first: build and check each part on Windows (the Windows VM <windows-vm> with a new tools/windows-vm/m13-all.ps1; the host only with advance notice and the owner's explicit permission for each run); keep Linux building with its headless tests and CI green, and list Linux-only parts for goal R instead of doing them. If the owner reported findings from goal N's build, fix what blocks daily use first. Early on, ask the owner which services to use for online subtitle search and for translation (PLAN.md section 9, question 3); keys and accounts go into the user's settings, never into the repository or logs, and tests use a local fake server; without an answer, do the rest and leave the online part open. Deliver M13 as PLAN.md section 6 lists it: a second subtitle at the same time and Combine Subtitle, reloading, copying the current subtitle; style (bold, spacing, the opaque box, the font style page, sideways moves and fades where libass allows); placement of bitmap and text subtitles with M12's margins; the sync dialog, keeping sync changes and FPS conversion; the language, encoding and loading options; saving external text subtitles with the sync applied, the subtitle browser and editor and Input Subtitles (RVP's own reader and writer for SRT, ASS and WebVTT); the online search, download and translation; 3D subtitles if goal N's study found a way. Coverage: every Subtitles item of R1's menus and hotkeys and R2's subtitle pages either works (an ACTIONS row with PotPlayer's IDs and default keys; a setting with its check in Settings::validate, a page in shell/qml/Settings.qml and apply_settings when mpv takes it at run time) or keeps a reason in crates/app/src/coverage.rs that says why it cannot; rewrite docs/coverage/ (RVP_BLESS=1). Tests: reader and writer round trips on synthetic files, the editor's model, the search and translation clients against a fake server, the style and placement properties on a headless player, rvp --selftest additions, m13-all.ps1 on the Windows VM. Done when: tests and CI are green, the Windows build is in a new portable folder C:\Users\<user>\rvp-test\rvp-o on the host (file copies only), docs/goals/goal-o-status.md lists results, differences from PotPlayer, the Linux items for goal R and what the owner should try, and everything is committed and pushed. Do not: send anything to an online service other than the one the owner chose, or the owner's files beyond what a search or translation needs; run anything on the Windows host desktop, including GUI programs from WSL, without advance notice and explicit permission; change PotPlayer's, SVP's or the system's settings on the host; commit PotPlayer or SVP files or captures; make the repository public, tag or release. Stop on blockers or when an owner decision is needed.
+/goal Execute goal O of docs/PLAN.md (milestone M13, PotPlayer parity: subtitles) in ~/rvp, only if docs/goals/goal-n-status.md records goal N as done; otherwise stop and report. Follow AGENTS.md, the rules M2-M12 inherited (the goal status files) and D14. Windows first: build and check each part on Windows (the Windows VM <windows-vm> with a new tools/windows-vm/m13-all.ps1; the host only with advance notice and the owner's explicit permission for each run); keep Linux building with its headless tests and CI green, and list Linux-only parts for goal S instead of doing them. If the owner reported findings from goal N's build, fix what blocks daily use first. Owner decision (2026-10-16): subtitles are added by hand for now; no online search or translation service and no AngelScript host in this goal (M13's online part stays deferred). Deliver the rest of M13 as PLAN.md section 6 lists it: a second subtitle at the same time and Combine Subtitle, reloading, copying the current subtitle; style (bold, spacing, the opaque box, the font style page, sideways moves and fades where libass allows); placement of bitmap and text subtitles with M12's margins; the sync dialog, keeping sync changes and FPS conversion; the language, encoding and loading options; saving external text subtitles with the sync applied, the subtitle browser and editor and Input Subtitles (RVP's own reader and writer for SRT, ASS and WebVTT); PotPlayer's Create subtitles from audio, ahead of time and in real time, offline with whisper.cpp (CPU, Vulkan or CUDA; models the user downloads; a study decides on PotPlayer's other engines); 3D subtitles if goal N's study found a way. Coverage: every Subtitles item of R1's menus (static and run-time) and hotkeys and R2's subtitle pages either works (an ACTIONS row with PotPlayer's IDs and default keys; a setting with its check in Settings::validate, a page in shell/qml/Settings.qml and apply_settings when mpv takes it at run time) or keeps a reason in crates/app/src/coverage.rs that says why it cannot (the online items: deferred by the owner); rewrite docs/coverage/ (RVP_BLESS=1). Tests, with no online service: reader and writer round trips on subtitle files the tests generate and on free samples kept in ~/rvp-reference, the editor's model, the style and placement properties on a headless player, generated subtitles on a synthetic speech clip (a free speech synthesizer such as espeak-ng) with the tiny model, skipped where it is absent, rvp --selftest additions, m13-all.ps1 on the Windows VM. Done when: tests and CI are green, the Windows build is in a new portable folder C:\Users\<user>\rvp-test\rvp-o on the host (file copies only), docs/goals/goal-o-status.md lists results, differences from PotPlayer, the Linux items for goal S and what the owner should try, and everything is committed and pushed. Do not: send the owner's files or subtitles to any online service; commit Whisper models or third-party subtitle files; run anything on the Windows host desktop, including GUI programs from WSL, without advance notice and explicit permission; change PotPlayer's, SVP's or the system's settings on the host; commit PotPlayer or SVP files or captures; make the repository public, tag or release. Stop on blockers or when an owner decision is needed.
 ```
 
 Goal P:
 ```
-/goal Execute goal P of docs/PLAN.md (milestone M14, PotPlayer parity: preferences, skins and the rest) in ~/rvp, only if docs/goals/goal-o-status.md records goal O as done; otherwise stop and report. Follow AGENTS.md (the skin engine's notes; M7's originality rules for anything RVP draws), the rules M2-M13 inherited (the goal status files) and D14. Windows first: build and check each part on Windows (the Windows VM <windows-vm> with a new tools/windows-vm/m14-all.ps1; the host only with advance notice and the owner's explicit permission for each run); keep Linux building with its headless tests and CI green, and list Linux-only parts for goal R instead of doing them. If the owner reported findings from goal O's build, fix what blocks daily use first. Deliver M14 as PLAN.md section 6 lists it: every remaining option of docs/r1/preferences.tsv as a setting or a reason, and the settings window grown into PotPlayer's tree where that helps (search, reset per page, RVP's own look and sliders); settings profiles (Manage Presets); PotPlayer's OSD options and the on-screen info items; the Playback/System Info window (Ctrl+F1); the Skins menu (the skin list and switching while running, colour themes and their dialog, opacity, logo settings, the on-screen control mode MainSkinAreaOscInside, the audio skin mode AudioSkin.xml, auto hiding, the skin mode options, the window per skin mode, skin settings), checked with RVP Default and BlackSpace and with other .dsf skins the owner names (kept local); copying names and paths, the history and Windows' jump list, Disable default hotkeys, interface languages (Qt's translations: English and Russian, written for RVP, never taken from PotPlayer's language files) and touch gestures. Coverage: every remaining item of R1's menus and hotkeys and every option of R2 either works (an ACTIONS row with PotPlayer's IDs and default keys; a setting with its check in Settings::validate, a page in shell/qml/Settings.qml and apply_settings when mpv takes it at run time) or keeps a reason in crates/app/src/coverage.rs that says why libmpv, FFmpeg, Qt or the platform cannot do it; no "not in RVP yet" reason remains for Windows; rewrite docs/coverage/ (RVP_BLESS=1). Tests: the preferences coverage report, profiles round trip, skin switching and colour themes on the synthetic skin and RVP Default (golden renders; BlackSpace's stay local), translations load and fit their controls, rvp --selftest additions, m14-all.ps1 on the Windows VM; one host session, with advance notice and permission, showing RVP's and PotPlayer's skin modes side by side (captures stay in ~/rvp-reference). Done when: tests and CI are green, the Windows build is in a new portable folder C:\Users\<user>\rvp-test\rvp-p on the host (file copies only), docs/goals/goal-p-status.md lists results, differences from PotPlayer, the Linux items for goal R and what the owner should try, and everything is committed and pushed. Do not: copy text, art or settings from PotPlayer's files into RVP; run anything on the Windows host desktop, including GUI programs from WSL, without advance notice and explicit permission; change PotPlayer's, SVP's or the system's settings on the host; commit PotPlayer or SVP files or captures; make the repository public, tag or release. Stop on blockers or when an owner decision is needed.
+/goal Execute goal P of docs/PLAN.md (milestone M14, PotPlayer parity: preferences, skins and the rest) in ~/rvp, only if docs/goals/goal-o-status.md records goal O as done; otherwise stop and report. Follow AGENTS.md (the skin engine's notes; M7's originality rules for anything RVP draws), the rules M2-M13 inherited (the goal status files) and D14. Windows first: build and check each part on Windows (the Windows VM <windows-vm> with a new tools/windows-vm/m14-all.ps1; the host only with advance notice and the owner's explicit permission for each run); keep Linux building with its headless tests and CI green, and list Linux-only parts for goal S instead of doing them. If the owner reported findings from goal O's build, fix what blocks daily use first. Deliver M14 as PLAN.md section 6 lists it: every remaining option of docs/r1/preferences.tsv as a setting or a reason, and the settings window grown into PotPlayer's tree where that helps (search, reset per page, RVP's own look and sliders); settings profiles (Manage Presets); PotPlayer's OSD options and the on-screen info items; the Playback/System Info window (Ctrl+F1); the Skins menu (the skin list and switching while running, colour themes and their dialog, opacity, logo settings, the on-screen control mode MainSkinAreaOscInside, the audio skin mode AudioSkin.xml, auto hiding, the skin mode options, the window per skin mode, skin settings), checked with RVP Default and BlackSpace and with other .dsf skins the owner names (kept local); copying names and paths, the history and Windows' jump list, Disable default hotkeys, the context menu's style, interface languages (Qt's translations: English and Russian, written for RVP, never taken from PotPlayer's language files) and touch gestures. Coverage: every remaining item of R1's menus and hotkeys and every option of R2 either works (an ACTIONS row with PotPlayer's IDs and default keys; a setting with its check in Settings::validate, a page in shell/qml/Settings.qml and apply_settings when mpv takes it at run time) or keeps a reason in crates/app/src/coverage.rs that says why libmpv, FFmpeg, Qt or the platform cannot do it; no "not in RVP yet" reason remains for Windows; rewrite docs/coverage/ (RVP_BLESS=1). Tests: the preferences coverage report, profiles round trip, skin switching and colour themes on the synthetic skin and RVP Default (golden renders; BlackSpace's stay local), translations load and fit their controls, rvp --selftest additions, m14-all.ps1 on the Windows VM; one host session, with advance notice and permission, showing RVP's and PotPlayer's skin modes side by side (captures stay in ~/rvp-reference). Done when: tests and CI are green, the Windows build is in a new portable folder C:\Users\<user>\rvp-test\rvp-p on the host (file copies only), docs/goals/goal-p-status.md lists results, differences from PotPlayer, the Linux items for goal S and what the owner should try, and everything is committed and pushed. Do not: copy text, art or settings from PotPlayer's files into RVP; run anything on the Windows host desktop, including GUI programs from WSL, without advance notice and explicit permission; change PotPlayer's, SVP's or the system's settings on the host; commit PotPlayer or SVP files or captures; make the repository public, tag or release. Stop on blockers or when an owner decision is needed.
 ```
 
 Goal Q:
 ```
-/goal Execute goal Q of docs/PLAN.md (milestone M15, remote control: RVP's control API and a Unified Remote remote) in ~/rvp, only if docs/goals/goal-p-status.md records goal P as done; otherwise stop and report. Follow AGENTS.md (the GUI thread stays free: the server's thread never calls mpv), the rules M2-M14 inherited (the goal status files), D14 and D15, and exact versions with a reason for any new dependency. Windows first: build and check each part on Windows (the Windows VM <windows-vm> with a new tools/windows-vm/m15-all.ps1; the host only with advance notice and the owner's explicit permission for each run); keep Linux building with its headless tests and CI green, and list Linux-only parts for goal R instead of doing them. If the owner reported findings from goal P's build, fix what blocks daily use first. Deliver M15 as PLAN.md section 6 lists it. The API: a small HTTP/1.1 JSON service, off by default and turned on from a Remote settings page that shows its address and token; 127.0.0.1 only unless the user sets another address after a warning; a token per installation on every request; requests with a browser's Origin header refused; limits on sizes and times; status, the action list, any action of ACTIONS through the usual dispatch, seek, volume, open, albums and entries, and a long poll for changes; commands reach the window's thread as MPRIS's and SMTC's do, and the status is a snapshot the window's thread keeps. The remote: remote/unified-remote/RVP with meta.prop, layout.xml, remote.lua (Unified Remote's http library), settings.prop (port and token) and an icon that cargo xtask builds from RVP's logo; a layout in the manner of Unified Remote's media remotes (transport, a seek slider, a volume slider and mute, fullscreen, tracks, speed, the normalizer, the title and times, an albums page). Delivery: the installer offers to copy the remote into C:\ProgramData\Unified Remote\Remotes\Custom when Unified Remote Server is installed, and removes what it copied on uninstall; the portable ZIP carries the folder. Study a subset of MPC-HC's web interface and add it only if it is small. Tests: the API on a headless player (every endpoint, the token, the Origin refusal, the limits, nothing blocking the GUI thread), every action the remote calls exists, layout.xml is well formed; on the Windows VM, Unified Remote Server (installed on the VM only) loads the remote and its calls reach RVP; m15-all.ps1. Then, with advance notice and the owner's explicit permission, a host session where the owner tries the remote from a phone. Done when: tests and CI are green, the owner has tried the remote (or chose not to), the Windows build is in a new portable folder C:\Users\<user>\rvp-test\rvp-q on the host (file copies only), docs/goals/goal-q-status.md lists results, the Linux items for goal R and what the owner should try, and everything is committed and pushed. Do not: open the API beyond 127.0.0.1 by default; put tokens into the repository or logs; install Unified Remote or anything else on the host without permission; run anything on the Windows host desktop, including GUI programs from WSL, without advance notice and explicit permission; change PotPlayer's, SVP's or the system's settings on the host; make the repository public, tag or release. Stop on blockers or when an owner decision is needed.
-```
-
-Goal K (after goal Q; the owner may postpone it):
-```
-/goal Execute goal K of docs/PLAN.md (milestone M9, other players' skins) in ~/rvp, only if docs/goals/goal-q-status.md records goal Q as done; otherwise stop and report. Follow AGENTS.md, the rules M2-M15 inherited (the goal status files) and D14. Start with the study. Ask the owner which VLC skins, mpv on-screen controllers and classic Winamp skins to try; without an answer, take the most downloaded skins from VLC's skins page plus uosc, ModernX and mpv's built-in OSC, and a few popular classic Winamp skins (.wsz). Keep the downloads local in ~/rvp-reference. Record in docs/spikes/s6-other-skins.md what each format needs, what RVP lacks and the cost of each part, then stop and ask the owner to choose the scope. Then implement the chosen parts, Windows first: check them on the Windows VM (<windows-vm>) and list their Linux side for goal R. For VLC .vlt skins: a second loader in crates/skin that builds the same display list, VLC's actions mapped to RVP's, and a coverage report. For mpv's on-screen controllers: libmpv with Lua (the kit's Linux build is goal R's), an RVP mode where mpv's controller replaces the skin (borderless window, pointer and keys passed to mpv), and the user's scripts folder. For classic Winamp skins: a loader that turns their fixed layout into the same display list, with the video placed as the study decided. Done when: tests and CI are green, the chosen parts work on the Windows VM, docs/goals/goal-k-status.md lists results and the Linux items for goal R, and everything is committed and pushed. Do not: commit third-party skins or scripts or renders made from them, run anything on the Windows host without advance notice and explicit permission, make the repository public, tag or release. Stop on blockers or when an owner decision is needed.
+/goal Execute goal Q of docs/PLAN.md (milestone M15, remote control: RVP's control API and a Unified Remote remote) in ~/rvp, only if docs/goals/goal-p-status.md records goal P as done; otherwise stop and report. Follow AGENTS.md (the GUI thread stays free: the server's thread never calls mpv), the rules M2-M14 inherited (the goal status files), D14 and D15, and exact versions with a reason for any new dependency. Windows first: build and check each part on Windows (the Windows VM <windows-vm> with a new tools/windows-vm/m15-all.ps1; the host only with advance notice and the owner's explicit permission for each run); keep Linux building with its headless tests and CI green, and list Linux-only parts for goal S instead of doing them. If the owner reported findings from goal P's build, fix what blocks daily use first. Deliver M15 as PLAN.md section 6 lists it. The API: a small HTTP/1.1 JSON service, off by default and turned on from a Remote settings page that shows its address and token; 127.0.0.1 only (owner, 2026-10-16); a token per installation on every request; requests with a browser's Origin header refused; limits on sizes and times; status, the action list, any action of ACTIONS through the usual dispatch, seek, volume, open, albums and entries, and a long poll for changes; commands reach the window's thread as MPRIS's and SMTC's do, and the status is a snapshot the window's thread keeps. The remote: remote/unified-remote/RVP with meta.prop, layout.xml, remote.lua (Unified Remote's http library), settings.prop (port and token) and an icon that cargo xtask builds from RVP's logo; a layout in the manner of Unified Remote's media remotes (transport, a seek slider, a volume slider and mute, fullscreen, tracks, speed, the normalizer, the title and times, an albums page). Delivery: the installer offers to copy the remote into C:\ProgramData\Unified Remote\Remotes\Custom when Unified Remote Server is installed, and removes what it copied on uninstall; the portable ZIP carries the folder. Study a subset of MPC-HC's web interface and add it only if it is small. Tests: the API on a headless player (every endpoint, the token, the Origin refusal, the limits, nothing blocking the GUI thread), every action the remote calls exists, layout.xml is well formed; on the Windows VM, Unified Remote Server (installed on the VM only) loads the remote and its calls reach RVP; m15-all.ps1. Then, with advance notice and the owner's explicit permission, a host session where the owner tries the remote from a phone. Done when: tests and CI are green, the owner has tried the remote (or chose not to), the Windows build is in a new portable folder C:\Users\<user>\rvp-test\rvp-q on the host (file copies only), docs/goals/goal-q-status.md lists results, the Linux items for goal S and what the owner should try, and everything is committed and pushed. Do not: open the API beyond 127.0.0.1; put tokens into the repository or logs; install Unified Remote or anything else on the host without permission; run anything on the Windows host desktop, including GUI programs from WSL, without advance notice and explicit permission; change PotPlayer's, SVP's or the system's settings on the host; make the repository public, tag or release. Stop on blockers or when an owner decision is needed.
 ```
 
 Goal R:
 ```
-/goal Execute goal R of docs/PLAN.md (milestone M16, Linux completion) in ~/rvp, only if docs/goals/goal-q-status.md records goal Q as done and goal K is done or postponed by the owner; otherwise stop and report. Follow AGENTS.md (test environments: GUI programs started in WSL count as host runs; silent tests need no permission), the rules M2-M15 inherited (the goal status files) and D14. Collect the Linux items that goals L to Q (and K) listed in their status files and deliver M16 as PLAN.md section 6 lists it: the system's volume through PipeWire or PulseAudio, recording RVP's own PipeWire stream, devices through v4l2, the screen as a source (a study: Wayland needs the screencast portal), the trash, power actions through logind (dry-run tests only), DVD, Blu-ray and CD support and the chosen audio filters' libraries (libdvdnav, libbluray, libcdio, libmysofa, librubberband, libbs2b) in the kit's libmpv, Lua if goal K needs it, the window commands Wayland refuses listed with their reason, Unified Remote Server for Linux with the remote, the translations, and the packages (AppImage, .deb, PKGBUILD) carrying the new parts. Run it all on the Ubuntu VM (<ubuntu-vm>, tools/linux-kit; access as in ~/another project/AGENTS.md): rvp --selftest's new sections, kit steps m10 to m15 and m16all, the packages installed, run and removed; add CHECKLIST.md sections for the owner's Ubuntu boot, with the checks only real hardware can do (GPU, SVP, a DVD drive or a webcam if the owner has them). Then bring the /goal text "Ubuntu boot run for M6 to M16" in PLAN.md section 10 in line with the kit's real steps. Coverage: no "not in RVP yet" reason remains for Linux in docs/coverage/; reasons that only Linux has (Wayland's limits) say so. Done when: tests and CI are green, the kit passes on the Ubuntu VM, docs/goals/goal-r-status.md lists results, what only the Ubuntu boot can check and what the owner should try, the owner is reminded of the boot run, and everything is committed and pushed. Do not: shut down, suspend or hibernate a VM (tests use the dry-run hook); use sudo on the Ubuntu VM beyond what tools/linux-kit documents; run anything on the Windows host desktop, including GUI programs from WSL, without advance notice and explicit permission; commit PotPlayer or SVP files or captures; make the repository public, tag or release. Stop on blockers or when an owner decision is needed.
+/goal Execute goal R of docs/PLAN.md (milestone M16, DVD and Blu-ray menus) in ~/rvp, only if docs/goals/goal-q-status.md records goal Q as done; otherwise stop and report. Follow AGENTS.md (the unsafe rule: FFI only in shell/, each with a SAFETY comment), the rules M2-M15 inherited (the goal status files) and D14. Windows first: build and check each part on Windows (the Windows VM <windows-vm> with a new tools/windows-vm/m16-all.ps1; the host only with advance notice and the owner's explicit permission for each run); keep Linux building with its headless tests and CI green, and list Linux-only parts for goal S instead of doing them. If the owner reported findings from goal Q's build, fix what blocks daily use first. Start with M16's study: how VLC (modules/access/dvdnav.c), Kodi (its DVD navigator and Blu-ray input stream) and mpv's removed discnav code handle navigation, still frames, highlights and stream changes; whether RVP feeds mpv through a custom stream (libmpv's stream_cb, wrapped by vendor/libmpv2's protocol module) or reopens it per cell; how the highlights are drawn. Record the design in docs/spikes/s7-disc-menus.md, then ask the owner to approve libdvdnav and libdvdread (GPL-2.0-or-later) and libbluray (LGPL-2.1-or-later) under D8, which waived the no-GPL rule only for libmpv and Qt. Then deliver M16 as PLAN.md section 6 lists it: DVD menus with button highlights, the mouse and keys, DVD Control's Title, Root, Chapter, Audio, Subtitle and Angle menus and Previous Menu, still frames, and the machine's audio and subtitle choices; Blu-ray HDMV menus through libbluray's overlays; BD-J menus where libbluray's Java part runs with the user's Java; encrypted discs only with the user's own libdvdcss, libaacs and keys. Coverage: DVD Control's items in docs/coverage/ either work or keep a reason that says why they cannot; rewrite docs/coverage/ (RVP_BLESS=1). Tests: a DVD with menus authored in WSL with free tools (dvdauthor, spumux; synthetic video and buttons) and headless navigation tests on it (moving between buttons, activating one, stills, starting a title, returning to the menu); Blu-ray HDMV menus on a free sample if one exists, otherwise on the owner's discs on the host, with advance notice and permission; rvp --selftest additions; m16-all.ps1 on the Windows VM. Done when: tests and CI are green, the Windows build is in a new portable folder C:\Users\<user>\rvp-test\rvp-r on the host (file copies only), docs/goals/goal-r-status.md lists results, differences from PotPlayer, the Linux items for goal S and what the owner should try, and everything is committed and pushed. Do not: ship or download libdvdcss, libaacs or decryption keys; commit disc images other than the synthetic DVD's sources and build script; run anything on the Windows host desktop, including GUI programs from WSL, without advance notice and explicit permission; change PotPlayer's, SVP's or the system's settings on the host; commit PotPlayer or SVP files or captures; make the repository public, tag or release. Stop on blockers or when an owner decision is needed.
 ```
 
-Ubuntu boot run for M6 to M16 (after goal R; the acceptance of M6, M8 and
-M16 needs it; goal R brings it in line with the kit):
+Goal K (after goal R; the owner may postpone it):
 ```
-/goal On the owner's Ubuntu 26.10 boot (GNOME Wayland, RTX 30-series card), run the Linux kit for milestones M6 to M16 of the private repository woffko/rvp in one session and record the results; this is the Ubuntu boot run that the acceptance of M6, M8 and M16 needs (docs/goals/goal-h-status.md, goal-j-status.md, goal-r-status.md) and, if goal K ran, M9's. Clone or pull the repository to ~/rvp and follow AGENTS.md and the sections of tools/linux-kit/CHECKLIST.md that goal-r-status.md names. The owner does the privileged steps the checklist lists (the packages `kit.sh check` prints, `ydotoold` running as root for m2input, SVP 4 Manager started for m2svp and m6svp, installing the .deb that step m8 names and removing it afterwards, Unified Remote Server for m15 if wanted); never use sudo yourself and never handle NAS credentials. Set RVP_SKIN to BlackSpace_en.dsf from the PotPlayer folder on the Windows partition, mounted read-only, and RVP_VPY to PotPlayer's VapourSynth/motioninterpolation.vpy there. Run `tools/linux-kit/kit.sh m16all` from a terminal inside the GNOME session; before each step that opens windows or plays sound, tell the owner what will appear and for how long (nobody touches the mouse or keyboard during m2input). If a step fails, find the cause in its log in the kit's log directory; fix RVP only when the cause is clear and the fix small, run `cargo xtask ci` and rerun the step; otherwise record it as an open item. Then record the results: `kit.sh report` writes docs/test-runs/<date>-<host>.md; add an "Ubuntu boot run" section to docs/goals/goal-r-status.md with each step's result (the GPU checks against goal D's 6 dropped frames per 20 s at 4K60, SVP's acceptance, the packages, MPRIS and the screen kept on, the new audio, video, subtitle and playlist functions, the remote) and, if their run has not happened, the M6 and M8 sections that the M6-M8 run would have written into goal-h-status.md and goal-j-status.md, with what the owner found in the checklist's manual checks. Commit with `git -c user.name=woffko -c user.email=2505149+woffko@users.noreply.github.com commit` and push. Done when the report and the status sections are committed and pushed. Do not: change SVP or system settings beyond the checklist's steps, commit PotPlayer or SVP files, scripts or captures, make the repository public, tag or release. Stop on blockers or when an owner decision is needed.
+/goal Execute goal K of docs/PLAN.md (milestone M9, other players' skins) in ~/rvp, only if docs/goals/goal-r-status.md records goal R as done; otherwise stop and report. Follow AGENTS.md, the rules M2-M16 inherited (the goal status files) and D14. Start with the study. Ask the owner which VLC skins, mpv on-screen controllers and classic Winamp skins to try; without an answer, take the most downloaded skins from VLC's skins page plus uosc, ModernX and mpv's built-in OSC, and a few popular classic Winamp skins (.wsz). Keep the downloads local in ~/rvp-reference. Record in docs/spikes/s6-other-skins.md what each format needs, what RVP lacks and the cost of each part, then stop and ask the owner to choose the scope. Then implement the chosen parts, Windows first: check them on the Windows VM (<windows-vm>) and list their Linux side for goal S. For VLC .vlt skins: a second loader in crates/skin that builds the same display list, VLC's actions mapped to RVP's, and a coverage report. For mpv's on-screen controllers: libmpv with Lua (the kit's Linux build is goal S's), an RVP mode where mpv's controller replaces the skin (borderless window, pointer and keys passed to mpv), and the user's scripts folder. For classic Winamp skins: a loader that turns their fixed layout into the same display list, with the video placed as the study decided. Done when: tests and CI are green, the chosen parts work on the Windows VM, docs/goals/goal-k-status.md lists results and the Linux items for goal S, and everything is committed and pushed. Do not: commit third-party skins or scripts or renders made from them, run anything on the Windows host without advance notice and explicit permission, make the repository public, tag or release. Stop on blockers or when an owner decision is needed.
+```
+
+Goal S:
+```
+/goal Execute goal S of docs/PLAN.md (milestone M17, Linux completion) in ~/rvp, only if docs/goals/goal-r-status.md records goal R as done and goal K is done or postponed by the owner; otherwise stop and report. Follow AGENTS.md (test environments: GUI programs started in WSL count as host runs; silent tests need no permission), the rules M2-M16 inherited (the goal status files) and D14. Collect the Linux items that goals L to R (and K) listed in their status files and deliver M17 as PLAN.md section 6 lists it: the system's volume through PipeWire or PulseAudio, recording RVP's own PipeWire stream, the second audio device, devices through v4l2, the screen as a source (a study: Wayland needs the screencast portal), the trash, power actions through logind (dry-run tests only), DVD, Blu-ray and CD support, M16's disc menus and the chosen audio filters' libraries (libdvdnav, libbluray, libcdio, libmysofa, librubberband, libbs2b) in the kit's libmpv, Lua if goal K needs it, AviSynth+ for Linux if the user installs it, whisper.cpp's GPU builds, the window commands Wayland refuses listed with their reason, Unified Remote Server for Linux with the remote, the translations, and the packages (AppImage, .deb, PKGBUILD) carrying the new parts. Run it all on the Ubuntu VM (<ubuntu-vm>, tools/linux-kit; access as in ~/another project/AGENTS.md): rvp --selftest's new sections, kit steps m10 to m16 and m17all, the packages installed, run and removed; add CHECKLIST.md sections for the owner's Ubuntu boot, with the checks only real hardware can do (GPU, SVP, Whisper on CUDA, a DVD drive or a webcam if the owner has them). Then bring the /goal text "Ubuntu boot run for M6 to M17" in PLAN.md section 10 in line with the kit's real steps. Coverage: no "not in RVP yet" reason remains for Linux in docs/coverage/; reasons that only Linux has (Wayland's limits) say so. Done when: tests and CI are green, the kit passes on the Ubuntu VM, docs/goals/goal-s-status.md lists results, what only the Ubuntu boot can check and what the owner should try, the owner is reminded of the boot run, and everything is committed and pushed. Do not: shut down, suspend or hibernate a VM (tests use the dry-run hook); use sudo on the Ubuntu VM beyond what tools/linux-kit documents; run anything on the Windows host desktop, including GUI programs from WSL, without advance notice and explicit permission; commit PotPlayer or SVP files or captures; make the repository public, tag or release. Stop on blockers or when an owner decision is needed.
+```
+
+Ubuntu boot run for M6 to M17 (after goal S; the acceptance of M6, M8 and
+M17 needs it; goal S brings it in line with the kit):
+```
+/goal On the owner's Ubuntu 26.10 boot (GNOME Wayland, RTX 30-series card), run the Linux kit for milestones M6 to M17 of the private repository woffko/rvp in one session and record the results; this is the Ubuntu boot run that the acceptance of M6, M8 and M17 needs (docs/goals/goal-h-status.md, goal-j-status.md, goal-s-status.md) and, if goal K ran, M9's. Clone or pull the repository to ~/rvp and follow AGENTS.md and the sections of tools/linux-kit/CHECKLIST.md that goal-s-status.md names. The owner does the privileged steps the checklist lists (the packages `kit.sh check` prints, `ydotoold` running as root for m2input, SVP 4 Manager started for m2svp and m6svp, installing the .deb that step m8 names and removing it afterwards, Unified Remote Server for m15 if wanted); never use sudo yourself and never handle NAS credentials. Set RVP_SKIN to BlackSpace_en.dsf from the PotPlayer folder on the Windows partition, mounted read-only, and RVP_VPY to PotPlayer's VapourSynth/motioninterpolation.vpy there. Run `tools/linux-kit/kit.sh m17all` from a terminal inside the GNOME session; before each step that opens windows or plays sound, tell the owner what will appear and for how long (nobody touches the mouse or keyboard during m2input). If a step fails, find the cause in its log in the kit's log directory; fix RVP only when the cause is clear and the fix small, run `cargo xtask ci` and rerun the step; otherwise record it as an open item. Then record the results: `kit.sh report` writes docs/test-runs/<date>-<host>.md; add an "Ubuntu boot run" section to docs/goals/goal-s-status.md with each step's result (the GPU checks against goal D's 6 dropped frames per 20 s at 4K60, SVP's acceptance, the packages, MPRIS and the screen kept on, the new audio, video, subtitle and playlist functions, the disc menus, the remote) and, if their run has not happened, the M6 and M8 sections that the M6-M8 run would have written into goal-h-status.md and goal-j-status.md, with what the owner found in the checklist's manual checks. Commit with `git -c user.name=woffko -c user.email=2505149+woffko@users.noreply.github.com commit` and push. Done when the report and the status sections are committed and pushed. Do not: change SVP or system settings beyond the checklist's steps, commit PotPlayer or SVP files, scripts or captures, make the repository public, tag or release. Stop on blockers or when an owner decision is needed.
 ```
