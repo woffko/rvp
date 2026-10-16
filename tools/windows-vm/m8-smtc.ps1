@@ -4,11 +4,11 @@
 #
 # It starts the portable RVP from this folder without sound (ao=null), on an
 # instance channel of its own (it never reaches the owner's RVP) with SVP's
-# pipe off, and an album of two copies of the test clip. Then it finds RVP's session in
-# Windows' media session manager, the list the flyout and the media keys
-# use, reads the title and the status, and presses Pause, Play, Next,
-# Previous and Stop there. Last, it closes RVP's window with WM_CLOSE. No
-# keys are injected and nothing is captured.
+# pipe off, and an album of two copies of the test clip. Then it finds
+# RVP's session in Windows' media session manager, the list the flyout and
+# the media keys use, reads the title and the status, and presses Pause,
+# Play, Next, Previous and Stop there. Last, it closes RVP's window with
+# WM_CLOSE. No keys are injected and nothing is captured.
 #
 # RVP's session is the one whose app ID names rvp, so no other RVP may
 # play meanwhile. Run with Windows PowerShell 5.1 (WinRT types), in a folder
