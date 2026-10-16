@@ -17,7 +17,8 @@ const PATH: &str = "/org/mpris/MediaPlayer2";
 const NAME: &str = "org.mpris.MediaPlayer2.rvp";
 /// The track ID MPRIS reserves for "no track".
 const NO_TRACK: &str = "/org/mpris/MediaPlayer2/TrackList/NoTrack";
-/// The portal's `Inhibit` flag for idle (the screen saver and blanking).
+/// The `Inhibit` flag for idle (the screen saver and blanking), the same
+/// for GNOME's session manager and the portal.
 const INHIBIT_IDLE: u32 = 8;
 /// MPRIS counts time in microseconds.
 const MICROS: f64 = 1_000_000.0;
@@ -119,10 +120,9 @@ impl Desktop {
             instance
         };
         let (sender, receiver) = mpsc::channel();
-        let reason = options.inhibit_reason;
         std::thread::Builder::new()
             .name("rvp-desktop".to_owned())
-            .spawn(move || run(&connection, &state, &receiver, &reason))
+            .spawn(move || run(&connection, &state, &receiver, &options))
             .map_err(|e| format!("desktop thread: {e}"))?;
         Ok(Self { sender, bus_name })
     }
@@ -434,10 +434,12 @@ impl Player {
 
 /// An inhibit RVP holds.
 enum Inhibit {
-    /// The portal's request object; closing it ends the inhibit.
-    Portal(OwnedObjectPath),
+    /// GNOME's session manager's cookie.
+    Session(u32),
     /// `org.freedesktop.ScreenSaver`'s cookie.
     ScreenSaver(u32),
+    /// The portal's request object; closing it ends the inhibit.
+    Portal(OwnedObjectPath),
 }
 
 /// The desktop thread: state changes become MPRIS signals, inhibit
@@ -446,7 +448,7 @@ fn run(
     connection: &Connection,
     shared: &Mutex<MediaState>,
     receiver: &Receiver<Message>,
-    reason: &str,
+    options: &Options,
 ) {
     let player = connection.object_server().interface::<_, Player>(PATH).ok();
     let mut held: Option<Inhibit> = None;
@@ -466,7 +468,7 @@ fn run(
                     )));
                 }
             }
-            Message::Inhibit(true) if held.is_none() => held = inhibit(connection, reason),
+            Message::Inhibit(true) if held.is_none() => held = inhibit(connection, options),
             Message::Inhibit(false) => {
                 if let Some(inhibit) = held.take() {
                     release(connection, inhibit);
@@ -518,46 +520,65 @@ fn announce(
     }
 }
 
-/// Asks the portal, then `org.freedesktop.ScreenSaver`, to keep the screen
-/// on; `None` when neither answers.
-fn inhibit(connection: &Connection, reason: &str) -> Option<Inhibit> {
-    let options = BTreeMap::from([("reason", Value::from(reason))]);
-    if let Ok(reply) = connection.call_method(
-        Some("org.freedesktop.portal.Desktop"),
-        "/org/freedesktop/portal/desktop",
-        Some("org.freedesktop.portal.Inhibit"),
+/// Asks GNOME's session manager, then `org.freedesktop.ScreenSaver` (KDE,
+/// Xfce, MATE), then the portal to keep the screen on; `None` when none
+/// answers. Each drops the inhibit of a client that leaves the bus.
+///
+/// The portal comes last: for a program outside a sandbox it passes an
+/// empty app ID on to GNOME's session manager, which refuses it, and still
+/// answers success (GNOME 42); GTK, too, asks the session manager itself
+/// outside a sandbox. Inside one, the portal is the only service reachable.
+fn inhibit(connection: &Connection, options: &Options) -> Option<Inhibit> {
+    let reason = options.inhibit_reason.as_str();
+    let cookie = |reply: zbus::Result<zbus::Message>| reply.ok()?.body().deserialize::<u32>().ok();
+    // No X11 window to name on Wayland: 0.
+    let session = connection.call_method(
+        Some("org.gnome.SessionManager"),
+        "/org/gnome/SessionManager",
+        Some("org.gnome.SessionManager"),
         "Inhibit",
-        &("", INHIBIT_IDLE, options),
-    ) && let Ok(handle) = reply.body().deserialize::<OwnedObjectPath>()
-    {
-        return Some(Inhibit::Portal(handle));
+        &(options.desktop_entry.as_str(), 0u32, reason, INHIBIT_IDLE),
+    );
+    if let Some(cookie) = cookie(session) {
+        return Some(Inhibit::Session(cookie));
     }
+    let screen_saver = connection.call_method(
+        Some("org.freedesktop.ScreenSaver"),
+        "/org/freedesktop/ScreenSaver",
+        Some("org.freedesktop.ScreenSaver"),
+        "Inhibit",
+        &("RVP", reason),
+    );
+    if let Some(cookie) = cookie(screen_saver) {
+        return Some(Inhibit::ScreenSaver(cookie));
+    }
+    let portal_options = BTreeMap::from([("reason", Value::from(reason))]);
     let reply = connection
         .call_method(
-            Some("org.freedesktop.ScreenSaver"),
-            "/org/freedesktop/ScreenSaver",
-            Some("org.freedesktop.ScreenSaver"),
+            Some("org.freedesktop.portal.Desktop"),
+            "/org/freedesktop/portal/desktop",
+            Some("org.freedesktop.portal.Inhibit"),
             "Inhibit",
-            &("RVP", reason),
+            &("", INHIBIT_IDLE, portal_options),
         )
         .ok()?;
     reply
         .body()
-        .deserialize::<u32>()
+        .deserialize::<OwnedObjectPath>()
         .ok()
-        .map(Inhibit::ScreenSaver)
+        .map(Inhibit::Portal)
 }
 
 fn release(connection: &Connection, inhibit: Inhibit) {
     // A release that fails ends with RVP anyway: the bus drops what a
     // client that leaves held.
     match inhibit {
-        Inhibit::Portal(handle) => drop(connection.call_method(
-            Some("org.freedesktop.portal.Desktop"),
-            handle.as_str(),
-            Some("org.freedesktop.portal.Request"),
-            "Close",
-            &(),
+        Inhibit::Session(cookie) => drop(connection.call_method(
+            Some("org.gnome.SessionManager"),
+            "/org/gnome/SessionManager",
+            Some("org.gnome.SessionManager"),
+            "Uninhibit",
+            &(cookie,),
         )),
         Inhibit::ScreenSaver(cookie) => drop(connection.call_method(
             Some("org.freedesktop.ScreenSaver"),
@@ -565,6 +586,13 @@ fn release(connection: &Connection, inhibit: Inhibit) {
             Some("org.freedesktop.ScreenSaver"),
             "UnInhibit",
             &(cookie,),
+        )),
+        Inhibit::Portal(handle) => drop(connection.call_method(
+            Some("org.freedesktop.portal.Desktop"),
+            handle.as_str(),
+            Some("org.freedesktop.portal.Request"),
+            "Close",
+            &(),
         )),
     }
 }

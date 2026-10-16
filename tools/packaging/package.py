@@ -262,7 +262,8 @@ def windows_includes(bundle: Path, includes: Path) -> None:
 
 
 def windows(args) -> None:
-    out = Path(args.out)
+    # Absolute: makensis reads the paths it gets from the script's folder.
+    out = Path(args.out).resolve()
     out.mkdir(parents=True, exist_ok=True)
     name = f"RVP-{version()}-windows-x64"
     epoch = commit_time()

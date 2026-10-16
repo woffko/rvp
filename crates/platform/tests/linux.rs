@@ -1,7 +1,8 @@
 //! MPRIS and idle inhibit on a private session bus (M8): a `dbus-daemon` of
-//! the test's own with no services to start, fake portal and screen saver
-//! services, and a client that reads and calls what a desktop would. The
-//! tests pass with a note where `dbus-daemon` is missing.
+//! the test's own with no services to start, fake session manager, screen
+//! saver and portal services, and a client that reads and calls what a
+//! desktop would. The tests pass with a note where `dbus-daemon` is
+//! missing.
 
 #![cfg(target_os = "linux")]
 
@@ -288,6 +289,29 @@ fn check_commands(
     assert_eq!(*commands.lock().expect("commands"), expected);
 }
 
+/// GNOME's session manager's `Inhibit`, recording the calls it gets.
+struct FakeSessionManager {
+    calls: Arc<Mutex<Vec<String>>>,
+}
+
+#[interface(name = "org.gnome.SessionManager")]
+impl FakeSessionManager {
+    fn inhibit(&self, app_id: &str, toplevel_xid: u32, reason: &str, flags: u32) -> u32 {
+        self.calls
+            .lock()
+            .expect("calls")
+            .push(format!("Inhibit {app_id} {toplevel_xid} {flags}: {reason}"));
+        5
+    }
+
+    fn uninhibit(&self, cookie: u32) {
+        self.calls
+            .lock()
+            .expect("calls")
+            .push(format!("Uninhibit {cookie}"));
+    }
+}
+
 /// A screen saver service that records the calls it gets.
 struct FakeScreenSaver {
     calls: Arc<Mutex<Vec<String>>>,
@@ -352,63 +376,115 @@ impl FakeRequest {
     }
 }
 
-#[test]
-fn inhibit_asks_the_portal_or_else_the_screen_saver() {
-    let Some(bus) = Bus::start("inhibit") else {
-        return;
-    };
-    // No portal: the screen saver's interface.
-    let saver_calls = Arc::new(Mutex::new(Vec::new()));
-    let _saver = connection::Builder::address(bus.address.as_str())
-        .and_then(|b| b.name("org.freedesktop.ScreenSaver"))
-        .and_then(|b| {
-            b.serve_at(
-                "/org/freedesktop/ScreenSaver",
-                FakeScreenSaver {
-                    calls: Arc::clone(&saver_calls),
-                },
-            )
-        })
+/// Serves `object` at `path` under the bus name `name` until dropped.
+fn serve(
+    bus: &Bus,
+    name: &str,
+    path: &str,
+    object: impl zbus::object_server::Interface,
+) -> Connection {
+    connection::Builder::address(bus.address.as_str())
+        .and_then(|b| b.name(name.to_owned()))
+        .and_then(|b| b.serve_at(path.to_owned(), object))
         .and_then(connection::Builder::build)
-        .expect("the fake screen saver");
+        .unwrap_or_else(|e| panic!("the fake {name}: {e}"))
+}
+
+/// Inhibits twice and lets go once, then drops the [`Desktop`].
+fn inhibit_and_release(bus: &Bus) {
     let desktop = Desktop::start_at(&bus.address, options(), |_| {}).expect("desktop");
     desktop.inhibit(true);
     desktop.inhibit(true);
     desktop.inhibit(false);
-    let calls = || saver_calls.lock().expect("calls").clone();
-    wait_for("the screen saver's calls", || calls().len() >= 2);
-    assert_eq!(calls(), ["Inhibit RVP: Playing video", "UnInhibit 7"]);
-    drop(desktop);
-
-    // With a portal: its Inhibit (idle), closed when RVP lets go or ends.
-    let portal_calls = Arc::new(Mutex::new(Vec::new()));
-    let _portal = connection::Builder::address(bus.address.as_str())
-        .and_then(|b| b.name("org.freedesktop.portal.Desktop"))
-        .and_then(|b| {
-            b.serve_at(
-                "/org/freedesktop/portal/desktop",
-                FakePortal {
-                    calls: Arc::clone(&portal_calls),
-                },
-            )
-        })
-        .and_then(|b| {
-            b.serve_at(
-                REQUEST,
-                FakeRequest {
-                    calls: Arc::clone(&portal_calls),
-                },
-            )
-        })
-        .and_then(connection::Builder::build)
-        .expect("the fake portal");
-    let desktop = Desktop::start_at(&bus.address, options(), |_| {}).expect("desktop");
     desktop.inhibit(true);
-    let calls = || portal_calls.lock().expect("calls").clone();
-    wait_for("the portal's Inhibit", || !calls().is_empty());
     drop(desktop);
-    wait_for("the request closed", || calls().len() >= 2);
-    assert_eq!(calls(), ["Inhibit '' 8: Playing video", "Close"]);
-    // The screen saver was not asked again.
-    assert_eq!(saver_calls.lock().expect("calls").len(), 2);
+}
+
+#[test]
+fn inhibit_asks_gnome_then_the_screen_saver_then_the_portal() {
+    let Some(bus) = Bus::start("inhibit") else {
+        return;
+    };
+    let record = || Arc::new(Mutex::new(Vec::<String>::new()));
+    let (portal_calls, saver_calls, session_calls) = (record(), record(), record());
+    let calls = |log: &Arc<Mutex<Vec<String>>>| log.lock().expect("calls").clone();
+
+    // The portal alone: its Inhibit (idle), closed when RVP lets go or ends.
+    let portal = serve(
+        &bus,
+        "org.freedesktop.portal.Desktop",
+        "/org/freedesktop/portal/desktop",
+        FakePortal {
+            calls: Arc::clone(&portal_calls),
+        },
+    );
+    portal
+        .object_server()
+        .at(
+            REQUEST,
+            FakeRequest {
+                calls: Arc::clone(&portal_calls),
+            },
+        )
+        .expect("the request object");
+    inhibit_and_release(&bus);
+    wait_for("the portal's calls", || calls(&portal_calls).len() >= 4);
+    assert_eq!(
+        calls(&portal_calls),
+        [
+            "Inhibit '' 8: Playing video",
+            "Close",
+            "Inhibit '' 8: Playing video",
+            "Close"
+        ]
+    );
+
+    // A screen saver service comes before the portal.
+    let _saver = serve(
+        &bus,
+        "org.freedesktop.ScreenSaver",
+        "/org/freedesktop/ScreenSaver",
+        FakeScreenSaver {
+            calls: Arc::clone(&saver_calls),
+        },
+    );
+    inhibit_and_release(&bus);
+    wait_for("the screen saver's calls", || {
+        calls(&saver_calls).len() >= 4
+    });
+    assert_eq!(
+        calls(&saver_calls),
+        [
+            "Inhibit RVP: Playing video",
+            "UnInhibit 7",
+            "Inhibit RVP: Playing video",
+            "UnInhibit 7"
+        ]
+    );
+
+    // GNOME's session manager comes first, asked with RVP's app ID.
+    let _session = serve(
+        &bus,
+        "org.gnome.SessionManager",
+        "/org/gnome/SessionManager",
+        FakeSessionManager {
+            calls: Arc::clone(&session_calls),
+        },
+    );
+    inhibit_and_release(&bus);
+    wait_for("the session manager's calls", || {
+        calls(&session_calls).len() >= 4
+    });
+    assert_eq!(
+        calls(&session_calls),
+        [
+            "Inhibit rvp 0 8: Playing video",
+            "Uninhibit 5",
+            "Inhibit rvp 0 8: Playing video",
+            "Uninhibit 5"
+        ]
+    );
+    // Neither of the others was asked again.
+    assert_eq!(calls(&portal_calls).len(), 4);
+    assert_eq!(calls(&saver_calls).len(), 4);
 }

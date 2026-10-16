@@ -178,6 +178,12 @@ each goal writes `docs/goals/goal-<letter>-status.md`.
   DoNotQueue), shown by `shell/src/desktop.rs`. Windows' media controls:
   `shell/src/media_controls.rs` (one FFI point, `GetForWindow`). Both send
   `MediaCommand`s to the window's thread (`App::media_command`).
+- Idle inhibit asks GNOME's session manager first, then
+  `org.freedesktop.ScreenSaver`, and the portal last: GNOME refuses the
+  portal's inhibit for a program outside a sandbox (empty app ID) while
+  the portal still answers success. Check it with the session manager's
+  `IsInhibited 8` on the desktop's own bus, and find RVP by process name
+  (`pgrep -x rvp`): `pgrep -f` also matches the shell running the check.
 - Crash logs go to RVP's state folder: panics (`rvp_app::crash`), fatal
   signals and unhandled exceptions with a minidump (`shell/src/crash.rs`).
   `rvp --crash-test=panic` or `=native` crashes on purpose.

@@ -102,7 +102,11 @@ jobs:
       - name: Qt and libmpv
         run: tools/linux-kit/kit.sh deps mpv
       - name: Packages
-        run: tools/linux-kit/kit.sh m8package
+        run: |
+          tools/linux-kit/kit.sh m8package
+          # upload-artifact takes no path with "..".
+          mkdir -p packages
+          cp "$RVP_KIT_DIR"/logs/m8-packages/*.AppImage "$RVP_KIT_DIR"/logs/m8-packages/*.deb packages/
       - name: Logs of a failed step
         if: failure()
         run: tail -n 60 "$RVP_KIT_DIR"/logs/*.log
@@ -110,8 +114,8 @@ jobs:
         with:
           name: rvp-linux
           path: |
-            ${{ env.RVP_KIT_DIR }}/logs/m8-packages/*.AppImage
-            ${{ env.RVP_KIT_DIR }}/logs/m8-packages/*.deb
+            packages/*.AppImage
+            packages/*.deb
           retention-days: 14
 
   package-windows:
