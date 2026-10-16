@@ -143,6 +143,13 @@ impl Settings {
         }
         clamp(&mut self.volume_step, 0.1, 50.0, "volume-step", notes);
         clamp(&mut self.volume_max, 100.0, 1000.0, "volume-max", notes);
+        if crate::speakers::choice(&self.output_speakers).is_none() {
+            notes.push(format!(
+                "output-speakers {:?} is not one of RVP's: stereo used",
+                self.output_speakers
+            ));
+            crate::speakers::DEFAULT.clone_into(&mut self.output_speakers);
+        }
         clamp(
             &mut self.normalizer.level,
             10.0,
@@ -430,7 +437,7 @@ impl App {
             endpoint_changed = Some(endpoint);
         }
         if (old.volume_max - new.volume_max).abs() > f64::EPSILON {
-            set("volume-max", &format!("{:.0}", new.volume_max));
+            set("volume-max", &crate::volume::mpv_volume_max(new.volume_max));
         }
         if old.audio_device != new.audio_device {
             set("audio-device", &new.audio_device);
@@ -495,6 +502,9 @@ impl App {
                     std::time::Instant::now(),
                 );
             }
+        }
+        if old.output_speakers != new.output_speakers {
+            self.speakers_changed(engine);
         }
         self.apply_m6_settings(engine, &old, &mut applied);
         if old.skin != new.skin || old.vapoursynth.library != new.vapoursynth.library {
@@ -563,6 +573,10 @@ impl App {
                 "scaler": SCALERS,
                 "audio-device": devices,
                 "skin": skins,
+                "output-speakers": crate::speakers::CHOICES
+                    .iter()
+                    .map(|choice| serde_json::json!({ "value": choice.value, "label": choice.label }))
+                    .collect::<Vec<_>>(),
             },
             "file": self.settings_path().map(|path| path.display().to_string()),
             "portable": portable,
@@ -619,6 +633,7 @@ mod tests {
             video_sync: "sometimes".to_owned(),
             hwdec: "auto; rm".to_owned(),
             subtitle_languages: "en,ru".to_owned(),
+            output_speakers: "quad".to_owned(),
             ..Settings::default()
         };
         settings
@@ -630,6 +645,11 @@ mod tests {
         let notes = settings.validate();
         assert!((settings.volume_step - 0.1).abs() < 1e-9);
         assert!((settings.volume_max - 1000.0).abs() < 1e-9);
+        assert_eq!(settings.output_speakers, "stereo");
+        assert!(
+            notes.iter().any(|note| note.contains("output-speakers")),
+            "{notes:?}"
+        );
         assert!((settings.seek_seconds[1] - 0.1).abs() < 1e-9);
         assert_eq!(settings.video_sync, "audio");
         assert_eq!(settings.hwdec, "auto-copy");
@@ -639,7 +659,7 @@ mod tests {
             ["V:"],
             "{notes:?}"
         );
-        assert_eq!(notes.len(), 7, "{notes:?}");
+        assert_eq!(notes.len(), 8, "{notes:?}");
         // The defaults are valid.
         assert!(Settings::default().validate().is_empty());
     }

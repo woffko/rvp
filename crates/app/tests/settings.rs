@@ -108,7 +108,14 @@ fn changes_apply_to_the_player_and_survive_a_restart() {
     assert_eq!(text("hwdec"), "no");
     assert_eq!(text("video-sync"), "display-resample");
     assert_eq!(text("scale"), "spline36");
-    assert_eq!(text("volume-max"), "150.000000");
+    // RVP's 150 % (PotPlayer's scale) is mpv's volume of the same gain,
+    // a thousandth above it so that 150 % itself is in range.
+    let volume_max: f64 = text("volume-max").parse().expect("a number");
+    let wanted: f64 = rvp_app::volume::mpv_volume_max(150.0)
+        .parse()
+        .expect("a number");
+    assert!((volume_max - wanted).abs() < 1e-4, "{volume_max}");
+    assert!(volume_max > rvp_app::volume::mpv_volume(150.0));
     assert_eq!(text("sub-scale"), "1.500000");
     assert_eq!(text("slang"), "en,ru");
     assert_eq!(text("sub-auto"), "exact");

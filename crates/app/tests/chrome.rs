@@ -110,7 +110,7 @@ fn chrome() -> Chrome {
     let skin = Skin::load(archive, "VideoSkin.xml").expect("load synthetic skin");
     assert!(skin.warnings().is_empty(), "{:?}", skin.warnings());
     let mut chrome = Chrome::new(Box::leak(Box::new(skin)));
-    chrome.data = view::data_model(&PlayerModel::new(), &Playlists::default());
+    chrome.data = view::data_model(&PlayerModel::new(), &Playlists::default(), 100.0);
     chrome.resize(Mode::Window, WIDTH, HEIGHT).expect("layout");
     chrome
 }
@@ -158,7 +158,7 @@ fn playing_model(seconds: f64) -> PlayerModel {
 }
 
 fn show(chrome: &mut Chrome, model: &PlayerModel) -> rvp_app::chrome::Damage {
-    chrome.data = view::data_model(model, &Playlists::default());
+    chrome.data = view::data_model(model, &Playlists::default(), 100.0);
     view::apply_playback_state(&mut chrome.state, model);
     chrome.refresh()
 }

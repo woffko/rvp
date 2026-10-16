@@ -181,6 +181,8 @@ pub enum Command {
     Album(usize),
     /// Choose an equalizer preset (index into `equalizer::PRESETS`).
     EqualizerPreset(usize),
+    /// Choose the output speakers (index into `speakers::CHOICES`).
+    Speakers(usize),
 }
 
 impl Command {
@@ -205,6 +207,7 @@ impl Command {
             Command::Chapter(index) => format!("c:{index}"),
             Command::Album(index) => format!("b:{index}"),
             Command::EqualizerPreset(index) => format!("e:{index}"),
+            Command::Speakers(index) => format!("o:{index}"),
         }
     }
 
@@ -230,6 +233,7 @@ impl Command {
             "c" => value.parse().ok().map(Command::Chapter),
             "b" => value.parse().ok().map(Command::Album),
             "e" => value.parse().ok().map(Command::EqualizerPreset),
+            "o" => value.parse().ok().map(Command::Speakers),
             _ => None,
         }
     }
@@ -474,6 +478,7 @@ impl App {
                 None
             }
             Command::EqualizerPreset(index) => self.set_equalizer_preset(engine, index),
+            Command::Speakers(index) => self.set_speakers(engine, index),
         }
     }
 
@@ -516,6 +521,10 @@ impl App {
         // "Equalizer Presets" lists RVP's presets.
         if node.id == 20008 {
             return MenuItem::submenu(&node.text, self.equalizer_presets());
+        }
+        // "Output Speakers" lists the speakers RVP can choose.
+        if node.id == 20005 {
+            return MenuItem::submenu(&node.text, self.speaker_choices());
         }
         None
     }
@@ -661,6 +670,19 @@ impl App {
                 label: preset.name.to_owned(),
                 command: Some(Command::EqualizerPreset(index)),
                 checked: Some(eq.enabled && eq.preset == preset.name),
+                ..MenuItem::default()
+            })
+            .collect()
+    }
+
+    fn speaker_choices(&self) -> Vec<MenuItem> {
+        crate::speakers::CHOICES
+            .iter()
+            .enumerate()
+            .map(|(index, choice)| MenuItem {
+                label: choice.label.to_owned(),
+                command: Some(Command::Speakers(index)),
+                checked: Some(self.settings.output_speakers == choice.value),
                 ..MenuItem::default()
             })
             .collect()

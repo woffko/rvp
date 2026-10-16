@@ -272,7 +272,11 @@ impl App {
         });
         options.extra.push((
             "volume-max".to_owned(),
-            format!("{:.0}", self.settings.volume_max.max(100.0)),
+            crate::volume::mpv_volume_max(self.settings.volume_max),
+        ));
+        options.extra.push((
+            "audio-channels".to_owned(),
+            self.audio_channels().to_owned(),
         ));
         let settings = &self.settings;
         for (name, value) in [
@@ -1064,12 +1068,25 @@ impl App {
     }
 
     fn change_volume(&mut self, engine: &Engine, delta: f64) -> Option<UiRequest> {
-        let current = self.model.double(PropertyId::Volume).unwrap_or(100.0);
-        let volume = (current + delta).clamp(0.0, self.settings.volume_max.max(100.0));
+        self.set_volume(engine, self.volume_percent() + delta)
+    }
+
+    /// The volume as RVP shows it: PotPlayer's percent
+    /// ([`crate::volume`]).
+    #[must_use]
+    pub fn volume_percent(&self) -> f64 {
+        crate::volume::percent(self.model.double(PropertyId::Volume).unwrap_or(100.0))
+    }
+
+    /// Sets the volume (PotPlayer's percent), within 0 to the highest
+    /// volume, and shows it on the OSD as the keys, the wheel and the
+    /// sliders do.
+    fn set_volume(&mut self, engine: &Engine, percent: f64) -> Option<UiRequest> {
+        let percent = percent.clamp(0.0, self.settings.volume_max.max(100.0));
         engine
-            .set_volume(volume)
+            .set_volume(crate::volume::mpv_volume(percent))
             .ok()
-            .map(|()| UiRequest::Osd(format!("Volume: {volume:.0} %")))
+            .map(|()| UiRequest::Osd(format!("Volume: {percent:.0} %")))
     }
 
     /// Seeks to `fraction` (0.0 to 1.0) of the file.
@@ -1152,9 +1169,10 @@ impl App {
         }
     }
 
-    /// The volume slider was set to `fraction` (0.0 to 1.0 of 100 %).
-    pub fn set_volume_fraction(&mut self, engine: &Engine, fraction: f64) {
-        drop(engine.set_volume((fraction * 100.0).clamp(0.0, 100.0)));
+    /// A volume slider was set to `fraction` (0.0 to 1.0) of its length,
+    /// which runs to the highest volume.
+    pub fn set_volume_fraction(&mut self, engine: &Engine, fraction: f64) -> Option<UiRequest> {
+        self.set_volume(engine, fraction * self.settings.volume_max.max(100.0))
     }
 
     /// Handles everything libmpv has reported: updates the model, the

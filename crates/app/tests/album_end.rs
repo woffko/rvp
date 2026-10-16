@@ -90,8 +90,12 @@ fn the_album_moves_on_when_the_normalizer_toggles_at_the_end() {
 
 #[test]
 fn the_album_moves_on_when_the_equalizer_toggles_at_the_end() {
+    // The downmix of the stereo speakers stays in front of the equalizer.
     change_at_the_end("equalizer", 2.7, Action::ToggleEqualizer, |af| {
-        af.starts_with("@rvpeq:") && af.contains("@rvpnorm:")
+        af.starts_with("@rvpdownmix:")
+            && af
+                .find("@rvpeq:")
+                .is_some_and(|eq| af.find("@rvpnorm:").is_some_and(|norm| eq < norm))
     });
 }
 

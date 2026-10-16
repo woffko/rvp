@@ -882,6 +882,199 @@ fn s5(options: &Options) -> Result<(), String> {
     Ok(())
 }
 
+// ------------------------------------------------------------------ audio
+
+/// PotPlayer's remote messages, as SVP and remote controls use them:
+/// `SendMessage(window, WM_USER, command, value)`.
+const WM_USER: u32 = 0x0400;
+const POT_GET_VOLUME: usize = 0x5000;
+const POT_SET_VOLUME: usize = 0x5001;
+/// PotPlayer's "Increase Volume" and "Decrease Volume" commands (R1), one
+/// `AudioVolumeUnit` (the owner's 1 %) each.
+const CMD_VOLUME_UP: usize = 10035;
+const CMD_VOLUME_DOWN: usize = 10036;
+const RVP_EXE: &str = "rvp.exe";
+
+/// The session's clock: seconds since the recording started, for the log.
+struct Clock(Instant);
+
+impl Clock {
+    fn now(&self) -> String {
+        format!("{:.3}", self.0.elapsed().as_secs_f64())
+    }
+}
+
+/// PotPlayer's volume (0-100), or None when it does not answer.
+fn pot_volume(hwnd: HWND) -> Option<isize> {
+    let value = send_message(hwnd, WM_USER, POT_GET_VOLUME, 0);
+    (0..=1000).contains(&value).then_some(value)
+}
+
+/// Sets PotPlayer's volume; returns what PotPlayer reports afterwards.
+/// Without the remote messages it steps with the volume commands from
+/// `current`.
+fn set_pot_volume(hwnd: HWND, target: isize, current: &mut isize, remote: bool) -> Option<isize> {
+    if remote {
+        send_message(hwnd, WM_USER, POT_SET_VOLUME, target);
+        sleep_ms(50);
+        let read = pot_volume(hwnd);
+        if let Some(read) = read {
+            *current = read;
+        }
+        return read;
+    }
+    let (command, step) = if target > *current { (CMD_VOLUME_UP, 1) } else { (CMD_VOLUME_DOWN, -1) };
+    while *current != target {
+        unsafe { PostMessageW(hwnd, WM_COMMAND, command, 0) };
+        *current += step;
+        sleep_ms(15);
+    }
+    None
+}
+
+/// Runs RVP with settings and state of its own for `seconds`, then closes
+/// its windows as their close buttons would.
+fn rvp_run(rvp: &Path, home: &Path, settings: &str, volume: Option<f64>, file: &Path, seconds: u64, clock: &Clock, log: &mut Log, name: &str) -> Result<(), String> {
+    let config = home.join(name).join("config");
+    let state = home.join(name).join("state");
+    let _ = std::fs::remove_dir_all(home.join(name));
+    std::fs::create_dir_all(&config).map_err(|e| e.to_string())?;
+    std::fs::create_dir_all(&state).map_err(|e| e.to_string())?;
+    std::fs::write(config.join("settings.json"), settings).map_err(|e| e.to_string())?;
+    if let Some(volume) = volume {
+        std::fs::write(state.join("state.json"), format!("{{ \"version\": 1, \"volume\": {volume} }}\n"))
+            .map_err(|e| e.to_string())?;
+    }
+    let mut child = Command::new(rvp)
+        .args(["--instance=audio-audit", "--skin="])
+        .arg(file)
+        .env("RVP_CONFIG_DIR", &config)
+        .env("RVP_STATE_DIR", &state)
+        .spawn()
+        .map_err(|e| format!("{}: {e}", rvp.display()))?;
+    log.line(&format!("segment {name} start t={} file={}", clock.now(), file.display()));
+    sleep_ms(seconds * 1000);
+    log.line(&format!("segment {name} end t={}", clock.now()));
+    let windows: Vec<HWND> = top_windows(None, Some(child.id()))
+        .into_iter()
+        .filter(|&hwnd| class_name(hwnd).contains("QWindow"))
+        .collect();
+    for &hwnd in &windows {
+        unsafe { PostMessageW(hwnd, WM_CLOSE, 0, 0) };
+    }
+    let deadline = Instant::now() + Duration::from_secs(15);
+    while Instant::now() < deadline {
+        if let Ok(Some(status)) = child.try_wait() {
+            log.line(&format!("rvp_closed {name} windows={} status={status}", windows.len()));
+            sleep_ms(1000);
+            return Ok(());
+        }
+        sleep_ms(200);
+    }
+    let _ = child.kill();
+    log.line(&format!("rvp_close=TIMEOUT {name} (stopped)"));
+    Ok(())
+}
+
+/// Plays `file` in PotPlayer at volume 100 for `seconds`, then puts the
+/// volume back to what PotPlayer had.
+fn pot_play(exe: &Path, file: &Path, seconds: u64, remote: bool, clock: &Clock, log: &mut Log, name: &str) -> Result<(), String> {
+    let pot = start_potplayer(exe, &[&file.to_string_lossy()], log)?;
+    let before = pot_volume(pot.hwnd);
+    let mut current = before.unwrap_or(22);
+    let read = set_pot_volume(pot.hwnd, 100, &mut current, remote);
+    log.line(&format!("segment {name} start t={} volume_before={before:?} set=100 read={read:?}", clock.now()));
+    sleep_ms(seconds * 1000);
+    log.line(&format!("segment {name} end t={}", clock.now()));
+    let restored = set_pot_volume(pot.hwnd, before.unwrap_or(22), &mut current, remote);
+    log.line(&format!("potplayer_volume_restored read={restored:?}"));
+    sleep_ms(300);
+    close_potplayer(pot, log);
+    sleep_ms(1500);
+    Ok(())
+}
+
+/// Records the default output device while RVP and PotPlayer play the test
+/// files: RVP's references (normalizer on and off, volume 100, 50 and 22),
+/// PotPlayer's volume from 100 % down (its normalizer as the owner has it),
+/// and both players on the 5.1 files. The log gives each segment's time.
+fn audio(options: &Options) -> Result<(), String> {
+    let out = options.path("--out")?;
+    let exe = options.path("--potplayer")?;
+    let rvp = options.path("--rvp")?;
+    let files = options.path("--files")?;
+    let hold: u64 = options.get("--hold-ms").unwrap_or("2500").parse().map_err(|_| "bad --hold-ms")?;
+    let levels: Vec<isize> = options
+        .get("--levels")
+        .unwrap_or("100,90,80,70,60,50,40,30,25,22,20,15,10,7,5,3,2,1,0,150,200")
+        .split(',')
+        .map(|v| v.trim().parse().map_err(|_| format!("bad level {v}")))
+        .collect::<Result<_, _>>()?;
+    require_no_potplayer()?;
+    let others = processes_named(RVP_EXE);
+    if !others.is_empty() {
+        return Err(format!("RVP is running (pids {others:?}); close it first, its sound would be recorded"));
+    }
+    let mut log = Log::open(&out)?;
+    let stereo = files.join("tone-stereo.flac");
+    let surround = files.join("tone-51.wav");
+    let ac3 = files.join("tone-51-ac3.mkv");
+    for file in [&stereo, &surround, &ac3] {
+        if !file.exists() {
+            return Err(format!("{} is missing", file.display()));
+        }
+    }
+    let wav = out.join("audio.wav");
+    let recorder = start_recording(&wav)?;
+    let clock = Clock(Instant::now());
+    log.line(&format!("recording={} {}", wav.display(), recorder.description));
+    let home = out.join("rvp");
+    let on = "{ \"ipc-server\": \"\" }\n";
+    let off = "{ \"ipc-server\": \"\", \"normalizer\": { \"enabled\": false } }\n";
+    sleep_ms(1000);
+    rvp_run(&rvp, &home, on, None, &stereo, 7, &clock, &mut log, "rvp-on-100")?;
+    rvp_run(&rvp, &home, off, None, &stereo, 7, &clock, &mut log, "rvp-off-100")?;
+    rvp_run(&rvp, &home, off, Some(50.0), &stereo, 7, &clock, &mut log, "rvp-off-50")?;
+    rvp_run(&rvp, &home, off, Some(22.0), &stereo, 7, &clock, &mut log, "rvp-off-22")?;
+    rvp_run(&rvp, &home, on, None, &surround, 25, &clock, &mut log, "rvp-on-51")?;
+    rvp_run(&rvp, &home, on, None, &ac3, 25, &clock, &mut log, "rvp-on-51-ac3")?;
+
+    // PotPlayer's volume, its normalizer as the owner has it.
+    let pot = start_potplayer(&exe, &[&stereo.to_string_lossy()], &mut log)?;
+    let before = pot_volume(pot.hwnd);
+    let remote = before.is_some();
+    log.line(&format!("potplayer_volume_before={before:?} remote_messages={remote}"));
+    let mut current = before.unwrap_or(22);
+    if !remote {
+        // Down to 0 with the volume commands, then up the levels in order.
+        set_pot_volume(pot.hwnd, 0, &mut current, false);
+        current = 0;
+    }
+    sleep_ms(1500);
+    let mut sweep = levels.clone();
+    if !remote {
+        sweep.retain(|&v| v <= 100);
+        sweep.sort_unstable();
+    }
+    for level in sweep {
+        let read = set_pot_volume(pot.hwnd, level, &mut current, remote);
+        log.line(&format!("segment pot-stereo-{level} start t={} set={level} read={read:?}", clock.now()));
+        sleep_ms(hold);
+        log.line(&format!("segment pot-stereo-{level} end t={}", clock.now()));
+    }
+    let restored = set_pot_volume(pot.hwnd, before.unwrap_or(22), &mut current, remote);
+    log.line(&format!("potplayer_volume_restored read={restored:?}"));
+    sleep_ms(300);
+    close_potplayer(pot, &mut log);
+    sleep_ms(1500);
+    pot_play(&exe, &surround, 25, remote, &clock, &mut log, "pot-on-51")?;
+    pot_play(&exe, &ac3, 25, remote, &clock, &mut log, "pot-on-51-ac3")?;
+    sleep_ms(500);
+    stop_recording(recorder)?;
+    log.line(&format!("recorded={} t={}", wav.display(), clock.now()));
+    Ok(())
+}
+
 // ------------------------------------------------------------------ other
 
 fn record(options: &Options) -> Result<(), String> {
@@ -940,11 +1133,12 @@ impl Options {
 
 pub fn run(args: &[String]) -> Result<(), String> {
     unsafe { SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2) };
-    let (command, rest) = args.split_first().ok_or("usage: host-session r1|s5|record|check ...")?;
+    let (command, rest) = args.split_first().ok_or("usage: host-session r1|s5|audio|record|check ...")?;
     let options = Options::parse(rest);
     match command.as_str() {
         "r1" => r1(&options),
         "s5" => s5(&options),
+        "audio" => audio(&options),
         "record" => record(&options),
         "check" => check(),
         "s3-input" => s3_input(&options),

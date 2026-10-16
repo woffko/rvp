@@ -81,6 +81,7 @@ fn idle_window_matches_potplayer_captures() {
             chrome.data = view::data_model(
                 &PlayerModel::new(),
                 &rvp_app::playlist::Playlists::default(),
+                100.0,
             );
             view::apply_playback_state(&mut chrome.state, &PlayerModel::new());
             chrome.resize(Mode::Window, width, height).expect("layout");

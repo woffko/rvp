@@ -156,9 +156,10 @@ fn channels(count: i64) -> String {
 }
 
 /// The skin's data model for the current playback state and the albums
-/// (the panel shows the shown album).
+/// (the panel shows the shown album). The volume slider runs from 0 to
+/// `volume_max` percent.
 #[must_use]
-pub fn data_model(model: &PlayerModel, lists: &Playlists) -> DataModel {
+pub fn data_model(model: &PlayerModel, lists: &Playlists, volume_max: f64) -> DataModel {
     let mut data = DataModel::default();
     let loaded = model.media_loaded();
     let time = model.double(PropertyId::TimePos).unwrap_or(0.0);
@@ -189,9 +190,12 @@ pub fn data_model(model: &PlayerModel, lists: &Playlists) -> DataModel {
             enabled: loaded && duration.is_some(),
         },
     );
-    // Volume is 0..100 % here; f32 is exact enough for a slider.
+    // The whole slider is 0 to the highest volume (owner, 2026-10-16: it
+    // stopped at 100 % with a higher maximum), in the percent RVP shows;
+    // f32 is exact enough for it.
+    let shown = crate::volume::percent(model.double(PropertyId::Volume).unwrap_or(100.0));
     #[allow(clippy::cast_possible_truncation)]
-    let volume = (model.double(PropertyId::Volume).unwrap_or(100.0) / 100.0).clamp(0.0, 1.0) as f32;
+    let volume = (shown / volume_max.max(100.0)).clamp(0.0, 1.0) as f32;
     data.sliders.insert(
         "CMD_VOLUME_CTRL".to_owned(),
         SliderValue {
@@ -434,7 +438,10 @@ mod tests {
         model.set(PropertyId::EstimatedVfFps, Some(Value::Double(59.0632)));
         model.set(PropertyId::VideoWidth, Some(Value::Int(1920)));
         model.set(PropertyId::VideoHeight, Some(Value::Int(800)));
-        model.set(PropertyId::Volume, Some(Value::Double(22.0)));
+        model.set(
+            PropertyId::Volume,
+            Some(Value::Double(crate::volume::mpv_volume(22.0))),
+        );
         model
     }
 
@@ -457,6 +464,7 @@ mod tests {
         let data = data_model(
             &playing_model(),
             &lists_playing("/films/Sample Film.mkv", 11, 12),
+            100.0,
         );
         for (command, text) in [
             ("CMD_TITLE_MESSAGE", "[12/12] Sample Film.mkv"),
@@ -482,6 +490,9 @@ mod tests {
         assert!(seek.enabled);
         assert!((seek.value - 0.482).abs() < 0.001);
         assert!((data.sliders["CMD_VOLUME_CTRL"].value - 0.22).abs() < 1e-6);
+        // With a highest volume of 200 %, 22 % is 11 % of the slider.
+        let data = data_model(&playing_model(), &Playlists::default(), 200.0);
+        assert!((data.sliders["CMD_VOLUME_CTRL"].value - 0.11).abs() < 1e-6);
     }
 
     #[test]
@@ -504,7 +515,7 @@ mod tests {
 
     #[test]
     fn idle_shows_zero_times_and_a_disabled_seek_bar() {
-        let data = data_model(&PlayerModel::new(), &Playlists::default());
+        let data = data_model(&PlayerModel::new(), &Playlists::default(), 100.0);
         assert_eq!(data.text("CMD_TITLE_MESSAGE"), Some(""));
         assert_eq!(data.text("CMD_CURRENTTIME_MESSAGE"), Some("00:00:00"));
         assert_eq!(data.text("CMD_PLAY_FILE_TYPE"), None);
@@ -523,7 +534,7 @@ mod tests {
         let mut lists = lists_playing("/films/Sample Film.mkv", 1, 2);
         lists.albums[0].entries[0] = Entry::new("/a/one.mkv");
         lists.albums[0].entries[1].played = true;
-        let data = data_model(&model, &lists);
+        let data = data_model(&model, &lists, 100.0);
         assert_eq!(data.text("CMD_VIDEO_OUT_FOURCC_MESSAGE"), Some("DXVA"));
         assert_eq!(data.playlist.entries[0].title, "one.mkv");
         assert_eq!(data.playlist.current, Some(1));

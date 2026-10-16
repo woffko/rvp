@@ -112,7 +112,7 @@ impl App {
             } else {
                 0.0
             },
-            volume: self.model.double(PropertyId::Volume).unwrap_or(100.0) / 100.0,
+            volume: self.volume_percent() / 100.0,
             rate: self.model.double(PropertyId::Speed).unwrap_or(1.0),
             can_next: loaded && self.library().neighbour(1).is_some(),
             can_previous: loaded && self.library().neighbour(-1).is_some(),
@@ -145,7 +145,7 @@ impl App {
             }
             MediaCommand::SetVolume(volume) => {
                 let percent = (volume * 100.0).clamp(0.0, self.settings.volume_max.max(100.0));
-                drop(engine.set_volume(percent));
+                drop(engine.set_volume(crate::volume::mpv_volume(percent)));
             }
             MediaCommand::SetRate(rate) => {
                 drop(engine.set_double("speed", rate.clamp(RATE_RANGE.0, RATE_RANGE.1)));

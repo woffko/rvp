@@ -84,6 +84,20 @@ ApplicationWindow {
     function set(path, newValue) {
         report(player.set_setting(path, JSON.stringify(newValue)), "Applied.")
     }
+    // The slider of a setting (self-test).
+    function amount(path) {
+        const find = (item) => {
+            if (item.objectName === "amount:" + path)
+                return item
+            for (const child of item.children) {
+                const found = find(child)
+                if (found)
+                    return found
+            }
+            return null
+        }
+        return find(contentItem)
+    }
     // A list setting with one item added, removed or moved by `delta`.
     function listAdd(path, items) {
         const list = (value(path) || []).slice()
@@ -132,36 +146,100 @@ ApplicationWindow {
         checked: win.value(path) === true
         onToggled: win.set(path, checked)
     }
-    component Number: RowLayout {
-        id: number
+    // Seconds as the seek and sync steps show them.
+    function seconds(v) {
+        if (v < 1)
+            return Math.round(v * 1000) + " ms"
+        if (v < 60)
+            return Math.round(v * 100) / 100 + " s"
+        if (v < 3600)
+            return Math.round(v / 6) / 10 + " min"
+        return Math.round(v / 360) / 10 + " h"
+    }
+    // A number set with a slider (the owner prefers sliders to typed
+    // numbers, 2026-10-16), its value beside it. The slider runs from `from`
+    // to `to` in `step`s, or over the entries of `values`. It applies when
+    // the mouse lets go of it, at once with the keys, and while it moves
+    // when `live`. (A type named after a JavaScript global, such as Number,
+    // hides that global in this file: Number(text) failed, and typed values
+    // never applied.)
+    component Amount: RowLayout {
+        id: amount
         property string label
         property string path
         property string unit
+        property real from: 0
+        property real to: 100
+        property real step: 1
+        // Instead of a range: the values it stops at, ascending.
+        property var values: []
         // Shown value = stored value * factor (percent of a scale).
         property real factor: 1
+        // Text of a shown value; the unit follows the number by default.
+        property var format: null
+        property bool live: false
+        readonly property bool stepped: values.length > 0
+        readonly property real shown: {
+            const v = win.value(amount.path)
+            return v === undefined || v === null ? NaN : v * amount.factor
+        }
+        objectName: "amount:" + path
+        // The slider position of a shown value: the nearest stop.
+        function position(v) {
+            if (!stepped)
+                return Math.min(Math.max(v, from), to)
+            let best = 0
+            for (let i = 1; i < values.length; ++i)
+                if (Math.abs(values[i] - v) < Math.abs(values[best] - v))
+                    best = i
+            return best
+        }
+        function shownAt(position) {
+            return stepped ? values[Math.round(position)] : Math.round(position / step) * step
+        }
+        function text(v) {
+            if (format)
+                return format(v)
+            return String(Math.round(v * 1000) / 1000) + (unit !== "" ? " " + unit : "")
+        }
+        function commit() {
+            const v = shownAt(slider.value)
+            if (isNaN(shown) || Math.abs(v - shown) > 1e-9)
+                win.set(amount.path, v / factor)
+        }
+        // Moves the slider to the stop nearest `v` and applies it, as a
+        // move with the keys does (self-test).
+        function pick(v) {
+            slider.value = position(v)
+            commit()
+        }
         Label {
-            text: number.label
+            text: amount.label
             Layout.preferredWidth: 240
         }
-        TextField {
-            Layout.preferredWidth: 90
-            text: {
-                const v = win.value(number.path)
-                return v === undefined ? "" : String(Math.round(v * number.factor * 1000) / 1000)
+        Slider {
+            id: slider
+            Layout.preferredWidth: 280
+            from: amount.stepped ? 0 : amount.from
+            to: amount.stepped ? amount.values.length - 1 : amount.to
+            stepSize: amount.stepped ? 1 : amount.step
+            snapMode: Slider.SnapAlways
+            value: isNaN(amount.shown) ? from : amount.position(amount.shown)
+            onMoved: {
+                if (!pressed || amount.live)
+                    amount.commit()
             }
-            validator: DoubleValidator {
-                locale: "C"
-                notation: DoubleValidator.StandardNotation
-            }
-            onEditingFinished: {
-                const v = Number(text) / number.factor
-                if (text !== "" && !isNaN(v) && v !== win.value(number.path))
-                    win.set(number.path, v)
+            onPressedChanged: {
+                if (!pressed)
+                    amount.commit()
             }
         }
         Label {
-            text: number.unit
-            opacity: 0.7
+            // The stored value until the slider leaves its stop.
+            text: amount.text(slider.pressed || isNaN(amount.shown)
+                              || amount.position(amount.shown) !== slider.value
+                              ? amount.shownAt(slider.value) : amount.shown)
+            Layout.minimumWidth: 80
         }
     }
     component Choice: RowLayout {
@@ -374,10 +452,10 @@ ApplicationWindow {
 
                 Page {
                     Heading { text: "Seek steps" }
-                    Number { label: "Left / Right"; path: "seek-seconds.0"; unit: "s" }
-                    Number { label: "Ctrl+Left / Right"; path: "seek-seconds.1"; unit: "s" }
-                    Number { label: "Shift+Left / Right"; path: "seek-seconds.2"; unit: "s" }
-                    Number { label: "Ctrl+Alt+Left / Right"; path: "seek-seconds.3"; unit: "s" }
+                    Amount { label: "Left / Right"; path: "seek-seconds.0"; values: [0.5, 1, 2, 3, 5, 10, 15, 20, 30, 45, 60, 90, 120, 180, 300, 600, 900, 1800, 3600]; format: win.seconds }
+                    Amount { label: "Ctrl+Left / Right"; path: "seek-seconds.1"; values: [0.5, 1, 2, 3, 5, 10, 15, 20, 30, 45, 60, 90, 120, 180, 300, 600, 900, 1800, 3600]; format: win.seconds }
+                    Amount { label: "Shift+Left / Right"; path: "seek-seconds.2"; values: [0.5, 1, 2, 3, 5, 10, 15, 20, 30, 45, 60, 90, 120, 180, 300, 600, 900, 1800, 3600]; format: win.seconds }
+                    Amount { label: "Ctrl+Alt+Left / Right"; path: "seek-seconds.3"; values: [0.5, 1, 2, 3, 5, 10, 15, 20, 30, 45, 60, 90, 120, 180, 300, 600, 900, 1800, 3600]; format: win.seconds }
                     Check { path: "keyframe-seeks"; text: "Seek to keyframes (faster, less exact)" }
                     Heading { text: "Resume" }
                     Check { path: "remember-positions"; text: "Resume every file at its last position" }
@@ -489,11 +567,12 @@ ApplicationWindow {
                     Heading { text: "Normalizer" }
                     Check { path: "normalizer.enabled"; text: "Normalize the volume (Shift+N)" }
                     Check { path: "normalizer.boost"; text: "Boost audio (raise quiet passages)" }
-                    Number { label: "Level"; path: "normalizer.level"; unit: "% (10-100)" }
-                    Number { label: "Release time"; path: "normalizer.release"; unit: "(5-10)" }
+                    Amount { label: "Level"; path: "normalizer.level"; unit: "%"; from: 10; to: 100 }
+                    Amount { label: "Release time"; path: "normalizer.release"; from: 5; to: 10 }
                     Heading { text: "Volume" }
-                    Number { label: "Step (Up, Down, wheel)"; path: "volume-step"; unit: "%" }
-                    Number { label: "Maximum (above 100 amplifies)"; path: "volume-max"; unit: "%" }
+                    Amount { label: "Step (Up, Down, wheel)"; path: "volume-step"; unit: "%"; from: 1; to: 20 }
+                    Amount { label: "Maximum (above 100 amplifies)"; path: "volume-max"; unit: "%"
+                             values: [100, 110, 120, 130, 150, 175, 200, 250, 300, 400, 500, 700, 1000] }
                     Heading { text: "Output" }
                     Choice {
                         label: "Audio device"
@@ -507,7 +586,22 @@ ApplicationWindow {
                             return texts
                         }
                     }
-                    Number { label: "Audio sync step (Shift+, and Shift+.)"; path: "audio-delay-step"; unit: "s" }
+                    Choice {
+                        label: "Speakers"
+                        path: "output-speakers"
+                        values: (win.view.choices["output-speakers"] || []).map(c => c.value)
+                        texts: {
+                            const texts = {}
+                            for (const c of win.view.choices["output-speakers"] || [])
+                                texts[c.value] = c.label
+                            return texts
+                        }
+                    }
+                    Note {
+                        text: "Stereo mixes 5.1 and 7.1 down as PotPlayer does (centre and LFE at -3 dB, "
+                              + "surround channels at their level) before the equalizer and the normalizer."
+                    }
+                    Amount { label: "Audio sync step (Shift+, and Shift+.)"; path: "audio-delay-step"; values: [0.001, 0.005, 0.01, 0.02, 0.025, 0.05, 0.1, 0.2, 0.25, 0.5, 1, 2, 5, 10]; format: win.seconds }
                     Heading { text: "Equalizer" }
                     Check { path: "equalizer.enabled"; text: "Use the equalizer (Shift+E), before the normalizer" }
                     Note { text: "Bands and presets: the control panel (F7) and the Audio menu." }
@@ -544,11 +638,11 @@ ApplicationWindow {
                     }
                     Heading { text: "Colour" }
                     Check { path: "color.enabled"; text: "Use the colour adjustments (Q switches them off and back)" }
-                    Number { label: "Brightness (W, E)"; path: "color.brightness"; unit: "(-100 to 100)" }
-                    Number { label: "Contrast (R, T)"; path: "color.contrast"; unit: "(-100 to 100)" }
-                    Number { label: "Saturation (Y, U)"; path: "color.saturation"; unit: "(-100 to 100)" }
-                    Number { label: "Hue (I, O)"; path: "color.hue"; unit: "(-100 to 100)" }
-                    Number { label: "Gamma"; path: "color.gamma"; unit: "(-100 to 100)" }
+                    Amount { label: "Brightness (W, E)"; path: "color.brightness"; from: -100; live: true }
+                    Amount { label: "Contrast (R, T)"; path: "color.contrast"; from: -100; live: true }
+                    Amount { label: "Saturation (Y, U)"; path: "color.saturation"; from: -100; live: true }
+                    Amount { label: "Hue (I, O)"; path: "color.hue"; from: -100; live: true }
+                    Amount { label: "Gamma"; path: "color.gamma"; from: -100; live: true }
                     Heading { text: "Effects" }
                     Effect { effect: "deblock"; text: "Deblock (Ctrl+H)" }
                     Effect { effect: "denoise"; text: "Denoise 3D (Ctrl+N)" }
@@ -637,7 +731,7 @@ ApplicationWindow {
                         onClicked: win.chooseFiles("vapoursynth.plugins", "VapourSynth plugins",
                                                    [win.view.windows ? "Plugins (*.dll)" : "Plugins (*.so)", "All files (*)"])
                     }
-                    Number { label: "Buffered frames"; path: "vapoursynth.buffered-frames"; unit: "(1-64)" }
+                    Amount { label: "Buffered frames"; path: "vapoursynth.buffered-frames"; from: 1; to: 64 }
                     Field {
                         label: "VSScript library"
                         path: "vapoursynth.library"
@@ -666,7 +760,7 @@ ApplicationWindow {
                         texts: ({ "no": "No", "exact": "With the video's name",
                                   "fuzzy": "Containing the video's name", "all": "All in the folder" })
                     }
-                    Number { label: "Size"; path: "subtitle-scale"; unit: "%"; factor: 100 }
+                    Amount { label: "Size"; path: "subtitle-scale"; unit: "%"; factor: 100; from: 30; to: 300; step: 5 }
                     Field {
                         label: "Font"
                         path: "subtitle-font"
@@ -681,7 +775,7 @@ ApplicationWindow {
                             }
                         }
                     }
-                    Number { label: "Sync step (< and >)"; path: "subtitle-delay-step"; unit: "s" }
+                    Amount { label: "Sync step (< and >)"; path: "subtitle-delay-step"; values: [0.01, 0.05, 0.1, 0.2, 0.25, 0.5, 1, 2, 5, 10, 30, 60]; format: win.seconds }
                 }
 
                 Loader {

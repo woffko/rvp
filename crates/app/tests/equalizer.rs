@@ -8,6 +8,7 @@ use std::time::{Duration, Instant};
 
 use rvp_app::equalizer::LABEL;
 use rvp_app::normalizer::{LABEL as NORMALIZER, TEMPO_LABEL as TEMPO};
+use rvp_app::speakers::LABEL as DOWNMIX;
 use rvp_app::{Action, App, Settings};
 use rvp_engine::{Engine, EngineEvent, EngineOptions, PlayerModel, PropertyId};
 
@@ -183,11 +184,12 @@ fn the_equalizer_runs_before_the_normalizer_and_keeps_sync() {
         assert!(Instant::now() < deadline, "the fixture plays");
         play(&mut app, &engine, 20);
     }
-    assert_eq!(labels(&engine), [NORMALIZER, TEMPO]);
+    // PotPlayer's downmix (stereo speakers, the default) comes first.
+    assert_eq!(labels(&engine), [DOWNMIX, NORMALIZER, TEMPO]);
 
     app.dispatch(&engine, Action::ToggleEqualizer);
     let largest = play(&mut app, &engine, 1500);
-    assert_eq!(labels(&engine), [LABEL, NORMALIZER, TEMPO]);
+    assert_eq!(labels(&engine), [DOWNMIX, LABEL, NORMALIZER, TEMPO]);
     assert!(
         largest < 0.2,
         "equalizer on: A/V offset up to {largest:.3} s"
@@ -213,7 +215,7 @@ fn the_equalizer_runs_before_the_normalizer_and_keeps_sync() {
 
     app.dispatch(&engine, Action::ToggleEqualizer);
     let largest = play(&mut app, &engine, 1500);
-    assert_eq!(labels(&engine), [NORMALIZER, TEMPO]);
+    assert_eq!(labels(&engine), [DOWNMIX, NORMALIZER, TEMPO]);
     assert!(
         largest < 0.2,
         "equalizer off: A/V offset up to {largest:.3} s"

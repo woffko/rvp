@@ -12,6 +12,9 @@ Window {
     id: panel
     required property Player player
     required property Window owner
+    // The menus' loader: a press that closed a menu stays with it.
+    required property Loader menus
+    property bool swallowing: false
     // The first time it shows, the panel goes where it was last (saved in
     // the state; not on Wayland, which reports no positions) or to the
     // bottom right of the video; later it stays where it was.
@@ -106,10 +109,20 @@ Window {
         onPressed: (mouse) => {
             keys.forceActiveFocus()
             tip.close()
-            panel.player.panel_press(mouse.x, mouse.y, mouse.button)
+            panel.swallowing = panel.menus.item !== null && panel.menus.item.swallowsPress()
+            if (!panel.swallowing)
+                panel.player.panel_press(mouse.x, mouse.y, mouse.button)
         }
-        onReleased: (mouse) => panel.player.panel_release(mouse.x, mouse.y, mouse.button)
-        onDoubleClicked: (mouse) => panel.player.panel_double(mouse.x, mouse.y, mouse.button)
+        onReleased: (mouse) => {
+            if (panel.swallowing)
+                panel.swallowing = false
+            else
+                panel.player.panel_release(mouse.x, mouse.y, mouse.button)
+        }
+        onDoubleClicked: (mouse) => {
+            if (!panel.swallowing)
+                panel.player.panel_double(mouse.x, mouse.y, mouse.button)
+        }
         onPositionChanged: (mouse) => {
             tip.close()
             tipTimer.restart()

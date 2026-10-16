@@ -771,7 +771,11 @@ impl qobject::Player {
         let Some(chrome) = core.chrome.as_mut() else {
             return;
         };
-        let mut data = view::data_model(&core.app.model, core.app.library().lists());
+        let mut data = view::data_model(
+            &core.app.model,
+            core.app.library().lists(),
+            core.app.settings.volume_max,
+        );
         core.app.seek_bar_data(&mut data);
         data.playlist.drop_before = core.drop_before;
         if !core.clock.is_empty() {
@@ -1233,8 +1237,10 @@ impl qobject::Player {
                     }
                 }
                 Effect::VolumeFraction(fraction) => {
-                    if let Some(core) = self.as_mut().core_mut() {
-                        core.app.set_volume_fraction(core.engine, fraction);
+                    if let Some(core) = self.as_mut().core_mut()
+                        && let Some(request) = core.app.set_volume_fraction(core.engine, fraction)
+                    {
+                        self.as_mut().handle_request(request);
                     }
                 }
                 Effect::Slider { command, fraction } => {
@@ -2230,7 +2236,7 @@ impl qobject::Player {
             ("pause", flag(model.flag(PropertyId::Pause))),
             ("playing", model.playing().to_string()),
             ("loaded", model.media_loaded().to_string()),
-            ("volume", number(model.double(PropertyId::Volume))),
+            ("volume", number(Some(core.app.volume_percent()))),
             ("mute", flag(model.flag(PropertyId::Mute))),
             ("video_width", integer(model.int(PropertyId::VideoWidth))),
             (
@@ -2333,6 +2339,7 @@ impl qobject::Player {
             ("editor_open", core.editor.is_some().to_string()),
             ("osd", text(Some(&self.osd().to_string()))),
             ("volume_step", number(Some(core.app.settings.volume_step))),
+            ("volume_max", number(Some(core.app.settings.volume_max))),
             ("speed", number(model.double(PropertyId::Speed))),
             (
                 "container_fps",

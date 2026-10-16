@@ -430,10 +430,13 @@ Window {
         cursorShape: root.pointerIdle && player.fullscreen ? Qt.BlankCursor : player.cursor_shape
         onPressed: (mouse) => {
             keys.forceActiveFocus()
-            player.mouse_press(mouse.x, mouse.y, mouse.button, mouse.modifiers)
+            root.pointerPress(mouse.x, mouse.y, mouse.button, mouse.modifiers)
         }
-        onReleased: (mouse) => player.mouse_release(mouse.x, mouse.y, mouse.button)
-        onDoubleClicked: (mouse) => player.mouse_double(mouse.x, mouse.y, mouse.button)
+        onReleased: (mouse) => root.pointerRelease(mouse.x, mouse.y, mouse.button)
+        onDoubleClicked: (mouse) => {
+            if (!root.swallowing)
+                player.mouse_double(mouse.x, mouse.y, mouse.button)
+        }
         onPositionChanged: (mouse) => {
             if (root.logPointer)
                 Tools.log("pointer_local=" + Math.round(mouse.x) + "," + Math.round(mouse.y)
@@ -451,6 +454,24 @@ Window {
                 tipLoader.item.tip.close()
             player.mouse_leave()
         }
+    }
+
+    // A press that closed a menu stays with the menu, and so does its
+    // release (Menus.swallowsPress).
+    property bool swallowing: false
+    function menuTookPress() {
+        return menuLoader.item !== null && menuLoader.item.swallowsPress()
+    }
+    function pointerPress(x, y, button, modifiers) {
+        swallowing = menuTookPress()
+        if (!swallowing)
+            player.mouse_press(x, y, button, modifiers)
+    }
+    function pointerRelease(x, y, button) {
+        if (swallowing)
+            swallowing = false
+        else
+            player.mouse_release(x, y, button)
     }
 
     // Fullscreen hides the pointer after two idle seconds.
@@ -530,7 +551,7 @@ Window {
     Loader {
         id: panelLoader
         active: player.panel_shown || item !== null
-        Component.onCompleted: setSource("ControlPanel.qml", { player: player, owner: root })
+        Component.onCompleted: setSource("ControlPanel.qml", { player: player, owner: root, menus: menuLoader })
     }
 
     DropArea {
@@ -1405,12 +1426,25 @@ Window {
             const listCount = menuLoader.item.build("playlist").count
             t.check("playlist_menu_builds", listCount > 5 && root.countCommands(list) > 15,
                     listCount + " top items, " + root.countCommands(list) + " commands")
+            // A press on the video that closed a menu stays with the menu,
+            // and so does its release: no play/pause (as a menu begins to
+            // close when Qt hands such a press on).
+            menuLoader.item.closedAt = Date.now()
+            const video = root.middle(player.video_rect)
+            t.before = s
+            root.pointerPress(video.x, video.y, Qt.LeftButton, 0)
+            const kept = root.swallowing
+            root.pointerRelease(video.x, video.y, Qt.LeftButton)
+            t.check("menu_closing_press_kept", kept && !root.swallowing, "kept " + kept)
             t.next()
             break
         }
         case 201:
-            if (root.settled("menus"))
+            if (root.settled("menus")) {
+                t.check("menu_closing_press_no_pause", s.pause === t.before.pause,
+                        "pause " + t.before.pause + " -> " + s.pause)
                 player.run_menu_command("w:speed-up")
+            }
             break
         case 202:
             // A menu command runs its action.
@@ -1465,11 +1499,12 @@ Window {
         case 209: {
             if (!root.settled("settings_grab"))
                 break
-            // A changed setting applies at once: a bigger volume step (the
-            // action, as Down goes to the playlist while it has the keys).
+            // A changed setting applies at once: a bigger volume step, set
+            // with its slider (the action, as Down goes to the playlist while
+            // it has the keys).
             const win = settingsLoader.item
             win.showPage(win.pages.findIndex(p => p.key === "audio"))
-            win.set("volume-step", 5)
+            win.amount("volume-step").pick(5)
             t.before = t.status()
             player.run_action("volume-down")
             break
@@ -1479,13 +1514,22 @@ Window {
                           && Math.abs(s.volume - (t.before.volume - 5)) < 0.01, 2000,
                       () => "step " + s.volume_step + " volume " + t.before.volume + " -> " + s.volume)
             break
-        case 211:
+        case 211: {
             if (!root.settled("setting_change"))
                 break
-            settingsLoader.item.set("volume-step", 1)
+            // The sliders apply what they show: the volume maximum went back
+            // to 200 % when it was typed (Number() failed in that file).
+            const win = settingsLoader.item
+            win.amount("volume-max").pick(100)
+            const lowered = t.status().volume_max
+            win.amount("volume-max").pick(200)
+            win.amount("volume-step").pick(1)
+            t.check("settings_sliders_apply", lowered === 100 && t.status().volume_max === 200,
+                    "volume-max " + lowered + " then " + t.status().volume_max)
             t.check("setting_restored", t.status().volume_step === 1, "step " + t.status().volume_step)
             settingsLoader.item.close()
             break
+        }
         case 212:
             t.waitFor("settings_window_closes", () => !settingsLoader.item.visible && !s.editor_open, 2000)
             break
@@ -1529,7 +1573,7 @@ Window {
                                                      album: s.playing_album, pause: s.pause }))
             if (!player.has_skin) {
                 Tools.log("check f7_opens_panel=SKIPPED no skin")
-                t.step = 313
+                t.step = 315
                 break
             }
             player.key(Qt.Key_F7, 0)
@@ -1579,8 +1623,11 @@ Window {
             }
             break
         case 308:
+            // The chain: PotPlayer's downmix (stereo speakers, the
+            // default), the equalizer, the normalizer.
             t.waitFor("equalizer_slider_applies", () => s.eq_enabled && s.eq_bands[4] > 11
-                          && s.af !== null && s.af.indexOf("rvpeq") >= 0
+                          && s.af !== null && s.af.indexOf("rvpdownmix") >= 0
+                          && s.af.indexOf("rvpdownmix") < s.af.indexOf("rvpeq")
                           && s.af.indexOf("rvpeq") < s.af.indexOf("rvpnorm"), 3000,
                       () => "band " + s.eq_bands[4] + " af " + s.af)
             break
@@ -1590,18 +1637,34 @@ Window {
             break
         case 310:
             t.waitFor("equalizer_button_toggles", () => !s.eq_enabled && s.af !== null
-                          && s.af.indexOf("rvpeq") < 0 && s.af.indexOf("rvpnorm") >= 0, 3000,
+                          && s.af.indexOf("rvpeq") < 0 && s.af.indexOf("rvpnorm") >= 0
+                          && s.af.indexOf("rvpdownmix") >= 0
+                          && s.af.indexOf("rvpdownmix") < s.af.indexOf("rvpnorm"), 3000,
                       () => "af " + s.af)
             break
         case 311:
-            player.key(Qt.Key_F7, 0)
+            // The panel's volume slider runs to the highest volume and shows
+            // the volume on the OSD, as the keys do (owner, 2026-10-16).
+            t.before = s
+            root.panelSlide("CMD_MASTER_VOLUME", 1, true)
             t.next()
             break
         case 312:
+            if (t.waitFor("volume_slider_reaches_max", () => s.volume !== null && s.volume_max !== null
+                              && Math.abs(s.volume - s.volume_max) < 0.5
+                              && String(s.osd).indexOf("Volume") >= 0, 2000,
+                          () => "volume " + s.volume + " max " + s.volume_max + " osd " + s.osd))
+                root.panelSlide("CMD_MASTER_VOLUME", t.before.volume / s.volume_max, true)
+            break
+        case 313:
+            player.key(Qt.Key_F7, 0)
+            t.next()
+            break
+        case 314:
             t.waitFor("f7_closes_panel", () => !s.panel_shown
                           && (panelLoader.item === null || !panelLoader.item.visible), 2000)
             break
-        case 313: {
+        case 315: {
             // A shader of RVP's own that changes nothing.
             const path = Tools.write_file(t.outDir + "/selftest.glsl",
                 "//!HOOK MAIN\n//!BIND HOOKED\n//!DESC RVP self-test (no change)\n"
@@ -1612,21 +1675,21 @@ Window {
             t.next()
             break
         }
-        case 314:
+        case 316:
             t.waitFor("shift_p_shaders_on", () => s.shaders_enabled
                           && String(JSON.parse(player.diagnostics()).glsl_shaders).indexOf("selftest.glsl") >= 0,
                       2000, () => "shaders " + JSON.parse(player.diagnostics()).glsl_shaders)
             break
-        case 315:
+        case 317:
             if (root.settled("shaders_on"))
                 player.key(Qt.Key_P, Qt.ShiftModifier)
             break
-        case 316:
+        case 318:
             t.waitFor("shift_p_shaders_off", () => !s.shaders_enabled
                           && String(JSON.parse(player.diagnostics()).glsl_shaders) === "", 2000,
                       () => "shaders " + JSON.parse(player.diagnostics()).glsl_shaders)
             break
-        case 317: {
+        case 319: {
             // SVP mode on an endpoint of the test's own: SVP does not attach
             // (no Manager on the test machines), and RVP says why.
             const endpoint = Qt.platform.os === "windows" ? "rvp-selftest-svp" : t.outDir + "/svp.sock"
@@ -1635,14 +1698,14 @@ Window {
             t.next()
             break
         }
-        case 318:
+        case 320:
             t.waitFor("svp_diagnostic_shows", () => String(s.svp_status).startsWith("SVP did not attach")
                           && s.message === s.svp_status
                           && JSON.parse(player.settings_view(false)).svp_status === s.svp_status,
                       20000, () => "status " + s.svp_status + " message " + s.message + " playing "
                           + s.playing + " time " + s.time + " path " + s.path)
             break
-        case 319: {
+        case 321: {
             const result = JSON.parse(player.set_setting("ipc-server", "\"\""))
             const status = t.status().svp_status
             t.check("svp_mode_off", !result.error && status === "SVP mode is off", "status " + status)

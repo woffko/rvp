@@ -16,7 +16,7 @@ const LONG: &str = concat!(
 /// The seek bar's position and the current time as the skin would show
 /// them.
 fn shown(app: &App) -> (f32, String) {
-    let mut data = view::data_model(&app.model, app.library().lists());
+    let mut data = view::data_model(&app.model, app.library().lists(), app.settings.volume_max);
     app.seek_bar_data(&mut data);
     (
         data.sliders["CMD_TIMEBAR_CTRL"].value,

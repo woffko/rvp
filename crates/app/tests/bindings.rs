@@ -5,6 +5,7 @@ use std::time::{Duration, Instant};
 
 use rvp_app::playlist::local_path;
 use rvp_app::video::{ColorChange, ColorKind, Rotation, ShaderChange, VideoEffect};
+use rvp_app::volume::mpv_volume;
 use rvp_app::{
     AbRepeat, Action, App, Bindings, Delay, Jump, Key, KeyChord, MouseGesture, SeekStep, Settings,
     Speed, SubtitleStyle, UiRequest, Zoom,
@@ -100,6 +101,13 @@ fn is_file(model: &PlayerModel, path: &str) -> bool {
     model.loaded_path() == Some(local_path(path).as_str())
 }
 
+/// mpv's volume is the one PotPlayer's `percent` gives.
+fn shown_volume(model: &PlayerModel, percent: f64) -> bool {
+    model
+        .double(PropertyId::Volume)
+        .is_some_and(|volume| (volume - mpv_volume(percent)).abs() < 1e-6)
+}
+
 fn audio_filters(model: &PlayerModel) -> &str {
     model.text(PropertyId::AudioFilters).unwrap_or_default()
 }
@@ -184,15 +192,14 @@ impl Harness {
                     self.back_to_30();
                 }
             }
+            // The volume steps in PotPlayer's percent (rvp_app::volume).
             Action::VolumeUp => {
                 self.dispatch(action);
-                self.wait("volume up", |m| m.double(PropertyId::Volume) == Some(51.0));
+                self.wait("volume up", |m| shown_volume(m, 51.0));
             }
             Action::VolumeDown => {
                 self.dispatch(action);
-                self.wait("volume down", |m| {
-                    m.double(PropertyId::Volume) == Some(50.0)
-                });
+                self.wait("volume down", |m| shown_volume(m, 50.0));
             }
             Action::ToggleMute => {
                 self.dispatch(action);
@@ -606,9 +613,9 @@ fn every_default_binding_triggers_its_action() {
     });
     h.app.apply_normalizer(&h.engine);
     h.engine.set_pause(true).expect("pause");
-    h.engine.set_volume(50.0).expect("volume");
+    h.engine.set_volume(mpv_volume(50.0)).expect("volume");
     h.wait("paused at 50 %", |m| {
-        m.flag(PropertyId::Pause) == Some(true) && m.double(PropertyId::Volume) == Some(50.0)
+        m.flag(PropertyId::Pause) == Some(true) && shown_volume(m, 50.0)
     });
     h.back_to_30();
 

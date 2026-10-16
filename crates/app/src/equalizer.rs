@@ -148,13 +148,17 @@ impl Equalizer {
 }
 
 impl App {
-    /// Adds or removes the equalizer filter to match the settings.
+    /// Adds or removes the equalizer filter to match the settings. It goes
+    /// in front of the chain, and the speakers' downmix then goes in front
+    /// of it again: every rebuild keeps the order (the band slider's
+    /// rebuild after a failed `af-command` had left the downmix behind).
     pub fn apply_equalizer(&self, engine: &Engine) {
         let eq = &self.settings.equalizer;
         let entry = eq.enabled.then(|| eq.chain_entry());
         if let Err(error) = engine.set_audio_filter_first(LABEL, entry.as_deref()) {
             eprintln!("rvp: cannot set the equalizer: {error}");
         }
+        self.apply_speakers(engine);
     }
 
     /// Switches the equalizer on or off.

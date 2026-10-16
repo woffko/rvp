@@ -114,9 +114,12 @@ each goal writes `docs/goals/goal-<letter>-status.md`.
   `m8-all.ps1` (the packages, see below).
 - Video filters: RVP adds and removes only its own, by label (`@rvp*`,
   `vf pre`), and never touches SVP's `@svp` (goal H's rule 4).
-- Audio filters: the equalizer first, the normalizer, then `@rvptempo`
-  (`scaletempo2`, which keeps speed changes from putting audio and video
-  out of step). Changes go through `App::defer_chain_change` and
+- Audio filters: PotPlayer's downmix first (`@rvpdownmix`, the stereo
+  speakers, `crates/app/src/speakers.rs`), the equalizer, the normalizer,
+  then `@rvptempo` (`scaletempo2`, which keeps speed changes from putting
+  audio and video out of step). The downmix and the equalizer both go in
+  with `af pre`, so `apply_equalizer` puts the downmix in front again
+  every time. Changes go through `App::defer_chain_change` and
   `App::resync_audio`: a chain change or seek at the very end of a file
   leaves mpv's `eof-reached` false and the album stops, so in the last
   `NEAR_END` (1.5 s) they wait for the next file. While a file loads, the
@@ -148,7 +151,18 @@ each goal writes `docs/goals/goal-<letter>-status.md`.
 - Settings change through `Player.set_setting` and `App::apply_settings`
   (`crates/app/src/preferences.rs`): a new setting needs a check in
   `Settings::validate`, a page in `shell/qml/Settings.qml`, and, when mpv
-  can take it at run time, a line in `apply_settings`.
+  can take it at run time, a line in `apply_settings`. Numbers are sliders
+  (`Amount`, the owner's preference); the self-test moves them with
+  `pick`, not `set`.
+- Never name a QML component or file after a JavaScript global (`Number`,
+  `String`, `Date`, `Math`, `JSON`...): it hides the global in that file
+  (`Number(text)` threw, and the settings window applied no typed number).
+- The volume is PotPlayer's percent everywhere RVP shows or takes it
+  (`crates/app/src/volume.rs`: square law up to 100 %, linear above, as
+  measured in `docs/audits/audio.md`); mpv gets the volume of the same
+  gain, the state file keeps mpv's, and `volume-max` comes from
+  `volume::mpv_volume_max` (a thousandth above, or mpv refuses the highest
+  volume).
 - RVP's own QML files shadow Qt types of the same name inside the `Rvp`
   module (`FolderDialog.qml`): import Qt's under a qualifier.
 - Portable mode: `rvp.portable` next to the executable keeps the settings
@@ -197,6 +211,20 @@ each goal writes `docs/goals/goal-<letter>-status.md`.
 - `tools/packaging/check-deb.sh` checks the Linux packages on another
   Ubuntu release inside a container (CI: `ubuntu:26.10`): install,
   libraries, the self-tests under Xvfb.
+
+## Audio audit (docs/audits/audio.md)
+
+- PotPlayer's sound was measured on the host (with permission) by
+  `spikes/host-session` `audio`: WASAPI loopback while RVP and PotPlayer
+  play `tools/audio-audit/make-tones.sh`'s tones, PotPlayer's volume set
+  with its remote messages (`WM_USER`, `0x5001` set, `0x5000` read). Before
+  such a run, export `HKCU\Software\DAUM\PotPlayerMini64` and copy its
+  Playlist folder; afterwards write back what changed (PotPlayer adds the
+  tones to its playlist and saves its window).
+- Loopback gives no samples while nothing plays: find the parts of a
+  recording by their levels (`tools/audio-audit/audit.py`), not by the
+  log's times. `tools/audio-audit/fit_downmix.py` fits PotPlayer's 5.1 mix
+  with the S5 TomSteady model.
 
 ## Test environments
 

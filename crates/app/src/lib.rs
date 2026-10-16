@@ -29,11 +29,13 @@ pub mod pointer;
 pub mod preferences;
 mod resume;
 mod settings;
+pub mod speakers;
 mod storage;
 pub mod svp;
 pub mod tomsteady;
 pub mod video;
 pub mod view;
+pub mod volume;
 
 pub use action::{
     ACTIONS, AbRepeat, Action, ActionInfo, AfterPlayback, Aspect, Delay, Fit, ImageFormat, Jump,

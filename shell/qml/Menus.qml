@@ -18,6 +18,17 @@ Item {
     property bool logWindows: false
     // The menu built last (self-test).
     property Menu current: null
+    // When a menu last began to close (Date.now()).
+    property real closedAt: 0
+
+    // Whether a press now belongs to a menu: one is open (or fading out),
+    // or one began to close a moment ago. Qt closes a menu on a press
+    // outside it and lets the press go on to the window beneath, where a
+    // click on the video paused; PotPlayer's menus keep that click, so the
+    // windows ignore such a press and its release (owner, 2026-10-16).
+    function swallowsPress() {
+        return (current !== null && current.visible) || Date.now() - closedAt < 250
+    }
 
     component Entry: MenuItem {
         id: entry
@@ -65,6 +76,7 @@ Item {
             // The items still to add (JSON), the first time it opens.
             property var pending: []
             onAboutToShow: holder.fillPending(submenu)
+            onAboutToHide: holder.closedAt = Date.now()
         }
     }
     Component {

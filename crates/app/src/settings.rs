@@ -79,6 +79,10 @@ pub struct Settings {
     pub subtitle_delay_step: f64,
     /// mpv `audio-device` (`auto`: the system's default output).
     pub audio_device: String,
+    /// PotPlayer's Output Speakers (`crate::speakers`): `stereo`
+    /// (PotPlayer's mix, the default), `mono`, `2.1`, `5.1`, `7.1` or
+    /// `same` (as the source).
+    pub output_speakers: String,
     /// mpv `video-sync` (`audio`: the video follows the audio clock).
     pub video_sync: String,
     /// mpv `scale` (the upscaler); empty: mpv's default.
@@ -135,6 +139,7 @@ impl Default for Settings {
             audio_delay_step: 0.05,
             subtitle_delay_step: 0.5,
             audio_device: "auto".to_owned(),
+            output_speakers: crate::speakers::DEFAULT.to_owned(),
             video_sync: "audio".to_owned(),
             scaler: String::new(),
             subtitle_languages: String::new(),
