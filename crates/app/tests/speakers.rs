@@ -13,9 +13,14 @@ use rvp_engine::{EndReason, Engine, EngineEvent, EngineOptions, PlayerModel, Pro
 const RATE: u32 = 48_000;
 /// Channels of the source, in WAV order: FL FR FC LFE SL SR.
 const CHANNELS: usize = 6;
-/// Each channel plays alone for a second, then half a second is silent.
+/// After a second of silence each channel plays alone for a second, then
+/// half a second is silent; the file ends with a second and a half of
+/// silence. (mpv may cut up to a second of what `ao=pcm` writes; the
+/// silences keep that off the bursts.)
+const HEAD: u32 = RATE;
 const BURST: u32 = RATE;
 const GAP: u32 = RATE / 2;
+const TAIL: u32 = RATE * 3 / 2;
 /// The tones' peak: -6 dBFS, so that no mix clips.
 const AMPLITUDE: f64 = 0.5;
 
@@ -29,7 +34,7 @@ fn scratch(name: &str) -> PathBuf {
 /// A 16-bit 5.1 WAV (`WAVE_FORMAT_EXTENSIBLE`, side surround channels):
 /// a 1 kHz tone (the LFE 50 Hz) in one channel after the other.
 fn write_surround(path: &Path) {
-    let frames = (BURST + GAP) * u32::try_from(CHANNELS).expect("6");
+    let frames = HEAD + (BURST + GAP) * u32::try_from(CHANNELS).expect("6") + TAIL;
     let data_len = frames * 2 * u32::try_from(CHANNELS).expect("6");
     let mut bytes = Vec::with_capacity(68 + data_len as usize);
     bytes.extend_from_slice(b"RIFF");
@@ -53,9 +58,15 @@ fn write_surround(path: &Path) {
     ]);
     bytes.extend_from_slice(b"data");
     bytes.extend_from_slice(&data_len.to_le_bytes());
+    bytes.resize(bytes.len() + HEAD as usize * 2 * CHANNELS, 0);
     for channel in 0..CHANNELS {
         let frequency = if channel == 3 { 50.0 } else { 1000.0 };
-        for n in 0..BURST + GAP {
+        let length = if channel + 1 == CHANNELS {
+            BURST + GAP + TAIL
+        } else {
+            BURST + GAP
+        };
+        for n in 0..length {
             let value = if n < BURST {
                 let phase = f64::from(n) * frequency * std::f64::consts::TAU / f64::from(RATE);
                 AMPLITUDE * phase.sin()
@@ -156,12 +167,24 @@ fn render(dir: &Path, input: &Path, entry: Option<&str>, name: &str) -> Vec<[f64
     read_stereo(&output)
 }
 
-/// Left and right RMS in dB of each channel's burst (its middle half).
+/// Left and right RMS in dB of each channel's burst (its middle half). The
+/// bursts are found from the first one's start, as mpv may drop a little
+/// of the file's start.
 fn burst_levels(frames: &[[f64; 2]]) -> Vec<[f64; 2]> {
     let period = (BURST + GAP) as usize;
+    let onset = frames
+        .iter()
+        .position(|frame| frame[0].abs() > 0.01 || frame[1].abs() > 0.01)
+        .expect("the first burst");
+    let first = onset;
+    assert!(
+        frames.len() >= first + (CHANNELS - 1) * period + BURST as usize,
+        "{} frames rendered, the bursts start at {first}",
+        frames.len()
+    );
     (0..CHANNELS)
         .map(|channel| {
-            let start = channel * period + BURST as usize / 4;
+            let start = first + channel * period + BURST as usize / 4;
             let part = &frames[start..start + BURST as usize / 2];
             let level = |side: usize| {
                 // Sample counts are far below 2^52.
