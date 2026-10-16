@@ -125,8 +125,13 @@ try {
         $shown = WaitFor { param($s) $s.Status -eq 'Playing' -and $s.Title -match 'clip-a' }
         Check 'playing_title' ($shown.Status -eq 'Playing' -and $shown.Title -match 'clip-a') "$($shown.Status) '$($shown.Title)'"
         # Windows offers the button that fits the status: Pause while
-        # playing, Play while paused.
-        $controls = $session.GetPlaybackInfo().Controls
+        # playing, Play while paused. Next comes once RVP knows the album.
+        $deadline = (Get-Date).AddSeconds(10)
+        do {
+            $controls = (Session).GetPlaybackInfo().Controls
+            if ($controls.IsPauseEnabled -and $controls.IsNextEnabled) { break }
+            Start-Sleep -Milliseconds 250
+        } while ((Get-Date) -lt $deadline)
         Check 'buttons_playing' ($controls.IsPauseEnabled -and $controls.IsNextEnabled) `
             "pause $($controls.IsPauseEnabled) next $($controls.IsNextEnabled) previous $($controls.IsPreviousEnabled)"
 

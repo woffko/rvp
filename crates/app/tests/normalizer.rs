@@ -12,7 +12,7 @@ use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
 use rvp_app::normalizer::{LABEL, Normalizer, TEMPO_ENTRY, TEMPO_LABEL};
-use rvp_engine::{EndReason, Engine, EngineEvent, EngineOptions, PlayerModel, PropertyId};
+use rvp_engine::{EndReason, Engine, EngineEvent, EngineOptions, PlayerModel};
 
 const RATE: u32 = 48_000;
 /// TomSteady's ceiling, 30000 of 32768, in dBFS.
@@ -106,40 +106,39 @@ fn peak_db(samples: &[f64]) -> f64 {
         .log10()
 }
 
-/// Waits until mpv reaches the end of the file (keep-open sets
-/// eof-reached), or until `stop` returns true.
-fn play_until(
-    engine: &Engine,
-    model: &mut PlayerModel,
-    mut stop: impl FnMut(&PlayerModel) -> bool,
-) {
+/// Waits until mpv ends the file at its end (without `keep-open`).
+fn play_to_the_end(engine: &Engine) {
+    let mut model = PlayerModel::new();
     let mut events = Vec::new();
     let deadline = Instant::now() + Duration::from_secs(60);
-    while model.flag(PropertyId::EofReached) != Some(true) && !stop(model) {
-        assert!(
-            Instant::now() < deadline,
-            "playback did not end: {events:?}"
-        );
-        assert!(
-            !events.iter().any(|event| matches!(
-                event,
+    loop {
+        engine.wait_and_drain(0.05, &mut model, &mut events);
+        for event in events.drain(..) {
+            match event {
+                EngineEvent::EndFile {
+                    reason: EndReason::Eof,
+                    ..
+                } => return,
                 EngineEvent::EndFile {
                     reason: EndReason::Error,
                     ..
-                }
-            )),
-            "playback failed: {events:?}"
-        );
-        engine.wait_and_drain(0.05, model, &mut events);
+                } => panic!("playback failed: {event:?}"),
+                _ => {}
+            }
+        }
+        assert!(Instant::now() < deadline, "playback did not end");
     }
 }
 
 /// Renders `input` through the normalizer's chain (at gain 1, no control)
-/// into a WAV and returns its samples.
+/// into a WAV and returns its samples. Without `keep-open` mpv drains its
+/// output before it ends the file; with it, what the output still held at
+/// the end was lost (a second or more on a slow CI runner).
 fn render(dir: &Path, input: &Path, tempo: bool) -> Vec<f64> {
     let output = dir.join(format!("out-{}.wav", u8::from(tempo)));
     let mut options = EngineOptions::headless();
     options.extra = vec![
+        ("keep-open".to_owned(), "no".to_owned()),
         ("ao".to_owned(), "pcm".to_owned()),
         ("ao-pcm-file".to_owned(), output.display().to_string()),
         ("audio-format".to_owned(), "s16".to_owned()),
@@ -159,7 +158,7 @@ fn render(dir: &Path, input: &Path, tempo: bool) -> Vec<f64> {
         .load(&input.display().to_string(), false)
         .expect("loadfile");
     engine.set_pause(false).expect("play");
-    play_until(&engine, &mut PlayerModel::new(), |_| false);
+    play_to_the_end(&engine);
     engine.quit().expect("quit");
     drop(engine);
     let (samples, rate) = read_wav(&output);

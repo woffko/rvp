@@ -8,7 +8,7 @@ use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
 use rvp_app::speakers::{LABEL, chain_entry};
-use rvp_engine::{EndReason, Engine, EngineEvent, EngineOptions, PlayerModel, PropertyId};
+use rvp_engine::{EndReason, Engine, EngineEvent, EngineOptions, PlayerModel};
 
 const RATE: u32 = 48_000;
 /// Channels of the source, in WAV order: FL FR FC LFE SL SR.
@@ -121,10 +121,12 @@ fn read_stereo(path: &Path) -> Vec<[f64; 2]> {
 }
 
 /// Renders `input` to stereo through `entry` (none: mpv's own mix).
+/// Without `keep-open` mpv drains its output before it ends the file.
 fn render(dir: &Path, input: &Path, entry: Option<&str>, name: &str) -> Vec<[f64; 2]> {
     let output = dir.join(format!("out-{name}.wav"));
     let mut options = EngineOptions::headless();
     options.extra = vec![
+        ("keep-open".to_owned(), "no".to_owned()),
         ("ao".to_owned(), "pcm".to_owned()),
         ("ao-pcm-file".to_owned(), output.display().to_string()),
         ("audio-format".to_owned(), "s16".to_owned()),
@@ -145,22 +147,22 @@ fn render(dir: &Path, input: &Path, entry: Option<&str>, name: &str) -> Vec<[f64
     let mut model = PlayerModel::new();
     let mut events = Vec::new();
     let deadline = Instant::now() + Duration::from_secs(60);
-    while model.flag(PropertyId::EofReached) != Some(true) {
-        assert!(
-            Instant::now() < deadline,
-            "playback did not end: {events:?}"
-        );
-        assert!(
-            !events.iter().any(|event| matches!(
-                event,
+    'playing: loop {
+        engine.wait_and_drain(0.05, &mut model, &mut events);
+        for event in events.drain(..) {
+            match event {
+                EngineEvent::EndFile {
+                    reason: EndReason::Eof,
+                    ..
+                } => break 'playing,
                 EngineEvent::EndFile {
                     reason: EndReason::Error,
                     ..
-                }
-            )),
-            "playback failed: {events:?}"
-        );
-        engine.wait_and_drain(0.05, &mut model, &mut events);
+                } => panic!("playback failed: {event:?}"),
+                _ => {}
+            }
+        }
+        assert!(Instant::now() < deadline, "playback did not end");
     }
     engine.quit().expect("quit");
     drop(engine);
