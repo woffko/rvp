@@ -7,12 +7,14 @@
 
 use std::path::{Path, PathBuf};
 
-use rvp_app::Action;
+use std::collections::BTreeMap;
+
 use rvp_app::coverage::{
     BLACKSPACE_INTRO, DEFAULT_SKIN_INTRO, ItemStatus, commands, item_status, menu_report,
-    skin_covered, skin_reason, skin_report,
+    runtime_commands, runtime_status, skin_covered, skin_reason, skin_report,
 };
 use rvp_app::menu::{context_tree, playlist_tree};
+use rvp_app::{Action, Bindings, KeyChord};
 use rvp_skin::{Skin, SkinArchive};
 
 const DEFAULT_SKIN: &str = "/mnt/c/Program Files/DAUM/PotPlayer/Skins/BlackSpace_en.dsf";
@@ -103,6 +105,55 @@ fn every_menu_item_is_carried_out_or_explained() {
         matches!(find(10770), Some(ItemStatus::Missing(_))),
         "AviSynth"
     );
+}
+
+/// R1's keys of the main window (table 157) for commands of the Audio menu,
+/// static or live: each works by default, or its menu item says why RVP
+/// has no such command (goal L's coverage rule).
+#[test]
+fn every_audio_hotkey_works_or_says_why_not() {
+    let mut audio: BTreeMap<u32, (String, ItemStatus)> = BTreeMap::new();
+    for (place, item) in commands(context_tree()) {
+        if place.starts_with("Audio > ") {
+            audio.insert(item.id, (place, item_status(item)));
+        }
+    }
+    for command in runtime_commands() {
+        if command.place.starts_with("Audio > ") {
+            let status = runtime_status(&command);
+            audio.insert(command.id, (command.place, status));
+        }
+    }
+    let bindings = Bindings::potplayer_defaults();
+    let mut keys = 0;
+    for line in include_str!("../../../docs/r1/hotkeys.tsv").lines().skip(1) {
+        let cells: Vec<&str> = line.split('\t').collect();
+        let (Some(&"157"), Some(key), Some(Ok(id))) = (
+            cells.first(),
+            cells.get(1),
+            cells.get(2).map(|id| id.parse::<u32>()),
+        ) else {
+            continue;
+        };
+        let Some((place, status)) = audio.get(&id) else {
+            continue;
+        };
+        keys += 1;
+        let chord = KeyChord::parse(key).expect("R1's key");
+        match status {
+            ItemStatus::Window(action) => {
+                assert_eq!(bindings.key(&chord), Some(*action), "{key}: {place}");
+            }
+            ItemStatus::Missing(why) => {
+                assert!(
+                    !why.is_empty() && *why != "not in RVP yet",
+                    "{key}: {place} ({id}) needs its reason"
+                );
+            }
+            other => panic!("{key}: {place} ({id}) is {other:?}"),
+        }
+    }
+    assert_eq!(keys, 28, "PotPlayer's audio keys");
 }
 
 #[test]

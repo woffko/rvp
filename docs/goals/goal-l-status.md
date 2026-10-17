@@ -45,6 +45,10 @@ from the audio audit's build, so nothing came before M8's Windows gap.
   (within 60 ms), pause, speed and a 400 ms delay, and stops.
 - Unit tests: the chain's order and graphs, the presets, the head model and
   Freeverb's response, the WAV writer of recordings, the coverage tables.
+- `tests/coverage.rs`: PotPlayer's 28 audio keys (R1, the main window's
+  table) each trigger their action by default, or their menu item gives a
+  reason: 24 work; Shift+X (DirectShow's audio transform filter) and
+  Shift+H, J, K (Audio Stretching, until the host session) have reasons.
 - `rvp --selftest`: Crystality on and off with Shift+C, the 26 speaker
   choices, the individual volume in the chain after the normalizer,
   Freeverb's response, the sync dialog, the second device (offset 2.8 ms
@@ -52,7 +56,8 @@ from the audio audit's build, so nothing came before M8's Windows gap.
 
 ## Checks on the Windows VM
 
-`tools/windows-vm/m10-all.ps1` on the bundle of f225315's sources, all
+`tools/windows-vm/m10-all.ps1` on the bundle of d11f59f, the build in
+`C:\Users\<user>\rvp-test\rvp-l` (same `rvp.exe`, SHA-256 1b850aa7...), all
 pass: the self-test (failures 0, exit 0), the awake request listed while
 video plays and gone after it (session 0 lists it under SYSTEM; DISPLAY
 needs a desktop session), the recording (2.2 s, a valid RIFF file; the VM
@@ -111,5 +116,5 @@ Windows.
   `tools/audio-audit/m10.py`.
 - The second device on the host needs a second active output: only "SPDIF
   Interface" is active now (the monitor's HDMI audio is not present).
-- The Windows build in `C:\Users\<user>\rvp-test\rvp-l` comes with the last
-  commit.
+- `C:\Users\<user>\rvp-test\rvp-l` holds the portable build of d11f59f
+  (file copies only); it is refreshed if the comparison changes code.
