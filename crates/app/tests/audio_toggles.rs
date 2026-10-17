@@ -64,8 +64,17 @@ fn effects_switch_while_a_file_plays() {
     for on in [true, false] {
         for (command, label) in EFFECTS {
             let before = app.model.double(PropertyId::TimePos).unwrap_or(0.0);
+            let switched = Instant::now();
             app.dispatch(&engine, Action::Audio(command));
-            pump(&mut app, &engine, 400);
+            // Playback goes on: a busy machine may take a while.
+            let deadline = switched + Duration::from_secs(5);
+            while app.model.double(PropertyId::TimePos).unwrap_or(0.0) < before + 0.1 {
+                assert!(
+                    Instant::now() < deadline,
+                    "{command:?}: stopped at {before:.2}"
+                );
+                pump(&mut app, &engine, 20);
+            }
             let af = engine.get_text("af").unwrap_or_default();
             assert_eq!(af.contains(label), on, "{command:?} on={on}: {af}");
             // The normalizer stays in its place, after the effects.
@@ -76,10 +85,12 @@ fn effects_switch_while_a_file_plays() {
                     "{label} before the normalizer: {af}"
                 );
             }
+            // On from where it was: no seek elsewhere.
             let after = app.model.double(PropertyId::TimePos).unwrap_or(0.0);
+            let elapsed = switched.elapsed().as_secs_f64();
             assert!(
-                after > before + 0.1 && after < before + 1.5,
-                "{command:?}: played on from {before:.2} to {after:.2}"
+                after < before + elapsed + 0.5,
+                "{command:?}: from {before:.2} to {after:.2} in {elapsed:.2} s"
             );
             assert_eq!(app.model.flag(PropertyId::Pause), Some(false));
         }

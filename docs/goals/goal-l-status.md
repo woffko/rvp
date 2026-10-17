@@ -56,8 +56,8 @@ from the audio audit's build, so nothing came before M8's Windows gap.
 
 ## Checks on the Windows VM
 
-`tools/windows-vm/m10-all.ps1` on the bundle of d11f59f, the build in
-`C:\Users\<user>\rvp-test\rvp-l` (same `rvp.exe`, SHA-256 1b850aa7...), all
+`tools/windows-vm/m10-all.ps1` on the code of 8113d23, the build in
+`C:\Users\<user>\rvp-test\rvp-l` (`rvp.exe` SHA-256 af051329...), all
 pass: the self-test (failures 0, exit 0), the awake request listed while
 video plays and gone after it (session 0 lists it under SYSTEM; DISPLAY
 needs a desktop session), the recording (2.2 s, a valid RIFF file; the VM
@@ -85,6 +85,10 @@ Windows.
    came out 3 dB off. 20 ms brings every preset within 1.5 dB.
 5. **Session 0 has no display**: Windows lists a display request there
    under SYSTEM only.
+6. **The self-test misread Linux's refusal to record** ("Audio recording:
+   on Windows for now" starts like a started recording's OSD) when the
+   text stayed on screen two seconds: CI's .deb check on Ubuntu 26.10
+   failed once. The status now says whether the recorder runs.
 
 ## Differences from PotPlayer (before the host comparison)
 
@@ -116,5 +120,5 @@ Windows.
   `tools/audio-audit/m10.py`.
 - The second device on the host needs a second active output: only "SPDIF
   Interface" is active now (the monitor's HDMI audio is not present).
-- `C:\Users\<user>\rvp-test\rvp-l` holds the portable build of d11f59f
+- `C:\Users\<user>\rvp-test\rvp-l` holds the portable build of 8113d23
   (file copies only); it is refreshed if the comparison changes code.
