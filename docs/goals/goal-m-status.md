@@ -31,7 +31,7 @@ EDL, and either would let mpv move on (or merge entries) where RVP decides
 (the queue, shuffle, Skip Ending, "When Playback Finished", the Recycle
 Bin, resume positions). Today's switch, measured headless from the end of
 one entry to the next entry's first frame, takes 68 to 74 ms in WSL and
-85 to 102 ms on the Windows VM. **The file navigator and Open Box** are
+85 to 119 ms on the Windows VM. **The file navigator and Open Box** are
 not added: they could keep the album rules, but they are a second file
 manager for ways in RVP already has. Whether RVP should grow either is
 the owner's call (below).
@@ -93,9 +93,9 @@ SSH, software OpenGL, no sound device), all pass:
 - The Recycle Bin: the self-test's own file left its folder and was in
   the SSH user's Recycle Bin (its `$I` record names it), and its playlist
   entry went with it; the script then removed it from the Recycle Bin.
-- `tests/thumbnails.rs` (8 tests, 3 to 4 ms a picture) and `tests/m11.rs`
+- `tests/thumbnails.rs` (8 tests, 2 to 4 ms a picture) and `tests/m11.rs`
   (11 tests: the DVD with shinchiro's libdvdnav, backward play 1 s in
-  1.16 to 1.19 s, the gap between entries 85 to 102 ms) on Windows' own
+  1.15 to 1.19 s, the gap between entries 85 to 119 ms) on Windows' own
   libmpv.
 
 The first run found one failure, in the self-test itself: its Recycle Bin
@@ -115,6 +115,18 @@ Windows in debug as CI builds them) ran on the VM with the repository
 mirrored at the path compiled into them: all pass, except
 `tests/resume.rs`, whose three tests start a helper program from the
 build machine's path (GitHub's Windows runner runs them).
+
+The final package, built from 27e7f9d (`rvp.exe` SHA-256 35962096...),
+passed both scripts on the VM again (`m11-all.ps1`: failures 0;
+`m10-all.ps1`'s functional self-test: failures 0).
+`C:\Users\<user>\rvp-test\rvp-m` holds that portable build (file copies only;
+its 1,677 files checked against the ZIP).
+
+GitHub CI passes on 27e7f9d (run 39064490376): the checks on Ubuntu
+24.04 and Windows 2025, cargo deny, and both package jobs. On Ubuntu
+26.10 the .deb and the AppImage pass the functional self-test (87 checks
+each) and the .deb passes M11's (42 checks; the DVD step is skipped, as
+the kit's libmpv has no libdvdnav).
 
 ## Findings
 
