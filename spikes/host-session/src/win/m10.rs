@@ -98,6 +98,9 @@ const SPEAKERS_PASS: i64 = 7500;
 /// A pass's setting is sent this long before the pass starts: in the
 /// silence that ends the pass before it.
 const SWITCH_EARLY: i64 = 150;
+/// When PotPlayer reports no position, by the wall clock this long after
+/// the pass starts (playback's start lags the clock).
+const SWITCH_LATE: i64 = 200;
 const BLOCK_FILES: [&str; 8] = [
     "block-mp3.mp3",
     "block-aac.m4a",
@@ -435,18 +438,33 @@ fn play_passes(
     send_message(pot.hwnd, WM_USER, POT_SET_PLAY_STATUS, PLAY_RUNNING);
     log.line(&format!("section {section} start t={}", clock.now()));
     let total = pass_ms * commands.len() as i64;
-    let deadline = Instant::now() + Duration::from_millis(total as u64 + 8000);
+    let started = Instant::now();
+    let deadline = started + Duration::from_millis(total as u64 + 8000);
     let mut next = 1;
     let mut last_time = -1;
+    // PotPlayer's position, or the wall clock when it never reports one.
+    let mut by_clock = false;
     loop {
         sleep_ms(20);
-        let time = send_message(pot.hwnd, WM_USER, POT_GET_CURRENT_TIME, 0) as i64;
+        let reported = send_message(pot.hwnd, WM_USER, POT_GET_CURRENT_TIME, 0) as i64;
+        if !by_clock && last_time <= 0 && reported <= 0 && started.elapsed() > Duration::from_secs(3) {
+            by_clock = true;
+            log.line(&format!("section {section} position_from=clock (PotPlayer reports {reported})"));
+        }
+        let time = if by_clock {
+            started.elapsed().as_millis() as i64
+        } else {
+            reported
+        };
         if time < last_time - 1000 {
             log.line(&format!("position_jumped from={last_time} to={time}"));
         }
         last_time = last_time.max(time);
         let boundary = pass_ms * next as i64;
-        if next < commands.len() && time >= boundary - SWITCH_EARLY {
+        // By the clock playback lags by its start: switch later, still in
+        // the silence between the passes.
+        let switch = if by_clock { boundary + SWITCH_LATE } else { boundary - SWITCH_EARLY };
+        if next < commands.len() && time >= switch {
             let previous = commands[next - 1].0;
             if toggles.contains(&previous) {
                 unsafe { PostMessageW(pot.hwnd, WM_COMMAND, previous, 0) };
