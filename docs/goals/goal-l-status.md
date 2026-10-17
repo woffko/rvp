@@ -115,6 +115,38 @@ Windows.
   CI on Linux with `ao=null`; real devices untested).
 - PipeWire's own way to combine two outputs, as an alternative.
 
+## What to try
+
+In `C:\Users\<user>\rvp-test\rvp-l` (portable: its settings stay beside
+`rvp.exe`), with PotPlayer's menu texts and keys:
+
+1. **Output Speakers** (context menu Audio > Output Speakers, or Settings >
+   Audio): 2.0 Stereo is PotPlayer's mix. With headphones, Virtual
+   Headphone and Virtual Surround on a 5.1 film; Dolby Pro Logic II on a
+   5.1 film through a receiver that decodes it.
+2. **Effects** with PotPlayer's keys: Shift+C Crystality, Shift+D Noise
+   Reduction, Shift+R Freeverb, Shift+V Voice Removal, Shift+A Voice
+   Emphasis, Shift+T Swap Stereo Channels; Crossfeed in Audio > Audio
+   Effects. The OSD names each; their sliders are on the settings pages
+   Audio: Crystality/Noise Reduction and Audio: Normalizer/Freeverb.
+3. **Equalizer presets** (Audio > Equalizer Presets; Shift+E switches the
+   equalizer): PotPlayer's 19 names, with Winamp's values until the host
+   comparison measures PotPlayer's.
+4. **Audio sync**: Audio > Audio Sync > Adjust Audio Sync... opens the
+   dialog; the same menu keeps changes never, over the run, or always.
+5. **Recording**: Shift+G (Record Audio...) asks for a file, Start/Stop
+   Audio Recording uses the recordings folder; the WAV file holds what RVP
+   plays.
+6. **System volume**: Ctrl+Alt+Shift+Up and Down change the device's master
+   volume, Ctrl+Alt+Up and Down the wave volume; the settings page Audio:
+   Volume Control has the control method, the individual channel volumes
+   and the AC3/DTS preamp.
+7. **Second device**: with a second output enabled in Windows (the
+   monitor's audio), Audio > Audio Renderer (2nd Device) plays the same
+   sound there too; the settings page Audio has its delay.
+8. **Screen saver**: while video plays the display does not sleep;
+   Playback's "Prevent screen saver during playback" turns that off.
+
 ## Open
 
 - The host session comparing RVP with PotPlayer: presets, effects,
