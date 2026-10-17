@@ -94,7 +94,7 @@ them:
 
 ## Checks on the Windows VM
 
-`tools/windows-vm/m10-all.ps1` on this commit's code, all pass: the
+`tools/windows-vm/m10-all.ps1` on the build of f1bd961, all pass: the
 self-test (failures 0, exit 0, with the Audio Stretching steps), the awake
 request listed while video plays and gone after it (session 0 lists it
 under SYSTEM), the recording (2.1 s, a valid RIFF file; the VM has no
@@ -102,17 +102,16 @@ sound device, so silence), the master volume answering "element not
 found" without a device, and `tests/audio_chain.rs` (15 tests) and
 `tests/speakers.rs` on Windows' own FFmpeg (the four-channel echo
 response, `aeval` and rubberband included). `C:\Users\<user>\rvp-test\rvp-l`
-holds the portable build of 644c138 (file copies only; `rvp.exe` SHA-256
-338e3e6e...).
+holds the same portable build of f1bd961 (file copies only; `rvp.exe`
+SHA-256 d508a9ea...).
 
 GitHub CI started no jobs for a while (the account's billing, which the
 owner sorted out). Its first run after that found a gap the other checks
 could not: the Linux kit builds libmpv from source, and without
 librubberband, so the packages' self-test failed at Audio Stretching on
 Ubuntu 26.10 (finding 7). With 4842430 CI passes on Linux and Windows
-(run 39030252051), the packages' self-tests (87 checks each, the .deb
-and the AppImage) included. The change after 644c138 only adds an OSD
-message for a libmpv without rubberband, which Windows' has.
+(run 39030252051, and run 39031234515 on f1bd961), the packages'
+self-tests (87 checks each, the .deb and the AppImage) included.
 
 ## Findings
 
