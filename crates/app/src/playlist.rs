@@ -119,6 +119,8 @@ pub struct Album {
     pub anchor: Option<usize>,
     /// The first row shown.
     pub top: usize,
+    /// The playback queue: entries (by path) that play next, in order.
+    pub queue: Vec<String>,
 }
 
 impl Album {
@@ -205,7 +207,7 @@ fn shift_after_removal(index: usize, removed: &BTreeSet<usize>) -> Option<usize>
 }
 
 /// A small deterministic generator for shuffling (splitmix64).
-fn next_random(state: &mut u64) -> u64 {
+pub(crate) fn next_random(state: &mut u64) -> u64 {
     *state = state.wrapping_add(0x9E37_79B9_7F4A_7C15);
     let mut z = *state;
     z = (z ^ (z >> 30)).wrapping_mul(0xBF58_476D_1CE4_E5B9);
@@ -834,6 +836,236 @@ impl Library {
     }
 }
 
+impl Library {
+    // M11: the queue, durations found in the background, and the edits of
+    // the playlist panel's commands.
+
+    /// The first queued entry of the album that plays (or the shown one),
+    /// taken off the queue.
+    pub fn take_queued(&mut self) -> Option<(usize, usize)> {
+        let album = self.lists.playing.unwrap_or(self.lists.shown);
+        let mut found = None;
+        self.update(|lists| {
+            let Some(target) = lists.albums.get_mut(album) else {
+                return false;
+            };
+            while !target.queue.is_empty() {
+                let path = target.queue.remove(0);
+                if let Some(index) = target
+                    .entries
+                    .iter()
+                    .position(|entry| entry.path == path && entry.playable)
+                {
+                    found = Some((album, index));
+                    break;
+                }
+            }
+            true
+        });
+        found
+    }
+
+    /// Queues entries (each once) of an album.
+    pub fn queue_add(&mut self, album: usize, indices: &[usize]) -> bool {
+        self.update(|lists| {
+            let Some(target) = lists.albums.get_mut(album) else {
+                return false;
+            };
+            let mut changed = false;
+            for &index in indices {
+                if let Some(entry) = target.entries.get(index)
+                    && !target.queue.contains(&entry.path)
+                {
+                    target.queue.push(entry.path.clone());
+                    changed = true;
+                }
+            }
+            changed
+        })
+    }
+
+    pub fn queue_clear(&mut self, album: usize) -> bool {
+        self.update(|lists| {
+            lists.albums.get_mut(album).is_some_and(|target| {
+                let had = !target.queue.is_empty();
+                target.queue.clear();
+                had
+            })
+        })
+    }
+
+    /// Records a duration found in the background for every entry of the
+    /// path.
+    pub fn set_duration(&mut self, path: &str, seconds: f64) -> bool {
+        self.update(|lists| {
+            let mut changed = false;
+            for entry in lists
+                .albums
+                .iter_mut()
+                .flat_map(|album| album.entries.iter_mut())
+                .filter(|entry| entry.path == path)
+            {
+                if entry
+                    .duration
+                    .is_none_or(|known| (known - seconds).abs() > 0.5)
+                {
+                    entry.duration = Some(seconds);
+                    changed = true;
+                }
+            }
+            changed
+        })
+    }
+
+    /// Puts an album's entries in a new order (`order[i]` is the entry that
+    /// goes to row `i`).
+    pub fn reorder(&mut self, album: usize, order: &[usize]) -> bool {
+        self.edit(|lists| {
+            let Some(target) = lists.albums.get_mut(album) else {
+                return false;
+            };
+            let len = target.entries.len();
+            let mut seen = vec![false; len];
+            if order.len() != len
+                || order
+                    .iter()
+                    .any(|&index| index >= len || std::mem::replace(&mut seen[index], true))
+            {
+                return false;
+            }
+            if order.iter().enumerate().all(|(row, &index)| row == index) {
+                return false;
+            }
+            let entries = std::mem::take(&mut target.entries);
+            target.entries = order.iter().map(|&index| entries[index].clone()).collect();
+            target.current = target
+                .current
+                .and_then(|current| order.iter().position(|&index| index == current));
+            target.selected.clear();
+            target.anchor = None;
+            true
+        })
+    }
+
+    /// Gives entries a title (`None`: the file name again).
+    pub fn set_title(&mut self, album: usize, indices: &[usize], title: Option<&str>) -> bool {
+        self.edit(|lists| {
+            let Some(target) = lists.albums.get_mut(album) else {
+                return false;
+            };
+            let title = title.map(str::trim).filter(|title| !title.is_empty());
+            let mut changed = false;
+            for &index in indices {
+                if let Some(entry) = target.entries.get_mut(index)
+                    && entry.title.as_deref() != title
+                {
+                    entry.title = title.map(str::to_owned);
+                    changed = true;
+                }
+            }
+            changed
+        })
+    }
+
+    /// A file was renamed or moved: its entries follow it.
+    pub fn replace_path(&mut self, old: &str, new: &str) -> bool {
+        let new = local_path(new);
+        self.update(|lists| {
+            let mut changed = false;
+            for album in &mut lists.albums {
+                for entry in album.entries.iter_mut().filter(|entry| entry.path == old) {
+                    entry.path.clone_from(&new);
+                    changed = true;
+                }
+                for queued in album.queue.iter_mut().filter(|queued| *queued == old) {
+                    queued.clone_from(&new);
+                }
+            }
+            changed
+        })
+    }
+
+    /// Removes the entries an album's predicate picks.
+    pub fn remove_where(&mut self, album: usize, pick: impl Fn(usize, &Entry) -> bool) -> bool {
+        let Some(target) = self.lists.albums.get(album) else {
+            return false;
+        };
+        let picked: BTreeSet<usize> = target
+            .entries
+            .iter()
+            .enumerate()
+            .filter(|(index, entry)| pick(*index, entry))
+            .map(|(index, _)| index)
+            .collect();
+        self.remove(album, &picked)
+    }
+
+    /// Removes the entries of these paths from every album (deleted files).
+    pub fn remove_paths(&mut self, paths: &[String]) -> bool {
+        let mut changed = false;
+        for album in 0..self.lists.albums.len() {
+            changed |= self.remove_where(album, |_, entry| paths.contains(&entry.path));
+        }
+        changed
+    }
+
+    /// Selects the entries whose title or file name holds `text` (any
+    /// case); returns the first.
+    pub fn select_matching(&mut self, album: usize, text: &str) -> Option<usize> {
+        let needle = text.trim().to_lowercase();
+        if needle.is_empty() {
+            return None;
+        }
+        let matches: BTreeSet<usize> = self
+            .lists
+            .albums
+            .get(album)?
+            .entries
+            .iter()
+            .enumerate()
+            .filter(|(_, entry)| {
+                entry.label().to_lowercase().contains(&needle)
+                    || crate::view::file_name(&entry.path)
+                        .to_lowercase()
+                        .contains(&needle)
+            })
+            .map(|(index, _)| index)
+            .collect();
+        let first = matches.iter().next().copied();
+        self.update(|lists| {
+            let Some(target) = lists.albums.get_mut(album) else {
+                return false;
+            };
+            target.anchor = first;
+            target.selected = matches;
+            true
+        });
+        first
+    }
+
+    /// Clears the album named "Default" (when the Default album is not to
+    /// be remembered).
+    pub fn forget_default(&mut self) -> bool {
+        let Some(album) = self
+            .lists
+            .albums
+            .iter()
+            .position(|album| album.name == "Default")
+        else {
+            return false;
+        };
+        self.update(|lists| {
+            let target = &mut lists.albums[album];
+            let had = !target.entries.is_empty();
+            *target = Album::new("Default");
+            if lists.playing == Some(album) {
+                lists.playing = None;
+            }
+            had
+        })
+    }
+}
+
 impl Playlists {
     /// Keeps indexes in range after loading or editing.
     fn repair(&mut self) {
@@ -853,6 +1085,8 @@ impl Playlists {
             album.selected.retain(|&index| index < len);
             album.anchor = album.anchor.filter(|&anchor| anchor < len);
             album.top = album.top.min(len.saturating_sub(1));
+            let paths: BTreeSet<&str> = album.entries.iter().map(|e| e.path.as_str()).collect();
+            album.queue.retain(|queued| paths.contains(queued.as_str()));
         }
     }
 }

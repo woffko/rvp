@@ -1,0 +1,343 @@
+// M11's self-test (`rvp --selftest=m11`), loaded by Main.qml's self-test:
+// the thumbnail core (the seek bar's tooltip and preview, the scene
+// browsers, the playlist's thumbnail view, durations), keyframe steps, the
+// jump dialog, the current subtitle, A-B subtitle and marked sections, the
+// skip feature, bookmarks, the queue, sorting, search, playlist files, the
+// power actions through the dry-run hook (never a real one), the Recycle
+// Bin, a DVD folder, external audio, the clipboard, favorites and recent
+// items, yt-dlp's fallback and the capture devices. Input goes through
+// Player's handlers, as in the functional check.
+//
+// Files: testdata/media/fixture-chapters.mkv (with its .srt), then
+// fixture-60s.mkv and fixture-3s.mkv; `--dvd=FOLDER` names the DVD fixture
+// (testdata/media/dvd). The command line is checked with `/seek=0:00:03`
+// and `/title="M11 title"`.
+import QtQuick
+import Rvp
+import RvpNative
+
+Item {
+    id: m11
+    required property Player player
+    required property var t
+    required property var host
+    property int scenesArrived: 0
+    property var scenes: []
+    property string recycleFile: ""
+    property string dryRunBefore: ""
+
+    Connections {
+        target: m11.player
+        function onSceneReady(index) { m11.scenesArrived += 1 }
+    }
+
+    function near(value, wanted, tolerance) {
+        return value !== null && Math.abs(value - wanted) <= tolerance
+    }
+    function endsWith(text, end) {
+        return text !== null && String(text).endsWith(end)
+    }
+    function setSetting(path, value) {
+        return JSON.parse(player.set_setting(path, JSON.stringify(value)))
+    }
+    function seekBar() { return player.control_rect("CMD_TIMEBAR_CTRL") }
+
+    function tick() {
+        const t = m11.t
+        const s = t.status()
+        switch (t.step) {
+        case 0:
+            // The fixtures are 96x72: a window fitted to them leaves the
+            // seek bar and the playlist a few pixels.
+            setSetting("fit-window-to-video", false)
+            host.width = 1000
+            host.height = 700
+            t.next()
+            break
+        case 1:
+            if (t.waitFor("chapters_file_plays", () => s.loaded && endsWith(s.path, "fixture-chapters.mkv")
+                              && s.duration > 19 && s.marks >= 3, 20000,
+                          () => "path " + s.path + " marks " + s.marks)) {
+                // The command line: /seek and /title.
+                t.check("command_line_seek", s.time !== null && s.time >= 2.5, "time " + s.time)
+                t.check("command_line_title", s.media_title === "M11 title", "title " + s.media_title)
+                if (s.pause === false)
+                    player.run_action("play-pause")
+            }
+            break
+        case 2: {
+            if (host.width < 900 && Date.now() - t.stepStarted < 3000)
+                break
+            const r = seekBar()
+            player.mouse_move(r.x + r.width / 2, r.y + r.height / 2)
+            t.next()
+            break
+        }
+        case 3:
+            t.waitFor("seek_bar_time_tooltip", () => s.seek_tip_shown && s.seek_tip.indexOf("00:00:1") === 0,
+                      3000, () => "tip " + s.seek_tip)
+            break
+        case 4:
+            if (t.waitFor("seek_bar_preview", () => s.preview_width > 0, 8000,
+                          () => "preview " + s.preview_width + "x" + s.preview_height))
+                player.mouse_leave()
+            break
+        case 5:
+            if (t.waitFor("seek_tip_hides", () => !s.seek_tip_shown, 2000))
+                player.jump_to("0:00:04.5", false)
+            break
+        // Keyframes every 2 s.
+        case 6:
+            if (t.waitFor("jump_dialog_time", () => near(s.time, 4.5, 0.15), 5000, () => "time " + s.time))
+                player.key(Qt.Key_Right, Qt.ControlModifier | Qt.ShiftModifier)
+            break
+        case 7:
+            if (t.waitFor("next_keyframe", () => near(s.time, 6.0, 0.05), 5000, () => "time " + s.time))
+                player.key(Qt.Key_Left, Qt.ControlModifier | Qt.ShiftModifier)
+            break
+        case 8:
+            if (t.waitFor("previous_keyframe", () => near(s.time, 4.0, 0.05), 5000, () => "time " + s.time))
+                player.run_action("jump-dialog")
+            break
+        case 9: {
+            const dialogs = host.playbackDialogs()
+            if (t.waitFor("jump_dialog_opens", () => dialogs !== null && dialogs.current !== null
+                              && dialogs.current.visible, 5000)) {
+                dialogs.current.close()
+                // Frame 115 at 10 fps.
+                player.jump_to("115", true)
+            }
+            break
+        }
+        case 10:
+            if (t.waitFor("jump_to_frame", () => near(s.time, 11.5, 0.15), 5000, () => "time " + s.time))
+                player.key(Qt.Key_Home, Qt.ControlModifier)
+            break
+        // The third line runs from 11 s to 12.5 s.
+        case 11:
+            if (t.waitFor("current_subtitle_position", () => near(s.time, 11.0, 0.15)
+                              && near(s.sub_start, 11.0, 0.01), 5000,
+                          () => "time " + s.time + " line " + s.sub_start))
+                player.key(Qt.Key_Backslash, Qt.ControlModifier)
+            break
+        case 12:
+            if (t.waitFor("ab_subtitle_section", () => s.ab_active && near(s.ab_a, 11.0, 0.05)
+                              && near(s.ab_b, 12.5, 0.05), 3000,
+                          () => "a " + s.ab_a + " b " + s.ab_b + " active " + s.ab_active))
+                player.key(Qt.Key_BracketLeft, Qt.AltModifier)
+            break
+        case 13:
+            if (t.waitFor("ab_point_a_later", () => near(s.ab_a, 11.1, 0.02), 3000, () => "a " + s.ab_a)) {
+                player.section_edit("add", -1, "Line three")
+                player.run_action("ab-clear")
+            }
+            break
+        case 14:
+            if (t.waitFor("ab_list_section", () => s.sections === 1 && !s.ab_active, 3000,
+                          () => "sections " + s.sections))
+                player.key(Qt.Key_Backslash, Qt.AltModifier)
+            break
+        case 15:
+            if (t.waitFor("repeat_marked_section", () => s.ab_active && near(s.ab_a, 11.1, 0.02), 3000,
+                          () => "a " + s.ab_a)) {
+                player.run_action("ab-clear")
+                setSetting("playback.skip.chapter-names", "Part A")
+                setSetting("playback.skip.chapters", true)
+                setSetting("playback.skip.enabled", true)
+                player.jump_to("0:00:06", false)
+            }
+            break
+        case 16:
+            if (t.waitFor("skip_chapter", () => s.time !== null && s.time >= 9.9, 5000, () => "time " + s.time)) {
+                setSetting("playback.skip.enabled", false)
+                player.key(Qt.Key_P, 0)
+            }
+            break
+        case 17:
+            if (t.waitFor("bookmark_added", () => s.bookmarks === 1 && s.marks === 4, 3000,
+                          () => "bookmarks " + s.bookmarks + " marks " + s.marks)) {
+                m11.scenesArrived = 0
+                player.key(Qt.Key_Z, Qt.ShiftModifier)
+            }
+            break
+        case 18: {
+            const browser = host.sceneBrowser()
+            if (t.waitFor("time_scenes", () => browser !== null && browser.visible && browser.scenes.length >= 5
+                              && m11.scenesArrived >= 3, 15000,
+                          () => "scenes " + (browser ? browser.scenes.length : -1) + " pictures " + m11.scenesArrived)) {
+                m11.scenes = browser.scenes
+                browser.choose(2)
+            }
+            break
+        }
+        case 19:
+            if (t.waitFor("scene_chosen", () => near(s.time, m11.scenes[2].time, 0.2), 5000,
+                          () => "time " + s.time + " scene " + m11.scenes[2].time))
+                player.key(Qt.Key_Z, Qt.AltModifier)
+            break
+        case 20: {
+            const browser = host.sceneBrowser()
+            // Three chapters after the start, the bookmark and the start.
+            if (t.waitFor("marker_scenes", () => browser !== null && browser.visible && browser.scenes.length === 5,
+                          5000, () => "scenes " + (browser ? browser.scenes.length : -1))) {
+                browser.close()
+                // The rows ask for their pictures while the panel shows.
+                if (!s.playlist_attached)
+                    player.run_action("toggle-playlist")
+                player.run_list_action("view-thumbnails-3")
+            }
+            break
+        }
+        case 21:
+            if (t.waitFor("playlist_thumbnails", () => s.list_rows === 3 && s.list_thumbnails >= 2, 15000,
+                          () => "rows " + s.list_rows + " thumbnails " + s.list_thumbnails
+                              + " attached " + s.playlist_attached)) {
+                player.run_list_action("view-list")
+                player.run_list_action("detect-durations")
+            }
+            break
+        case 22:
+            if (t.waitFor("durations_detected", () => s.durations_known === s.shown_entries, 15000,
+                          () => "known " + s.durations_known + " of " + s.shown_entries)) {
+                player.run_list_action("cursor-end")
+                player.run_list_action("queue-add")
+            }
+            break
+        case 23:
+            if (t.waitFor("queued", () => s.queue === 1, 3000, () => "queue " + s.queue))
+                player.run_action("next")
+            break
+        // The queue wins over the next entry (fixture-60s).
+        case 24:
+            if (t.waitFor("queue_plays_first", () => endsWith(s.path, "fixture-3s.mkv") && s.queue === 0,
+                          10000, () => "path " + s.path))
+                player.run_list_action("sort-duration")
+            break
+        case 25:
+            if (t.waitFor("sort_by_duration", () => s.shown_first === "fixture-3s.mkv", 3000,
+                          () => "first " + s.shown_first)) {
+                player.list_dialog_answer("search", "chapters")
+            }
+            break
+        case 26:
+            if (t.waitFor("search_selects", () => s.cursor === 1 && s.selected === 1, 3000,
+                          () => "cursor " + s.cursor + " selected " + s.selected)) {
+                m11.listFile = t.outDir + "/album.m3u8"
+                player.list_dialog_answer("save", m11.listFile)
+                player.list_dialog_answer("open", m11.listFile)
+            }
+            break
+        case 27:
+            if (t.waitFor("playlist_file_round_trip", () => s.shown_entries === 6, 5000,
+                          () => "entries " + s.shown_entries)) {
+                player.run_list_action("remove-duplicates")
+            }
+            break
+        case 28:
+            if (t.waitFor("duplicates_removed", () => s.shown_entries === 3, 3000,
+                          () => "entries " + s.shown_entries)) {
+                // The power notice through the dry-run hook: a timer of a
+                // second starts the countdown, which is cancelled first.
+                setSetting("playback.finished.countdown", 5)
+                m11.dryRunBefore = s.power_dry_run
+                player.set_power_timer(1, 1, false, "1 s")
+            }
+            break
+        case 29:
+            if (t.waitFor("power_countdown_starts", () => s.power_seconds > 0, 5000,
+                          () => "seconds " + s.power_seconds))
+                player.cancel_countdown()
+            break
+        case 30:
+            if (t.waitFor("power_countdown_cancelled", () => s.power_seconds === 0
+                              && s.power_dry_run === m11.dryRunBefore, 3000,
+                          () => "seconds " + s.power_seconds + " dry run " + s.power_dry_run))
+                player.set_power_timer(1, 1, false, "1 s")
+            break
+        case 31:
+            t.waitFor("power_action_dry_run", () => s.power_dry_run.indexOf("shut down") >= 0
+                          && s.power_seconds === 0, 12000,
+                      () => "seconds " + s.power_seconds + " dry run " + s.power_dry_run)
+            break
+        case 32: {
+            // The Recycle Bin: a file of the test's own.
+            m11.recycleFile = Tools.write_file(t.outDir + "/recycle-me.mkv", "RVP")
+            player.open_files(m11.recycleFile, true)
+            player.run_list_action("cursor-end")
+            player.run_list_action("delete-files")
+            t.next()
+            break
+        }
+        case 33: {
+            const dialogs = host.playbackDialogs()
+            if (t.waitFor("recycle_asks_first", () => dialogs !== null && dialogs.data.kind === "recycle"
+                              && dialogs.current !== null && dialogs.current.visible, 5000)) {
+                dialogs.current.close()
+                const error = player.recycle(JSON.stringify(dialogs.data.files),
+                                             JSON.stringify(dialogs.data.entries))
+                // The entry goes with its file: a status read after it.
+                const after = t.status()
+                if (Qt.platform.os === "windows")
+                    t.check("recycle_bin", error === "" && after.shown_entries === 3,
+                            "error " + error + " entries " + after.shown_entries)
+                else
+                    t.check("recycle_bin", true, "SKIPPED (Linux: goal S) " + error)
+                player.open_disc(player.option("dvd"), false)
+            }
+            break
+        }
+        case 34:
+            // The Linux packages' libmpv is built without libdvdnav (goal S).
+            if (!s.dvd_supported) {
+                t.check("dvd_folder_plays", true, "SKIPPED this libmpv opens no DVD")
+                m11.audioTracks = s.audio_tracks
+                player.load_external_audio(player.option("audio"))
+                t.next()
+                break
+            }
+            if (t.waitFor("dvd_folder_plays", () => s.loaded && String(s.path).indexOf("dvd://") === 0
+                              && s.disc_titles === 2, 20000,
+                          () => "path " + s.path + " titles " + s.disc_titles)) {
+                m11.audioTracks = s.audio_tracks
+                player.load_external_audio(player.option("audio"))
+            }
+            break
+        case 35:
+            if (t.waitFor("external_audio", () => s.audio_tracks === m11.audioTracks + 1, 8000,
+                          () => "tracks " + s.audio_tracks)) {
+                Tools.set_clipboard_text(player.option("clip"))
+                player.run_action("open-clipboard")
+            }
+            break
+        case 36:
+            if (t.waitFor("open_from_clipboard", () => endsWith(s.path, "fixture-60s.mkv"), 10000,
+                          () => "path " + s.path))
+                player.run_action("favorite-item")
+            break
+        case 37:
+            if (t.waitFor("favorites_and_recent", () => s.favorites === 1 && s.recent >= 4, 3000,
+                          () => "favorites " + s.favorites + " recent " + s.recent)) {
+                setSetting("open.ytdl-path", "rvp-no-such-yt-dlp")
+                player.open_files("https://127.0.0.1:9/watch?v=m11", false)
+            }
+            break
+        case 38:
+            t.waitFor("ytdl_falls_back", () => String(s.osd).indexOf("yt-dlp:") === 0, 10000,
+                      () => "osd " + s.osd)
+            break
+        case 39: {
+            let devices = null
+            try { devices = JSON.parse(player.devices_json()) } catch (error) { devices = null }
+            t.check("capture_devices_listed", Array.isArray(devices),
+                    "devices " + (devices ? devices.length : "none"))
+            const stats = JSON.parse(player.status()).thumbnail_stats
+            t.check("thumbnails_off_the_gui_thread", stats !== null && stats.rendered > 0
+                        && stats.off_gui_thread === true, JSON.stringify(stats))
+            t.finish()
+            break
+        }
+        }
+    }
+    property string listFile: ""
+    property int audioTracks: 0
+}

@@ -33,6 +33,12 @@ pub fn format_time(seconds: f64) -> String {
     )
 }
 
+/// The atlas name of a playlist entry's thumbnail (M11).
+#[must_use]
+pub fn thumbnail_key(path: &str) -> String {
+    format!("thumb/entry/{path}")
+}
+
 /// The last component of a path or URL.
 #[must_use]
 pub fn file_name(path: &str) -> &str {
@@ -230,12 +236,16 @@ pub fn panel(lists: &Playlists) -> Playlist {
                     .map(|seconds| seconds.max(0.0).round() as u32),
                 playable: entry.playable,
                 played: entry.played,
+                thumbnail: None,
+                details: None,
             })
             .collect(),
         current: shown.current.filter(|_| lists.playing == Some(lists.shown)),
         selected: shown.selected.clone(),
         scroll: ListScroll::Entry(shown.top),
         drop_before: None,
+        row_lines: 1,
+        wide_thumbnails: true,
     }
 }
 

@@ -16,3 +16,10 @@ RVP through `[patch.crates-io]` in the workspace manifest. Changes:
   `Mpv::create_weak_client` (`mpv_create_weak_client`: a handle that does
   not keep the core alive) and `Mpv::request_log_messages`
   (`mpv_request_log_messages`).
+- mpv's software renderer, for M11's thumbnail core
+  (`crates/engine/src/thumbnail.rs`, 2026-10-17): `SoftwareRenderContext`
+  (`Mpv::create_software_render_context`, `MPV_RENDER_API_TYPE_SW`) with
+  `render` into a caller's buffer of `u32` pixels (size, format, stride and
+  pointer checked before mpv sees them; `BLOCK_FOR_TARGET_TIME` off), the
+  update callback and `update`. Its `Drop` frees the context before the
+  callback, so mpv cannot call a freed callback.

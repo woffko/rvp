@@ -49,6 +49,11 @@ Window {
     readonly property int requestAudioSync: 26
     readonly property int requestRecordAs: 27
     readonly property int requestRecordFolder: 28
+    readonly property int requestDialog: 29
+    readonly property int requestCopyText: 30
+    readonly property int requestReadClipboard: 31
+    readonly property int requestShowFile: 32
+    readonly property int requestScenes: 33
 
     property bool wasMaximized: false
     // The window state RVP last asked for and when (see applyVisibility).
@@ -285,6 +290,23 @@ Window {
         case requestStartResize:
             root.startSystemResize(argument)
             break
+        case requestDialog:
+            playbackLoader.active = true
+            playbackLoader.item.show(player.dialog)
+            break
+        case requestCopyText:
+            Tools.set_clipboard_text(player.dialog)
+            break
+        case requestReadClipboard:
+            player.paste_text(argument, Tools.clipboard_text())
+            break
+        case requestShowFile:
+            Tools.show_file(player.dialog)
+            break
+        case requestScenes:
+            sceneLoader.active = true
+            sceneLoader.item.show(player.dialog)
+            break
         }
     }
 
@@ -351,6 +373,11 @@ Window {
         root.width = Math.round(videoWidth * scale + chromeWidth)
         root.height = Math.round(videoHeight * scale + chromeHeight)
         if (screen && Qt.platform.pluginName !== "wayland") {
+            // "Start playback in centered window" (M11).
+            if (player.center_window) {
+                root.x = screen.virtualX + Math.round((maxWidth - root.width) / 2)
+                root.y = screen.virtualY + Math.round((maxHeight - root.height) / 2)
+            }
             root.x = Math.max(screen.virtualX, Math.min(root.x, screen.virtualX + maxWidth - root.width))
             root.y = Math.max(screen.virtualY, Math.min(root.y, screen.virtualY + maxHeight - root.height))
         }
@@ -442,7 +469,14 @@ Window {
         z: 10
         acceptedButtons: Qt.AllButtons
         hoverEnabled: true
-        cursorShape: root.pointerIdle && player.fullscreen ? Qt.BlankCursor : player.cursor_shape
+        // Fullscreen hides an idle pointer; in the window it hides over the
+        // playing video with "Hide mouse cursor during playback" (M11).
+        readonly property bool overVideo: mouseX >= player.video_rect.x
+            && mouseX < player.video_rect.x + player.video_rect.width
+            && mouseY >= player.video_rect.y
+            && mouseY < player.video_rect.y + player.video_rect.height
+        cursorShape: root.pointerIdle && (player.fullscreen || (player.hide_pointer && overVideo))
+            ? Qt.BlankCursor : player.cursor_shape
         onPressed: (mouse) => {
             keys.forceActiveFocus()
             root.pointerPress(mouse.x, mouse.y, mouse.button, mouse.modifiers)
@@ -453,6 +487,11 @@ Window {
                 player.mouse_double(mouse.x, mouse.y, mouse.button)
         }
         onPositionChanged: (mouse) => {
+            // A self-test moves the pointer through Player's handlers; the
+            // window's own hover (Qt repeats it every frame while items
+            // change) would undo its moves.
+            if (selftest.mode !== "")
+                return
             if (root.logPointer)
                 Tools.log("pointer_local=" + Math.round(mouse.x) + "," + Math.round(mouse.y)
                           + " size=" + root.width + "x" + root.height)
@@ -465,6 +504,8 @@ Window {
         }
         onWheel: (wheel) => player.mouse_wheel(wheel.x, wheel.y, wheel.angleDelta.y)
         onExited: {
+            if (selftest.mode !== "")
+                return
             if (tipLoader.item)
                 tipLoader.item.tip.close()
             player.mouse_leave()
@@ -569,6 +610,27 @@ Window {
         active: false
         Component.onCompleted: setSource("Settings.qml", { player: player })
     }
+    Loader {
+        id: playbackLoader
+        anchors.fill: parent
+        z: 30
+        active: false
+        Component.onCompleted: setSource("PlaybackDialogs.qml", { player: player })
+    }
+    // The scene browser lies over the video (M11).
+    Loader {
+        id: sceneLoader
+        x: player.video_rect.x
+        y: player.video_rect.y
+        width: player.video_rect.width
+        height: player.video_rect.height
+        z: 26
+        active: false
+        Component.onCompleted: setSource("SceneBrowser.qml", { player: player })
+        onLoaded: {
+            item.anchors.fill = sceneLoader
+        }
+    }
     // The control panel's window (F7), created the first time it shows.
     Loader {
         id: panelLoader
@@ -584,7 +646,7 @@ Window {
             const paths = []
             for (const url of drop.urls)
                 paths.push(Tools.local_file(url))
-            player.open_files(paths.join("\n"), false)
+            player.drop_files(paths.join("\n"))
             drop.accept()
         }
     }
@@ -607,6 +669,91 @@ Window {
             id: osdTimer
             interval: 2000
             onTriggered: player.osd = ""
+        }
+    }
+
+    // The seek bar's tooltip (M11): the time under the pointer, the
+    // chapter or bookmark there, and the thumbnail core's preview.
+    Rectangle {
+        id: seekTip
+        visible: player.seek_tip_shown && (player.seek_tip !== "" || player.preview_width > 0)
+        z: 22
+        readonly property int pad: 4
+        width: Math.max(seekTipText.implicitWidth, player.preview_width) + 2 * pad
+        height: (player.preview_width > 0 ? player.preview_height + pad : 0)
+                + (player.seek_tip !== "" ? seekTipText.implicitHeight : 0) + 2 * pad
+        x: Math.max(0, Math.min(root.width - width, player.seek_tip_x - width / 2))
+        y: Math.max(0, player.seek_tip_y - height - 6)
+        radius: 3
+        color: "#e0181820"
+        border.color: "#60ffffff"
+        ThumbView {
+            id: previewView
+            visible: player.preview_width > 0
+            x: (seekTip.width - width) / 2
+            y: seekTip.pad
+            width: player.preview_width
+            height: player.preview_height
+            key: "thumb/preview"
+            image_width: player.preview_width
+            image_height: player.preview_height
+            Connections {
+                target: player
+                function onPreview_serialChanged() { previewView.update() }
+            }
+        }
+        Text {
+            id: seekTipText
+            x: (seekTip.width - width) / 2
+            y: seekTip.height - seekTip.pad - implicitHeight
+            horizontalAlignment: Text.AlignHCenter
+            color: "#f0f0f0"
+            font.pixelSize: 13
+            text: player.seek_tip
+        }
+    }
+
+    // The notice before shutting down, sleeping or hibernating (M11):
+    // it counts down, and Cancel stops it.
+    Rectangle {
+        visible: player.power_seconds > 0
+        z: 28
+        anchors.centerIn: parent
+        width: Math.max(powerText.implicitWidth, 260) + 40
+        height: powerText.implicitHeight + cancelPower.height + 40
+        radius: 6
+        color: "#f0202028"
+        border.color: "#80ffb000"
+        Text {
+            id: powerText
+            anchors.horizontalCenter: parent.horizontalCenter
+            y: 14
+            horizontalAlignment: Text.AlignHCenter
+            color: "#f0f0f0"
+            font.pixelSize: 16
+            text: player.power_notice + "\nin " + player.power_seconds + " seconds"
+        }
+        Rectangle {
+            id: cancelPower
+            objectName: "cancelPower"
+            anchors.horizontalCenter: parent.horizontalCenter
+            anchors.bottom: parent.bottom
+            anchors.bottomMargin: 12
+            width: 120
+            height: 30
+            radius: 4
+            color: cancelArea.containsMouse ? "#505868" : "#383e4a"
+            Text {
+                anchors.centerIn: parent
+                color: "#ffffff"
+                text: "Cancel"
+            }
+            MouseArea {
+                id: cancelArea
+                anchors.fill: parent
+                hoverEnabled: true
+                onClicked: player.cancel_countdown()
+            }
         }
     }
 
@@ -705,6 +852,15 @@ Window {
     //                         and checked: at most 2 frames more than the
     //                         baseline, offset under 0.1 s (SKIPPED when
     //                         the baseline is above 2: software rendering)
+    //   --selftest=m11        M11's checks (SelfTestM11.qml): the thumbnail
+    //                         core, jumps, A-B, skips, bookmarks, the
+    //                         playlist's commands, the power actions
+    //                         through the dry-run hook, discs (--dvd=DIR),
+    //                         external audio (--audio=FILE), the clipboard
+    //                         (--clip=FILE), yt-dlp's fallback; the files:
+    //                         fixture-chapters.mkv, fixture-60s.mkv,
+    //                         fixture-3s.mkv, with /seek=0:00:03 and
+    //                         /title="M11 title"
     //   --selftest=resume     expects the last file reopened paused within
     //                         --expect-tolerance (default 2.5) seconds of
     //                         --expect-time=SECONDS; with --expect-entry=I
@@ -809,8 +965,27 @@ Window {
             return vpyTick()
         if (selftest.mode === "speed")
             return speedTick()
+        if (selftest.mode === "m11")
+            return m11Tick()
         functionalTick()
     }
+
+    // --selftest=m11: M11's checks (SelfTestM11.qml).
+    Loader {
+        id: m11Loader
+        active: false
+        Component.onCompleted: setSource("SelfTestM11.qml", { player: player, t: selftest, host: root })
+    }
+    function m11Tick() {
+        if (!m11Loader.item) {
+            m11Loader.active = true
+            return
+        }
+        m11Loader.item.tick()
+    }
+    // M11's dialogs and scene browser, for the self-test.
+    function playbackDialogs() { return playbackLoader.item }
+    function sceneBrowser() { return sceneLoader.item }
 
     function resumeTick() {
         const t = selftest
@@ -1738,10 +1913,20 @@ Window {
         // the individual volume, Freeverb's response, the sync dialog, the
         // second device, recording, the system's master volume and Audio
         // Stretching.
-        case 322:
+        case 322: {
+            // The window takes the keyboard back from the playlist (whose
+            // Shift+C copies files, M11): two clicks on the video, which
+            // pause and play again.
+            const cx = player.video_rect.x + player.video_rect.width / 2
+            const cy = player.video_rect.y + player.video_rect.height / 2
+            for (let i = 0; i < 2; ++i) {
+                player.mouse_press(cx, cy, Qt.LeftButton, 0)
+                player.mouse_release(cx, cy, Qt.LeftButton)
+            }
             player.key(Qt.Key_C, Qt.ShiftModifier)
             t.next()
             break
+        }
         case 323:
             if (t.waitFor("shift_c_crystality_on", () => s.af !== null && s.af.indexOf("rvpcrystality") >= 0
                               && String(s.osd).indexOf("Crystality: On") >= 0, 3000,

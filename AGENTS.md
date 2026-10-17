@@ -118,10 +118,14 @@ FFmpeg, Qt or the platform cannot do it.
   `m4-all.ps1`, `m6-all.ps1`, `m7-all.ps1` (RVP Default with no skin
   set, then the test copy of BlackSpace; copy them and `run.ps1` to
   `C:\rvp-test` with the bundle and `testdata/media/fixture-marker.*`),
-  `m8-all.ps1` (the packages, see below) and `m10-all.ps1` (M10's
+  `m8-all.ps1` (the packages, see below), `m10-all.ps1` (M10's
   self-test steps, the awake request, the recording's file, and
   `tests/audio_chain.rs` and `tests/speakers.rs` built with `cargo xwin
-  test --no-run` beside the bundle's libmpv: Windows' FFmpeg).
+  test --no-run` beside the bundle's libmpv: Windows' FFmpeg) and
+  `m11-all.ps1` (`--selftest=m11` with `fixture-chapters.*` and the `dvd`
+  folder beside the bundle, the power dry-run file, the Recycle Bin, and
+  `tests/thumbnails.rs` and `tests/m11.rs` run with `RVP_TESTDATA` at
+  the bundle).
 - Video filters: RVP adds and removes only its own, by label (`@rvp*`,
   `vf pre`), and never touches SVP's `@svp` (goal H's rule 4).
 - Audio filters: RVP's part of mpv's `af` is built at once by
@@ -251,7 +255,37 @@ FFmpeg, Qt or the platform cannot do it.
   host it runs only with permission.
 - `tools/packaging/check-deb.sh` checks the Linux packages on another
   Ubuntu release inside a container (CI: `ubuntu:26.10`): install,
-  libraries, the self-tests under Xvfb.
+  libraries, the self-tests under Xvfb (M11's too).
+
+## Playback, playlist and opening (M11)
+
+- The thumbnail core (`crates/engine/src/thumbnail.rs`) is a second
+  libmpv core without audio, drawn with the software render API on a
+  thread of its own, with a cache; it also finds durations. Create it
+  after the player's core (ffmpeg's log goes to the first core).
+  vo_libmpv holds a seek until its frame is rendered, and a property read
+  then waits for its 200 ms timeout: the worker renders while it waits
+  for the restart and reads no properties meanwhile. Previews, scenes and
+  list thumbnails are for local files only (a network source could hold
+  the core up).
+- Power actions never run in tests: `--power-dry-run=FILE` (always on
+  with `--selftest`: `<state>/power-dry-run.txt`) writes the action
+  instead. Never shut down, sleep or hibernate the host or a VM.
+- The Recycle Bin (`shell/src/recycle.rs`) gets full paths: the shell
+  deletes a relative one for good. Linux's trash is goal S's.
+- mpv numbers DVD titles from 0 (`dvd://0/DEVICE` is the first); RVP
+  reads the titles from `VIDEO_TS.IFO`. mpv reads 5 s of a stream to probe
+  it and goes on past a shorter title into the next one, so the DVD
+  fixture's titles are longer. Backward play stalls on discs (refused
+  there).
+- M11's fixtures come from `tools/test-clips/make-m11-fixtures.sh`
+  (bit-exact; dvdauthor for the DVD). Tests that run elsewhere take
+  them from `RVP_TESTDATA`.
+- Self-tests move the pointer through Player's handlers; the window's
+  own hover is ignored while one runs (Qt repeats it every frame).
+- RVP chooses the next entry itself (queue, shuffle, the end of a file):
+  seamless playback and the file navigator were studied and left out
+  (`docs/spikes/m11-studies.md`).
 
 ## Audio audit (docs/audits/audio.md)
 

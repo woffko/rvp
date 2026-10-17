@@ -77,6 +77,12 @@ public:
     Q_INVOKABLE void instance_receiver(QObject *receiver) const;
     // Starts this program again (the self-test's second instance).
     Q_INVOKABLE bool run_self(const QStringList &arguments) const;
+    // The clipboard's text, and putting text on it (M11).
+    Q_INVOKABLE QString clipboard_text() const;
+    Q_INVOKABLE void set_clipboard_text(const QString &text) const;
+    // Shows a file in the system's file manager: selected in Explorer on
+    // Windows, its folder elsewhere.
+    Q_INVOKABLE bool show_file(const QString &path) const;
 };
 
 // Called from Rust (declared in src/ffi.rs).
@@ -93,6 +99,7 @@ void rvp_set_env(rust::Str name, rust::Str value);
 std::size_t rvp_gl_get_proc_address(rust::Str name);
 void rvp_video_request_update();
 bool rvp_atlas_contains(rust::Str name);
+void rvp_atlas_remove_prefix(rust::Str prefix);
 void rvp_atlas_insert(rust::Str name, rust::Slice<const std::uint8_t> rgba, std::int32_t width,
                       std::int32_t height);
 void rvp_paint_atlas(QPainter &painter, rust::Str name, std::array<std::int32_t, 4> src,

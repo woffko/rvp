@@ -4,9 +4,11 @@
 //! This crate has no Qt dependency and no `unsafe` code: it uses the safe
 //! API of the patched `libmpv2` crate (`vendor/libmpv2`). Tests run libmpv
 //! headless (`vo=null`, `ao=null`) on generated `av://lavfi:` sources.
+//! [`thumbnail`] is the second core that renders small pictures (M11).
 
 mod engine;
 mod model;
+pub mod thumbnail;
 
 pub use engine::{
     AudioOutput, Chapter, EndReason, Engine, EngineError, EngineEvent, EngineOptions, Seek, Track,

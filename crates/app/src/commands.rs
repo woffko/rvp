@@ -88,19 +88,10 @@ impl Default for Session {
     }
 }
 
-const SPEED_STEP: f64 = 0.1;
 const ZOOM_STEP: f64 = 0.1;
 const STRETCH_STEP: f64 = 0.05;
 const PAN_STEP: f64 = 0.01;
 const SUBTITLE_SCALE_STEP: f64 = 0.1;
-
-/// `0:01:23` for A-B notices.
-fn clock(seconds: f64) -> String {
-    // Media times are far inside u64.
-    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
-    let total = seconds.max(0.0).round() as u64;
-    format!("{}:{:02}:{:02}", total / 3600, total / 60 % 60, total % 60)
-}
 
 /// `+0.5 s`, `-50 ms`.
 pub(crate) fn signed_seconds(seconds: f64) -> String {
@@ -165,7 +156,7 @@ impl App {
             Action::FrameForward => self.loaded_command(engine, "frame-step", &[]),
             Action::JumpTo(jump) => self.jump(engine, jump),
             Action::Speed(speed) => self.speed(engine, speed),
-            Action::AbRepeat(change) => Some(self.ab_repeat(engine, change)),
+            Action::AbRepeat(change) => self.ab_repeat(engine, change),
             Action::RepeatCycle => {
                 let next = match self.settings.repeat {
                     Repeat::Off => Repeat::Album,
@@ -203,7 +194,9 @@ impl App {
                 let next = match self.session.after {
                     AfterPlayback::Nothing => AfterPlayback::ExitAfterFile,
                     AfterPlayback::ExitAfterFile => AfterPlayback::ExitAfterList,
-                    AfterPlayback::ExitAfterList => AfterPlayback::Nothing,
+                    AfterPlayback::ExitAfterList => AfterPlayback::PowerAfterFile,
+                    AfterPlayback::PowerAfterFile => AfterPlayback::PowerAfterList,
+                    AfterPlayback::PowerAfterList | AfterPlayback::Stay => AfterPlayback::Nothing,
                 };
                 Some(self.set_after(next))
             }
@@ -248,8 +241,101 @@ impl App {
             Action::SubtitleFont => Some(UiRequest::SubtitleFontDialog(
                 self.settings.subtitle_font.clone(),
             )),
-            other => self.view_command(engine, other),
+            other => self
+                .m11_command(engine, other)
+                .unwrap_or_else(|| self.view_command(engine, other)),
         }
+    }
+
+    /// M11's commands: `None` when the action is not one of them, else
+    /// what it asks of the window.
+    #[allow(clippy::option_option)] // Not M11's / M11's and what it asks.
+    fn m11_command(&mut self, engine: &Engine, action: Action) -> Option<Option<UiRequest>> {
+        let request = match action {
+            Action::JumpDialog => self.model.media_loaded().then(|| UiRequest::JumpDialog {
+                time: self.model.double(PropertyId::TimePos).unwrap_or(0.0),
+                duration: self.model.double(PropertyId::Duration).unwrap_or(0.0),
+                fps: self.model.double(PropertyId::ContainerFps).unwrap_or(0.0),
+            }),
+            Action::Scenes(kind) => self.open_scenes(engine, kind),
+            Action::Skip(skip) => Some(self.skip_command(skip)),
+            Action::Bookmark(command) => self.bookmark_command(engine, command),
+            Action::ToggleShuffle
+            | Action::ToggleRememberPositions
+            | Action::ToggleHidePointer
+            | Action::ToggleCloseAtEnd
+            | Action::ToggleRecyclePlayed
+            | Action::ToggleSeekTooltip
+            | Action::ToggleSeekPreview
+            | Action::ToggleSeekMarkers
+            | Action::ToggleKeepSpeed
+            | Action::ToggleRememberAfter => self.playback_toggle(action),
+            Action::SetPowerAction(power) => Some(self.set_power_action(power)),
+            Action::PowerTimer(kind) => Some(self.power_timer_command(kind)),
+            Action::CopyName(what) => self.copy_name(what),
+            Action::ToggleRecent => {
+                let open = &mut self.settings.open;
+                open.recent = !open.recent;
+                let on = open.recent;
+                if !on {
+                    self.marks_mut().clear_recent();
+                }
+                Some(self.toggled("Store and show recent items", on))
+            }
+            Action::ClearRecent => {
+                self.marks_mut().clear_recent();
+                Some(UiRequest::Osd("Recent items cleared".to_owned()))
+            }
+            Action::SetWhenOpened(rule) => {
+                self.settings.open.when_opened = rule;
+                self.save_settings();
+                Some(UiRequest::Osd(
+                    match rule {
+                        crate::action::WhenOpened::Selected => "When files open: only them",
+                        crate::action::WhenOpened::Similar => "When files open: similar files too",
+                        crate::action::WhenOpened::All => "When files open: the whole folder",
+                    }
+                    .to_owned(),
+                ))
+            }
+            Action::SetDefaultOpen(choice) => {
+                self.settings.open.default_open = choice;
+                self.save_settings();
+                None
+            }
+            Action::Open(source) => self.open_source(engine, source),
+            Action::LoadExternalAudio => Some(UiRequest::OpenAudioDialog),
+            Action::ReloadSubtitle => self.reload_subtitle(engine),
+            Action::AddFavoriteItem => self.add_favorite(false),
+            Action::AddFavoriteFolder => self.add_favorite(true),
+            Action::EditFavorites => Some(UiRequest::Favorites),
+            Action::ChapterMenu => {
+                if self.settings.playback.bookmarks.thumbnails {
+                    self.open_scenes(engine, crate::action::Scenes::Markers)
+                } else {
+                    Some(UiRequest::PopupMenu("CMD_POPUPMENU_PLAY_BOOKMARK"))
+                }
+            }
+            Action::DeleteFiles(related) => {
+                let action = if related {
+                    crate::action::ListAction::DeleteRelated
+                } else {
+                    crate::action::ListAction::DeleteFiles
+                };
+                self.list_action(engine, action, false, 10)
+            }
+            Action::DvdSpeed(speed) => Some(UiRequest::Osd(match self.dvd_speed(engine, speed) {
+                Ok(true) => format!(
+                    "Speed: {}x {}",
+                    speed.unsigned_abs(),
+                    if speed < 0 { "backward" } else { "forward" }
+                ),
+                Ok(false) => "Backward play: not on discs".to_owned(),
+                Err(error) => format!("Speed: {error}"),
+            })),
+            _ => return None,
+        };
+        Some(request)
     }
 
     /// The picture, frame capture and window commands.
@@ -357,6 +443,9 @@ impl App {
             Jump::NextSubtitle => engine.command("sub-seek", &["1"]),
             Jump::PreviousChapter => engine.command("add", &["chapter", "-1"]),
             Jump::NextChapter => engine.command("add", &["chapter", "1"]),
+            Jump::PreviousKeyframe => self.keyframe_step(engine, false),
+            Jump::NextKeyframe => self.keyframe_step(engine, true),
+            Jump::CurrentSubtitle => engine.command("sub-seek", &["0"]),
         };
         drop(result);
         None
@@ -365,24 +454,37 @@ impl App {
     fn speed(&mut self, engine: &Engine, change: Speed) -> Option<UiRequest> {
         let current = self.model.double(PropertyId::Speed).unwrap_or(1.0);
         let next = match change {
-            Speed::Faster => current + SPEED_STEP,
-            Speed::Slower => current - SPEED_STEP,
+            Speed::Faster => current + self.settings.playback.speed_step,
+            Speed::Slower => current - self.settings.playback.speed_step,
             Speed::Default if (current - 1.0).abs() > 1e-6 => {
                 self.session.last_speed = current;
                 1.0
             }
             Speed::Default => self.session.last_speed,
         };
-        let next = ((next * 10.0).round() / 10.0).clamp(0.1, 16.0);
+        let next = ((next * 100.0).round() / 100.0).clamp(0.01, 16.0);
         // With the normalizer on, the tempo filter after it takes the speed
         // (`crate::normalizer`): no seek is needed.
         engine.set_double("speed", next).ok()?;
-        Some(UiRequest::Osd(format!("Speed: {next:.1}x")))
+        Some(UiRequest::Osd(if (next * 10.0).fract().abs() < 1e-9 {
+            format!("Speed: {next:.1}x")
+        } else {
+            format!("Speed: {next:.2}x")
+        }))
     }
 
-    fn ab_repeat(&mut self, engine: &Engine, change: AbRepeat) -> UiRequest {
+    fn ab_repeat(&mut self, engine: &Engine, change: AbRepeat) -> Option<UiRequest> {
         let time = self.model.double(PropertyId::TimePos);
         let session = &mut self.session;
+        match change {
+            AbRepeat::SetA
+            | AbRepeat::SetB
+            | AbRepeat::ClearA
+            | AbRepeat::ClearB
+            | AbRepeat::Clear
+            | AbRepeat::Toggle => {}
+            other => return self.ab_extra(engine, other),
+        }
         match change {
             AbRepeat::SetA => session.point_a = time,
             AbRepeat::SetB => session.point_b = time,
@@ -391,8 +493,10 @@ impl App {
             AbRepeat::Clear => {
                 session.point_a = None;
                 session.point_b = None;
+                session.ab_active = false;
             }
             AbRepeat::Toggle => session.ab_active = !session.ab_active,
+            _ => {}
         }
         // Setting both points starts the repeat, as in PotPlayer.
         if matches!(change, AbRepeat::SetA | AbRepeat::SetB) {
@@ -405,18 +509,7 @@ impl App {
             session.point_b = Some(a);
         }
         self.apply_ab(engine);
-        let session = &self.session;
-        let point = |p: Option<f64>| p.map_or_else(|| "-".to_owned(), clock);
-        UiRequest::Osd(format!(
-            "A-B Repeat{}: A {} B {}",
-            if session.ab_active && session.point_a.is_some() && session.point_b.is_some() {
-                ""
-            } else {
-                " (off)"
-            },
-            point(session.point_a),
-            point(session.point_b)
-        ))
+        Some(self.ab_notice())
     }
 
     /// Sets mpv's A-B loop from the session.
@@ -447,15 +540,23 @@ impl App {
     }
 
     fn set_after(&mut self, after: AfterPlayback) -> UiRequest {
+        // Choosing the chosen one again turns it off, as in PotPlayer.
+        let after = if self.session.after == after && after != AfterPlayback::Nothing {
+            AfterPlayback::Nothing
+        } else {
+            after
+        };
         self.session.after = after;
-        UiRequest::Osd(
-            match after {
-                AfterPlayback::Nothing => "When playback ends: do nothing",
-                AfterPlayback::ExitAfterFile => "When playback ends: exit",
-                AfterPlayback::ExitAfterList => "When the playlist ends: exit",
-            }
-            .to_owned(),
-        )
+        self.remember_after();
+        let action = crate::power::action_text(self.settings.playback.finished.action);
+        UiRequest::Osd(match after {
+            AfterPlayback::Nothing => "When playback ends: do nothing".to_owned(),
+            AfterPlayback::ExitAfterFile => "When playback ends: exit".to_owned(),
+            AfterPlayback::ExitAfterList => "When the playlist ends: exit".to_owned(),
+            AfterPlayback::PowerAfterFile => format!("When playback ends: {action}"),
+            AfterPlayback::PowerAfterList => format!("When the playlist ends: {action}"),
+            AfterPlayback::Stay => "When playback ends: stay".to_owned(),
+        })
     }
 
     fn cycle_track(&mut self, engine: &Engine, kind: TrackKind) -> Option<UiRequest> {

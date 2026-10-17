@@ -3,6 +3,7 @@
 //! after changes, and what mouse input does.
 
 use rvp_app::chrome::{Chrome, Mode};
+use rvp_app::playback::SeekHover;
 use rvp_app::playlist::Playlists;
 use rvp_app::pointer::{Button, Context, EDGE_LEFT, Effect, Modifiers, Pointer};
 use rvp_app::{Action, Bindings, view};
@@ -189,6 +190,22 @@ fn regions_cover_every_control() {
 }
 
 #[test]
+fn a_layout_at_the_same_size_repaints_everything() {
+    let mut chrome = chrome();
+    show(&mut chrome, &playing_model(5.0));
+    // The regions stay the same (a playlist view's new row height asks
+    // for a layout at the same size).
+    let damage = chrome.resize(Mode::Window, WIDTH, HEIGHT).expect("layout");
+    assert!(damage.static_layer && damage.regions_changed);
+    assert_eq!(damage.regions.len(), chrome.frame().regions.len());
+    let damage = show(&mut chrome, &playing_model(6.0));
+    assert_eq!(
+        damage.regions,
+        vec![region_of(&chrome, "CMD_CURRENTTIME_MESSAGE")]
+    );
+}
+
+#[test]
 fn time_changes_repaint_only_their_region() {
     let mut chrome = chrome();
     show(&mut chrome, &playing_model(5.0));
@@ -325,6 +342,40 @@ fn right_click_runs_the_alternative_command_or_opens_the_menu() {
 }
 
 #[test]
+fn hovering_the_seek_bar_asks_for_its_tooltip() {
+    let mut chrome = chrome();
+    let mut pointer = Pointer::default();
+    let rect = chrome
+        .layout()
+        .and_then(|placed| placed.find_command("CMD_TIMEBAR_CTRL"))
+        .expect("seek bar")
+        .rect;
+    let x = rect.x + (rect.w - 1) / 2;
+    match pointer
+        .moved(&mut chrome, window(), x, rect.y + 1)
+        .as_slice()
+    {
+        [Effect::SeekHover(Some(hover))] => {
+            assert!((hover.fraction - 0.5).abs() < 0.02, "{hover:?}");
+            assert_eq!((hover.x, hover.top, hover.held), (x, rect.y, false));
+        }
+        other => panic!("{other:?}"),
+    }
+    // The control's own tooltip gives way to the time.
+    assert_eq!(pointer.tooltip, None);
+    assert_eq!(
+        pointer.moved(&mut chrome, window(), 5, 5),
+        vec![Effect::SeekHover(None)]
+    );
+    assert!(pointer.moved(&mut chrome, window(), 6, 5).is_empty());
+    pointer.moved(&mut chrome, window(), x, rect.y + 1);
+    assert!(
+        pointer.leave(&mut chrome),
+        "leaving the window leaves the bar"
+    );
+}
+
+#[test]
 fn sliders_follow_the_pointer() {
     let mut chrome = chrome();
     let mut pointer = Pointer::default();
@@ -338,9 +389,18 @@ fn sliders_follow_the_pointer() {
         pointer.press(&mut chrome, window(), rect.x, y, Button::Left),
         vec![Effect::SeekFraction(0.0)]
     );
+    // The time tooltip follows the held bar (M11).
     assert_eq!(
         pointer.moved(&mut chrome, window(), rect.right() + 50, y),
-        vec![Effect::SeekFraction(1.0)]
+        vec![
+            Effect::SeekFraction(1.0),
+            Effect::SeekHover(Some(SeekHover {
+                fraction: 1.0,
+                x: rect.right() - 1,
+                top: rect.y,
+                held: true
+            }))
+        ]
     );
     // Let go: the seek bar seeks for good there.
     assert_eq!(

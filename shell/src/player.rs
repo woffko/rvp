@@ -33,6 +33,8 @@ use rvp_skin::{Skin, SkinArchive};
 use crate::player_qobject::qobject;
 use crate::video::ENGINE;
 
+mod m11;
+
 /// `ui_request` kinds.
 pub mod request {
     pub const OPEN_FILES: i32 = 1;
@@ -83,6 +85,16 @@ pub mod request {
     pub const RECORD_AS: i32 = 27;
     /// The folder dialog for audio recordings.
     pub const RECORD_FOLDER: i32 = 28;
+    /// An M11 dialog (`PlaybackDialogs.qml`) described by `dialog` (JSON).
+    pub const DIALOG: i32 = 29;
+    /// Put `dialog` (text) on the clipboard.
+    pub const COPY_TEXT: i32 = 30;
+    /// Read the clipboard for `Player.paste_text`; argument: the purpose.
+    pub const READ_CLIPBOARD: i32 = 31;
+    /// Show the file `dialog` (a path) in the file manager.
+    pub const SHOW_FILE: i32 = 32;
+    /// The scene browser of `dialog` (JSON, `rvp_app::scenes::Browser`).
+    pub const SCENES: i32 = 33;
 }
 
 /// The skin, loaded once for the process (the painters read it on the
@@ -159,6 +171,8 @@ struct Core {
     awake: crate::awake::KeepAwake,
     /// The audio recording under way.
     recorder: Option<crate::recorder::Recorder>,
+    /// Power actions only write their name here (tests, `--selftest`).
+    power_dry_run: Option<PathBuf>,
 }
 
 /// Fitting the window to a video the user opened: requested, then the new
@@ -242,6 +256,18 @@ pub struct PlayerRust {
     pub(crate) panel_x: i32,
     pub(crate) panel_y: i32,
     pub(crate) record_path: QString,
+    pub(crate) seek_tip: QString,
+    pub(crate) seek_tip_x: i32,
+    pub(crate) seek_tip_y: i32,
+    pub(crate) seek_tip_shown: bool,
+    pub(crate) preview_serial: i32,
+    pub(crate) preview_width: i32,
+    pub(crate) preview_height: i32,
+    pub(crate) hide_pointer: bool,
+    pub(crate) center_window: bool,
+    pub(crate) power_notice: QString,
+    pub(crate) power_seconds: i32,
+    pub(crate) dialog: QString,
     /// The command line, parsed by `start`.
     cli: Cli,
     core: Option<Core>,
@@ -575,6 +601,7 @@ impl qobject::Player {
             return;
         }
         crate::metrics::mark("engine_ready_ms");
+        messages.extend(m11::start_thumbnails(&mut app, self.qt_thread()));
         let Some(engine) = ENGINE.get() else {
             return;
         };
@@ -595,8 +622,8 @@ impl qobject::Player {
         }
         self.as_mut().set_has_skin(chrome.is_some());
         self.as_mut().set_window_title(QString::from("RVP"));
-        let cwd = std::env::current_dir().unwrap_or_default();
-        let request = Request::from_cli(&cli, &cwd);
+        let request = Request::from_cli(&cli, &std::env::current_dir().unwrap_or_default());
+        let power_dry_run = m11::power_dry_run(&cli, app.state_dir());
         self.as_mut().rust_mut().get_mut().core = Some(Core {
             app,
             engine,
@@ -620,6 +647,7 @@ impl qobject::Player {
             desktop: None,
             awake: crate::awake::KeepAwake::default(),
             recorder: None,
+            power_dry_run,
         });
         if let Some(message) = messages.first() {
             self.as_mut().show_message(message);
@@ -647,9 +675,11 @@ impl qobject::Player {
         let Some(core) = self.as_mut().core_mut() else {
             return;
         };
-        let Some(request) = core.pending.take() else {
+        let Some(mut request) = core.pending.take() else {
             return;
         };
+        // PotPlayer's switches (M11): the files' order and options first.
+        core.app.prepare_switches(&mut request);
         // The desktop's media controls follow the application from here.
         match crate::desktop::Integration::start(thread, crate::ffi::bridge::rvp_main_window_id()) {
             Ok(desktop) => core.desktop = Some(desktop),
@@ -671,8 +701,12 @@ impl qobject::Player {
                 .start(core.engine, &[])
                 .and_then(|()| core.app.remote(core.engine, &request))
         };
+        let action = core.app.switch_action(core.engine, &request);
         if let Err(error) = result {
-            self.show_message(&format!("cannot open: {error}"));
+            self.as_mut().show_message(&format!("cannot open: {error}"));
+        }
+        if let Some(action) = action {
+            self.handle_request(action);
         }
     }
 
@@ -687,6 +721,8 @@ impl qobject::Player {
             desktop.sync(&core.app, &drained.events);
         }
         core.awake.set(core.app.keeps_screen_on());
+        let hides_pointer = core.hides_pointer();
+        let center = core.app.settings.playback.center_window;
         for event in &drained.events {
             match event {
                 EngineEvent::PlaybackRestart => crate::metrics::playback_restarted(),
@@ -739,6 +775,8 @@ impl qobject::Player {
         let title = view::title(&core.app.model, core.app.library().lists());
         let requests = drained.requests;
         self.as_mut().set_has_video(has_video);
+        self.as_mut().set_hide_pointer(hides_pointer);
+        self.as_mut().set_center_window(center);
         self.as_mut()
             .set_window_title(QString::from(if title.is_empty() {
                 "RVP"
@@ -792,6 +830,8 @@ impl qobject::Player {
             core.app.settings.volume_max,
         );
         core.app.seek_bar_data(&mut data);
+        core.app.list_view_data(&mut data);
+        data.marks = core.app.seek_marks();
         data.playlist.drop_before = core.drop_before;
         if !core.clock.is_empty() {
             data.set_text("CMD_SYSTEM_TIME_MESSAGE", core.clock.as_str());
@@ -804,6 +844,14 @@ impl qobject::Player {
         let toggles = chrome.toggle_commands();
         core.app.toggle_flags(&mut chrome.state, toggles);
         let damage = chrome.refresh();
+        // The thumbnail view's rows ask for their pictures (M11), the last
+        // one even when it shows in part.
+        if let Some(geometry) = chrome.list_geometry()
+            && !geometry.area.is_empty()
+        {
+            core.app
+                .request_list_thumbnails(geometry.first, geometry.visible + 1);
+        }
         self.as_mut().emit_damage(&damage, synced);
         self.sync_panel(false);
     }
@@ -1281,6 +1329,7 @@ impl qobject::Player {
                     }
                     self.as_mut().ui_request(request::SKIN_MENU, 0);
                 }
+                Effect::SeekHover(hover) => self.as_mut().seek_hover(hover),
             }
         }
     }
@@ -1301,12 +1350,18 @@ impl qobject::Player {
             ListEffect::DropMarker(marker) => core.drop_before = marker,
             ListEffect::Menu => self.ui_request(request::LIST_MENU, 0),
             effect => {
-                if matches!(effect, ListEffect::Play(_)) {
+                let plays = matches!(effect, ListEffect::Play(_));
+                if plays {
                     crate::metrics::input("input_ms");
                     core.request_fit();
                 }
                 let visible = Self::visible_rows(core);
-                if let Some(request) = core.app.list_effect(core.engine, effect, visible) {
+                let request = core.app.list_effect(core.engine, effect, visible);
+                // "Move focus to main win on manual play" (M11).
+                if plays && core.app.settings.playlist.focus_main {
+                    core.focus = Focus::Window;
+                }
+                if let Some(request) = request {
                     self.handle_request(request);
                 }
             }
@@ -1323,7 +1378,11 @@ impl qobject::Player {
             core.request_fit();
         }
         let visible = Self::visible_rows(core);
-        if let Some(request) = core.app.list_action(core.engine, action, extend, visible) {
+        let request = core.app.list_action(core.engine, action, extend, visible);
+        if action == ListAction::Play && core.app.settings.playlist.focus_main {
+            core.focus = Focus::Window;
+        }
+        if let Some(request) = request {
             self.handle_request(request);
         }
     }
@@ -1408,8 +1467,12 @@ impl qobject::Player {
         let Some(core) = self.as_mut().core_mut() else {
             return;
         };
-        if let Some(chrome) = core.chrome.as_mut() {
-            core.pointer.leave(chrome);
+        let left_bar = core
+            .chrome
+            .as_mut()
+            .is_some_and(|chrome| core.pointer.leave(chrome));
+        if left_bar {
+            self.as_mut().seek_hover(None);
         }
         self.as_mut().set_tooltip(QString::default());
         if *self.fullscreen() {
@@ -1581,6 +1644,7 @@ impl qobject::Player {
             | UiRequest::RecordDialog(_)
             | UiRequest::RecordFolderDialog
             | UiRequest::Record(_)) => self.audio_request(request),
+            other => self.m11_request(other),
         }
     }
 
@@ -2015,7 +2079,7 @@ impl qobject::Player {
     }
 
     pub(crate) fn remote_message(mut self: Pin<&mut Self>, message: &QString) {
-        let Some(request) = Request::decode(&message.to_string()) else {
+        let Some(mut request) = Request::decode(&message.to_string()) else {
             return;
         };
         let Some(core) = self.as_mut().core_mut() else {
@@ -2033,8 +2097,14 @@ impl qobject::Player {
         let Some(core) = self.as_mut().core_mut() else {
             return;
         };
-        if let Err(error) = core.app.remote(core.engine, &request) {
+        core.app.prepare_switches(&mut request);
+        let result = core.app.remote(core.engine, &request);
+        let action = core.app.switch_action(core.engine, &request);
+        if let Err(error) = result {
             self.as_mut().show_message(&format!("cannot open: {error}"));
+        }
+        if let Some(action) = action {
+            self.as_mut().handle_request(action);
         }
         self.sync_chrome();
     }
@@ -2297,8 +2367,9 @@ impl qobject::Player {
         core.app.tick_second(core.engine, Instant::now());
         if let Err(error) = core.app.tick(Instant::now()) {
             let text = format!("cannot save the playback state: {error}");
-            self.show_message(&text);
+            self.as_mut().show_message(&text);
         }
+        self.tick_m11();
     }
 
     pub(crate) fn shutdown(mut self: Pin<&mut Self>) {
@@ -2388,6 +2459,7 @@ impl qobject::Player {
         let body: Vec<String> = fields
             .into_iter()
             .chain(self.playlist_status(core))
+            .chain(m11::status(self, core))
             .map(|(name, value)| format!("\"{name}\":{value}"))
             .collect();
         QString::from(&format!("{{{}}}", body.join(",")))

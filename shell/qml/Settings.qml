@@ -22,7 +22,12 @@ ApplicationWindow {
     // Keys of rvp_app::SettingsPage.
     readonly property var pages: [
         { key: "playback", title: "Playback" },
+        { key: "time-jump", title: "Playback: Time Jump" },
+        { key: "skip", title: "Playback: Skip" },
+        { key: "section-repeat", title: "Playback: Section Repeat" },
+        { key: "scene-browser", title: "Playback: Scene Browser" },
         { key: "playlist", title: "Playlist" },
+        { key: "devices", title: "Devices" },
         { key: "audio", title: "Audio" },
         { key: "audio-volume", title: "Audio: Volume Control" },
         { key: "equalizer", title: "Audio: Equalizer" },
@@ -380,6 +385,12 @@ ApplicationWindow {
         property string target
         onAccepted: win.set(target, Tools.local_file(selectedFolder))
     }
+    // Adds the chosen folder to the list setting `target`.
+    Dialogs.FolderDialog {
+        id: folderListChooser
+        property string target
+        onAccepted: win.listAdd(target, [Tools.local_file(selectedFolder)])
+    }
     // Adds the chosen files to the list setting `target`.
     Dialogs.FileDialog {
         id: listChooser
@@ -464,25 +475,11 @@ ApplicationWindow {
                 currentIndex: pageList.currentIndex
 
                 Page {
-                    Heading { text: "Seek steps" }
-                    Amount { label: "Left / Right"; path: "seek-seconds.0"; values: [0.5, 1, 2, 3, 5, 10, 15, 20, 30, 45, 60, 90, 120, 180, 300, 600, 900, 1800, 3600]; format: win.seconds }
-                    Amount { label: "Ctrl+Left / Right"; path: "seek-seconds.1"; values: [0.5, 1, 2, 3, 5, 10, 15, 20, 30, 45, 60, 90, 120, 180, 300, 600, 900, 1800, 3600]; format: win.seconds }
-                    Amount { label: "Shift+Left / Right"; path: "seek-seconds.2"; values: [0.5, 1, 2, 3, 5, 10, 15, 20, 30, 45, 60, 90, 120, 180, 300, 600, 900, 1800, 3600]; format: win.seconds }
-                    Amount { label: "Ctrl+Alt+Left / Right"; path: "seek-seconds.3"; values: [0.5, 1, 2, 3, 5, 10, 15, 20, 30, 45, 60, 90, 120, 180, 300, 600, 900, 1800, 3600]; format: win.seconds }
-                    Check { path: "keyframe-seeks"; text: "Seek to keyframes (faster, less exact)" }
                     Heading { text: "Resume" }
-                    Check { path: "remember-positions"; text: "Resume every file at its last position" }
+                    Check { path: "remember-positions"; text: "Remember video playback positions" }
+                    Check { path: "playback.remember-audio-positions"; text: "Remember audio playback positions" }
                     Check { path: "reopen-last-file"; text: "Reopen the last file, paused, when RVP starts without files" }
-                    Heading { text: "Window" }
-                    Check { path: "fit-window-to-video"; text: "Fit the window to a newly opened video" }
-                    Check { path: "keep-aspect-window"; text: "Keep the video's shape while the window is resized" }
-                    Check { path: "prevent-screen-saver"; text: "Prevent screen saver during playback" }
-                    Choice {
-                        label: "Stay on top"
-                        path: "on-top"
-                        values: ["never", "always", "while-playing"]
-                        texts: ({ "never": "Never", "always": "Always", "while-playing": "While playing" })
-                    }
+                    Heading { text: "Playback" }
                     Choice {
                         label: "At the end of a file"
                         path: "repeat"
@@ -490,6 +487,127 @@ ApplicationWindow {
                         texts: ({ "off": "Play the next one", "album": "Repeat the playlist",
                                   "item": "Repeat the file" })
                     }
+                    Check { path: "playback.shuffle"; text: "Shuffle playback" }
+                    Choice {
+                        label: "When playback failed"
+                        path: "playback.on-failure"
+                        values: ["next", "stop"]
+                        texts: ({ "next": "Play the next one", "stop": "Stop" })
+                    }
+                    Amount { label: "Speed step"; path: "playback.speed-step"; values: [0.01, 0.02, 0.05, 0.1, 0.2, 0.25, 0.5]; format: (v) => v + "x" }
+                    Check { path: "playback.keep-speed"; text: "Keep playback speed changes for the next file" }
+                    Check { path: "playback.external-audio"; text: "Auto load external audio files" }
+                    FileList { path: "playback.audio-folders"; ordered: true }
+                    Button {
+                        text: "Add a folder for external audio…"
+                        onClicked: {
+                            folderListChooser.target = "playback.audio-folders"
+                            folderListChooser.open()
+                        }
+                    }
+                    Choice {
+                        visible: win.view.windows === true
+                        label: "Process priority (at the next start)"
+                        path: "playback.priority"
+                        values: ["idle", "belownormal", "normal", "abovenormal", "high"]
+                        texts: ({ "idle": "Idle", "belownormal": "Below normal", "normal": "Normal",
+                                  "abovenormal": "Above normal", "high": "High" })
+                    }
+                    Check { path: "playback.folder-neighbours"; text: "Load previous/next files in the play folder" }
+                    Check { path: "playback.auto-rotate"; text: "Auto rotate files based on metadata" }
+                    Check { path: "playback.retitle"; text: "Auto retitle items based on metadata" }
+                    Check { path: "playback.close-at-end"; text: "Close playback when the playlist ends" }
+                    Check { path: "playback.recycle-played"; text: "Offer played files to the Recycle Bin" }
+                    Heading { text: "Seek bar" }
+                    Check { path: "playback.seek-tooltip"; text: "Show time info on the tooltip" }
+                    Check { path: "playback.seek-preview"; text: "Show thumbnail previews" }
+                    Check { path: "playback.preview-title"; text: "Include the title of the bookmark or chapter" }
+                    Check { path: "playback.preview-time"; text: "Include the time" }
+                    Check { path: "playback.seek-markers"; text: "Show markers of bookmarks, chapters and A-B points" }
+                    Check { path: "playback.pause-while-seeking"; text: "Pause when seeking with the mouse" }
+                    Heading { text: "When playback finished" }
+                    Choice {
+                        label: "The action"
+                        path: "playback.finished.action"
+                        values: ["shutdown", "sleep", "hibernate"]
+                        texts: ({ "shutdown": "Shut down", "sleep": "Sleep", "hibernate": "Hibernate" })
+                    }
+                    Amount { label: "Notice before it (cancellable)"; path: "playback.finished.countdown"; from: 5; to: 300; step: 5; unit: "s" }
+                    Check { path: "playback.finished.remember"; text: "Remember the playback finished action" }
+                    Heading { text: "Window" }
+                    Check { path: "fit-window-to-video"; text: "Fit the window to a newly opened video" }
+                    Check { path: "playback.center-window"; text: "Start playback in a centred window" }
+                    Check { path: "keep-aspect-window"; text: "Keep the video's shape while the window is resized" }
+                    Check { path: "prevent-screen-saver"; text: "Prevent screen saver during playback" }
+                    Check { path: "playback.hide-pointer"; text: "Hide the mouse pointer over the playing video" }
+                    Choice {
+                        label: "Stay on top"
+                        path: "on-top"
+                        values: ["never", "always", "while-playing"]
+                        texts: ({ "never": "Never", "always": "Always", "while-playing": "While playing" })
+                    }
+                    Heading { text: "Opening" }
+                    Choice {
+                        label: "Default open action"
+                        path: "open.default-open"
+                        values: ["files", "url", "folder"]
+                        texts: ({ "files": "Open File(s)", "url": "Open URL", "folder": "Open Folder" })
+                    }
+                    Choice {
+                        label: "When files are opened"
+                        path: "open.when-opened"
+                        values: ["selected", "similar", "all"]
+                        texts: ({ "selected": "Add only the files opened", "similar": "Add similar files too",
+                                  "all": "Add every file of the folder" })
+                    }
+                    Check { path: "open.recent"; text: "Store and show recent items" }
+                    Check { path: "open.ytdl"; text: "Open streaming sites with yt-dlp" }
+                    Field { label: "yt-dlp program"; path: "open.ytdl-path"; placeholder: "yt-dlp" }
+                    Field { label: "yt-dlp format"; path: "open.ytdl-format"; placeholder: "bestvideo+bestaudio/best" }
+                }
+
+                Page {
+                    Heading { text: "Time jump (the arrow keys)" }
+                    Amount { label: "Left / Right"; path: "seek-seconds.0"; values: [0.5, 1, 2, 3, 5, 10, 15, 20, 30, 45, 60, 90, 120, 180, 300, 600, 900, 1800, 3600]; format: win.seconds }
+                    Amount { label: "Ctrl+Left / Right"; path: "seek-seconds.1"; values: [0.5, 1, 2, 3, 5, 10, 15, 20, 30, 45, 60, 90, 120, 180, 300, 600, 900, 1800, 3600]; format: win.seconds }
+                    Amount { label: "Shift+Left / Right"; path: "seek-seconds.2"; values: [0.5, 1, 2, 3, 5, 10, 15, 20, 30, 45, 60, 90, 120, 180, 300, 600, 900, 1800, 3600]; format: win.seconds }
+                    Amount { label: "Ctrl+Alt+Left / Right"; path: "seek-seconds.3"; values: [0.5, 1, 2, 3, 5, 10, 15, 20, 30, 45, 60, 90, 120, 180, 300, 600, 900, 1800, 3600]; format: win.seconds }
+                    Check { path: "keyframe-seeks"; text: "Jump to keyframes (faster, less exact)" }
+                }
+
+                Page {
+                    Heading { text: "Skip" }
+                    Check { path: "playback.skip.enabled"; text: "Enable the skip feature" }
+                    Check { path: "playback.skip.intro"; text: "Skip the intro" }
+                    Amount { label: "Intro length"; path: "playback.skip.intro-seconds"; from: 1; to: 600; step: 1; format: win.seconds }
+                    Check { path: "playback.skip.ending"; text: "Skip the ending" }
+                    Amount { label: "Ending length"; path: "playback.skip.ending-seconds"; from: 1; to: 600; step: 1; format: win.seconds }
+                    Check { path: "playback.skip.chapters"; text: "Skip chapters" }
+                    Field { label: "Chapters to skip"; path: "playback.skip.chapter-names"; placeholder: "Opening;Ending;3" }
+                    Note { text: "Titles (a part, any case) or numbers, separated by semicolons." }
+                }
+
+                Page {
+                    Heading { text: "Section repeat (A-B)" }
+                    Amount { label: "Repeats (0: endless)"; path: "playback.ab.loops"; from: 0; to: 100; step: 1 }
+                    Amount { label: "Fine move"; path: "playback.ab.step"; values: [0.01, 0.05, 0.1, 0.2, 0.5, 1]; format: win.seconds }
+                    Amount { label: "Repeat behind the current point"; path: "playback.ab.behind"; from: 1; to: 60; step: 1; format: win.seconds }
+                    Check { path: "playback.ab.remember"; text: "Remember the A-B repeat lists" }
+                    Check { path: "playback.ab.prevent-backward"; text: "Prevent backward navigation from point A" }
+                    Check { path: "playback.ab.toggle-current"; text: "Repeat-current commands also turn the repeat off" }
+                    Heading { text: "Bookmarks" }
+                    Check { path: "playback.bookmarks.prompt"; text: "Prompt before adding a bookmark" }
+                    Check { path: "playback.bookmarks.in-menu"; text: "Show the bookmark list in the Chapter/Bookmark menu" }
+                    Check { path: "playback.bookmarks.auto-delete"; text: "Delete a bookmark once it is chosen" }
+                }
+
+                Page {
+                    Heading { text: "Scene browser" }
+                    Amount { label: "Scene width"; path: "scenes.size"; values: [96, 128, 160, 192, 224, 256, 320, 400, 480]; unit: "px" }
+                    Amount { label: "Time interval (0: auto)"; path: "scenes.interval"; values: [0, 5, 10, 15, 30, 60, 120, 300, 600]; format: (v) => v === 0 ? "Auto" : win.seconds(v) }
+                    Amount { label: "Opacity"; path: "scenes.opacity"; from: 20; to: 100; step: 5; unit: "%" }
+                    Check { path: "scenes.close-on-change"; text: "Close on scene changes" }
+                    Check { path: "scenes.fall-back-to-time"; text: "Time-based scenes when there is no marker or subtitle" }
                 }
 
                 Page {
@@ -575,6 +693,43 @@ ApplicationWindow {
                             }
                         }
                     }
+                    Heading { text: "Playlist" }
+                    Choice {
+                        label: "View items as"
+                        path: "playlist.thumbnail-rows"
+                        values: [0, 2, 3, 4, 5, 6, 7]
+                        texts: ({ 0: "List", 2: "Thumbnails (2 rows) + details", 3: "Thumbnails (3 rows) + details",
+                                  4: "Thumbnails (4 rows) + details", 5: "Thumbnails (5 rows) + details",
+                                  6: "Thumbnails (6 rows) + details", 7: "Thumbnails (7 rows) + details" })
+                    }
+                    Amount { label: "Thumbnail position"; path: "playlist.thumbnail-position"; from: 0; to: 95; step: 5; unit: "%" }
+                    Check { path: "playlist.wide-thumbnails"; text: "Use a 16:9 thumbnail ratio" }
+                    Check { path: "playlist.detect-durations"; text: "Detect durations after adding files to the list" }
+                    Check { path: "playlist.remember-default"; text: "Remember the Default album and recent URLs" }
+                    Check { path: "playlist.instant-albums"; text: "Start albums chosen in menus at once" }
+                    Check { path: "playlist.append-on-open"; text: "Append opened files rather than clear the album" }
+                    Check { path: "playlist.no-duplicates"; text: "Do not add duplicate files" }
+                    Check { path: "playlist.sort-dropped"; text: "Sort dropped files before adding them" }
+                    Check { path: "playlist.focus-main"; text: "Give the window the keyboard when an entry plays" }
+                }
+
+                Page {
+                    Heading { text: "Screen capture" }
+                    Choice {
+                        label: "Method"
+                        path: "devices.capture"
+                        values: ["gdigrab", "ddagrab"]
+                        texts: ({ "gdigrab": "GDI (any desktop)", "ddagrab": "Desktop Duplication (Windows 8 and later)" })
+                    }
+                    Amount { label: "Frames a second"; path: "devices.capture-fps"; values: [5, 10, 15, 24, 25, 30, 50, 60]; unit: "fps" }
+                    Check { path: "devices.capture-pointer"; text: "Show the mouse pointer" }
+                    Heading { text: "Webcam and other devices" }
+                    Field { label: "Device opened without asking"; path: "devices.webcam"; placeholder: "ask every time" }
+                    Heading { text: "Discs" }
+                    Field { label: "DVD drive or folder"; path: "devices.dvd"; placeholder: "ask every time" }
+                    Field { label: "Blu-ray drive or folder"; path: "devices.bluray"; placeholder: "ask every time" }
+                    Field { label: "CD drive"; path: "devices.cd"; placeholder: "libmpv's default" }
+                    Note { text: "Discs play their titles; their menus come with a later version." }
                 }
 
                 Page {

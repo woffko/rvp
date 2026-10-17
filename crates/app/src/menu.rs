@@ -187,6 +187,16 @@ pub enum Command {
     Speakers(usize),
     /// An audio output choice.
     Audio(AudioChoice),
+    /// Jump to a bookmark of the playing file (index).
+    Bookmark(usize),
+    /// Open a favorite (index).
+    Favorite(usize),
+    /// Open a recent item (index).
+    Recent(usize),
+    /// Play a disc's title (DVD Control > Move), by its index.
+    DiscTitle(usize),
+    /// Show a DVD angle (DVD Control > Angle Option).
+    DiscAngle(u8),
 }
 
 /// An audio output choice of the Audio menu's lists.
@@ -306,6 +316,11 @@ impl Command {
             Command::EqualizerPreset(index) => format!("e:{index}"),
             Command::Speakers(index) => format!("o:{index}"),
             Command::Audio(choice) => format!("x:{}", choice.id()),
+            Command::Bookmark(index) => format!("k:{index}"),
+            Command::Favorite(index) => format!("f:{index}"),
+            Command::Recent(index) => format!("r:{index}"),
+            Command::DiscTitle(title) => format!("t:{title}"),
+            Command::DiscAngle(angle) => format!("g:{angle}"),
         }
     }
 
@@ -333,6 +348,11 @@ impl Command {
             "e" => value.parse().ok().map(Command::EqualizerPreset),
             "o" => value.parse().ok().map(Command::Speakers),
             "x" => AudioChoice::parse(value).map(Command::Audio),
+            "k" => value.parse().ok().map(Command::Bookmark),
+            "f" => value.parse().ok().map(Command::Favorite),
+            "r" => value.parse().ok().map(Command::Recent),
+            "t" => value.parse().ok().map(Command::DiscTitle),
+            "g" => value.parse().ok().map(Command::DiscAngle),
             _ => None,
         }
     }
@@ -533,7 +553,7 @@ impl App {
                 (node.text.clone(), items)
             }
             PopupSource::Tracks(kind) => ("Tracks".to_owned(), self.tracks(live, kind)),
-            PopupSource::Chapters => ("Chapters".to_owned(), self.chapters(live)),
+            PopupSource::Chapters => ("Chapter/Bookmark".to_owned(), self.chapter_menu(live)),
             PopupSource::Albums => ("Albums".to_owned(), self.albums()),
             PopupSource::EqualizerPresets => {
                 ("Equalizer Presets".to_owned(), self.equalizer_presets())
@@ -562,9 +582,24 @@ impl App {
                 None
             }
             Command::Album(index) => {
-                self.play_album(engine, index);
+                if self.settings.playlist.instant_albums {
+                    self.play_album(engine, index);
+                } else {
+                    self.library_mut().show_album(index);
+                }
                 None
             }
+            Command::Bookmark(index) => self.jump_to_bookmark(engine, index),
+            Command::Favorite(index) => {
+                let favorite = self.marks().marks().favorites.get(index)?.clone();
+                self.open_item(engine, &favorite.path, favorite.folder)
+            }
+            Command::Recent(index) => {
+                let path = self.marks().marks().recent.get(index)?.clone();
+                self.open_item(engine, &path, false)
+            }
+            Command::DiscTitle(index) => self.play_disc_title(engine, index),
+            Command::DiscAngle(angle) => self.set_disc_angle(engine, angle),
             Command::EqualizerPreset(index) => self.set_equalizer_preset(engine, index),
             Command::Speakers(index) => self.set_speakers(engine, index),
             Command::Audio(choice) => self.audio_choice(engine, choice),
@@ -589,7 +624,7 @@ impl App {
                 "101_0_12_3" => self.device_choices(AudioChoice::SecondDevice),
                 "101_0_11_0" => self.tracks(live, TrackKind::Video),
                 "101_0_10_0" => self.tracks(live, TrackKind::Subtitle),
-                "101_0_3" => self.albums(),
+                "101_0_3" => self.favorites_menu(),
                 "101_0_13" => self.pipeline(live),
                 _ => Vec::new(),
             };
@@ -599,6 +634,11 @@ impl App {
             }
             return MenuItem::submenu(&node.text, children);
         }
+        // "Chapter/Bookmark": the file's chapters and bookmarks, then the
+        // bookmark commands (H opens the same list).
+        if node.id == 10324 {
+            return MenuItem::submenu(&node.text, self.chapter_menu(live));
+        }
         let text = node.text.replace("PotPlayer", "RVP");
         if let Some(action) = Action::from_potplayer_id(node.id) {
             return Some(self.window_item(action, Some(&text)));
@@ -606,9 +646,15 @@ impl App {
         if let Some(action) = ListAction::from_potplayer_id(node.id) {
             return Some(self.list_item(action, &text));
         }
-        // "Chapter/Bookmark" is a list of the file's chapters.
-        if node.id == 10324 {
-            return MenuItem::submenu(&node.text, self.chapters(live));
+        // DVD Control's run-time lists.
+        match node.id {
+            20001 => return MenuItem::submenu(&node.text, self.disc_title_items()),
+            20004 => return MenuItem::submenu(&node.text, self.disc_angle_items()),
+            20002 => return MenuItem::submenu(&node.text, self.tracks(live, TrackKind::Audio)),
+            20003 => {
+                return MenuItem::submenu(&node.text, self.tracks(live, TrackKind::Subtitle));
+            }
+            _ => {}
         }
         // "Equalizer Presets" lists RVP's presets.
         if node.id == 20008 {
@@ -889,6 +935,113 @@ impl App {
             checked: Some(audio.passthrough_min_channels.is_none()),
             ..MenuItem::default()
         });
+        items
+    }
+
+    /// Chapter/Bookmark: the chapters, the bookmarks (when they are to be
+    /// listed) and the bookmark commands.
+    fn chapter_menu(&self, live: &Live) -> Vec<MenuItem> {
+        let mut items = self.chapters(live);
+        if self.settings.playback.bookmarks.in_menu
+            && let Some(path) = self.model.loaded_path()
+        {
+            let bookmarks = self.marks().file(path).bookmarks;
+            if !bookmarks.is_empty() {
+                items.push(MenuItem::separator());
+            }
+            items.extend(
+                bookmarks
+                    .into_iter()
+                    .enumerate()
+                    .map(|(index, bookmark)| MenuItem {
+                        label: bookmark.title,
+                        shortcut: crate::view::format_time(bookmark.time),
+                        command: Some(Command::Bookmark(index)),
+                        ..MenuItem::default()
+                    }),
+            );
+        }
+        items.push(MenuItem::separator());
+        for command in [
+            crate::action::BookmarkCommand::Add,
+            crate::action::BookmarkCommand::Edit,
+        ] {
+            items.push(self.window_item(Action::Bookmark(command), None));
+        }
+        items.push(MenuItem::separator());
+        for command in [
+            crate::action::BookmarkCommand::Thumbnails,
+            crate::action::BookmarkCommand::AutoDelete,
+            crate::action::BookmarkCommand::Prompt,
+            crate::action::BookmarkCommand::ShowInMenu,
+        ] {
+            items.push(self.window_item(Action::Bookmark(command), None));
+        }
+        items
+    }
+
+    /// A disc's titles (DVD Control > Move).
+    fn disc_title_items(&self) -> Vec<MenuItem> {
+        let playing = self.model.loaded_path().unwrap_or_default();
+        self.disc_titles()
+            .into_iter()
+            .enumerate()
+            .map(|(index, (label, address))| MenuItem {
+                label,
+                command: Some(Command::DiscTitle(index)),
+                checked: Some(address == playing),
+                ..MenuItem::default()
+            })
+            .collect()
+    }
+
+    /// A DVD title's angles (DVD Control > Angle Option).
+    fn disc_angle_items(&self) -> Vec<MenuItem> {
+        (1..=self.disc_angles())
+            .map(|angle| MenuItem {
+                label: format!("Angle {angle}"),
+                command: Some(Command::DiscAngle(angle)),
+                ..MenuItem::default()
+            })
+            .collect()
+    }
+
+    /// Album/Favorites: the albums, the favorites and the recent items.
+    fn favorites_menu(&self) -> Vec<MenuItem> {
+        let mut items = self.albums();
+        let marks = self.marks().marks();
+        if !marks.favorites.is_empty() {
+            items.push(MenuItem::separator());
+            items.extend(
+                marks
+                    .favorites
+                    .iter()
+                    .enumerate()
+                    .map(|(index, favorite)| MenuItem {
+                        label: if favorite.folder {
+                            format!("{} (folder)", favorite.title)
+                        } else {
+                            favorite.title.clone()
+                        },
+                        command: Some(Command::Favorite(index)),
+                        ..MenuItem::default()
+                    }),
+            );
+        }
+        if self.settings.open.recent && !marks.recent.is_empty() {
+            let recent: Vec<MenuItem> = marks
+                .recent
+                .iter()
+                .enumerate()
+                .map(|(index, path)| MenuItem {
+                    label: crate::view::file_name(path).to_owned(),
+                    command: Some(Command::Recent(index)),
+                    ..MenuItem::default()
+                })
+                .collect();
+            items.push(MenuItem::separator());
+            items.extend(MenuItem::submenu("Recent Items", recent));
+        }
         items
     }
 

@@ -303,3 +303,39 @@ fn tracks_chapters_and_plain_properties() {
         model.double(PropertyId::AbLoopA).is_none()
     });
 }
+
+#[test]
+fn per_file_options_reach_mpv_with_commas_intact() {
+    let mut player = Player::new();
+    player.events.clear();
+    player
+        .engine
+        .load_with_options(
+            SHORT,
+            &[("force-media-title".to_owned(), "One, two=three".to_owned())],
+        )
+        .expect("loadfile with options");
+    player.wait("file loaded", |_, events| {
+        events
+            .iter()
+            .any(|event| matches!(event, EngineEvent::FileLoaded { .. }))
+    });
+    assert_eq!(
+        player.engine.get_text("media-title").as_deref(),
+        Some("One, two=three")
+    );
+    // A file loaded without them takes its own title again.
+    player.load(LONG);
+    assert_eq!(
+        player.engine.get_text("media-title").as_deref(),
+        Some("RVP fixture 60 s")
+    );
+    let (major, minor) = player.engine.version();
+    assert!(
+        major > 0 || minor >= 30,
+        "mpv-version read: {major}.{minor}"
+    );
+    let protocols = player.engine.protocols();
+    assert!(protocols.iter().any(|p| p == "file"), "{protocols:?}");
+    println!("status protocols={}", protocols.join(","));
+}

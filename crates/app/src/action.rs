@@ -36,6 +36,10 @@ pub enum Jump {
     NextSubtitle,
     PreviousChapter,
     NextChapter,
+    PreviousKeyframe,
+    NextKeyframe,
+    /// The start of the subtitle shown now.
+    CurrentSubtitle,
 }
 
 /// Playback speed changes (PotPlayer's steps of 0.1x).
@@ -58,6 +62,142 @@ pub enum AbRepeat {
     Toggle,
     /// Both points cleared.
     Clear,
+    /// Move a point by the fine step (0.1 s), later when `true`.
+    MoveA(bool),
+    MoveB(bool),
+    MoveBoth(bool),
+    /// Repeat the subtitle line shown now (or the seconds behind the
+    /// current point when no line shows), the one before or the one after.
+    CurrentSubtitle,
+    PreviousSubtitle,
+    NextSubtitle,
+    /// Repeat the A-B list's section at the current point, the one before
+    /// or the one after.
+    CurrentSection,
+    PreviousSection,
+    NextSection,
+    /// Repeat the seconds behind the current point.
+    Behind,
+    FewerLoops,
+    MoreLoops,
+    /// Seeks never go before point A while the section repeats.
+    PreventBackward,
+    /// The repeat-current commands turn the repeat off when it is on.
+    ToggleCurrent,
+    /// Keep the A-B lists across runs.
+    RememberList,
+    /// The A-B repeat list's dialog.
+    ListSetup,
+    /// The section repeat's settings page.
+    Settings,
+}
+
+/// The skip feature (Playback > Skip).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub enum Skip {
+    Toggle,
+    Intro,
+    Ending,
+    Chapters,
+    /// The skip settings page.
+    Setup,
+}
+
+/// Bookmarks (Playback > Chapter/Bookmark).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub enum BookmarkCommand {
+    Add,
+    /// The bookmark list's dialog.
+    Edit,
+    /// The Chapter/Bookmark list opens as the marker scene browser.
+    Thumbnails,
+    /// A bookmark chosen in the menu is deleted after the jump.
+    AutoDelete,
+    /// Ask for a title when adding a bookmark.
+    Prompt,
+    /// List the bookmarks in the Chapter/Bookmark menu.
+    ShowInMenu,
+}
+
+/// The scene browsers (Jump (to) > Browse Scenes).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub enum Scenes {
+    Time,
+    Markers,
+    Subtitles,
+}
+
+/// What "Perform the action" does (Misc > When Playback Finished).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Default, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum PowerAction {
+    #[default]
+    Shutdown,
+    Sleep,
+    Hibernate,
+}
+
+/// The shutdown timer (Misc).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub enum PowerTimer {
+    /// At the time set in the timer's dialog.
+    At,
+    /// After the duration set in the timer's dialog.
+    In,
+    /// The timer's dialog.
+    Dialog,
+}
+
+/// What "Copy current item's ..." copies.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub enum CopyName {
+    Name,
+    Folder,
+    Path,
+}
+
+/// Other sources to open (Open).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub enum Source {
+    /// An FTP, `WebDAV` or HTTP address (the URL dialog).
+    Network,
+    Screen,
+    /// A webcam or another capture device.
+    Device,
+    Dvd,
+    /// A DVD's `.IFO` file.
+    DvdFiles,
+    Bluray,
+    /// A Blu-ray's `.MPLS` playlist.
+    BlurayFiles,
+    AudioCd,
+    /// What the clipboard holds: files or URLs.
+    Clipboard,
+}
+
+/// Which files join the album when files are opened (Misc > When Files
+/// Opened).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Default, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum WhenOpened {
+    /// Only the files opened.
+    #[default]
+    Selected,
+    /// Those and the files of the folder that look alike (the same name
+    /// but a number, the same extension).
+    Similar,
+    /// Those and every media file of the folder.
+    All,
+}
+
+/// What the Open button and Ctrl+O open first (Open > Default Open Action).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Default, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum DefaultOpen {
+    #[default]
+    Files,
+    Url,
+    Folder,
 }
 
 /// What happens at the end of a file.
@@ -170,13 +310,21 @@ impl WindowScale {
     }
 }
 
-/// "When Playback Finished" (for this session, as in PotPlayer).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Default)]
+/// "When Playback Finished": for this session, or kept with "Remember
+/// playback finished action".
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Default, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
 pub enum AfterPlayback {
     #[default]
     Nothing,
     ExitAfterFile,
     ExitAfterList,
+    /// The power action ([`PowerAction`]) after the file or the list, once
+    /// a notice counted down.
+    PowerAfterFile,
+    PowerAfterList,
+    /// Playback stays at the end of the file (the album does not move on).
+    Stay,
 }
 
 /// The format of saved frames.
@@ -205,12 +353,22 @@ pub enum SettingsPage {
     Normalizer,
     AudioEffects,
     AudioSync,
+    TimeJump,
+    Skip,
+    SectionRepeat,
+    SceneBrowser,
+    Devices,
 }
 
 impl SettingsPage {
-    pub const ALL: [SettingsPage; 14] = [
+    pub const ALL: [SettingsPage; 19] = [
         SettingsPage::Playback,
+        SettingsPage::TimeJump,
+        SettingsPage::Skip,
+        SettingsPage::SectionRepeat,
+        SettingsPage::SceneBrowser,
         SettingsPage::Playlist,
+        SettingsPage::Devices,
         SettingsPage::Audio,
         SettingsPage::AudioVolume,
         SettingsPage::Equalizer,
@@ -243,6 +401,11 @@ impl SettingsPage {
             SettingsPage::Normalizer => "normalizer",
             SettingsPage::AudioEffects => "audio-effects",
             SettingsPage::AudioSync => "audio-sync",
+            SettingsPage::TimeJump => "time-jump",
+            SettingsPage::Skip => "skip",
+            SettingsPage::SectionRepeat => "section-repeat",
+            SettingsPage::SceneBrowser => "scene-browser",
+            SettingsPage::Devices => "devices",
         }
     }
 }
@@ -250,6 +413,9 @@ impl SettingsPage {
 /// A user action.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Action {
+    /// The Default Open Action (the Open button, F3): files, a URL or a
+    /// folder.
+    OpenDefault,
     /// Open files through the file dialog.
     OpenFiles,
     OpenFolder,
@@ -350,6 +516,48 @@ pub enum Action {
     SaveFrameAs,
     /// The Audio menu's processing commands (M10).
     Audio(AudioCommand),
+    // M11.
+    /// The Jump to Time/Frame dialog.
+    JumpDialog,
+    Scenes(Scenes),
+    Skip(Skip),
+    Bookmark(BookmarkCommand),
+    ToggleShuffle,
+    ToggleRememberPositions,
+    /// Hide the pointer over the playing video in the window too.
+    ToggleHidePointer,
+    ToggleCloseAtEnd,
+    /// Offer played files (and their subtitles) to the Recycle Bin.
+    ToggleRecyclePlayed,
+    ToggleSeekTooltip,
+    ToggleSeekPreview,
+    ToggleSeekMarkers,
+    /// A new file keeps the playback speed.
+    ToggleKeepSpeed,
+    SetPowerAction(PowerAction),
+    ToggleRememberAfter,
+    PowerTimer(PowerTimer),
+    CopyName(CopyName),
+    /// Store the recent items and list them in the Album/Favorites menu.
+    ToggleRecent,
+    /// Forget the recent items.
+    ClearRecent,
+    SetWhenOpened(WhenOpened),
+    SetDefaultOpen(DefaultOpen),
+    Open(Source),
+    LoadExternalAudio,
+    ReloadSubtitle,
+    AddFavoriteItem,
+    AddFavoriteFolder,
+    EditFavorites,
+    /// DVD Control > Speed: forward (positive) or backward, 1x to 8x.
+    DvdSpeed(i8),
+    /// The playlist's selected files (and with `true` their related files)
+    /// to the Recycle Bin, from the window (Shift+Del).
+    DeleteFiles(bool),
+    /// The Chapter/Bookmark menu at the pointer (H), or the marker scene
+    /// browser with "View bookmarks as thumbnails".
+    ChapterMenu,
 }
 
 /// One row of [`ACTIONS`].
@@ -391,17 +599,20 @@ const fn info(
 pub const ACTIONS: &[ActionInfo] = &[
     // Open.
     info(
+        Action::OpenDefault,
+        "open",
+        "Open File(s)...",
+        Some("F3"),
+        &[10443],
+        &["CMD_MEDIA_OPEN", "ID_BASE_OPEN"],
+    ),
+    info(
         Action::OpenFiles,
         "open-files",
         "Open File(s)...",
-        Some("F3"),
-        &[10443, 10158],
-        &[
-            "CMD_MEDIA_OPEN",
-            "ID_FILE_OPEN",
-            "ID_OPEN_FILE",
-            "ID_BASE_OPEN",
-        ],
+        Some("Ctrl+O"),
+        &[10158],
+        &["ID_FILE_OPEN", "ID_OPEN_FILE"],
     ),
     info(
         Action::OpenFolder,
@@ -743,9 +954,17 @@ pub const ACTIONS: &[ActionInfo] = &[
     info(
         Action::SetAfterPlayback(AfterPlayback::Nothing),
         "after-playback-nothing",
-        "Do nothing when playback ends",
+        "Default action when playback ends",
         None,
+        &[10169],
         &[],
+    ),
+    info(
+        Action::SetAfterPlayback(AfterPlayback::Stay),
+        "after-playback-stay",
+        "Stay in current item when playback ends",
+        None,
+        &[10120],
         &[],
     ),
     info(
@@ -1998,7 +2217,7 @@ pub const ACTIONS: &[ActionInfo] = &[
         "playlist-settings",
         "Playlist Settings...",
         None,
-        &[10315],
+        &[10315, 10759],
         &["ID_PLAYLIST_SETTING"],
     ),
     info(
@@ -2071,6 +2290,763 @@ pub const ACTIONS: &[ActionInfo] = &[
         "About...",
         Some("F1"),
         &[57664],
+        &[],
+    ), // M11: jumps.
+    info(
+        Action::JumpTo(Jump::PreviousKeyframe),
+        "previous-keyframe",
+        "Previous keyframe",
+        Some("Ctrl+Shift+Left"),
+        &[10786],
+        &[],
+    ),
+    info(
+        Action::JumpTo(Jump::NextKeyframe),
+        "next-keyframe",
+        "Next keyframe",
+        Some("Ctrl+Shift+Right"),
+        &[10787],
+        &[],
+    ),
+    info(
+        Action::JumpTo(Jump::CurrentSubtitle),
+        "current-subtitle",
+        "Current subtitle position",
+        Some("Ctrl+Home"),
+        &[10582],
+        &[],
+    ),
+    info(
+        Action::JumpDialog,
+        "jump-dialog",
+        "Jump to Specified Time/Frame...",
+        Some("G"),
+        &[10325],
+        &[],
+    ),
+    info(
+        Action::Scenes(Scenes::Time),
+        "scenes-time",
+        "Browse Scenes by Time Intervals...",
+        Some("Shift+Z"),
+        &[10416],
+        &[],
+    ),
+    info(
+        Action::Scenes(Scenes::Markers),
+        "scenes-markers",
+        "Browse Scenes by Marker Positions...",
+        Some("Alt+Z"),
+        &[10802],
+        &[],
+    ),
+    info(
+        Action::Scenes(Scenes::Subtitles),
+        "scenes-subtitles",
+        "Browse Scenes by Subtitle Intervals...",
+        None,
+        &[10962],
+        &[],
+    ),
+    info(
+        Action::Settings(SettingsPage::TimeJump),
+        "time-jump-settings",
+        "Time Jump Settings...",
+        None,
+        &[10758],
+        &[],
+    ),
+    // M11: repeat and skip.
+    info(
+        Action::AbRepeat(AbRepeat::MoveA(false)),
+        "ab-a-earlier",
+        "Move Point A 0.1 Sec. Backward",
+        Some("Ctrl+["),
+        &[10533],
+        &[],
+    ),
+    info(
+        Action::AbRepeat(AbRepeat::MoveA(true)),
+        "ab-a-later",
+        "Move Point A 0.1 Sec. Forward",
+        Some("Alt+["),
+        &[10535],
+        &[],
+    ),
+    info(
+        Action::AbRepeat(AbRepeat::MoveB(false)),
+        "ab-b-earlier",
+        "Move Point B 0.1 Sec. Backward",
+        Some("Ctrl+]"),
+        &[10537],
+        &[],
+    ),
+    info(
+        Action::AbRepeat(AbRepeat::MoveB(true)),
+        "ab-b-later",
+        "Move Point B 0.1 Sec. Forward",
+        Some("Alt+]"),
+        &[10539],
+        &[],
+    ),
+    info(
+        Action::AbRepeat(AbRepeat::MoveBoth(false)),
+        "ab-earlier",
+        "Move A-B Points 0.1 Sec. Backward",
+        Some("Ctrl+Alt+["),
+        &[10541],
+        &[],
+    ),
+    info(
+        Action::AbRepeat(AbRepeat::MoveBoth(true)),
+        "ab-later",
+        "Move A-B Points 0.1 Sec. Forward",
+        Some("Ctrl+Alt+]"),
+        &[10543],
+        &[],
+    ),
+    info(
+        Action::AbRepeat(AbRepeat::CurrentSubtitle),
+        "ab-subtitle",
+        "Repeat current subtitle section",
+        Some("Ctrl+\\"),
+        &[10592],
+        &[],
+    ),
+    info(
+        Action::AbRepeat(AbRepeat::PreviousSubtitle),
+        "ab-previous-subtitle",
+        "Repeat previous subtitle section",
+        Some("Ctrl+-"),
+        &[10591],
+        &[],
+    ),
+    info(
+        Action::AbRepeat(AbRepeat::NextSubtitle),
+        "ab-next-subtitle",
+        "Repeat next subtitle section",
+        Some("Ctrl+="),
+        &[10593],
+        &[],
+    ),
+    info(
+        Action::AbRepeat(AbRepeat::CurrentSection),
+        "ab-section",
+        "Repeat current marked section",
+        Some("Alt+\\"),
+        &[10746],
+        &[],
+    ),
+    info(
+        Action::AbRepeat(AbRepeat::PreviousSection),
+        "ab-previous-section",
+        "Repeat previous marked section",
+        Some("Alt+-"),
+        &[10745],
+        &[],
+    ),
+    info(
+        Action::AbRepeat(AbRepeat::NextSection),
+        "ab-next-section",
+        "Repeat next marked section",
+        None,
+        &[10747],
+        &[],
+    ),
+    info(
+        Action::AbRepeat(AbRepeat::Behind),
+        "ab-behind",
+        "Repeat 5 Sec. behind current point",
+        None,
+        &[10596],
+        &[],
+    ),
+    info(
+        Action::AbRepeat(AbRepeat::FewerLoops),
+        "ab-fewer-loops",
+        "Decrease the number of loop repeats",
+        Some("Ctrl+Alt+-"),
+        &[10594],
+        &[],
+    ),
+    info(
+        Action::AbRepeat(AbRepeat::MoreLoops),
+        "ab-more-loops",
+        "Increase the number of loop repeats",
+        Some("Ctrl+Alt+="),
+        &[10595],
+        &[],
+    ),
+    info(
+        Action::AbRepeat(AbRepeat::PreventBackward),
+        "ab-prevent-backward",
+        "Prevent backward navigation from point A",
+        None,
+        &[10780],
+        &[],
+    ),
+    info(
+        Action::AbRepeat(AbRepeat::ToggleCurrent),
+        "ab-toggle-current",
+        "Enable toggle for repeat current section",
+        None,
+        &[10781],
+        &[],
+    ),
+    info(
+        Action::AbRepeat(AbRepeat::RememberList),
+        "ab-remember-list",
+        "Remember A-B Repeat List",
+        None,
+        &[10777],
+        &[],
+    ),
+    info(
+        Action::AbRepeat(AbRepeat::ListSetup),
+        "ab-list",
+        "A-B Repeat List Setup...",
+        Some("Shift+\\"),
+        &[10778],
+        &[],
+    ),
+    info(
+        Action::AbRepeat(AbRepeat::Settings),
+        "section-repeat-settings",
+        "Section Repeat Settings...",
+        None,
+        &[10782],
+        &[],
+    ),
+    info(
+        Action::Skip(Skip::Toggle),
+        "skip-toggle",
+        "Enable skip feature",
+        Some("\""),
+        &[10239],
+        &[],
+    ),
+    info(
+        Action::Skip(Skip::Intro),
+        "skip-intro",
+        "Skip Intro %s",
+        None,
+        &[10579],
+        &[],
+    ),
+    info(
+        Action::Skip(Skip::Ending),
+        "skip-ending",
+        "Skip Ending %s",
+        None,
+        &[10580],
+        &[],
+    ),
+    info(
+        Action::Skip(Skip::Chapters),
+        "skip-chapters",
+        "Skip chapter(s)",
+        None,
+        &[10581],
+        &[],
+    ),
+    info(
+        Action::Skip(Skip::Setup),
+        "skip-setup",
+        "Skip Setup...",
+        Some("'"),
+        &[10240],
+        &[],
+    ),
+    info(
+        Action::ToggleShuffle,
+        "shuffle",
+        "Use shuffle playback mode",
+        None,
+        &[10069],
+        &[],
+    ),
+    info(
+        Action::Bookmark(BookmarkCommand::Add),
+        "bookmark-add",
+        "Add Bookmark",
+        Some("P"),
+        &[10326],
+        &[],
+    ),
+    info(
+        Action::Bookmark(BookmarkCommand::Edit),
+        "bookmark-edit",
+        "Edit Bookmarks...",
+        None,
+        &[10330],
+        &[],
+    ),
+    info(
+        Action::Bookmark(BookmarkCommand::Thumbnails),
+        "bookmark-thumbnails",
+        "View bookmarks as thumbnails",
+        None,
+        &[10455],
+        &[],
+    ),
+    info(
+        Action::Bookmark(BookmarkCommand::AutoDelete),
+        "bookmark-auto-delete",
+        "Auto delete the selected bookmarks",
+        None,
+        &[10456],
+        &[],
+    ),
+    info(
+        Action::Bookmark(BookmarkCommand::Prompt),
+        "bookmark-prompt",
+        "Prompt before adding a bookmark",
+        None,
+        &[10459],
+        &[],
+    ),
+    info(
+        Action::Bookmark(BookmarkCommand::ShowInMenu),
+        "bookmark-in-menu",
+        "Show bookmark list in this menu",
+        None,
+        &[10460],
+        &[],
+    ),
+    // M11: other playback items.
+    info(
+        Action::ToggleRememberPositions,
+        "remember-positions",
+        "Remember playback positions",
+        None,
+        &[10419],
+        &[],
+    ),
+    info(
+        Action::ToggleHidePointer,
+        "hide-pointer",
+        "Hide mouse cursor during playback",
+        None,
+        &[10121],
+        &[],
+    ),
+    info(
+        Action::ToggleCloseAtEnd,
+        "close-at-end",
+        "Close playback when playlist ends",
+        None,
+        &[10445],
+        &[],
+    ),
+    info(
+        Action::ToggleRecyclePlayed,
+        "recycle-played",
+        "Send played and related files to Recycle Bin",
+        None,
+        &[10921],
+        &[],
+    ),
+    info(
+        Action::ToggleSeekTooltip,
+        "seek-tooltip",
+        "Show time info on tooltip when seeking",
+        None,
+        &[10812],
+        &[],
+    ),
+    info(
+        Action::ToggleSeekPreview,
+        "seek-preview",
+        "Show thumbnail previews on navigation bar",
+        None,
+        &[10813],
+        &[],
+    ),
+    info(
+        Action::ToggleSeekMarkers,
+        "seek-markers",
+        "Show markers of bookmark/chapter on nav bar",
+        None,
+        &[10814],
+        &[],
+    ),
+    info(
+        Action::ToggleKeepSpeed,
+        "keep-speed",
+        "Keep playback speed changes",
+        None,
+        &[11016],
+        &[],
+    ),
+    // M11: when playback finishes.
+    info(
+        Action::SetAfterPlayback(AfterPlayback::PowerAfterFile),
+        "power-after-file",
+        "Perform the action when playback ends",
+        None,
+        &[10118],
+        &[],
+    ),
+    info(
+        Action::SetAfterPlayback(AfterPlayback::PowerAfterList),
+        "power-after-list",
+        "Perform the action when playlist ends",
+        None,
+        &[10119],
+        &[],
+    ),
+    info(
+        Action::SetPowerAction(PowerAction::Shutdown),
+        "power-shutdown",
+        "Action : Shut down",
+        None,
+        &[10766],
+        &[],
+    ),
+    info(
+        Action::SetPowerAction(PowerAction::Sleep),
+        "power-sleep",
+        "Action : Sleep",
+        None,
+        &[10767],
+        &[],
+    ),
+    info(
+        Action::SetPowerAction(PowerAction::Hibernate),
+        "power-hibernate",
+        "Action : Hibernate",
+        None,
+        &[10768],
+        &[],
+    ),
+    info(
+        Action::ToggleRememberAfter,
+        "remember-after-playback",
+        "Remember playback finished action",
+        None,
+        &[10553],
+        &[],
+    ),
+    info(
+        Action::PowerTimer(PowerTimer::At),
+        "shutdown-at",
+        "Shutdown at %s",
+        None,
+        &[10479],
+        &[],
+    ),
+    info(
+        Action::PowerTimer(PowerTimer::In),
+        "shutdown-in",
+        "Shutdown in %s (if no time is specified)",
+        None,
+        &[10784],
+        &[],
+    ),
+    info(
+        Action::PowerTimer(PowerTimer::Dialog),
+        "power-task",
+        "Add a task to turn off PC or exit RVP...",
+        None,
+        &[10480],
+        &[],
+    ),
+    // M11: opening.
+    info(
+        Action::Open(Source::Network),
+        "open-network",
+        "Open FTP/WebDAV/HTTP...",
+        Some("Alt+F12"),
+        &[10668],
+        &[],
+    ),
+    info(
+        Action::Open(Source::Clipboard),
+        "open-clipboard",
+        "Open File/URL(s) from Clipboard",
+        Some("Ctrl+V"),
+        &[10168],
+        &[],
+    ),
+    info(
+        Action::SetDefaultOpen(DefaultOpen::Files),
+        "default-open-files",
+        "Open File(s)",
+        None,
+        &[10358],
+        &[],
+    ),
+    info(
+        Action::SetDefaultOpen(DefaultOpen::Url),
+        "default-open-url",
+        "Open URL",
+        None,
+        &[10359],
+        &[],
+    ),
+    info(
+        Action::SetDefaultOpen(DefaultOpen::Folder),
+        "default-open-folder",
+        "Open Folder",
+        None,
+        &[10360],
+        &[],
+    ),
+    info(
+        Action::Open(Source::Screen),
+        "open-screen",
+        "Open Screen Capture",
+        Some("Ctrl+S"),
+        &[10161],
+        &[],
+    ),
+    info(
+        Action::Open(Source::Device),
+        "open-device",
+        "Open Webcam/Other Device",
+        Some("Ctrl+J"),
+        &[10162],
+        &[],
+    ),
+    info(
+        Action::Settings(SettingsPage::Devices),
+        "device-settings",
+        "Device Settings...",
+        Some("Alt+D"),
+        &[10338],
+        &[],
+    ),
+    info(
+        Action::Open(Source::Dvd),
+        "open-dvd",
+        "Open DVD",
+        Some("Ctrl+D"),
+        &[10165],
+        &[],
+    ),
+    info(
+        Action::Open(Source::DvdFiles),
+        "open-dvd-files",
+        "Open DVD files (*.IFO)...",
+        None,
+        &[10412],
+        &[],
+    ),
+    info(
+        Action::Open(Source::Bluray),
+        "open-bluray",
+        "Open Blu-ray",
+        Some("Ctrl+Alt+D"),
+        &[10795],
+        &[],
+    ),
+    info(
+        Action::Open(Source::BlurayFiles),
+        "open-bluray-files",
+        "Open Blu-ray files (*.MPLS)...",
+        None,
+        &[10796],
+        &[],
+    ),
+    info(
+        Action::Open(Source::AudioCd),
+        "open-audio-cd",
+        "Open Audio CD",
+        None,
+        &[],
+        &[],
+    ),
+    info(
+        Action::ReloadSubtitle,
+        "reload-subtitle",
+        "Reload Subtitle",
+        Some("Ctrl+Alt+Y"),
+        &[10488],
+        &[],
+    ),
+    info(
+        Action::LoadExternalAudio,
+        "load-external-audio",
+        "Load External Audio...",
+        None,
+        &[10400],
+        &[],
+    ),
+    info(
+        Action::AddFavoriteItem,
+        "favorite-item",
+        "Add Current Item to Favorites",
+        Some("Alt+Insert"),
+        &[10310],
+        &[],
+    ),
+    info(
+        Action::AddFavoriteFolder,
+        "favorite-folder",
+        "Add Current Folder to Favorites",
+        Some("Ctrl+Insert"),
+        &[10311],
+        &[],
+    ),
+    info(
+        Action::EditFavorites,
+        "edit-favorites",
+        "Edit Favorites...",
+        None,
+        &[10312],
+        &[],
+    ),
+    info(
+        Action::ToggleRecent,
+        "recent-items",
+        "Store and show recent items in Album/Fav menu",
+        None,
+        &[10807],
+        &[],
+    ),
+    info(
+        Action::ClearRecent,
+        "clear-recent",
+        "Remove history of opened files from the OpenBox/Taskbar",
+        None,
+        &[10944],
+        &[],
+    ),
+    info(
+        Action::SetWhenOpened(WhenOpened::Selected),
+        "when-opened-selected",
+        "Add only selected files to playlist",
+        None,
+        &[10277],
+        &[],
+    ),
+    info(
+        Action::SetWhenOpened(WhenOpened::Similar),
+        "when-opened-similar",
+        "Add together similar files to playlist",
+        None,
+        &[10278],
+        &[],
+    ),
+    info(
+        Action::SetWhenOpened(WhenOpened::All),
+        "when-opened-all",
+        "Add together all files to playlist",
+        None,
+        &[10279],
+        &[],
+    ),
+    info(
+        Action::CopyName(CopyName::Name),
+        "copy-name",
+        "Copy current item's name to clipboard",
+        None,
+        &[10926],
+        &[],
+    ),
+    info(
+        Action::CopyName(CopyName::Folder),
+        "copy-folder",
+        "Copy current item's path to clipboard",
+        None,
+        &[10927],
+        &[],
+    ),
+    info(
+        Action::CopyName(CopyName::Path),
+        "copy-path",
+        "Copy current item's path & name to clipboard",
+        None,
+        &[10928],
+        &[],
+    ),
+    info(
+        Action::ChapterMenu,
+        "chapter-menu",
+        "Chapter/Bookmark",
+        Some("H"),
+        &[10324],
+        &[],
+    ),
+    info(
+        Action::DeleteFiles(false),
+        "delete-files",
+        "Delete files",
+        Some("Shift+Del"),
+        &[10417],
+        &[],
+    ),
+    info(
+        Action::DeleteFiles(true),
+        "delete-related-files",
+        "Delete files (e.g. subtitles)",
+        Some("Shift+Ctrl+Del"),
+        &[10418],
+        &[],
+    ),
+    // M11: DVD Control.
+    info(
+        Action::DvdSpeed(-1),
+        "dvd-speed-back-1",
+        "1x Backward",
+        None,
+        &[10469],
+        &[],
+    ),
+    info(
+        Action::DvdSpeed(-2),
+        "dvd-speed-back-2",
+        "2x Backward",
+        None,
+        &[10470],
+        &[],
+    ),
+    info(
+        Action::DvdSpeed(-4),
+        "dvd-speed-back-4",
+        "4x Backward",
+        None,
+        &[10471],
+        &[],
+    ),
+    info(
+        Action::DvdSpeed(-8),
+        "dvd-speed-back-8",
+        "8x Backward",
+        None,
+        &[10472],
+        &[],
+    ),
+    info(
+        Action::DvdSpeed(1),
+        "dvd-speed-1",
+        "1x Forward",
+        None,
+        &[10473],
+        &[],
+    ),
+    info(
+        Action::DvdSpeed(2),
+        "dvd-speed-2",
+        "2x Forward",
+        None,
+        &[10474],
+        &[],
+    ),
+    info(
+        Action::DvdSpeed(4),
+        "dvd-speed-4",
+        "4x Forward",
+        None,
+        &[10475],
+        &[],
+    ),
+    info(
+        Action::DvdSpeed(8),
+        "dvd-speed-8",
+        "8x Forward",
+        None,
+        &[10476],
         &[],
     ),
 ];
@@ -2191,6 +3167,74 @@ pub enum ListAction {
     PageDown,
     /// Hide the attached playlist (F6).
     Close,
+    // M11.
+    /// Start another RVP window with the selected entries.
+    PlayNewInstance,
+    /// Choosing an album in a menu plays it at once.
+    ToggleInstantAlbums,
+    /// Show the folder the albums are kept in.
+    OpenStorageFolder,
+    /// Add a playlist file's entries (`.dpl`, `.m3u`, `.m3u8`, `.pls`).
+    OpenPlaylist,
+    /// Write the shown album as a playlist file.
+    SavePlaylist,
+    /// Keep the Default album and recent URLs across runs.
+    ToggleRememberDefault,
+    QueueAdd,
+    QueueClear,
+    AddUrl,
+    EditTitle,
+    OpenLocation,
+    Search,
+    RenameFile,
+    /// The selected entries to the clipboard (their paths, one a line).
+    Copy,
+    /// Paths and URLs from the clipboard after the entries.
+    Paste,
+    /// The recent items into the album.
+    PasteRecent,
+    /// Paths and URLs from the clipboard below the selected entry.
+    PasteBelow,
+    /// The selected entries' paths to the clipboard (as Copy).
+    CopyPaths,
+    /// Every media file of the playing file's folder.
+    AddPlayingFolder,
+    /// The selected files to the Recycle Bin (with their subtitles and
+    /// other files of the same name for the `Related` forms).
+    DeleteFiles,
+    DeleteRelated,
+    MoveFiles,
+    MoveRelated,
+    CopyFiles,
+    CopyRelated,
+    RemovePlayed,
+    RemoveDuplicates,
+    SortBy(SortField),
+    /// The list (0) or thumbnails with details on 2 to 7 rows.
+    View(u8),
+    ReloadThumbnails,
+    /// Thumbnails in 16:9 boxes.
+    ToggleWideThumbnails,
+    DetectDurations,
+    FileInfo,
+    MoveTopOfPage,
+    MoveBottomOfPage,
+    MoveBelowPlaying,
+}
+
+/// The fields "Sort by" sorts on.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub enum SortField {
+    Title,
+    Name,
+    Extension,
+    Size,
+    Duration,
+    Date,
+    /// By folder, then name.
+    Folder,
+    /// By the year in the title or file name ("By release date").
+    Release,
 }
 
 /// Every playlist action with its settings name and PotPlayer's menu text.
@@ -2247,6 +3291,199 @@ const LIST_NAMES: &[(ListAction, &str, &str)] = &[
     (ListAction::PageUp, "page-up", "Page up"),
     (ListAction::PageDown, "page-down", "Page down"),
     (ListAction::Close, "close", "Close Playlist"),
+    (
+        ListAction::PlayNewInstance,
+        "play-new-instance",
+        "Play within a new instance",
+    ),
+    (
+        ListAction::ToggleInstantAlbums,
+        "instant-albums",
+        "Start instantly to play selected albums from menus",
+    ),
+    (
+        ListAction::OpenStorageFolder,
+        "open-storage-folder",
+        "Open playlist storage folder",
+    ),
+    (
+        ListAction::OpenPlaylist,
+        "open-playlist",
+        "Open a playlist...",
+    ),
+    (
+        ListAction::SavePlaylist,
+        "save-playlist",
+        "Save playlist as...",
+    ),
+    (
+        ListAction::ToggleRememberDefault,
+        "remember-default",
+        "Remember default playlist/recent URL items",
+    ),
+    (ListAction::QueueAdd, "queue-add", "Add to playback queue"),
+    (
+        ListAction::QueueClear,
+        "queue-clear",
+        "Clear playback queue",
+    ),
+    (ListAction::AddUrl, "add-url", "Add URL..."),
+    (
+        ListAction::EditTitle,
+        "edit-title",
+        "Edit title of selected items...",
+    ),
+    (
+        ListAction::OpenLocation,
+        "open-location",
+        "Open file location of selected item",
+    ),
+    (
+        ListAction::Search,
+        "search",
+        "Search title and filenames...",
+    ),
+    (
+        ListAction::RenameFile,
+        "rename-file",
+        "Rename filename of selected items...",
+    ),
+    (ListAction::Copy, "copy", "Copy"),
+    (ListAction::Paste, "paste", "Paste"),
+    (
+        ListAction::PasteRecent,
+        "paste-recent",
+        "Paste recent items list",
+    ),
+    (
+        ListAction::PasteBelow,
+        "paste-below",
+        "Paste below selected item",
+    ),
+    (
+        ListAction::CopyPaths,
+        "copy-paths",
+        "Copy path of selected items to clipboard",
+    ),
+    (
+        ListAction::AddPlayingFolder,
+        "add-playing-folder",
+        "Add all files in the playing folder",
+    ),
+    (ListAction::DeleteFiles, "delete-files", "Delete files"),
+    (
+        ListAction::DeleteRelated,
+        "delete-related",
+        "Delete files (e.g. subtitles/bookmarks)",
+    ),
+    (ListAction::MoveFiles, "move-files", "Move files..."),
+    (
+        ListAction::MoveRelated,
+        "move-related",
+        "Move files(e.g. subtitles/bookmarks)...",
+    ),
+    (ListAction::CopyFiles, "copy-files", "Copy files..."),
+    (
+        ListAction::CopyRelated,
+        "copy-related",
+        "Copy files(e.g. subtitles/bookmarks)...",
+    ),
+    (
+        ListAction::RemovePlayed,
+        "remove-played",
+        "Remove played items",
+    ),
+    (
+        ListAction::RemoveDuplicates,
+        "remove-duplicates",
+        "Remove duplicated items",
+    ),
+    (ListAction::SortBy(SortField::Title), "sort-title", "Title"),
+    (ListAction::SortBy(SortField::Name), "sort-name", "Name"),
+    (
+        ListAction::SortBy(SortField::Extension),
+        "sort-extension",
+        "Extension",
+    ),
+    (ListAction::SortBy(SortField::Size), "sort-size", "Size"),
+    (
+        ListAction::SortBy(SortField::Duration),
+        "sort-duration",
+        "Duration",
+    ),
+    (ListAction::SortBy(SortField::Date), "sort-date", "Date"),
+    (
+        ListAction::SortBy(SortField::Folder),
+        "sort-folder",
+        "Sort by folder",
+    ),
+    (
+        ListAction::SortBy(SortField::Release),
+        "sort-release",
+        "By release date",
+    ),
+    (ListAction::View(0), "view-list", "List (Recommended)"),
+    (
+        ListAction::View(2),
+        "view-thumbnails-2",
+        "Thumbnails (up to 2 rows) + Details",
+    ),
+    (
+        ListAction::View(3),
+        "view-thumbnails-3",
+        "Thumbnails (up to 3 rows) + Details",
+    ),
+    (
+        ListAction::View(4),
+        "view-thumbnails-4",
+        "Thumbnails (up to 4 rows) + Details",
+    ),
+    (
+        ListAction::View(5),
+        "view-thumbnails-5",
+        "Thumbnails (up to 5 rows) + Details",
+    ),
+    (
+        ListAction::View(6),
+        "view-thumbnails-6",
+        "Thumbnails (up to 6 rows) + Details",
+    ),
+    (
+        ListAction::View(7),
+        "view-thumbnails-7",
+        "Thumbnails (up to 7 rows) + Details",
+    ),
+    (
+        ListAction::ReloadThumbnails,
+        "reload-thumbnails",
+        "Reload Thumbnails + Details",
+    ),
+    (
+        ListAction::ToggleWideThumbnails,
+        "wide-thumbnails",
+        "Use 16:9 Thumbnail Ratio",
+    ),
+    (
+        ListAction::DetectDurations,
+        "detect-durations",
+        "Detect file durations",
+    ),
+    (ListAction::FileInfo, "file-info", "File information..."),
+    (
+        ListAction::MoveTopOfPage,
+        "move-top-of-page",
+        "Move selected items to top of page",
+    ),
+    (
+        ListAction::MoveBottomOfPage,
+        "move-bottom-of-page",
+        "Move selected items to bottom of page",
+    ),
+    (
+        ListAction::MoveBelowPlaying,
+        "move-below-playing",
+        "Move selected items below playing item",
+    ),
 ];
 
 impl ListAction {
@@ -2306,6 +3543,50 @@ impl ListAction {
             27022 => ListAction::MoveTop,
             27023 => ListAction::MoveBottom,
             10446 => ListAction::Close,
+            10792 => ListAction::PlayNewInstance,
+            10946 => ListAction::ToggleInstantAlbums,
+            10410 => ListAction::OpenStorageFolder,
+            10000 => ListAction::OpenPlaylist,
+            10206 => ListAction::SavePlaylist,
+            10411 => ListAction::ToggleRememberDefault,
+            10005 => ListAction::QueueAdd,
+            10006 => ListAction::QueueClear,
+            10198 => ListAction::AddUrl,
+            10211 => ListAction::EditTitle,
+            10207 => ListAction::OpenLocation,
+            10490 => ListAction::Search,
+            10583 => ListAction::RenameFile,
+            10007 => ListAction::Copy,
+            10008 => ListAction::Paste,
+            10948 => ListAction::PasteRecent,
+            11364 => ListAction::PasteBelow,
+            11365 => ListAction::CopyPaths,
+            11367 => ListAction::AddPlayingFolder,
+            10213 => ListAction::DeleteFiles,
+            10209 => ListAction::DeleteRelated,
+            10215 => ListAction::MoveFiles,
+            10216 => ListAction::MoveRelated,
+            11368 => ListAction::CopyFiles,
+            11369 => ListAction::CopyRelated,
+            10208 => ListAction::RemovePlayed,
+            10214 => ListAction::RemoveDuplicates,
+            10980 => ListAction::SortBy(SortField::Title),
+            10981 => ListAction::SortBy(SortField::Name),
+            10982 => ListAction::SortBy(SortField::Extension),
+            10983 => ListAction::SortBy(SortField::Size),
+            10984 => ListAction::SortBy(SortField::Duration),
+            10985 => ListAction::SortBy(SortField::Date),
+            10001 => ListAction::SortBy(SortField::Folder),
+            10986 => ListAction::SortBy(SortField::Release),
+            10900 => ListAction::View(0),
+            10901..=10906 => ListAction::View(u8::try_from(id - 10899).unwrap_or(2)),
+            10908 => ListAction::ReloadThumbnails,
+            11075 => ListAction::ToggleWideThumbnails,
+            10640 => ListAction::DetectDurations,
+            10505 => ListAction::FileInfo,
+            27026 => ListAction::MoveTopOfPage,
+            27027 => ListAction::MoveBottomOfPage,
+            27025 => ListAction::MoveBelowPlaying,
             _ => return None,
         })
     }
@@ -2322,6 +3603,42 @@ impl ListAction {
             "CMD_PLAYLIST_DEL" => ListAction::RemoveSelected,
             _ => return None,
         })
+    }
+
+    /// M11's commands of the playlist panel ([`crate::albums`]).
+    #[must_use]
+    pub fn is_panel_command(self) -> bool {
+        !matches!(
+            self,
+            ListAction::Play
+                | ListAction::SelectAll
+                | ListAction::InvertSelection
+                | ListAction::RemoveSelected
+                | ListAction::RemoveUnselected
+                | ListAction::RemoveAll
+                | ListAction::RemoveMissing
+                | ListAction::AddFiles
+                | ListAction::AddFolder
+                | ListAction::AddAlbum
+                | ListAction::RenameAlbum
+                | ListAction::DeleteAlbum
+                | ListAction::SortAscending
+                | ListAction::SortDescending
+                | ListAction::Shuffle
+                | ListAction::MoveUp
+                | ListAction::MoveDown
+                | ListAction::MoveTop
+                | ListAction::MoveBottom
+                | ListAction::Undo
+                | ListAction::Redo
+                | ListAction::CursorUp
+                | ListAction::CursorDown
+                | ListAction::CursorHome
+                | ListAction::CursorEnd
+                | ListAction::PageUp
+                | ListAction::PageDown
+                | ListAction::Close
+        )
     }
 
     /// Cursor movements, which Shift turns into extending the selection.

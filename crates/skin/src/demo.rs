@@ -123,6 +123,8 @@ fn parse_entry(demo: &mut Demo, rest: &str) -> Result<(), String> {
         duration,
         playable: !flags.contains('!'),
         played: flags.contains('~'),
+        thumbnail: None,
+        details: None,
     });
     Ok(())
 }

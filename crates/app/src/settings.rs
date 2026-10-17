@@ -115,6 +115,17 @@ pub struct Settings {
     pub equalizer: Equalizer,
     /// The rest of the audio processing (M10).
     pub audio: crate::audio::Audio,
+    /// M11's playback options (seek bar, skips, A-B repeat, bookmarks,
+    /// when playback finishes).
+    pub playback: crate::playback::Playback,
+    /// The playlist panel's options (M11).
+    pub playlist: crate::albums::ListSettings,
+    /// The scene browsers (M11).
+    pub scenes: crate::scenes::SceneSettings,
+    /// The Open menu's options (M11).
+    pub open: crate::sources::OpenSettings,
+    /// Capture devices and discs (M11).
+    pub devices: crate::sources::Devices,
 }
 
 impl Default for Settings {
@@ -160,6 +171,11 @@ impl Default for Settings {
             vapoursynth: VapourSynth::default(),
             equalizer: Equalizer::default(),
             audio: crate::audio::Audio::default(),
+            playback: crate::playback::Playback::default(),
+            playlist: crate::albums::ListSettings::default(),
+            scenes: crate::scenes::SceneSettings::default(),
+            open: crate::sources::OpenSettings::default(),
+            devices: crate::sources::Devices::default(),
         }
     }
 }

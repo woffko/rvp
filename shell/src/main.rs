@@ -21,16 +21,21 @@
 mod awake;
 mod crash;
 mod desktop;
+mod devices;
 mod ffi;
 #[cfg(windows)]
 mod media_controls;
 mod metrics;
 mod player;
 mod player_qobject;
+mod power;
 mod recorder;
+mod recycle;
 mod skin_view;
 mod skin_view_qobject;
 mod system_volume;
+mod thumb_view;
+mod thumb_view_qobject;
 mod video;
 
 use std::time::{Duration, Instant};

@@ -370,6 +370,73 @@ fn bitmap_labels_and_sliders() {
 }
 
 #[test]
+fn seek_bar_marks_lie_under_the_thumb() {
+    use rvp_skin::paint::Op;
+    use rvp_skin::{Mark, MarkKind};
+    let skin = skin();
+    let state = UiState {
+        media_loaded: true,
+        ..UiState::default()
+    };
+    let placed = layout(&skin, "MainSkinArea", 100, 60, &state).expect("layout");
+    let bar = placed
+        .find_command("CMD_TIMEBAR_CTRL")
+        .expect("seek bar")
+        .rect;
+    let mut data = data();
+    data.marks = vec![
+        Mark {
+            at: 0.0,
+            kind: MarkKind::Chapter,
+        },
+        Mark {
+            at: 0.25,
+            kind: MarkKind::Bookmark,
+        },
+        Mark {
+            at: 0.5,
+            kind: MarkKind::PointA,
+        },
+        Mark {
+            at: 1.0,
+            kind: MarkKind::PointB,
+        },
+    ];
+    let list = paint(&skin, &placed, &state, &data);
+    let fills: Vec<(Rect, [u8; 4])> = list
+        .ops
+        .iter()
+        .filter_map(|op| match op {
+            Op::Fill { rect, color } if rect.intersect(&bar) == *rect => Some((*rect, *color)),
+            _ => None,
+        })
+        .collect();
+    // 43 pixels wide: positions 0, 11 (0.25 of 42, rounded), 21 and 42;
+    // the band from A to B first, then the lines.
+    assert_eq!(fills[0].0, Rect::new(bar.x + 21, bar.y, 22, bar.h));
+    assert_eq!(fills[1].0, Rect::new(bar.x, bar.y, 1, bar.h));
+    assert_eq!(fills[2].0, Rect::new(bar.x + 11, bar.y, 1, bar.h));
+    assert_eq!(fills[3].0, Rect::new(bar.x + 21, bar.y, 2, bar.h));
+    // B's line is clipped at the bar's end.
+    assert_eq!(fills[4].0, Rect::new(bar.x + 42, bar.y, 1, bar.h));
+    assert_eq!(fills.len(), 5);
+    // The thumb is drawn after the marks.
+    let last_mark = list
+        .ops
+        .iter()
+        .rposition(|op| matches!(op, Op::Fill { rect, .. } if rect.intersect(&bar) == *rect))
+        .expect("marks");
+    let thumb = list
+        .ops
+        .iter()
+        .rposition(
+            |op| matches!(op, Op::Image { dst, .. } if dst.w == 2 && dst.intersect(&bar) == *dst),
+        )
+        .expect("thumb");
+    assert!(thumb > last_mark);
+}
+
+#[test]
 fn vertical_sliders_fill_from_the_bottom() {
     let skin = skin();
     let mut data = DataModel::default();

@@ -91,6 +91,24 @@ pub struct SliderValue {
     pub enabled: bool,
 }
 
+/// What a mark on the seek bar stands for.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MarkKind {
+    Chapter,
+    Bookmark,
+    /// The A-B repeat's points.
+    PointA,
+    PointB,
+}
+
+/// A mark on the seek bar (`CMD_TIMEBAR_CTRL`) at a fraction of the
+/// duration.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Mark {
+    pub at: f32,
+    pub kind: MarkKind,
+}
+
 /// One playlist row.
 #[derive(Debug, Clone, PartialEq)]
 pub struct PlaylistEntry {
@@ -100,6 +118,11 @@ pub struct PlaylistEntry {
     /// False when the file could not be opened (`<Can't open>`).
     pub playable: bool,
     pub played: bool,
+    /// The atlas image of the entry's thumbnail (thumbnail views), once
+    /// it is there.
+    pub thumbnail: Option<String>,
+    /// A line of details under the title (thumbnail views).
+    pub details: Option<String>,
 }
 
 /// The playlist shown in the attached panel.
@@ -118,6 +141,11 @@ pub struct Playlist {
     /// While rows are dragged: the entry they will be inserted before
     /// (`entries.len()` for the end).
     pub drop_before: Option<usize>,
+    /// Lines of text a row takes: 1 (or 0) for the list, 2 to 7 for
+    /// thumbnails with details (PotPlayer's View as).
+    pub row_lines: u32,
+    /// Thumbnail boxes are 16:9 (otherwise 4:3).
+    pub wide_thumbnails: bool,
 }
 
 /// Scroll position of the playlist.
@@ -139,6 +167,8 @@ pub struct DataModel {
     pub texts: BTreeMap<String, String>,
     pub sliders: BTreeMap<String, SliderValue>,
     pub playlist: Playlist,
+    /// Marks on the seek bar: chapters, bookmarks and the A-B points.
+    pub marks: Vec<Mark>,
 }
 
 impl DataModel {
@@ -206,6 +236,8 @@ impl DataModel {
                 duration: Some(5400 + 431 * index_u32),
                 playable: index != 4,
                 played: index == 0,
+                thumbnail: None,
+                details: None,
             });
         }
         data.playlist.albums = vec!["Default".to_owned(), "Films".to_owned()];

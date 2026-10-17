@@ -34,6 +34,15 @@ pub enum Status {
 use Status::{Missing, Setting};
 
 const DAUM: &str = "Daum's and Kakao's broadcasting services, discontinued";
+const NAVIGATOR: &str = "PotPlayer's file navigator and Open Box are not in RVP \
+                         (docs/spikes/m11-studies.md)";
+const SEAMLESS: &str = "seamless playback is not in RVP (docs/spikes/m11-studies.md): mpv \
+                        preloads and joins files only inside its own playlist";
+const SKIN_LIST: &str = "RVP's playlist is the skin's attached panel: it numbers its rows and \
+                         takes its font and colours from the skin";
+const WINDOW_SIZES: &str = "planned in M12 (goal N) with the window sizes";
+const CAPTURE_DEVICE: &str = "FFmpeg's dshow and gdigrab choose the format and size; RVP opens \
+                              the device or screen as it is";
 const WINAMP_DSP: &str = "mpv's audio chain runs FFmpeg's filters only: native Winamp DSP \
                           plugins cannot run in it";
 
@@ -172,6 +181,345 @@ const ITEMS: &[(u32, u32, Status)] = &[
     (441, 3378, Setting("audio.voice-removal")),
     (441, 3379, Setting("audio.voice-emphasis")),
     (441, 3381, Setting("audio.swap-channels")),
+    // M11: General > Navigation (443).
+    (443, 3075, Missing(NAVIGATOR)),
+    (
+        443,
+        3076,
+        Missing("RVP keeps the files it makes in its state folder"),
+    ),
+    (
+        443,
+        3077,
+        Missing("RVP keeps its albums in its state folder (Open playlist storage folder)"),
+    ),
+    (
+        443,
+        3078,
+        Missing("speech recognition (Whisper) is not planned"),
+    ),
+    (443, 3079, Missing("RVP has no web view")),
+    (443, 3070, Setting("image-folder")),
+    (
+        443,
+        3034,
+        Missing("saved frames go to the image folder; M12 (goal N) takes the frame options"),
+    ),
+    (443, 3073, Missing("video recording is not planned")),
+    (443, 3035, Missing("video recording is not planned")),
+    (443, 3071, Setting("audio.recording.folder")),
+    (443, 3036, Setting("audio.recording.in-media-folder")),
+    (443, 3072, Missing("RVP does not save streams")),
+    (443, 3074, Missing(DAUM)),
+    // General > Playlist (373).
+    (373, 3012, Setting("playlist.thumbnail-rows")),
+    (373, 3089, Setting("playlist.thumbnail-position")),
+    (373, 3021, Missing(SKIN_LIST)),
+    (373, 3088, Missing(SKIN_LIST)),
+    (373, 3120, Missing(SKIN_LIST)),
+    (373, 3104, Missing(SKIN_LIST)),
+    (373, 3121, Missing(SKIN_LIST)),
+    (
+        373,
+        3125,
+        Missing("RVP's thumbnail views show pictures; an entry without video shows a black box"),
+    ),
+    (
+        373,
+        3110,
+        Missing("RVP's playlist always shows the durations it knows"),
+    ),
+    (373, 3123, Missing(SKIN_LIST)),
+    (373, 3097, Setting("playlist.remember-default")),
+    (
+        373,
+        3129,
+        Missing("sorting by folder is a command in RVP (Sort by > Sort by folder)"),
+    ),
+    (373, 3115, Setting("open.when-opened")),
+    (373, 3117, Setting("playlist.detect-durations")),
+    (
+        373,
+        3118,
+        Missing("files dropped on the window join the shown album at its end"),
+    ),
+    (373, 3122, Setting("playlist.instant-albums")),
+    (
+        373,
+        3126,
+        Missing("Open a playlist adds a playlist file's entries to the shown album"),
+    ),
+    (373, 3119, Setting("playlist.append-on-open")),
+    (373, 3124, Setting("playlist.no-duplicates")),
+    (373, 3127, Setting("playlist.focus-main")),
+    (373, 3128, Setting("playlist.sort-dropped")),
+    (
+        373,
+        3130,
+        Missing("RVP deletes local files only (to the Recycle Bin)"),
+    ),
+    (373, 3242, Setting("playlist-keys")),
+    (373, 3330, Setting("playlist-keys")),
+    (373, 3024, Setting("playlist-keys")),
+    (373, 3027, Setting("playlist-keys")),
+    (373, 3028, Setting("playlist-keys")),
+    (373, 3022, Setting("playlist-keys")),
+    // General > Playlist > Color/View (389): the navigator's look.
+    (389, 3072, Setting("playlist.wide-thumbnails")),
+    // Playback (358).
+    (358, 3005, Missing(WINDOW_SIZES)),
+    (358, 3273, Missing(WINDOW_SIZES)),
+    (358, 3275, Missing(WINDOW_SIZES)),
+    (358, 3095, Missing(WINDOW_SIZES)),
+    (358, 3007, Missing(WINDOW_SIZES)),
+    (358, 3274, Missing(WINDOW_SIZES)),
+    (358, 3276, Missing(WINDOW_SIZES)),
+    (358, 3014, Setting("audio.stretch")),
+    (358, 3277, Setting("playback.speed-step")),
+    (358, 3017, Setting("playback.on-failure")),
+    (358, 3006, Setting("playback.priority")),
+    (358, 3015, Setting("repeat")),
+    (358, 3016, Setting("repeat")),
+    (358, 3113, Setting("playback.shuffle")),
+    (358, 3114, Setting("playback.shuffle")),
+    (
+        358,
+        3094,
+        Missing("libmpv opens files on its own threads: the window never waits for one"),
+    ),
+    (358, 3110, Setting("playback.external-audio")),
+    (358, 3068, Setting("playback.folder-neighbours")),
+    (358, 3084, Setting("playback.center-window")),
+    (358, 3067, Setting("playback.auto-rotate")),
+    (358, 3072, Setting("playback.retitle")),
+    (358, 3061, Setting("remember-positions")),
+    (358, 3071, Setting("playback.remember-audio-positions")),
+    (358, 3083, Setting("prevent-screen-saver")),
+    (358, 3089, Setting("playback.hide-pointer")),
+    (358, 3124, Setting("playback.close-at-end")),
+    (358, 3125, Setting("playback.recycle-played")),
+    (358, 3066, Setting("playback.seek-preview")),
+    (358, 3069, Setting("playback.preview-title")),
+    (358, 3070, Setting("playback.preview-time")),
+    (358, 3063, Setting("playback.seek-markers")),
+    (358, 3062, Setting("playback.seek-tooltip")),
+    (358, 3064, Setting("playback.pause-while-seeking")),
+    // Playback > Time Jump (364).
+    (364, 3267, Setting("seek-seconds.0")),
+    (364, 3270, Setting("seek-seconds.1")),
+    (364, 3271, Setting("seek-seconds.2")),
+    (364, 3272, Setting("seek-seconds.3")),
+    (364, 3034, Setting("keyframe-seeks")),
+    // Playback > Seamless Playback (379).
+    (379, 3012, Missing(SEAMLESS)),
+    (379, 3105, Missing(SEAMLESS)),
+    (379, 3041, Missing(SEAMLESS)),
+    (
+        379,
+        3040,
+        Missing(
+            "mpv's cache keeps what it read of a stream, so seeking back works within it; RVP has no timeshift setting",
+        ),
+    ),
+    (
+        379,
+        3084,
+        Missing(
+            "mpv's cache keeps what it read of a stream, so seeking back works within it; RVP has no timeshift setting",
+        ),
+    ),
+    (
+        379,
+        3267,
+        Missing(
+            "mpv's cache keeps what it read of a stream, so seeking back works within it; RVP has no timeshift setting",
+        ),
+    ),
+    (379, 3315, Setting("playback.audio-folders")),
+    (
+        379,
+        3034,
+        Missing("mpv looks in the video's folder first, then in these folders"),
+    ),
+    (379, 3021, Setting("playback.audio-folders")),
+    (379, 3024, Setting("playback.audio-folders")),
+    (379, 3022, Setting("playback.audio-folders")),
+    (379, 3025, Setting("playback.audio-folders")),
+    // Playback > Scene Browser (471): one size, opacity and choice for the
+    // three browsers.
+    (471, 3088, Setting("scenes.size")),
+    (471, 3089, Setting("scenes.size")),
+    (471, 3090, Setting("scenes.size")),
+    (
+        471,
+        3004,
+        Missing("RVP's browsers scroll with the wheel, the keys and a scroll bar alike"),
+    ),
+    (
+        471,
+        3006,
+        Missing("RVP's browsers scroll with the wheel, the keys and a scroll bar alike"),
+    ),
+    (
+        471,
+        3007,
+        Missing("RVP's browsers scroll with the wheel, the keys and a scroll bar alike"),
+    ),
+    (471, 3008, Setting("scenes.opacity")),
+    (471, 3009, Setting("scenes.opacity")),
+    (471, 3010, Setting("scenes.opacity")),
+    (
+        471,
+        3046,
+        Missing("the browser's background and pictures share its opacity"),
+    ),
+    (
+        471,
+        3047,
+        Missing("the browser's background and pictures share its opacity"),
+    ),
+    (
+        471,
+        3048,
+        Missing("the browser's background and pictures share its opacity"),
+    ),
+    (471, 3003, Setting("scenes.interval")),
+    (471, 3034, Setting("scenes.close-on-change")),
+    (471, 3036, Setting("scenes.close-on-change")),
+    (471, 3039, Setting("scenes.close-on-change")),
+    (471, 3038, Setting("scenes.fall-back-to-time")),
+    (471, 3041, Setting("scenes.fall-back-to-time")),
+    // Device > Screen Capture (428).
+    (428, 3047, Setting("devices.capture")),
+    (428, 3267, Setting("devices.capture-fps")),
+    (428, 3271, Missing(CAPTURE_DEVICE)),
+    (428, 3021, Missing(CAPTURE_DEVICE)),
+    (428, 3013, Missing(CAPTURE_DEVICE)),
+    (
+        428,
+        3063,
+        Missing("RVP captures the whole desktop: capture areas are not in RVP"),
+    ),
+    (
+        428,
+        3068,
+        Missing("RVP captures the whole desktop: capture areas are not in RVP"),
+    ),
+    (
+        428,
+        3064,
+        Missing("RVP captures the whole desktop: capture areas are not in RVP"),
+    ),
+    (
+        428,
+        3069,
+        Missing("RVP captures the whole desktop: capture areas are not in RVP"),
+    ),
+    (428, 3042, Setting("devices.capture")),
+    (
+        428,
+        3046,
+        Missing("FFmpeg's screen grabbers have no sound: a screen capture is silent"),
+    ),
+    (
+        428,
+        3051,
+        Missing("FFmpeg's screen grabbers have no sound: a screen capture is silent"),
+    ),
+    (
+        428,
+        3034,
+        Missing("FFmpeg's screen grabbers have no sound: a screen capture is silent"),
+    ),
+    // Device > Webcam (427).
+    (427, 3003, Setting("devices.webcam")),
+    (427, 3005, Missing(CAPTURE_DEVICE)),
+    (427, 3008, Missing(CAPTURE_DEVICE)),
+    (
+        427,
+        3006,
+        Missing("a device opens with its video; its sound is not added"),
+    ),
+    (
+        427,
+        3024,
+        Missing("Open Webcam/Other Device lists the devices each time it opens"),
+    ),
+    (
+        427,
+        3016,
+        Missing("a device opens with its video; its sound is not added"),
+    ),
+    (
+        427,
+        3019,
+        Missing("a device opens with its video; its sound is not added"),
+    ),
+    (
+        427,
+        3034,
+        Missing("a device opens with its video; its sound is not added"),
+    ),
+    (
+        427,
+        3040,
+        Missing(
+            "mpv's cache keeps what it read, so seeking back works within it; RVP has no timeshift setting",
+        ),
+    ),
+    // Device > DVD/Blu-ray (382).
+    (382, 3007, Setting("devices.dvd")),
+    (382, 3069, Setting("devices.dvd")),
+    (
+        382,
+        3008,
+        Missing("libmpv's dvdnav plays DVDs: DirectShow navigators do not apply"),
+    ),
+    (
+        382,
+        3070,
+        Missing("libmpv's dvdnav plays DVDs: DirectShow navigators do not apply"),
+    ),
+    (382, 3003, Missing("DVD menus are M16's (goal R)")),
+    (382, 3005, Setting("audio.languages")),
+    (382, 3006, Setting("subtitle-languages")),
+    (
+        382,
+        3034,
+        Missing("a DVD's subtitles are tracks like any file's (Subtitles menu)"),
+    ),
+    (382, 3009, Setting("remember-positions")),
+    (
+        382,
+        3010,
+        Missing("skipping a disc's opening is M16's (goal R) with its menus"),
+    ),
+    (
+        382,
+        3004,
+        Missing("libmpv's libbluray plays Blu-rays: there is no other method"),
+    ),
+    (
+        382,
+        3267,
+        Missing("libbluray's chapters are mpv's: there is no minimum to set"),
+    ),
+    // Device > CD/DVD-ROM (429).
+    (
+        429,
+        3034,
+        Missing("libmpv reads an audio CD's tracks itself (libcdio, when built in)"),
+    ),
+    (
+        429,
+        3035,
+        Missing("RVP's Open menu has no drive list: the disc dialog shows the system's drives"),
+    ),
+    (
+        429,
+        3036,
+        Missing("Kernel Streaming devices are DirectShow's: FFmpeg opens dshow devices"),
+    ),
     // Winamp DSP Plugins (365).
     (365, 3034, Missing(WINAMP_DSP)),
     (365, 3069, Missing(WINAMP_DSP)),
@@ -192,9 +540,10 @@ const PAGES: &[(&str, &str)] = &[
         "General > Mouse",
         "RVP's Keys and Mouse page (M5); the rest in M14 (goal P)",
     ),
-    ("General > Playlist", "planned in M11 (goal M)"),
-    ("General > Navigation", "planned in M11 (goal M)"),
-    ("Playback", "planned in M11 (goal M)"),
+    ("General > Playlist", "not in RVP"),
+    ("General > Playlist > Color/View", NAVIGATOR),
+    ("General > Navigation", "not in RVP"),
+    ("Playback", "not in RVP"),
     ("Playback > Fullscreen Mode", "planned in M12 (goal N)"),
     ("Playback > Window Size", "planned in M12 (goal N)"),
     ("Subtitles", "planned in M13 (goal O)"),
@@ -206,7 +555,7 @@ const PAGES: &[(&str, &str)] = &[
         "Subtitles > Subtitle Translation",
         "online subtitles: deferred by the owner (2026-10-16)",
     ),
-    ("Device", "planned in M11 (goal M)"),
+    ("Device", "not in RVP"),
     (
         "Device > Analog TV (WDM)",
         "TV tuners are not planned (non-goals)",

@@ -52,6 +52,9 @@ pub mod bridge {
 
         /// True when an atlas image of this name is cached on the C++ side.
         fn rvp_atlas_contains(name: &str) -> bool;
+        /// Drops the cached atlas images whose names start with `prefix`
+        /// (thumbnails no longer shown).
+        fn rvp_atlas_remove_prefix(prefix: &str);
         /// Caches an RGBA atlas image (straight alpha, rows without padding).
         fn rvp_atlas_insert(name: &str, rgba: &[u8], width: i32, height: i32);
         /// Tiles `src` of an atlas over `dst`, clipped to `clip` (each

@@ -8,8 +8,8 @@ use rvp_app::playlist::local_path;
 use rvp_app::video::{ColorChange, ColorKind, Rotation, ShaderChange, VideoEffect};
 use rvp_app::volume::mpv_volume;
 use rvp_app::{
-    AbRepeat, Action, App, Bindings, Delay, Jump, Key, KeyChord, MouseGesture, SeekStep, Settings,
-    Speed, SubtitleStyle, UiRequest, Zoom,
+    AbRepeat, Action, App, Bindings, BookmarkCommand, Delay, Jump, Key, KeyChord, MouseGesture,
+    Scenes, SeekStep, Settings, Skip, Source, Speed, SubtitleStyle, UiRequest, Zoom,
 };
 use rvp_engine::{Engine, EngineOptions, PlayerModel, PropertyId};
 
@@ -44,8 +44,14 @@ fn potplayer_default_keys() {
         ("Ctrl+Alt+Left", Action::SeekBackward(SeekStep::VeryLong)),
         ("PgUp", Action::Previous),
         ("PgDn", Action::Next),
-        ("F3", Action::OpenFiles),
+        ("F3", Action::OpenDefault),
         ("Ctrl+O", Action::OpenFiles),
+        ("G", Action::JumpDialog),
+        ("P", Action::Bookmark(BookmarkCommand::Add)),
+        ("Ctrl+\\", Action::AbRepeat(AbRepeat::CurrentSubtitle)),
+        ("Ins", Action::AbRepeat(AbRepeat::CurrentSubtitle)),
+        ("Ctrl+Shift+Right", Action::JumpTo(Jump::NextKeyframe)),
+        ("Shift+Z", Action::Scenes(Scenes::Time)),
         ("F4", Action::CloseMedia),
         ("F6", Action::TogglePlaylist),
         ("Alt+H", Action::ToggleSubtitles),
@@ -409,7 +415,13 @@ impl Harness {
                 self.back_to_30();
             }
             // The fixtures have no subtitles: nothing happens.
-            Action::JumpTo(_) => assert_eq!(self.dispatch(action), None),
+            Action::JumpTo(
+                Jump::PreviousSubtitle
+                | Jump::NextSubtitle
+                | Jump::CurrentSubtitle
+                | Jump::PreviousChapter
+                | Jump::NextChapter,
+            ) => assert_eq!(self.dispatch(action), None),
             Action::Speed(Speed::Default) => {
                 self.osd(action, "Speed: 1.0x");
                 self.wait_double("1.0x", PropertyId::Speed, 1.0);
@@ -426,23 +438,7 @@ impl Harness {
                 self.osd(Action::Speed(Speed::Default), "Speed: 1.0x");
                 self.wait_double("1.0x", PropertyId::Speed, 1.0);
             }
-            Action::AbRepeat(change) => {
-                let text = match change {
-                    AbRepeat::SetA => "A-B Repeat (off): A 0:00:30 B -",
-                    AbRepeat::SetB => "A-B Repeat (off): A - B 0:00:30",
-                    _ => "A-B Repeat (off): A - B -",
-                };
-                self.osd(action, text);
-                self.osd(
-                    Action::AbRepeat(AbRepeat::Clear),
-                    "A-B Repeat (off): A - B -",
-                );
-            }
-            Action::AfterPlaybackCycle => {
-                self.osd(action, "When playback ends: exit");
-                self.osd(action, "When the playlist ends: exit");
-                self.osd(action, "When playback ends: do nothing");
-            }
+            Action::AbRepeat(_) | Action::AfterPlaybackCycle => self.check_repeat(action),
             Action::OnTopCycle => {
                 self.osd(action, "Stay on top: always");
                 self.osd(action, "Stay on top: while playing");
@@ -619,7 +615,7 @@ impl Harness {
                 self.osd(action, "Shaders: on (0)");
                 self.osd(action, "Shaders: off");
             }
-            _ => unreachable!("{action:?} is checked in check()"),
+            _ => self.check_m11(action),
         }
     }
 
@@ -671,6 +667,185 @@ impl Harness {
                 self.osd(reset, "Subtitle position: 100 %");
                 self.wait_double("subtitle position back", PropertyId::SubPos, 100.0);
             }
+            _ => self.check_m11(action),
+        }
+    }
+
+    /// The A-B repeat's points and the playback finished actions.
+    fn check_repeat(&mut self, action: Action) {
+        match action {
+            Action::AbRepeat(
+                change @ (AbRepeat::SetA
+                | AbRepeat::SetB
+                | AbRepeat::ClearA
+                | AbRepeat::ClearB
+                | AbRepeat::Toggle
+                | AbRepeat::Clear),
+            ) => {
+                let text = match change {
+                    AbRepeat::SetA => "A-B Repeat (off): A 0:00:30 B -",
+                    AbRepeat::SetB => "A-B Repeat (off): A - B 0:00:30",
+                    _ => "A-B Repeat (off): A - B -",
+                };
+                self.osd(action, text);
+                self.osd(
+                    Action::AbRepeat(AbRepeat::Clear),
+                    "A-B Repeat (off): A - B -",
+                );
+            }
+            Action::AfterPlaybackCycle => {
+                self.osd(action, "When playback ends: exit");
+                self.osd(action, "When the playlist ends: exit");
+                self.osd(action, "When playback ends: shut down");
+                self.osd(action, "When the playlist ends: shut down");
+                self.osd(action, "When playback ends: do nothing");
+            }
+            _ => self.check_m11(action),
+        }
+    }
+
+    /// M11's commands that keys start.
+    fn check_m11(&mut self, action: Action) {
+        match action {
+            // Keyframes every second: from 30 s, 29 s and 31 s.
+            Action::JumpTo(jump @ (Jump::PreviousKeyframe | Jump::NextKeyframe)) => {
+                assert_eq!(self.dispatch(action), None);
+                let expected = if jump == Jump::NextKeyframe {
+                    31.0
+                } else {
+                    29.0
+                };
+                self.wait("keyframe", |m| {
+                    (m.double(PropertyId::TimePos).unwrap_or_default() - expected).abs() < 0.05
+                });
+                self.back_to_30();
+            }
+            Action::OpenDefault => {
+                assert_eq!(self.dispatch(action), Some(UiRequest::OpenFileDialog));
+            }
+            Action::JumpDialog => match self.dispatch(action) {
+                Some(UiRequest::JumpDialog {
+                    time,
+                    duration,
+                    fps,
+                }) => {
+                    assert!((time - 30.0).abs() < 0.1, "{time}");
+                    assert!((duration - 60.0).abs() < 0.2, "{duration}");
+                    assert!((fps - 10.0).abs() < 0.01, "{fps}");
+                }
+                other => panic!("{action:?}: {other:?}"),
+            },
+            Action::Scenes(_) => match self.dispatch(action) {
+                Some(UiRequest::SceneBrowser(browser)) => {
+                    // No markers: the time-based browser, every 3 s (60 / 24).
+                    assert_eq!(browser.scenes.len(), 20, "{browser:?}");
+                }
+                other => panic!("{action:?}: {other:?}"),
+            },
+            Action::AbRepeat(AbRepeat::MoveA(_) | AbRepeat::MoveB(_) | AbRepeat::MoveBoth(_)) => {
+                self.osd_starts(Action::AbRepeat(AbRepeat::SetA), "A-B Repeat");
+                self.osd_starts(action, "A-B Repeat");
+                self.osd_starts(Action::AbRepeat(AbRepeat::Clear), "A-B Repeat (off)");
+            }
+            // No subtitle line shows: the 5 s behind the current point.
+            Action::AbRepeat(AbRepeat::CurrentSubtitle | AbRepeat::Behind) => {
+                self.osd(action, "A-B Repeat: A 0:00:25 B 0:00:30");
+                self.osd_starts(Action::AbRepeat(AbRepeat::Clear), "A-B Repeat (off)");
+                self.back_to_30();
+            }
+            Action::AbRepeat(AbRepeat::PreviousSubtitle | AbRepeat::NextSubtitle) => {
+                assert_eq!(self.dispatch(action), None);
+            }
+            Action::AbRepeat(
+                AbRepeat::CurrentSection | AbRepeat::PreviousSection | AbRepeat::NextSection,
+            ) => self.osd(action, "The A-B repeat list is empty"),
+            Action::AbRepeat(AbRepeat::MoreLoops) => {
+                self.osd(action, "A-B repeat: 1 times");
+                self.osd(
+                    Action::AbRepeat(AbRepeat::FewerLoops),
+                    "A-B repeat: endless",
+                );
+            }
+            Action::AbRepeat(AbRepeat::FewerLoops) => self.osd(action, "A-B repeat: endless"),
+            Action::AbRepeat(AbRepeat::ListSetup) => {
+                assert_eq!(self.dispatch(action), Some(UiRequest::SectionList));
+            }
+            Action::Skip(Skip::Toggle) => {
+                self.osd(action, "Skip: On");
+                self.osd(action, "Skip: Off");
+            }
+            Action::Skip(Skip::Setup) => {
+                assert_eq!(
+                    self.dispatch(action),
+                    Some(UiRequest::Preferences(Some("skip")))
+                );
+            }
+            Action::Bookmark(BookmarkCommand::Add) => {
+                self.osd(action, "Bookmark added: Bookmark 1 (00:00:30)");
+                let path = self
+                    .app
+                    .model
+                    .loaded_path()
+                    .map(str::to_owned)
+                    .expect("plays");
+                assert_eq!(self.app.marks().file(&path).bookmarks.len(), 1);
+                self.app.marks_mut().clear_bookmarks(&path);
+            }
+            _ => self.check_m11_open(action),
+        }
+    }
+
+    /// M11's opening commands that keys start.
+    fn check_m11_open(&mut self, action: Action) {
+        match action {
+            Action::Open(Source::Network) => {
+                assert_eq!(self.dispatch(action), Some(UiRequest::OpenUrlDialog));
+            }
+            Action::Open(Source::Clipboard) => {
+                assert_eq!(
+                    self.dispatch(action),
+                    Some(UiRequest::ReadClipboard(rvp_app::sources::Paste::Open))
+                );
+            }
+            // It would open the screen: `sources` checks its address.
+            Action::Open(Source::Screen) => {}
+            Action::Open(Source::Device) => {
+                assert_eq!(
+                    self.dispatch(action),
+                    Some(UiRequest::DeviceDialog(Vec::new()))
+                );
+            }
+            Action::Open(source @ (Source::Dvd | Source::Bluray)) => {
+                assert_eq!(
+                    self.dispatch(action),
+                    Some(UiRequest::DiscDialog {
+                        bluray: source == Source::Bluray,
+                        files: false
+                    })
+                );
+            }
+            Action::Settings(page) => {
+                assert_eq!(
+                    self.dispatch(action),
+                    Some(UiRequest::Preferences(Some(page.key())))
+                );
+            }
+            Action::ReloadSubtitle => self.osd(action, "No subtitle file to reload"),
+            Action::ChapterMenu => {
+                assert_eq!(
+                    self.dispatch(action),
+                    Some(UiRequest::PopupMenu("CMD_POPUPMENU_PLAY_BOOKMARK"))
+                );
+            }
+            // Only asks: the window deletes after the user says yes.
+            Action::DeleteFiles(_) => match self.dispatch(action) {
+                Some(UiRequest::ConfirmRecycle { files, entries }) => {
+                    assert!(!files.is_empty() && !entries.is_empty());
+                }
+                other => panic!("{action:?}: {other:?}"),
+            },
+            Action::AddFavoriteItem => self.osd(action, "Added to favorites: fixture-60s.mkv"),
+            Action::AddFavoriteFolder => self.osd(action, "Added to favorites: media"),
             _ => unreachable!("{action:?} is checked in check()"),
         }
     }

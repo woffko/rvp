@@ -21,6 +21,8 @@
 #include <QtCore/QPointer>
 #include <QtCore/QProcess>
 #include <QtCore/QTimer>
+#include <QtGui/QClipboard>
+#include <QtGui/QDesktopServices>
 #include <QtGui/QFontMetrics>
 #include <QtGui/QGuiApplication>
 #include <QtGui/QIcon>
@@ -396,6 +398,29 @@ bool Tools::run_self(const QStringList &arguments) const
     return QProcess::startDetached(QCoreApplication::applicationFilePath(), arguments);
 }
 
+QString Tools::clipboard_text() const
+{
+    return QGuiApplication::clipboard()->text();
+}
+
+void Tools::set_clipboard_text(const QString &text) const
+{
+    QGuiApplication::clipboard()->setText(text);
+}
+
+bool Tools::show_file(const QString &path) const
+{
+#ifdef Q_OS_WIN
+    // Explorer takes `/select,"path"` as one argument.
+    QProcess explorer;
+    explorer.setProgram(QStringLiteral("explorer.exe"));
+    explorer.setNativeArguments(QStringLiteral("/select,\"%1\"").arg(QDir::toNativeSeparators(path)));
+    return explorer.startDetached();
+#else
+    return QDesktopServices::openUrl(QUrl::fromLocalFile(QFileInfo(path).absolutePath()));
+#endif
+}
+
 bool rvp_instance_send(rust::Str name, rust::Str message)
 {
     QLocalSocket socket;
@@ -513,6 +538,18 @@ bool rvp_atlas_contains(rust::Str name)
 {
     const QMutexLocker lock(&atlasMutex);
     return atlases.contains(fromStr(name));
+}
+
+void rvp_atlas_remove_prefix(rust::Str prefix)
+{
+    const QString start = fromStr(prefix);
+    const QMutexLocker lock(&atlasMutex);
+    for (auto it = atlases.begin(); it != atlases.end();) {
+        if (it.key().startsWith(start))
+            it = atlases.erase(it);
+        else
+            ++it;
+    }
 }
 
 void rvp_atlas_insert(rust::Str name, rust::Slice<const std::uint8_t> rgba, std::int32_t width,

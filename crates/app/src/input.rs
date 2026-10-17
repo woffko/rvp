@@ -419,9 +419,11 @@ impl Bindings {
                 continue;
             };
             match table {
+                // A key listed twice (Ctrl+\: 10592 and 10596) keeps the
+                // first, the one PotPlayer's menu shows it with.
                 "157" => {
                     if let Some(action) = Action::from_potplayer_id(id) {
-                        keys.insert(chord, action);
+                        keys.entry(chord).or_insert(action);
                     }
                 }
                 "118" => {
@@ -446,6 +448,12 @@ impl Bindings {
             if let Some(chord) = KeyChord::parse(key) {
                 list_keys.entry(chord).or_insert(action);
             }
+        }
+        // PotPlayer's menu names Insert beside Ctrl+\ for "Repeat current
+        // subtitle section"; its table lacks it.
+        if let Some(chord) = KeyChord::parse("Ins") {
+            keys.entry(chord)
+                .or_insert(Action::AbRepeat(crate::action::AbRepeat::CurrentSubtitle));
         }
         let mouse = BTreeMap::from([
             (MouseGesture::LeftClick, Action::PlayPause),

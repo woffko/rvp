@@ -114,6 +114,9 @@ pub enum Effect {
         command: &'static str,
         menu: Option<&'static str>,
     },
+    /// The pointer is over the seek bar (or holds it) at this place, or
+    /// left it (`None`): the time tooltip and preview (M11).
+    SeekHover(Option<crate::playback::SeekHover>),
 }
 
 /// What the playlist panel does.
@@ -213,6 +216,8 @@ pub struct Pointer {
     /// Tooltip of the control under the pointer.
     pub tooltip: Option<&'static str>,
     pub cursor: Cursor,
+    /// The pointer was over the seek bar at the last move.
+    over_seek_bar: bool,
 }
 
 impl Default for Pointer {
@@ -223,8 +228,30 @@ impl Default for Pointer {
             swallow_release: false,
             tooltip: None,
             cursor: Cursor::Arrow,
+            over_seek_bar: false,
         }
     }
+}
+
+/// Where the pointer is over the seek bar's node, from its left end.
+fn seek_hover(
+    chrome: &Chrome,
+    node: usize,
+    x: i32,
+    held: bool,
+) -> Option<crate::playback::SeekHover> {
+    let rect = chrome.layout()?.nodes.get(node)?.rect;
+    let fraction = if rect.w > 1 {
+        (f64::from(x - rect.x) / f64::from(rect.w - 1)).clamp(0.0, 1.0)
+    } else {
+        0.0
+    };
+    Some(crate::playback::SeekHover {
+        fraction,
+        x: x.clamp(rect.x, rect.right() - 1),
+        top: rect.y,
+        held,
+    })
 }
 
 /// Resize edges under a point, 0 when none.
@@ -581,9 +608,14 @@ impl Pointer {
     pub fn moved(&mut self, chrome: &mut Chrome, ctx: Context, x: i32, y: i32) -> Vec<Effect> {
         match self.drag {
             Drag::Slider { node, command } => {
-                return slider_effect(chrome, node, command, x, y, false)
+                let mut effects: Vec<Effect> = slider_effect(chrome, node, command, x, y, false)
                     .into_iter()
                     .collect();
+                if command == "CMD_TIMEBAR_CTRL" {
+                    self.over_seek_bar = true;
+                    effects.push(Effect::SeekHover(seek_hover(chrome, node, x, true)));
+                }
+                return effects;
             }
             Drag::Button { element, .. } => {
                 let over = matches!(
@@ -605,17 +637,34 @@ impl Pointer {
             Drag::Rows { .. } | Drag::Thumb { .. } => return self.move_list(chrome, y),
             Drag::Idle => {}
         }
+        let mut seek = None;
         let (hover, tooltip, cursor) = match target(chrome, ctx, x, y) {
             Target::Edge(edges) => (None, None, cursor_for(edges)),
             Target::Control(Hit::Control {
-                element, tooltip, ..
-            }) => (Some(element), tooltip, Cursor::Arrow),
+                node,
+                element,
+                tooltip,
+                command,
+                ..
+            }) => {
+                if command == Some("CMD_TIMEBAR_CTRL") {
+                    seek = seek_hover(chrome, node, x, false);
+                }
+                // The seek bar's tooltip is the time (M11).
+                let tooltip = if seek.is_some() { None } else { tooltip };
+                (Some(element), tooltip, Cursor::Arrow)
+            }
             _ => (None, None, Cursor::Arrow),
         };
         chrome.state.hover = hover;
         self.tooltip = tooltip;
         self.cursor = cursor;
-        Vec::new()
+        let was_over = std::mem::replace(&mut self.over_seek_bar, seek.is_some());
+        if seek.is_some() || was_over {
+            vec![Effect::SeekHover(seek)]
+        } else {
+            Vec::new()
+        }
     }
 
     /// A button went up.
@@ -775,12 +824,16 @@ impl Pointer {
     }
 
     /// The pointer left the window.
-    pub fn leave(&mut self, chrome: &mut Chrome) {
+    /// The pointer left the window; `true` when it left the seek bar too
+    /// (its tooltip goes).
+    pub fn leave(&mut self, chrome: &mut Chrome) -> bool {
         if matches!(self.drag, Drag::Idle) {
             chrome.state.hover = None;
             self.tooltip = None;
             self.cursor = Cursor::Arrow;
+            return std::mem::take(&mut self.over_seek_bar);
         }
+        false
     }
 
     /// True while a slider or button is held.

@@ -19,36 +19,31 @@ const CONTEXT_REASONS: &[(&str, &str)] = &[
     ("101_0", "not in RVP yet"),
     (
         "101_0_1",
-        "other sources (FTP/WebDAV, devices, TV, DVD, Blu-ray, external audio) are not planned or not in RVP yet; RVP opens files, folders, URLs and subtitles",
+        "TV tuners (WDM analog and BDA digital TV) are a non-goal: libmpv has no tuner input",
     ),
-    ("101_0_1_4", "RVP adds opened files to the shown album"),
+    (
+        "101_0_1_4",
+        "PotPlayer's file navigator is not in RVP (docs/spikes/m11-studies.md): Open File(s), Open URL and Open Folder are the choices",
+    ),
     (
         "101_0_1_5",
-        "PotPlayer's file navigator and Open Box are not planned",
+        "PotPlayer's file navigator and Open Box are not in RVP (docs/spikes/m11-studies.md): the system's file dialogs, Open Folder, favorites and recent items open files",
     ),
     (
         "101_0_2",
         "Daum's broadcast and chat services (discontinued) and PotPlayer's screen capture are not planned",
     ),
-    ("101_0_3", "favorites: RVP's albums take their place"),
     ("101_0_6", "visualizations are not planned"),
     ("101_0_7", "TV devices are not planned"),
-    ("101_0_8", "DVD menus are not planned (chapters are RVP's)"),
+    (
+        "101_0_8",
+        "DVD and Blu-ray menus are M16's (goal R); RVP plays a disc's titles, chapters and streams",
+    ),
     ("101_0_9", "not in RVP yet"),
     (
-        "101_0_9_6",
-        "keyframe steps, the jump dialog and the scene browsers are not in RVP yet",
+        "101_0_9_12",
+        "seamless playback is not in RVP (docs/spikes/m11-studies.md): mpv preloads and joins files only inside its own playlist, and RVP's albums give mpv one entry at a time",
     ),
-    ("101_0_9_8", "skipping intros and endings is not in RVP yet"),
-    (
-        "101_0_9_9",
-        "RVP's albums have no playback queue, thumbnail views, copy and paste or file operations yet",
-    ),
-    (
-        "101_0_9_10",
-        "A-B lists, fine point moves and subtitle sections are not in RVP yet",
-    ),
-    ("101_0_9_12", "seamless playback is not planned"),
     ("101_0_10", "not in RVP yet"),
     ("101_0_10_8", "mpv (libass) renders every subtitle"),
     (
@@ -104,15 +99,6 @@ const CONTEXT_REASONS: &[(&str, &str)] = &[
     ("101_0_15", "not in RVP yet"),
     ("101_0_15_2", "RVP's interface is English"),
     (
-        "101_0_15_4",
-        "shutting down, sleeping or hibernating the computer is not planned",
-    ),
-    ("101_0_15_5", "RVP adds the files it is given"),
-    (
-        "101_0_15_6",
-        "copying names to the clipboard is not in RVP yet",
-    ),
-    (
         "101_0_17",
         "frame size presets and screen margins are not in RVP yet",
     ),
@@ -127,48 +113,16 @@ const CONTEXT_REASONS: &[(&str, &str)] = &[
 ];
 
 /// Why parts of PotPlayer's playlist menu (resource 111) are not in RVP.
-const PLAYLIST_REASONS: &[(&str, &str)] = &[
-    ("111_0", "not in RVP's albums yet"),
-    (
-        "111_0_4",
-        "RVP saves its albums itself; the import reads PotPlayer's",
-    ),
-    ("111_0_5", "a playback queue is not in RVP yet"),
-    (
-        "111_0_6",
-        "editing titles, file operations and the clipboard are not in RVP yet",
-    ),
-    ("111_0_7", "deleting files is not planned"),
-    ("111_0_8", "sorting by other fields is not in RVP yet"),
-    ("111_0_10", "thumbnail views are not in RVP yet"),
-];
+const PLAYLIST_REASONS: &[(&str, &str)] = &[("111_0", "not in RVP's albums yet")];
 
 /// Reasons for single items.
 const ITEM_REASONS: &[(u32, &str)] = &[
     (10187, "Daum's login, discontinued"),
-    (10325, "the jump dialog is not in RVP yet"),
-    (10792, "single instance: rvp /new opens another window"),
-    (10640, "RVP learns durations when files play"),
-    (10505, "file information is not in RVP yet"),
-    (10800, "thumbnails are not in RVP yet"),
-    (10069, "shuffle is not in RVP yet"),
     (
-        10419,
-        "RVP always remembers positions (the edges are settings)",
+        10800,
+        "thumbnail images are M12's (goal N); the thumbnail core that makes them is in RVP",
     ),
-    (
-        10121,
-        "RVP hides the pointer only in fullscreen (after 2 s)",
-    ),
-    (
-        10445,
-        "\"When Playback Finished\" covers closing after the list",
-    ),
-    (10921, "deleting played files is not planned"),
-    (10812, "seek bar tooltips and markers are not in RVP yet"),
-    (10813, "seek bar tooltips and markers are not in RVP yet"),
-    (10814, "seek bar tooltips and markers are not in RVP yet"),
-    (10940, "combined subtitles are not in RVP yet"),
+    (10940, "combined subtitles are M13's (goal O)"),
     (10228, "subtitle editing is not planned"),
     (10266, "subtitle editing is not planned"),
     (10220, "DirectShow output surfaces do not apply to libmpv"),
@@ -202,11 +156,7 @@ const ITEM_REASONS: &[(u32, &str)] = &[
     ),
     (10644, "presets are not in RVP yet"),
     (10968, "stay on top while in fullscreen is not in RVP yet"),
-    (10479, "shutting the computer down is not planned"),
-    (10784, "shutting the computer down is not planned"),
-    (10480, "shutting the computer down is not planned"),
     (10339, "RVP's keys are all editable (Keys and Mouse)"),
-    (10807, "recent items are not in RVP yet"),
     (10809, "touch input is not planned"),
     (10442, "other on-screen information is not in RVP yet"),
     (10449, "other on-screen information is not in RVP yet"),
@@ -233,6 +183,10 @@ fn runtime_list(id: u32) -> Option<&'static str> {
         20006 => "the output formats, sample rates and resampler qualities",
         20007 => "the output modes",
         20008 => "the equalizer's presets",
+        20001 => "the disc's titles (DVD Control > Move, from the disc's title table)",
+        20004 => "the DVD title's angles (mpv's dvd-angle)",
+        20002 => "the audio tracks",
+        20003 => "the subtitle tracks",
         37600 | 37650 | 37700 => "mpv's audio devices",
         _ => return None,
     })
@@ -252,14 +206,15 @@ pub enum ItemStatus {
 /// separator).
 #[must_use]
 pub fn item_status(item: &Recorded) -> ItemStatus {
+    // A submenu RVP fills (its key, H, opens it too).
+    if item.id == 10324 {
+        return ItemStatus::Runtime("the file's chapters and bookmarks");
+    }
     if let Some(action) = Action::from_potplayer_id(item.id) {
         return ItemStatus::Window(action);
     }
     if let Some(action) = ListAction::from_potplayer_id(item.id) {
         return ItemStatus::List(action);
-    }
-    if item.id == 10324 {
-        return ItemStatus::Runtime("the file's chapters");
     }
     if let Some(what) = runtime_list(item.id) {
         return ItemStatus::Runtime(what);
@@ -374,11 +329,13 @@ const RUNTIME_LISTS: &[(&str, &str)] = &[
 
 /// Why run-time commands are not in RVP, by place; the longest wins.
 const RUNTIME_REASONS: &[(&str, &str)] = &[
-    ("Open", "planned in M11 (goal M)"),
-    ("Playback", "planned in M11 (goal M)"),
     (
         "Playback > Speed",
-        "RVP stretches with mpv's filters (Speed's three items); keeping speed changes: M11 (goal M)",
+        "RVP stretches with mpv's filters (Speed's three items)",
+    ),
+    (
+        "Playback > Chapter/Bookmark",
+        "RVP keeps bookmarks in its state folder (marks.json); PotPlayer's .pbf format was not recorded (R1)",
     ),
     ("Subtitles", "planned in M13 (goal O)"),
     (
@@ -453,6 +410,12 @@ pub fn runtime_status(command: &RuntimeCommand) -> ItemStatus {
     if let Some(action) = Action::from_potplayer_id(command.id) {
         return ItemStatus::Window(action);
     }
+    if let Some(action) = ListAction::from_potplayer_id(command.id) {
+        return ItemStatus::List(action);
+    }
+    if let Some((_, reason)) = ITEM_REASONS.iter().find(|(id, _)| *id == command.id) {
+        return ItemStatus::Missing(reason);
+    }
     if let Some((_, what)) = RUNTIME_LISTS.iter().find(|(place, _)| {
         command.parent == *place || command.parent.starts_with(&format!("{place} > "))
     }) {
@@ -477,6 +440,9 @@ fn runtime_section(out: &mut String) {
     for command in &commands {
         match runtime_status(command) {
             ItemStatus::Window(action) => done.push((command, action.name().to_owned())),
+            ItemStatus::List(action) => {
+                done.push((command, format!("playlist: {}", action.name())));
+            }
             ItemStatus::Runtime(what) => {
                 let list = RUNTIME_LISTS
                     .iter()
@@ -484,7 +450,6 @@ fn runtime_section(out: &mut String) {
                     .map_or(command.parent.as_str(), |(place, _)| place);
                 lists.entry(list).or_insert((0, what)).0 += 1;
             }
-            ItemStatus::List(_) => {}
             ItemStatus::Missing(why) => missing
                 .entry(why)
                 .or_default()
@@ -512,6 +477,122 @@ fn runtime_section(out: &mut String) {
     for (why, places) in missing {
         let _ = writeln!(out, "- **{why}** ({}): {}", places.len(), places.join("; "));
     }
+}
+
+const COMMAND_LINE_TSV: &str = include_str!("../../../docs/r1/command-line.tsv");
+
+/// What RVP does with each of PotPlayer's command-line switches (R2), by
+/// the switch as R2 wrote it.
+const COMMAND_LINE: &[(&str, Result<&str, &str>)] = &[
+    (
+        "\"content\"",
+        Ok(
+            "files, folders and URLs open in the shown album (When Files Opened applies); wildcards and URL titles after a backslash are not read",
+        ),
+    ),
+    ("-", Ok("standard input plays (mpv's `-`)")),
+    ("/filedlg", Ok("the Open File(s) dialog")),
+    ("/urldlg", Ok("the Open URL dialog")),
+    ("/folderdlg", Ok("the Open Folder dialog")),
+    (
+        "/simple",
+        Err("PotPlayer's file navigator is not in RVP (docs/spikes/m11-studies.md)"),
+    ),
+    ("/cap", Ok("the screen capture")),
+    (
+        "/cam",
+        Ok("the webcam or device (the device setting, or a list)"),
+    ),
+    ("/atv[:ch]", Err("TV tuners are a non-goal")),
+    ("/dtv[:ch[-idx]]", Err("TV tuners are a non-goal")),
+    (
+        "/dvd",
+        Ok("the DVD (the device setting, or the disc dialog)"),
+    ),
+    ("/cd[:drive]", Ok("the audio CD (cdda://) of the drive")),
+    ("/add", Ok("appends to the shown album")),
+    ("/insert", Ok("inserts below the entry that plays")),
+    ("/autoplay", Ok("the last played item plays")),
+    (
+        "/same",
+        Ok("the files after the first are its streams (external files)"),
+    ),
+    ("/sort", Ok("the files sort by name first")),
+    ("/randomize", Ok("the files are shuffled first")),
+    ("/new", Ok("another RVP plays them")),
+    ("/current", Ok("the running RVP plays them")),
+    ("/clipboard", Ok("the clipboard's files and URLs open")),
+    (
+        "/seek=time",
+        Ok("the first file starts there (mpv's start)"),
+    ),
+    (
+        "/sub=\"subfile\"",
+        Ok("the first file's subtitle (mpv's sub-files)"),
+    ),
+    (
+        "/aud=\"audiofile\"",
+        Ok("the first file's audio (mpv's audio-files)"),
+    ),
+    ("/user_agent=\"ua\"", Ok("the first file's user agent")),
+    ("/referer=\"ref\"", Ok("the first file's referer")),
+    (
+        "/headers=\"hdrs\"",
+        Ok("the first file's HTTP header fields"),
+    ),
+    (
+        "/title=\"title\"",
+        Ok("the first file's title (mpv's force-media-title)"),
+    ),
+    ("config=\"name\"", Err("presets are M14's (goal P)")),
+];
+
+/// What RVP does with a switch of R2's list; `None` for one RVP has not
+/// sorted out (the test fails on it).
+#[must_use]
+pub fn command_line_status(switch: &str) -> Option<Result<&'static str, &'static str>> {
+    COMMAND_LINE
+        .iter()
+        .find(|(name, _)| *name == switch)
+        .map(|(_, status)| *status)
+}
+
+/// The switches of R2's `docs/r1/command-line.tsv`.
+#[must_use]
+pub fn command_line_switches() -> Vec<&'static str> {
+    COMMAND_LINE_TSV
+        .lines()
+        .skip(1)
+        .filter_map(|line| line.split('\t').next())
+        .filter(|switch| !switch.is_empty())
+        .collect()
+}
+
+/// `docs/coverage/command-line.md`.
+#[must_use]
+pub fn command_line_report() -> String {
+    let switches = command_line_switches();
+    let done = switches
+        .iter()
+        .filter(|switch| matches!(command_line_status(switch), Some(Ok(_))))
+        .count();
+    let mut out = format!(
+        "# PotPlayer's command line in RVP\n\nGenerated by `cargo test -p rvp-app --test coverage` \
+         (`RVP_BLESS=1` rewrites it) from R2's `docs/r1/command-line.tsv` \
+         (`crates/app/src/instance.rs` reads them).\n\n{} switches: {done} in RVP, {} not.\n\n\
+         | Switch | RVP |\n|--------|-----|\n",
+        switches.len(),
+        switches.len() - done
+    );
+    for switch in switches {
+        let what = match command_line_status(switch) {
+            Some(Ok(what)) => what.to_owned(),
+            Some(Err(why)) => format!("not: {why}"),
+            None => "not: not sorted out".to_owned(),
+        };
+        let _ = writeln!(out, "| `{switch}` | {what} |");
+    }
+    out
 }
 
 /// Skin commands the window shows data with (labels, sliders, images).

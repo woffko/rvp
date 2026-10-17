@@ -6,7 +6,7 @@
 use std::path::Path;
 use std::time::{Duration, Instant};
 
-use rvp_app::instance::{Mode, Request};
+use rvp_app::instance::{Mode, Request, Switches};
 use rvp_app::playlist::local_path;
 use rvp_app::{App, Cli, Settings};
 use rvp_engine::{Engine, EngineOptions, PlayerModel};
@@ -69,6 +69,7 @@ fn add_insert_and_play_requests() {
     let insert = Request {
         mode: Mode::Insert,
         files: vec!["/media/inserted.mkv".to_owned()],
+        switches: Switches::default(),
     };
     app.remote(&engine, &insert).expect("insert");
     assert_eq!(paths(&app), [&long, &inserted, &short]);
@@ -80,6 +81,7 @@ fn add_insert_and_play_requests() {
     let play = Request {
         mode: Mode::Play,
         files: vec![SHORT.to_owned()],
+        switches: Switches::default(),
     };
     app.remote(&engine, &play).expect("play");
     assert_eq!(paths(&app).len(), 4);

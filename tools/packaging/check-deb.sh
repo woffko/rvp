@@ -9,8 +9,9 @@
 # library the package's files load resolves, and the functional self-test
 # passes for the installed copy and for the AppImage (extracted, as a
 # container has no FUSE) under Xvfb: software OpenGL, no sound, no session
-# bus. Arguments: the folder with rvp_*_amd64.deb and RVP-*-x86_64.AppImage,
-# and the one with fixture-60s.mkv and fixture-3s.mkv.
+# bus; M11's self-test runs on the installed copy too. Arguments: the
+# folder with rvp_*_amd64.deb and RVP-*-x86_64.AppImage, and testdata/media
+# (fixture-60s.mkv, fixture-3s.mkv, fixture-chapters.mkv and .srt, dvd).
 set -u
 packages=$1
 fixtures=$2
@@ -51,7 +52,7 @@ fi
 apt-get install -y -q xvfb xauth libgl1-mesa-dri > /tmp/xvfb.log 2>&1 || tail -5 /tmp/xvfb.log
 
 selftest() {
-    # selftest <name> <command...>
+    # selftest <name> <command and its arguments...>
     local name=$1 log result
     shift
     log=/tmp/selftest-$name.log
@@ -59,8 +60,7 @@ selftest() {
     mkdir -p /tmp/rvp/config
     printf '{ "ipc-server": "" }\n' > /tmp/rvp/config/settings.json
     RVP_CONFIG_DIR=/tmp/rvp/config RVP_STATE_DIR=/tmp/rvp/state \
-        xvfb-run -a -s '-screen 0 1920x1080x24' "$@" --selftest --out=/tmp/rvp/out --skin= \
-        --mpv-options=ao=null,hwdec=no "$fixtures/fixture-60s.mkv" "$fixtures/fixture-3s.mkv" > "$log" 2>&1
+        xvfb-run -a -s '-screen 0 1920x1080x24' "$@" > "$log" 2>&1
     result=$(grep -E '^failures=' "$log" | tail -1)
     if [ "$result" = failures=0 ]; then
         check "selftest_$name" PASS "$(grep -c '=PASS' "$log") checks"
@@ -70,7 +70,13 @@ selftest() {
     fi
 }
 
-selftest deb /usr/bin/rvp
-selftest appimage env APPIMAGE_EXTRACT_AND_RUN=1 "$packages"/RVP-*-x86_64.AppImage
+functional=(--selftest --out=/tmp/rvp/out --skin= --mpv-options=ao=null,hwdec=no
+    "$fixtures/fixture-60s.mkv" "$fixtures/fixture-3s.mkv")
+selftest deb /usr/bin/rvp "${functional[@]}"
+selftest appimage env APPIMAGE_EXTRACT_AND_RUN=1 "$packages"/RVP-*-x86_64.AppImage "${functional[@]}"
+selftest m11 /usr/bin/rvp --selftest=m11 --out=/tmp/rvp/out --skin= --mpv-options=ao=null,hwdec=no \
+    "--dvd=$fixtures/dvd" "--audio=$fixtures/fixture-3s.mkv" "--clip=$fixtures/fixture-60s.mkv" \
+    /seek=0:00:03 "/title=M11 title" "$fixtures/fixture-chapters.mkv" "$fixtures/fixture-60s.mkv" \
+    "$fixtures/fixture-3s.mkv"
 echo "failures=$failures"
 [ "$failures" -eq 0 ]

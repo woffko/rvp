@@ -56,6 +56,18 @@ pub mod qobject {
         #[qproperty(i32, panel_x)]
         #[qproperty(i32, panel_y)]
         #[qproperty(QString, record_path)]
+        #[qproperty(QString, seek_tip)]
+        #[qproperty(i32, seek_tip_x)]
+        #[qproperty(i32, seek_tip_y)]
+        #[qproperty(bool, seek_tip_shown)]
+        #[qproperty(i32, preview_serial)]
+        #[qproperty(i32, preview_width)]
+        #[qproperty(i32, preview_height)]
+        #[qproperty(bool, hide_pointer)]
+        #[qproperty(bool, center_window)]
+        #[qproperty(QString, power_notice)]
+        #[qproperty(i32, power_seconds)]
+        #[qproperty(QString, dialog)]
         type Player = super::PlayerRust;
 
         /// Loads settings, the skin and libmpv; sets the `restore_*`
@@ -346,10 +358,120 @@ pub mod qobject {
         #[qinvokable]
         fn option(self: &Self, name: &QString) -> QString;
 
+        // M11.
+        /// The Jump to Time/Frame dialog's answer; returns the error to
+        /// show (empty when it jumped).
+        #[qinvokable]
+        fn jump_to(self: Pin<&mut Self>, text: &QString, frames: bool) -> QString;
+
+        /// Adds a bookmark with the title the dialog asked for.
+        #[qinvokable]
+        fn add_bookmark(self: Pin<&mut Self>, time: f64, title: &QString);
+
+        /// The playing file's bookmarks as JSON (`time`, `title`).
+        #[qinvokable]
+        fn bookmarks_json(self: &Self) -> QString;
+
+        /// The bookmark dialog: `jump`, `rename` (to `text`), `delete` or
+        /// `add` (at the current time) a bookmark.
+        #[qinvokable]
+        fn bookmark_edit(self: Pin<&mut Self>, op: &QString, index: i32, text: &QString);
+
+        /// The playing file's A-B repeat list as JSON (`start`, `end`,
+        /// `title`).
+        #[qinvokable]
+        fn sections_json(self: &Self) -> QString;
+
+        /// The A-B list dialog: `add` (the current A-B points), `repeat`,
+        /// `rename` (to `text`) or `delete` a section.
+        #[qinvokable]
+        fn section_edit(self: Pin<&mut Self>, op: &QString, index: i32, text: &QString);
+
+        /// The notice's Cancel before shutting down or exiting.
+        #[qinvokable]
+        fn cancel_countdown(self: Pin<&mut Self>);
+
+        /// The shutdown timer's dialog: fire in `seconds` (`kind` 0 at a
+        /// time, 1 after a duration), exiting RVP or powering off.
+        #[qinvokable]
+        fn set_power_timer(
+            self: Pin<&mut Self>,
+            kind: i32,
+            seconds: f64,
+            exit: bool,
+            label: &QString,
+        );
+
+        /// The Recycle Bin dialog's Yes: the files (JSON list) go there
+        /// and the album entries (JSON list) are removed; returns the error
+        /// (empty when done).
+        #[qinvokable]
+        fn recycle(self: Pin<&mut Self>, files: &QString, entries: &QString) -> QString;
+
+        /// The clipboard's text for a purpose (0 open, 1 add to the album,
+        /// 2 add below the selected entry).
+        #[qinvokable]
+        fn paste_text(self: Pin<&mut Self>, purpose: i32, text: &QString);
+
+        /// Load External Audio's file.
+        #[qinvokable]
+        fn load_external_audio(self: Pin<&mut Self>, path: &QString);
+
+        /// A disc folder or file from its dialog.
+        #[qinvokable]
+        fn open_disc(self: Pin<&mut Self>, path: &QString, bluray: bool);
+
+        /// A capture device from its dialog.
+        #[qinvokable]
+        fn open_device(self: Pin<&mut Self>, name: &QString);
+
+        /// The capture devices the system has, as JSON (`name`, `audio`).
+        #[qinvokable]
+        fn devices_json(self: &Self) -> QString;
+
+        /// A playlist dialog's answer (`rvp_app::UiRequest::ListDialog`).
+        #[qinvokable]
+        fn list_dialog_answer(self: Pin<&mut Self>, kind: &QString, text: &QString);
+
+        /// A scene of the scene browser was chosen.
+        #[qinvokable]
+        fn scene_chosen(self: Pin<&mut Self>, time: f64);
+
+        /// The scene browser closed: its pictures are no longer wanted.
+        #[qinvokable]
+        fn scenes_closed(self: Pin<&mut Self>);
+
+        /// The rectangle of the main window's control bound to a command
+        /// (self-test); empty when it is not shown.
+        #[qinvokable]
+        fn control_rect(self: &Self, command: &QString) -> QRectF;
+
+        /// The favorites as JSON (`path`, `title`, `folder`).
+        #[qinvokable]
+        fn favorites_json(self: &Self) -> QString;
+
+        /// The favorites' dialog's answer (the whole list as JSON).
+        #[qinvokable]
+        fn set_favorites(self: Pin<&mut Self>, json: &QString);
+
+        /// Files dropped on the window (one a line): sorted first when the
+        /// Playlist page says so, then opened.
+        #[qinvokable]
+        fn drop_files(self: Pin<&mut Self>, paths: &QString);
+
+        /// The thumbnail core finished pictures (queued from its thread).
+        #[qinvokable]
+        fn thumbnails_ready(self: Pin<&mut Self>);
+
         /// Something only the window can do; see [`super::request`].
         #[qsignal]
         #[cxx_name = "uiRequest"]
         fn ui_request(self: Pin<&mut Self>, kind: i32, argument: i32);
+
+        /// A scene browser's picture arrived (atlas `thumb/scene/INDEX`).
+        #[qsignal]
+        #[cxx_name = "sceneReady"]
+        fn scene_ready(self: Pin<&mut Self>, index: i32);
 
         /// Chrome items to repaint: the static layer, region indexes
         /// separated by commas, and whether to wait for the next video

@@ -249,7 +249,9 @@ impl Chrome {
         };
         let list = paint(self.skin, placed, &self.state, &self.data);
         let regions = dynamic_regions(placed);
-        let regions_changed = regions != self.frame.regions;
+        // `resize` forgets what was painted: the same regions count as new.
+        let regions_changed =
+            regions != self.frame.regions || self.painted_regions.len() != regions.len();
         let frame = Frame { list, regions };
         let mut damage = Damage {
             regions_changed,

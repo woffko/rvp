@@ -66,7 +66,10 @@ fn main() {
         .qml_file("qml/UrlDialog.qml")
         .qml_file("qml/About.qml")
         .qml_file("qml/AudioSync.qml")
-        .qml_file("qml/ControlPanel.qml");
+        .qml_file("qml/ControlPanel.qml")
+        .qml_file("qml/PlaybackDialogs.qml")
+        .qml_file("qml/SceneBrowser.qml")
+        .qml_file("qml/SelfTestM11.qml");
     CxxQtBuilder::new_qml_module(module)
         .qt_module("Gui")
         .qt_module("Qml")
@@ -77,6 +80,7 @@ fn main() {
             "src/ffi.rs",
             "src/player_qobject.rs",
             "src/skin_view_qobject.rs",
+            "src/thumb_view_qobject.rs",
         ])
         .cpp_file("cpp/shell.h")
         .cpp_file("cpp/shell.cpp")

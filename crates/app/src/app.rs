@@ -106,6 +106,73 @@ pub enum UiRequest {
     RecordFolderDialog,
     /// A non-blocking message (section 4: no modal interruptions).
     Message(String),
+    // M11.
+    /// The Jump to Time/Frame dialog, at the current time (seconds), with
+    /// the duration and the frame rate (0 when unknown).
+    JumpDialog {
+        time: f64,
+        duration: f64,
+        fps: f64,
+    },
+    /// The A-B repeat list's dialog (`Player.sections_json`).
+    SectionList,
+    /// The bookmark list's dialog (`Player.bookmarks_json`).
+    Bookmarks,
+    /// Ask for a new bookmark's title (then `Player.add_bookmark`).
+    BookmarkTitle {
+        time: f64,
+        title: String,
+    },
+    /// The notice before an ending: its text and the seconds left, or
+    /// hidden (`None`).
+    PowerNotice(Option<(String, u64)>),
+    /// Shut down, sleep or hibernate the computer now (the shell's
+    /// platform code, or its dry-run hook).
+    Power(crate::action::PowerAction),
+    /// The shutdown timer's dialog.
+    PowerTimerDialog(crate::action::PowerTimer),
+    /// Ask whether these files may go to the Recycle Bin (then
+    /// `Player.recycle`); `entries` are the album entries to remove after.
+    ConfirmRecycle {
+        files: Vec<PathBuf>,
+        entries: Vec<String>,
+    },
+    /// Put this text on the clipboard.
+    CopyText(String),
+    /// Read the clipboard and give its text to `Player.paste_text`, for
+    /// the purpose named.
+    ReadClipboard(crate::sources::Paste),
+    /// A file dialog for an external audio file (then
+    /// `Player.load_external_audio`).
+    OpenAudioDialog,
+    /// A folder or file dialog for a disc: `bluray` for Blu-ray, `files`
+    /// for its `.IFO` or `.MPLS` files (then `Player.open_disc`).
+    DiscDialog {
+        bluray: bool,
+        files: bool,
+    },
+    /// The list of capture devices to choose from (then
+    /// `Player.open_device`).
+    DeviceDialog(Vec<crate::sources::CaptureDevice>),
+    /// The scene browser: its title, the pictures' places and sizes.
+    SceneBrowser(crate::scenes::Browser),
+    /// The favorites' dialog.
+    Favorites,
+    /// A dialog of the playlist panel (`kind`: `title`, `rename`,
+    /// `search`, `url`, `info`, `save`, `open`, `move`, `copy`), with the
+    /// current text.
+    ListDialog {
+        kind: &'static str,
+        text: String,
+    },
+    /// Start another RVP with these files (`rvp /new`).
+    NewInstance(Vec<String>),
+    /// Show a file in the system's file manager (selected when it can).
+    ShowFile(PathBuf),
+    /// The playlist's view changed (list or thumbnails): lay it out again.
+    ListView,
+    /// A built-in submenu at the pointer (`CMD_POPUPMENU_*`).
+    PopupMenu(&'static str),
 }
 
 /// A sync step as PotPlayer's menu names it: `50ms`, `0.5 Sec`.
@@ -236,6 +303,18 @@ pub struct App {
     seek_bar: Option<SeekBarHold>,
     /// Counts the files loaded: the media controls' track ID (`media`).
     pub(crate) media_track: u64,
+    /// M11's playback state (chapters, skips, shuffle).
+    pub(crate) play: crate::playback::PlayState,
+    /// Bookmarks, A-B lists, favorites and recent items.
+    marks: crate::marks::MarkStore,
+    /// The thumbnail core's requests.
+    pub(crate) thumbs: crate::thumbs::Thumbs,
+    /// The countdown before an ending and the shutdown timer.
+    pub(crate) power: crate::power::Power,
+    /// File moves and copies under way.
+    pub(crate) file_jobs: crate::albums::FileJobs,
+    /// A yt-dlp resolution under way.
+    pub(crate) resolver: crate::ytdl::Resolver,
 }
 
 impl App {
@@ -265,6 +344,14 @@ impl App {
         let (bindings, binding_warnings) = settings.bindings();
         warnings.extend(binding_warnings);
         let first_start = !state_dir.join("playlists.json").exists();
+        let mut marks = crate::marks::MarkStore::open(state_dir)?;
+        if !settings.playback.ab.remember {
+            marks.forget_sections();
+        }
+        let mut session = Session::default();
+        if settings.playback.finished.remember {
+            session.after = settings.playback.finished.after;
+        }
         Ok(Self {
             settings,
             bindings,
@@ -280,7 +367,7 @@ impl App {
             writer: storage::Writer::new()?,
             first_start,
             warnings,
-            session: Session::default(),
+            session,
             state_dir: state_dir.to_path_buf(),
             svp: crate::svp::Watch::default(),
             normalizer: None,
@@ -293,7 +380,29 @@ impl App {
             second_mpv_options: Vec::new(),
             seek_bar: None,
             media_track: 0,
+            play: crate::playback::PlayState::default(),
+            marks,
+            thumbs: crate::thumbs::Thumbs::default(),
+            power: crate::power::Power::default(),
+            file_jobs: crate::albums::FileJobs::default(),
+            resolver: crate::ytdl::Resolver::default(),
         })
+    }
+
+    /// Picture and playback state of this session (A-B points and more).
+    #[must_use]
+    pub fn session(&self) -> &Session {
+        &self.session
+    }
+
+    /// Bookmarks, A-B lists, favorites and recent items.
+    #[must_use]
+    pub fn marks(&self) -> &crate::marks::MarkStore {
+        &self.marks
+    }
+
+    pub fn marks_mut(&mut self) -> &mut crate::marks::MarkStore {
+        &mut self.marks
     }
 
     /// The engine options these settings ask for.
@@ -335,6 +444,9 @@ impl App {
                 .extra
                 .push(("sub-font".to_owned(), settings.subtitle_font.clone()));
         }
+        options
+            .extra
+            .extend(crate::playback::engine_options(&settings.playback));
         options
     }
 
@@ -385,6 +497,10 @@ impl App {
     /// # Errors
     /// Fails when libmpv rejects a command.
     pub fn start(&mut self, engine: &Engine, files: &[String]) -> Result<(), EngineError> {
+        if !self.settings.playlist.remember_default {
+            self.library.forget_default();
+            self.marks.clear_recent();
+        }
         let state = self.store.state();
         engine.set_volume(state.volume.unwrap_or(100.0))?;
         engine.set_mute(state.mute)?;
@@ -448,14 +564,67 @@ impl App {
         append: bool,
     ) -> Result<(), EngineError> {
         let shown = self.library.lists().shown;
-        let Some(first) = self.library.insert(shown, None, files) else {
-            return Ok(());
+        // A folder brings its media files (and its subfolders').
+        let files: Vec<String> = files
+            .iter()
+            .flat_map(|file| {
+                let path = Path::new(file);
+                if !crate::playlist::is_url(file) && path.is_dir() {
+                    let mut found = Vec::new();
+                    collect_media(path, 0, &mut found);
+                    found.sort();
+                    found
+                } else {
+                    vec![file.clone()]
+                }
+            })
+            .collect();
+        let (files, play) = if append {
+            (files, 0)
+        } else {
+            self.expand_opened(&files)
+        };
+        if !append && !self.settings.playlist.append_on_open {
+            self.library.clear(shown);
+        }
+        let known = self.library.shown().entries.len();
+        let Some(first) = self.add_paths(shown, &files) else {
+            // Every file was in the album already: the first of them plays.
+            let path = files
+                .get(play)
+                .map(|path| crate::playlist::local_path(path));
+            let existing = path.and_then(|path| {
+                self.library
+                    .shown()
+                    .entries
+                    .iter()
+                    .position(|entry| entry.path == path)
+            });
+            return match existing {
+                Some(index) if !append => self.play_entry(engine, shown, index, false),
+                _ => Ok(()),
+            };
         };
         if append {
-            Ok(())
-        } else {
-            self.play_entry(engine, shown, first, false)
+            return Ok(());
         }
+        // With duplicates left out, the file to play may be an older entry.
+        let wanted = files
+            .get(play)
+            .map(|path| crate::playlist::local_path(path));
+        let index = wanted
+            .and_then(|path| {
+                self.library
+                    .shown()
+                    .entries
+                    .iter()
+                    .enumerate()
+                    .skip(if first >= known { first } else { 0 })
+                    .find(|(_, entry)| entry.path == path)
+                    .map(|(index, _)| index)
+            })
+            .unwrap_or(first);
+        self.play_entry(engine, shown, index, false)
     }
 
     /// Adds files after the entry that plays (PotPlayer's `/insert`).
@@ -552,20 +721,60 @@ impl App {
         else {
             return Ok(());
         };
+        if self.library.lists().playing != Some(album) {
+            self.reset_shuffle();
+        }
         self.library.set_playing(album, index);
         self.end_handled = false;
         self.play_on_load = !paused;
         self.tracking = Tracking::Loading;
+        self.remember_recent(&path);
         engine.set_pause(paused)?;
-        engine.load(&path, false)
+        // Streaming sites go through yt-dlp first (crate::ytdl).
+        if self.resolve_stream(engine, &path) {
+            return Ok(());
+        }
+        let options = std::mem::take(&mut self.play.next_options);
+        engine.load_with_options(&path, &options)
     }
 
-    /// Moves to the next (`1`) or previous (`-1`) playable entry.
+    /// Moves to the next (`1`) or previous (`-1`) playable entry: the
+    /// queue first, in shuffle order when shuffle is on, and on with the
+    /// folder's files at the album's ends when that is on.
     fn step(&mut self, engine: &Engine, step: i32) -> Result<(), EngineError> {
-        match self.library.neighbour(step) {
+        match self.next_entry(step, false) {
             Some((album, index)) => self.play_entry(engine, album, index, false),
             None => Ok(()),
         }
+    }
+
+    /// The entry Next (`1`), Previous (`-1`) or the end of a file (`at_end`)
+    /// goes to.
+    fn next_entry(&mut self, step: i32, at_end: bool) -> Option<(usize, usize)> {
+        if step > 0
+            && let Some(queued) = self.library.take_queued()
+        {
+            return Some(queued);
+        }
+        if self.settings.playback.shuffle {
+            let pick = if step > 0 {
+                self.shuffle_next()
+            } else {
+                self.shuffle_previous()
+            };
+            if pick.is_some() || step < 0 {
+                return pick;
+            }
+            // Every entry played in this round: a new one with Repeat.
+            if at_end && self.settings.repeat != Repeat::Album {
+                return None;
+            }
+            self.reset_shuffle();
+            return self.shuffle_next();
+        }
+        self.library
+            .neighbour(step)
+            .or_else(|| self.folder_neighbour(step))
     }
 
     /// Whether an action's menu entry shows a check mark, and if so its
@@ -605,7 +814,9 @@ impl App {
             Action::ToggleVapourSynth => Some(self.settings.vapoursynth.enabled),
             Action::ControlPanel => Some(self.session.control_panel),
             Action::Audio(command) => self.audio_checked(command),
-            _ => None,
+            other => self
+                .playback_checked(other)
+                .or_else(|| self.source_checked(other)),
         }
     }
 
@@ -646,6 +857,12 @@ impl App {
             Action::SubtitleDelay(Delay::Earlier | Delay::Later) => {
                 text.replace("%s", &sync_step_label(self.settings.subtitle_delay_step))
             }
+            Action::Skip(skip) => self.skip_label(skip, text),
+            Action::PowerTimer(kind) => self.timer_label(kind, text),
+            Action::AbRepeat(crate::action::AbRepeat::Behind) => text.replace(
+                "5 Sec.",
+                &format!("{} Sec.", self.settings.playback.ab.behind),
+            ),
             _ => text.to_owned(),
         }
         .trim()
@@ -725,6 +942,7 @@ impl App {
             Action::CloseMedia => engine.stop(),
             Action::Previous => self.step(engine, -1),
             Action::Next => self.step(engine, 1),
+            Action::OpenDefault => return Some(self.default_open()),
             Action::SeekBackward(step) => {
                 self.seek_to(engine, Seek::Relative(-self.settings.seek_seconds(step)))
             }
@@ -803,6 +1021,9 @@ impl App {
             }
             return None;
         }
+        if action.is_panel_command() {
+            return self.album_command(engine, action, visible);
+        }
         // Whether the album changed is already in the library's state.
         let _changed = match action {
             ListAction::Play => {
@@ -844,12 +1065,9 @@ impl App {
                 });
             }
             ListAction::Close => return Some(UiRequest::TogglePlaylist),
-            ListAction::CursorUp
-            | ListAction::CursorDown
-            | ListAction::CursorHome
-            | ListAction::CursorEnd
-            | ListAction::PageUp
-            | ListAction::PageDown => false,
+            // The cursor moved above, and M11's commands went to
+            // App::album_command.
+            _ => false,
         };
         None
     }
@@ -921,19 +1139,23 @@ impl App {
             .or_else(dpl::potplayer_folder)
     }
 
+    /// How PotPlayer's Windows paths become this system's: Windows opens
+    /// them as they are, Linux through the drive map setting.
+    pub(crate) fn drive_map(&self) -> DriveMap {
+        if cfg!(windows) {
+            DriveMap::default()
+        } else {
+            DriveMap::new(&self.settings.drive_map)
+        }
+    }
+
     /// Imports PotPlayer's playlists from `folder` (read-only) as albums,
     /// with their resume positions; returns how many albums came in.
     ///
     /// # Errors
     /// Fails when the folder cannot be read.
     pub fn import_playlists(&mut self, folder: &Path) -> io::Result<usize> {
-        // Windows opens PotPlayer's paths as they are.
-        let map = if cfg!(windows) {
-            DriveMap::default()
-        } else {
-            DriveMap::new(&self.settings.drive_map)
-        };
-        let imported = dpl::import_dir(folder, &map)?;
+        let imported = dpl::import_dir(folder, &self.drive_map())?;
         let count = imported.len();
         let mut first = None;
         for item in imported {
@@ -1218,6 +1440,7 @@ impl App {
         if matches!(self.tracking, Tracking::Resuming(_)) {
             self.tracking = Tracking::On;
         }
+        let target = self.keep_after_a(target);
         engine.seek_with(target, !self.settings.keyframe_seeks)
     }
 
@@ -1265,6 +1488,14 @@ impl App {
         if !self.model.media_loaded() {
             return;
         }
+        // "Pause when seeking with mouse": from the press to the release.
+        if self.seek_bar.is_none_or(|hold| hold.released.is_some())
+            && self.settings.playback.pause_while_seeking
+            && self.model.flag(PropertyId::Pause) == Some(false)
+            && engine.set_pause(true).is_ok()
+        {
+            self.play.paused_for_seek = true;
+        }
         self.seek_bar = Some(SeekBarHold {
             fraction,
             released: None,
@@ -1287,6 +1518,9 @@ impl App {
             released: Some(now),
         });
         drop(self.seek_to(engine, Seek::Fraction(fraction)));
+        if std::mem::take(&mut self.play.paused_for_seek) {
+            drop(engine.set_pause(false));
+        }
     }
 
     /// Shows a held seek bar, and its time, in the skin's data.
@@ -1353,24 +1587,30 @@ impl App {
         }
     }
 
-    /// Handles everything libmpv has reported: updates the model, the
-    /// albums and the resume store, moves on at the end of a file, and
-    /// returns the changes, requests for the window and the events.
-    pub fn drain(&mut self, engine: &Engine, now: Instant) -> Drained {
-        let mut events = Vec::new();
-        let changes = engine.drain(&mut self.model, &mut events);
-        let mut requests = Vec::new();
+    /// The engine's events of one drain: what they change, whether the
+    /// store is to be saved now, and whether a file failed to open.
+    fn handle_events(
+        &mut self,
+        engine: &Engine,
+        events: &[EngineEvent],
+        now: Instant,
+        requests: &mut Vec<UiRequest>,
+    ) -> (bool, bool) {
         let mut save_now = false;
         let mut failed = false;
-        for event in &events {
+        for event in events {
             match event {
                 EngineEvent::StartFile => {
                     self.tracking = Tracking::Loading;
                     self.seek_bar = None;
-                    // A-B points belong to one file.
+                    // A-B points, chapters and skips belong to one file.
                     self.session.point_a = None;
                     self.session.point_b = None;
                     self.session.ab_active = false;
+                    self.play.chapters.clear();
+                    self.play.skipped_chapter = None;
+                    self.play.ending_skipped = false;
+                    self.play.subtitle_section = false;
                 }
                 EngineEvent::FileLoaded { path } => {
                     self.media_track += 1;
@@ -1398,10 +1638,34 @@ impl App {
                 EngineEvent::PlaybackRestart | EngineEvent::Shutdown => {}
             }
         }
+        (save_now, failed)
+    }
+
+    /// Handles everything libmpv has reported: updates the model, the
+    /// albums and the resume store, moves on at the end of a file, and
+    /// returns the changes, requests for the window and the events.
+    pub fn drain(&mut self, engine: &Engine, now: Instant) -> Drained {
+        let mut events = Vec::new();
+        let changes = engine.drain(&mut self.model, &mut events);
+        let mut requests = Vec::new();
+        let (mut save_now, failed) = self.handle_events(engine, &events, now, &mut requests);
         if failed {
-            // `<Can't open>`, then the next playable entry.
+            // `<Can't open>`, then the next playable entry (or stop).
             self.library.update_current(None, false);
-            drop(self.step(engine, 1));
+            if self.settings.playback.on_failure == crate::playback::OnFailure::Next {
+                drop(self.step(engine, 1));
+            }
+        }
+        if changes.contains(PropertyId::Chapters) {
+            self.read_chapters(engine);
+        }
+        if changes.any(&[PropertyId::SubStart, PropertyId::SubEnd]) {
+            requests.extend(self.subtitle_section_arrived(engine));
+        }
+        if changes.contains(PropertyId::Chapter) && self.chapter_skip(engine) {
+            // The last chapter was one to skip: the file is done.
+            self.end_handled = true;
+            self.end_of_file(engine, now, &mut requests);
         }
         if changes.contains(PropertyId::Duration)
             && let Some(duration) = self.model.double(PropertyId::Duration).filter(|d| *d > 0.0)
@@ -1410,7 +1674,7 @@ impl App {
         }
 
         self.follow_second(engine, &events, now);
-        requests.extend(self.track_position(engine));
+        self.track_position(engine, now, &mut requests);
         self.settle_seek_bar(now);
         if let Some(top) = self.on_top_change() {
             requests.push(UiRequest::OnTop(top));
@@ -1439,6 +1703,7 @@ impl App {
             .map(|error| error.to_string())
             .or_else(|| self.store.take_error())
             .or_else(|| self.library.take_error())
+            .or_else(|| self.marks.take_error())
             .or_else(|| self.writer.take_error());
         if let Some(error) = failure {
             requests.push(UiRequest::Message(format!(
@@ -1464,11 +1729,39 @@ impl App {
         self.svp
             .file_started(crate::svp::svp_mode(&self.settings), now);
         self.store.set_last_file(path);
-        let resume = self
-            .store
-            .position(path)
-            .filter(|_| self.settings.remember_positions);
-        self.tracking = match resume {
+        self.read_chapters(engine);
+        self.apply_loop_count(engine);
+        if !self.settings.playback.keep_speed {
+            drop(engine.set_double("speed", 1.0));
+        }
+        drop(engine.set_text("play-direction", "forward"));
+        if self.settings.playback.retitle
+            && let Some(title) = engine.get_text("metadata/by-key/title")
+            && !title.trim().is_empty()
+            && let Some((album, index)) = self.playing_position()
+        {
+            self.library.set_title(album, &[index], Some(&title));
+        }
+        let audio_only = self.model.int(PropertyId::VideoWidth).is_none()
+            && !engine
+                .tracks()
+                .iter()
+                .any(|track| track.kind == rvp_engine::TrackKind::Video);
+        let remember = if audio_only {
+            self.settings.remember_positions && self.settings.playback.remember_audio_positions
+        } else {
+            self.settings.remember_positions
+        };
+        // The command line's /seek sets the start itself.
+        let given = std::mem::take(&mut self.play.start_given);
+        let resume = self.store.position(path).filter(|_| remember && !given);
+        let start = if given {
+            None
+        } else {
+            self.intro_skip(resume, engine.get_double("duration"))
+                .or(resume)
+        };
+        self.tracking = match start {
             Some(position) if engine.seek(Seek::Absolute(position)).is_ok() => {
                 Tracking::Resuming(position)
             }
@@ -1476,8 +1769,16 @@ impl App {
         };
     }
 
-    /// Records the position of the playing file and moves on at its end.
-    fn track_position(&mut self, engine: &Engine) -> Option<UiRequest> {
+    /// The album and index of the entry that plays.
+    fn playing_position(&self) -> Option<(usize, usize)> {
+        let album = self.library.lists().playing?;
+        let (index, _) = self.library.playing()?;
+        Some((album, index))
+    }
+
+    /// Records the position of the playing file and moves on at its end
+    /// (or where "Skip Ending" ends it).
+    fn track_position(&mut self, engine: &Engine, now: Instant, requests: &mut Vec<UiRequest>) {
         let time = self.model.double(PropertyId::TimePos);
         if let (Tracking::Resuming(target), Some(time)) = (self.tracking, time)
             && (time - target).abs() < 2.0
@@ -1505,6 +1806,15 @@ impl App {
         // While the next file loads, the model still holds the old one's
         // end until mpv reports the load: moving on again then would skip
         // an entry (goal I, seen on the Windows VM).
+        if !at_end
+            && self.tracking == Tracking::On
+            && self.model.media_loaded()
+            && self.ending_reached()
+        {
+            self.end_handled = true;
+            self.end_of_file(engine, now, requests);
+            return;
+        }
         if at_end
             && !self.end_handled
             && self.model.media_loaded()
@@ -1512,16 +1822,34 @@ impl App {
         {
             // keep-open stops on the last frame; the album moves on.
             self.end_handled = true;
-            return self.end_of_file(engine);
+            self.end_of_file(engine, now, requests);
         }
-        None
     }
 
     /// The file played to its end: repeat it, move on, start the album
-    /// again or exit, as the repeat mode and "When Playback Finished" say.
-    fn end_of_file(&mut self, engine: &Engine) -> Option<UiRequest> {
-        if self.session.after == AfterPlayback::ExitAfterFile {
-            return Some(UiRequest::Exit);
+    /// again, exit or power off, as the repeat mode and "When Playback
+    /// Finished" say; a played file may go to the Recycle Bin.
+    fn end_of_file(&mut self, engine: &Engine, now: Instant, requests: &mut Vec<UiRequest>) {
+        let finished = self.model.loaded_path().map(str::to_owned);
+        if self.settings.playback.recycle_played
+            && let Some(path) = &finished
+            && let Some(request) = Self::recycle_request(std::slice::from_ref(path), true)
+        {
+            requests.push(request);
+        }
+        match self.session.after {
+            AfterPlayback::ExitAfterFile => {
+                requests.push(UiRequest::Exit);
+                return;
+            }
+            AfterPlayback::PowerAfterFile => {
+                let action = self.settings.playback.finished.action;
+                requests.push(self.start_countdown(crate::power::Ending::Power(action), now));
+                return;
+            }
+            // keep-open holds the last frame; the album waits.
+            AfterPlayback::Stay => return,
+            _ => {}
         }
         if self.settings.repeat == Repeat::Item {
             drop(
@@ -1530,20 +1858,25 @@ impl App {
                     .and_then(|()| engine.set_pause(false)),
             );
             self.end_handled = false;
-            return None;
+            return;
         }
-        let next = self.library.neighbour(1).or_else(|| {
-            (self.settings.repeat == Repeat::Album)
+        let next = self.next_entry(1, true).or_else(|| {
+            (self.settings.repeat == Repeat::Album && !self.settings.playback.shuffle)
                 .then(|| self.library.first_playable())
                 .flatten()
         });
-        match next {
-            Some((album, index)) => {
-                drop(self.play_entry(engine, album, index, false));
-                None
+        if let Some((album, index)) = next {
+            drop(self.play_entry(engine, album, index, false));
+            return;
+        }
+        match self.session.after {
+            AfterPlayback::ExitAfterList => requests.push(UiRequest::Exit),
+            AfterPlayback::PowerAfterList => {
+                let action = self.settings.playback.finished.action;
+                requests.push(self.start_countdown(crate::power::Ending::Power(action), now));
             }
-            None if self.session.after == AfterPlayback::ExitAfterList => Some(UiRequest::Exit),
-            None => None,
+            _ if self.settings.playback.close_at_end => drop(engine.stop()),
+            _ => {}
         }
     }
 
@@ -1575,6 +1908,7 @@ impl App {
         drop(engine.stop());
         self.writer.flush();
         self.library.flush()?;
+        self.marks.flush()?;
         self.store.save_and_wait(now)
     }
 }

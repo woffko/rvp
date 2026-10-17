@@ -231,17 +231,21 @@ fn run_time_lists_take_potplayers_place() {
     assert_eq!(off.command, Some(Command::Track(TrackKind::Subtitle, None)));
     assert_eq!(off.checked, Some(true));
     let chapters = item(&menu, &["Playback", "Chapter/Bookmark"]);
-    assert_eq!(labels(&chapters.children), ["Opening", "Chapter 2"]);
+    // The chapters, then the bookmark commands (M11).
+    assert_eq!(labels(&chapters.children[..2]), ["Opening", "Chapter 2"]);
+    assert_eq!(chapters.children[3].label, "Add Bookmark");
     assert_eq!(chapters.children[1].shortcut, "0:01:35");
     assert_eq!(chapters.children[1].checked, Some(true));
     assert_eq!(chapters.children[1].command, Some(Command::Chapter(1)));
-    // No file: no chapter list.
+    // No file: no chapters, only the bookmark commands.
     let idle = app.context_menu(&Live::default());
+    let idle_chapters = item(&idle, &["Playback", "Chapter/Bookmark"]);
+    assert_eq!(idle_chapters.children[0].label, "Add Bookmark");
     assert!(
-        item(&idle, &["Playback"])
+        idle_chapters
             .children
             .iter()
-            .all(|item| item.label != "Chapter/Bookmark")
+            .all(|item| !matches!(item.command, Some(Command::Chapter(_))))
     );
 }
 
@@ -358,7 +362,9 @@ fn skin_menus_name_commands_and_builtin_submenus() {
             "",
             "Repeat Playback",
             "Previous Chapter",
-            "Next Chapter"
+            "Next Chapter",
+            "",
+            "Speed"
         ]
     );
     assert_eq!(items[0].shortcut, "Ctrl+U");
@@ -393,10 +399,12 @@ fn skin_menus_name_commands_and_builtin_submenus() {
         app.popup("CMD_POPUPMENU_FILTER", &Live::default())
             .is_none()
     );
-    assert!(
-        app.popup("CMD_POPUPMENU_PLAY_BOOKMARK", &Live::default())
-            .is_none()
-    );
+    // Without a file the bookmark menu has its commands only.
+    let (title, items) = app
+        .popup("CMD_POPUPMENU_PLAY_BOOKMARK", &Live::default())
+        .expect("bookmarks");
+    assert_eq!(title, "Chapter/Bookmark");
+    assert_eq!(items[0].label, "Add Bookmark");
 }
 
 #[test]
@@ -408,7 +416,8 @@ fn menus_reach_the_shell_as_json() {
     assert_eq!(first["label"], "Play");
     assert_eq!(first["id"], "l:play");
     assert_eq!(first["checked"], -1);
-    assert_eq!(json[1]["separator"], true);
+    assert_eq!(json[1]["label"], "Play within a new instance");
+    assert_eq!(json[2]["separator"], true);
     let album = json
         .as_array()
         .and_then(|items| items.iter().find(|item| item["label"] == "Album"))

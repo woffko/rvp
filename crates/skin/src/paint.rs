@@ -34,13 +34,18 @@
 //!   control panel's equalizer) runs bottom to top: its track is centred
 //!   across the width, the sprites are sliced by `TopMargin` and
 //!   `BottomMargin`, and the fill grows up from the bottom.
+//! * The seek bar's marks (an RVP drawing: PotPlayer's "Show markers of
+//!   bookmark/chapter on nav bar") lie over the track and under the thumb,
+//!   as tall as the slider: a 1-pixel line per chapter (white) and bookmark
+//!   (light blue), 2-pixel lines for the A-B points (amber), and with both
+//!   points a faint amber band between them.
 
 use crate::geometry::Rect;
 use crate::layout::{Kind, Layout, Node};
 use crate::markup::{Attrs, atoi};
 use crate::playlist;
 use crate::skin::Skin;
-use crate::state::{DataModel, SliderValue, UiState};
+use crate::state::{DataModel, MarkKind, SliderValue, UiState};
 
 /// Horizontal text alignment.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -560,21 +565,33 @@ fn paint_slider(list: &mut DisplayList, node: &Node<'_>, state: &UiState, data: 
             );
         }
     }
+    if command == "CMD_TIMEBAR_CTRL" && slider.enabled && !vertical {
+        paint_marks(list, node, data);
+    }
+    if slider.enabled {
+        paint_thumb(list, node, slider.value);
+    }
+}
+
+/// A slider's thumb at `value`.
+fn paint_thumb(list: &mut DisplayList, node: &Node<'_>, value: f32) {
+    let attrs = &node.element.attrs;
+    let rect = node.rect;
+    let vertical = attrs.flag("Vert");
     let thumb_width = attrs.int_or("ThumbWidth", 0);
     let thumb_height = attrs.int_or("ThumbHeight", 0);
-    if slider.enabled
-        && thumb_width > 0
+    if thumb_width > 0
         && thumb_height > 0
         && (attrs.has("ThumbImageLeft") || attrs.has("ThumbImageTop"))
     {
         let (x, y) = if vertical {
             (
                 rect.x + (rect.w - thumb_width) / 2,
-                rect.y + rect.h - thumb_height - fraction(rect.h - thumb_height, slider.value),
+                rect.y + rect.h - thumb_height - fraction(rect.h - thumb_height, value),
             )
         } else {
             (
-                rect.x + fraction(rect.w - thumb_width, slider.value),
+                rect.x + fraction(rect.w - thumb_width, value),
                 rect.y + (rect.h - thumb_height) / 2,
             )
         };
@@ -589,6 +606,34 @@ fn paint_slider(list: &mut DisplayList, node: &Node<'_>, state: &UiState, data: 
             Rect::new(x, y, thumb_width, thumb_height),
             node.clip,
         );
+    }
+}
+
+/// The seek bar's marks (see the module comment).
+fn paint_marks(list: &mut DisplayList, node: &Node<'_>, data: &DataModel) {
+    let rect = node.rect;
+    let at = |value: f32| rect.x + fraction(rect.w - 1, value);
+    let point = |kind: MarkKind| data.marks.iter().find(|mark| mark.kind == kind);
+    if let (Some(a), Some(b)) = (point(MarkKind::PointA), point(MarkKind::PointB)) {
+        let (start, end) = (at(a.at.min(b.at)), at(a.at.max(b.at)));
+        let band = Rect::new(start, rect.y, end - start + 1, rect.h).intersect(&node.clip);
+        if !band.is_empty() {
+            list.ops.push(Op::Fill {
+                rect: band,
+                color: [255, 190, 0, 70],
+            });
+        }
+    }
+    for mark in &data.marks {
+        let (width, color) = match mark.kind {
+            MarkKind::Chapter => (1, [255, 255, 255, 150]),
+            MarkKind::Bookmark => (1, [120, 200, 255, 220]),
+            MarkKind::PointA | MarkKind::PointB => (2, [255, 190, 0, 230]),
+        };
+        let line = Rect::new(at(mark.at), rect.y, width, rect.h).intersect(&node.clip);
+        if !line.is_empty() {
+            list.ops.push(Op::Fill { rect: line, color });
+        }
     }
 }
 

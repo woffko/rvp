@@ -120,6 +120,11 @@ impl Settings {
         self.validate_texts(&mut notes);
         self.validate_subtitle_font(&mut notes);
         self.audio.validate(&mut notes);
+        self.playback.validate(&mut notes);
+        self.playlist.validate(&mut notes);
+        self.scenes.validate(&mut notes);
+        self.open.validate(&mut notes);
+        self.devices.validate(&mut notes);
         notes
     }
 
@@ -368,7 +373,16 @@ pub fn import(path: &Path) -> Result<(Settings, Vec<String>), String> {
         Value::Object(map) => Value::Object(
             map.iter()
                 .map(|(key, value)| {
-                    let value = if matches!(key.as_str(), "normalizer" | "audio") {
+                    let value = if matches!(
+                        key.as_str(),
+                        "normalizer"
+                            | "audio"
+                            | "playback"
+                            | "playlist"
+                            | "scenes"
+                            | "open"
+                            | "devices"
+                    ) {
                         value.clone()
                     } else if value.is_object() {
                         Value::Object(Map::new())
@@ -507,7 +521,11 @@ impl App {
         }
         self.apply_audio_settings(engine, &old, &mut applied.notes);
         self.apply_m6_settings(engine, &old, &mut applied);
-        if old.skin != new.skin || old.vapoursynth.library != new.vapoursynth.library {
+        self.apply_playback_settings(engine, &old);
+        if old.skin != new.skin
+            || old.vapoursynth.library != new.vapoursynth.library
+            || old.playback.priority != new.playback.priority
+        {
             applied.restart = true;
         }
         self.save_settings();

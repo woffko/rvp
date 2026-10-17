@@ -459,3 +459,194 @@ impl Drop for RenderContext<'_> {
         }
     }
 }
+
+/// RVP patch: the pixel layouts of mpv's software renderer
+/// (`MPV_RENDER_PARAM_SW_FORMAT`): 4 bytes per pixel, one per component,
+/// in this order with increasing address; `0` is padding with undefined
+/// contents.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SoftwareFormat {
+    Rgb0,
+    Bgr0,
+    ZeroBgr,
+    ZeroRgb,
+}
+
+impl SoftwareFormat {
+    fn name(self) -> &'static CStr {
+        match self {
+            SoftwareFormat::Rgb0 => c"rgb0",
+            SoftwareFormat::Bgr0 => c"bgr0",
+            SoftwareFormat::ZeroBgr => c"0bgr",
+            SoftwareFormat::ZeroRgb => c"0rgb",
+        }
+    }
+}
+
+/// RVP patch: a render context of mpv's software renderer
+/// (`MPV_RENDER_API_TYPE_SW`), which draws video frames into memory.
+///
+/// Like [`RenderContext`], it must be dropped before the core it was made
+/// from; the borrow ensures that.
+pub struct SoftwareRenderContext<'a> {
+    ctx: *mut libmpv2_sys::mpv_render_context,
+    update_callback_cleanup: Option<Box<dyn FnOnce()>>,
+    _marker: PhantomData<&'a Mpv>,
+}
+
+impl Mpv {
+    /// RVP patch: creates a render context of the software renderer
+    /// (`mpv_render_context_create` with `MPV_RENDER_API_TYPE_SW`). The
+    /// core must use `vo=libmpv`.
+    pub fn create_software_render_context(&self) -> Result<SoftwareRenderContext<'_>> {
+        let mut params = [
+            libmpv2_sys::mpv_render_param {
+                type_: libmpv2_sys::mpv_render_param_type_MPV_RENDER_PARAM_API_TYPE,
+                data: libmpv2_sys::MPV_RENDER_API_TYPE_SW.as_ptr() as *mut c_void,
+            },
+            libmpv2_sys::mpv_render_param {
+                type_: 0,
+                data: ptr::null_mut(),
+            },
+        ];
+        let mut ctx: *mut libmpv2_sys::mpv_render_context = ptr::null_mut();
+        // SAFETY: `params` ends with the type-0 terminator, and the API type
+        // string is a static NUL-terminated constant that mpv only reads
+        // during the call.
+        let err = unsafe {
+            libmpv2_sys::mpv_render_context_create(&mut ctx, self.ctx.as_ptr(), params.as_mut_ptr())
+        };
+        mpv_err(
+            SoftwareRenderContext {
+                ctx,
+                update_callback_cleanup: None,
+                _marker: PhantomData,
+            },
+            err,
+        )
+    }
+}
+
+impl SoftwareRenderContext<'_> {
+    /// Renders the current video frame into `pixels`: `width` x `height`
+    /// pixels in `format`, rows `stride` bytes apart. The frame is scaled to
+    /// the size, with black bars where the aspect ratios differ, as other
+    /// outputs do.
+    ///
+    /// `stride` must be a multiple of 4 and hold `width` pixels, and
+    /// `pixels` must hold `stride * height` bytes; mpv may overwrite all of
+    /// them. Otherwise the call fails with `MPV_ERROR_INVALID_PARAMETER`
+    /// without rendering.
+    pub fn render(
+        &self,
+        width: i32,
+        height: i32,
+        format: SoftwareFormat,
+        stride: usize,
+        pixels: &mut [u32],
+    ) -> Result<()> {
+        let invalid = Err(Error::Raw(
+            libmpv2_sys::mpv_error_MPV_ERROR_INVALID_PARAMETER,
+        ));
+        let (Ok(columns), Ok(rows)) = (usize::try_from(width), usize::try_from(height)) else {
+            return invalid;
+        };
+        let needed = stride.checked_mul(rows);
+        if columns == 0
+            || rows == 0
+            || stride % 4 != 0
+            || stride / 4 < columns
+            || needed.is_none_or(|needed| needed > pixels.len() * 4)
+        {
+            return invalid;
+        }
+        let mut size: [c_int; 2] = [width, height];
+        let mut stride = stride;
+        let mut block: c_int = 0;
+        let mut params = [
+            libmpv2_sys::mpv_render_param {
+                type_: libmpv2_sys::mpv_render_param_type_MPV_RENDER_PARAM_SW_SIZE,
+                data: size.as_mut_ptr() as *mut c_void,
+            },
+            libmpv2_sys::mpv_render_param {
+                type_: libmpv2_sys::mpv_render_param_type_MPV_RENDER_PARAM_SW_FORMAT,
+                data: format.name().as_ptr() as *mut c_void,
+            },
+            libmpv2_sys::mpv_render_param {
+                type_: libmpv2_sys::mpv_render_param_type_MPV_RENDER_PARAM_SW_STRIDE,
+                data: &mut stride as *mut usize as *mut c_void,
+            },
+            libmpv2_sys::mpv_render_param {
+                type_: libmpv2_sys::mpv_render_param_type_MPV_RENDER_PARAM_SW_POINTER,
+                data: pixels.as_mut_ptr() as *mut c_void,
+            },
+            // A picture in memory has no display time to wait for.
+            libmpv2_sys::mpv_render_param {
+                type_: libmpv2_sys::mpv_render_param_type_MPV_RENDER_PARAM_BLOCK_FOR_TARGET_TIME,
+                data: &mut block as *mut c_int as *mut c_void,
+            },
+            libmpv2_sys::mpv_render_param {
+                type_: 0,
+                data: ptr::null_mut(),
+            },
+        ];
+        // SAFETY: every parameter points at memory that lives for the call:
+        // the size, stride and flag on the stack, the format a static C string,
+        // and the pixels a buffer of at least `stride * height` bytes
+        // (checked above), aligned to 4 bytes as `u32` is, which the formats
+        // need. mpv writes only within that buffer.
+        unsafe {
+            mpv_err(
+                (),
+                libmpv2_sys::mpv_render_context_render(self.ctx, params.as_mut_ptr()),
+            )
+        }
+    }
+
+    /// Sets the callback that tells a new frame is available (see
+    /// [`RenderContext::set_update_callback`]; the same restrictions apply).
+    pub fn set_update_callback<F: Fn() + Send + 'static>(&mut self, callback: F) {
+        let raw_callback = Box::into_raw(Box::new(callback));
+        // SAFETY: the callback box lives until it is replaced or the context
+        // is freed (both below), and mpv stops calling the old one once
+        // this returns.
+        unsafe {
+            libmpv2_sys::mpv_render_context_set_update_callback(
+                self.ctx,
+                Some(ru_wrapper::<F>),
+                raw_callback as *mut c_void,
+            );
+        }
+        if let Some(old_callback_cleanup) =
+            self.update_callback_cleanup.replace(Box::new(move || {
+                drop(unsafe { Box::from_raw(raw_callback) });
+            }) as Box<dyn FnOnce()>)
+        {
+            old_callback_cleanup();
+        }
+    }
+
+    /// What the renderer needs after an update callback (see
+    /// [`RenderContext::update`]): `mpv_render_update::Frame` when a new
+    /// frame should be rendered.
+    pub fn update(&self) -> Result<MpvRenderUpdate> {
+        let res = unsafe { libmpv2_sys::mpv_render_context_update(self.ctx) };
+        match res.try_into() {
+            Ok(res) => Ok(res),
+            Err(_) => Err(Error::Raw(libmpv2_sys::mpv_error_MPV_ERROR_GENERIC)),
+        }
+    }
+}
+
+impl Drop for SoftwareRenderContext<'_> {
+    fn drop(&mut self) {
+        // SAFETY: freeing the context first stops further update callbacks,
+        // so the callback box can go after it.
+        unsafe {
+            libmpv2_sys::mpv_render_context_free(self.ctx);
+        }
+        if let Some(update_callback_cleanup) = self.update_callback_cleanup.take() {
+            update_callback_cleanup();
+        }
+    }
+}

@@ -9,6 +9,13 @@
 //! [`geometry`] places the tabs, rows and scroll bar once; painting and
 //! [`hit`] testing both use it. While rows are dragged, a two-pixel line in
 //! the frame colour marks where they will land (`Playlist::drop_before`).
+//!
+//! Thumbnail views (an RVP drawing of PotPlayer's "Thumbnails (up to N
+//! rows) + Details", `Playlist::row_lines` 2 to 7): a row is that many
+//! list rows tall; a black box of 16:9 (or 4:3) [`thumbnail_size`] at its
+//! left holds the entry's picture (an atlas image of exactly that size,
+//! once the thumbnail core made it), the title and duration run on the
+//! first line beside it and the details on the second.
 
 use crate::geometry::Rect;
 use crate::layout::Node;
@@ -153,6 +160,28 @@ pub struct Geometry {
     pub scrollbar: Option<Scrollbar>,
     /// `node.clip`: nothing is drawn or hit outside it.
     pub clip: Rect,
+    /// A row's height: [`ROW_HEIGHT`] times its lines.
+    pub row_height: i32,
+    /// The thumbnail box of thumbnail views.
+    pub thumbnail: Option<(i32, i32)>,
+}
+
+/// A row's height for `lines` lines of text (0 and 1: the list).
+#[must_use]
+pub fn row_height(lines: u32) -> i32 {
+    ROW_HEIGHT * i32::try_from(lines.clamp(1, 7)).unwrap_or(1)
+}
+
+/// The thumbnail box of a thumbnail view with `lines` lines a row.
+#[must_use]
+pub fn thumbnail_size(lines: u32, wide: bool) -> (i32, i32) {
+    let height = row_height(lines) - 6;
+    let width = if wide {
+        height * 16 / 9
+    } else {
+        height * 4 / 3
+    };
+    (width, height)
 }
 
 impl Geometry {
@@ -165,9 +194,9 @@ impl Geometry {
         Rect::new(
             self.area.x,
             self.first_y
-                .saturating_add(offset.saturating_mul(ROW_HEIGHT)),
+                .saturating_add(offset.saturating_mul(self.row_height)),
             self.text_right - self.area.x + TEXT_RIGHT_PADDING,
-            ROW_HEIGHT,
+            self.row_height,
         )
     }
 
@@ -175,8 +204,8 @@ impl Geometry {
     /// (0 to `total`).
     #[must_use]
     pub fn insertion_index(&self, y: i32, total: usize) -> usize {
-        let relative = y - self.first_y + ROW_HEIGHT / 2;
-        let rows = relative.div_euclid(ROW_HEIGHT);
+        let relative = y - self.first_y + self.row_height / 2;
+        let rows = relative.div_euclid(self.row_height);
         let index = i64::from(rows) + i64::try_from(self.first).unwrap_or(0);
         usize::try_from(index.max(0)).unwrap_or(0).min(total)
     }
@@ -241,7 +270,8 @@ pub fn geometry(node: &Node<'_>, playlist: &Playlist) -> Geometry {
     });
     let area = Rect::new(rect.x, bar.bottom(), rect.w, rect.h - tab_height);
     let total = playlist.entries.len();
-    let visible = usize::try_from((area.h / ROW_HEIGHT).max(0)).unwrap_or(0);
+    let row_height = row_height(playlist.row_lines);
+    let visible = usize::try_from((area.h / row_height).max(0)).unwrap_or(0);
     let needs_scrollbar = total > visible;
     let text_right = if needs_scrollbar {
         area.right() - SCROLLBAR_WIDTH - TEXT_RIGHT_PADDING
@@ -249,10 +279,10 @@ pub fn geometry(node: &Node<'_>, playlist: &Playlist) -> Geometry {
         area.right() - TEXT_RIGHT_PADDING
     };
     let rows_area = Rect::new(area.x, area.y, area.w, area.h - LIST_BOTTOM_MARGIN);
-    let (first, first_y) = first_row(playlist.scroll, rows_area, total);
+    let (first, first_y) = first_row(playlist.scroll, rows_area, total, row_height);
     let scrollbar = needs_scrollbar.then(|| {
-        let offset = area.y - (first_y - ROW_HEIGHT * i32::try_from(first).unwrap_or(0));
-        let content = ROW_HEIGHT * i32::try_from(total).unwrap_or(0);
+        let offset = area.y - (first_y - row_height * i32::try_from(first).unwrap_or(0));
+        let content = row_height * i32::try_from(total).unwrap_or(0);
         scrollbar(area, offset, content)
     });
     Geometry {
@@ -269,6 +299,9 @@ pub fn geometry(node: &Node<'_>, playlist: &Playlist) -> Geometry {
         visible,
         scrollbar,
         clip,
+        row_height,
+        thumbnail: (playlist.row_lines > 1)
+            .then(|| thumbnail_size(playlist.row_lines, playlist.wide_thumbnails)),
     }
 }
 
@@ -320,8 +353,8 @@ pub fn hit(geometry: &Geometry, total: usize, x: i32, y: i32) -> Option<ListHit>
         });
     }
     let relative = y - geometry.first_y;
-    let index =
-        i64::from(relative.div_euclid(ROW_HEIGHT)) + i64::try_from(geometry.first).unwrap_or(0);
+    let index = i64::from(relative.div_euclid(geometry.row_height))
+        + i64::try_from(geometry.first).unwrap_or(0);
     Some(match usize::try_from(index) {
         Ok(index) if index < total => ListHit::Row(index),
         _ => ListHit::Empty,
@@ -440,21 +473,21 @@ fn paint_tabs(
 }
 
 /// First entry drawn and the y of its top edge.
-fn first_row(scroll: ListScroll, area: Rect, total: usize) -> (usize, i32) {
+fn first_row(scroll: ListScroll, area: Rect, total: usize, row_height: i32) -> (usize, i32) {
     match scroll {
         ListScroll::Entry(index) => (index.min(total), area.y),
         ListScroll::End => {
             let total_height = i32::try_from(total)
-                .unwrap_or(i32::MAX / ROW_HEIGHT)
-                .saturating_mul(ROW_HEIGHT);
+                .unwrap_or(i32::MAX / row_height)
+                .saturating_mul(row_height);
             if total_height <= area.h {
                 return (0, area.y);
             }
             let top = area.bottom() - total_height;
-            let skipped = (area.y - top) / ROW_HEIGHT;
+            let skipped = (area.y - top) / row_height;
             (
                 usize::try_from(skipped).unwrap_or(0),
-                top + skipped * ROW_HEIGHT,
+                top + skipped * row_height,
             )
         }
     }
@@ -489,29 +522,53 @@ fn paint_rows(list: &mut DisplayList, colors: &Colors, geometry: &Geometry, play
         } else {
             colors.text
         };
-        paint_icon(list, row, area_clip);
         let title = format!("{:0digits$}. {}", index + 1, entry.title);
         let trailing = if entry.playable {
             entry.duration.map(format_duration)
         } else {
             Some("<Can't open>".to_owned())
         };
+        let text_left = if let Some((width, height)) = geometry.thumbnail {
+            let frame = Rect::new(area.x + 4, row.y + 3, width, height);
+            list.ops.push(Op::Fill {
+                rect: frame.intersect(&area_clip),
+                color: [0, 0, 0, 255],
+            });
+            if let Some(picture) = &entry.thumbnail {
+                list.image(picture, Rect::new(0, 0, width, height), frame, area_clip);
+            }
+            area.x + 4 + width + 8
+        } else {
+            paint_icon(list, row, area_clip);
+            area.x + TEXT_LEFT
+        };
+        let text_width = geometry.text_right - text_left;
         list.ops.push(Op::Text(TextOp {
             text: title,
             font: font(LIST_FONT_PX),
             color,
-            rect: Rect::new(
-                area.x + TEXT_LEFT,
-                row.y,
-                geometry.text_right - area.x - TEXT_LEFT,
-                ROW_HEIGHT,
-            ),
+            rect: Rect::new(text_left, row.y, text_width, ROW_HEIGHT),
             clip: area_clip,
             h_align: HAlign::Left,
             v_align: VAlign::Center,
             ellipsis: true,
             trailing,
         }));
+        if geometry.thumbnail.is_some()
+            && let Some(details) = &entry.details
+        {
+            list.ops.push(Op::Text(TextOp {
+                text: details.clone(),
+                font: font(LIST_FONT_PX),
+                color: colors.played_text,
+                rect: Rect::new(text_left, row.y + ROW_HEIGHT, text_width, ROW_HEIGHT),
+                clip: area_clip,
+                h_align: HAlign::Left,
+                v_align: VAlign::Center,
+                ellipsis: true,
+                trailing: None,
+            }));
+        }
     }
     if let Some(before) = playlist.drop_before {
         let y = geometry.row(before).y - 1;
@@ -601,7 +658,10 @@ fn paint_scrollbar(list: &mut DisplayList, bar: &Scrollbar, clip: Rect) {
 
 #[cfg(test)]
 mod tests {
-    use super::{Geometry, ListHit, ROW_HEIGHT, first_row, format_duration, hit, scrollbar};
+    use super::{
+        Geometry, ListHit, ROW_HEIGHT, first_row, format_duration, hit, row_height, scrollbar,
+        thumbnail_size,
+    };
     use crate::geometry::Rect;
     use crate::state::ListScroll;
 
@@ -626,7 +686,30 @@ mod tests {
             visible: 5,
             scrollbar: Some(scrollbar(area, 2 * ROW_HEIGHT, 10 * ROW_HEIGHT)),
             clip: Rect::new(0, 0, 200, 22 + 5 * ROW_HEIGHT),
+            row_height: ROW_HEIGHT,
+            thumbnail: None,
         }
+    }
+
+    #[test]
+    fn thumbnail_rows_are_taller_and_hit_by_their_height() {
+        assert_eq!(row_height(0), ROW_HEIGHT);
+        assert_eq!(row_height(3), 3 * ROW_HEIGHT);
+        assert_eq!(row_height(9), 7 * ROW_HEIGHT);
+        assert_eq!(thumbnail_size(3, true), (96, 54));
+        assert_eq!(thumbnail_size(3, false), (72, 54));
+        let mut geometry = sample();
+        geometry.row_height = 3 * ROW_HEIGHT;
+        geometry.thumbnail = Some(thumbnail_size(3, true));
+        // Entry 2 fills the first 60 pixels, entry 3 the next.
+        assert_eq!(hit(&geometry, 10, 50, 22 + 59), Some(ListHit::Row(2)));
+        assert_eq!(hit(&geometry, 10, 50, 22 + 61), Some(ListHit::Row(3)));
+        assert_eq!(geometry.row(3).y, 22 + 60);
+        assert_eq!(geometry.insertion_index(22 + 95, 10), 4);
+        assert_eq!(
+            first_row(super::ListScroll::End, Rect::new(0, 0, 10, 100), 10, 60),
+            (8, -20)
+        );
     }
 
     #[test]
@@ -682,8 +765,14 @@ mod tests {
     #[test]
     fn scrolled_to_end_cuts_the_top_row() {
         let area = Rect::new(0, 100, 200, 5 * ROW_HEIGHT + 7);
-        assert_eq!(first_row(ListScroll::End, area, 3), (0, 100));
-        assert_eq!(first_row(ListScroll::End, area, 10), (4, 100 - 13));
-        assert_eq!(first_row(ListScroll::Entry(2), area, 10), (2, 100));
+        assert_eq!(first_row(ListScroll::End, area, 3, ROW_HEIGHT), (0, 100));
+        assert_eq!(
+            first_row(ListScroll::End, area, 10, ROW_HEIGHT),
+            (4, 100 - 13)
+        );
+        assert_eq!(
+            first_row(ListScroll::Entry(2), area, 10, ROW_HEIGHT),
+            (2, 100)
+        );
     }
 }

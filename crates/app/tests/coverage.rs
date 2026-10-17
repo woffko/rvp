@@ -14,7 +14,7 @@ use rvp_app::coverage::{
     runtime_commands, runtime_status, skin_covered, skin_reason, skin_report,
 };
 use rvp_app::menu::{context_tree, playlist_tree};
-use rvp_app::{Action, Bindings, KeyChord};
+use rvp_app::{Action, Bindings, KeyChord, ListAction};
 use rvp_skin::{Skin, SkinArchive};
 
 const DEFAULT_SKIN: &str = "/mnt/c/Program Files/DAUM/PotPlayer/Skins/BlackSpace_en.dsf";
@@ -154,6 +154,101 @@ fn every_audio_hotkey_works_or_says_why_not() {
         }
     }
     assert_eq!(keys, 28, "PotPlayer's audio keys");
+}
+
+/// M11: the keys of PotPlayer's Open, Playback, Album/Favorites and DVD
+/// Control items, and of its playlist, work or say why not.
+#[test]
+fn every_playback_and_playlist_hotkey_works_or_says_why_not() {
+    const AREAS: [&str; 5] = [
+        "Open > ",
+        "Playback > ",
+        "Album/Favorites > ",
+        "DVD Control > ",
+        "Misc > When ",
+    ];
+    let mut items: BTreeMap<u32, (String, ItemStatus)> = BTreeMap::new();
+    for (place, item) in commands(context_tree()) {
+        if AREAS.iter().any(|area| place.starts_with(area)) {
+            items.insert(item.id, (place, item_status(item)));
+        }
+    }
+    for command in runtime_commands() {
+        if AREAS.iter().any(|area| command.place.starts_with(area)) {
+            let status = runtime_status(&command);
+            items.insert(command.id, (command.place, status));
+        }
+    }
+    let bindings = Bindings::potplayer_defaults();
+    let (mut keys, mut list_keys) = (0, 0);
+    let mut seen = std::collections::BTreeSet::new();
+    for line in include_str!("../../../docs/r1/hotkeys.tsv").lines().skip(1) {
+        let cells: Vec<&str> = line.split('\t').collect();
+        let (Some(table), Some(key), Some(Ok(id))) = (
+            cells.first(),
+            cells.get(1),
+            cells.get(2).map(|id| id.parse::<u32>()),
+        ) else {
+            continue;
+        };
+        // A key PotPlayer lists twice keeps the first (Ctrl+\\).
+        let first = seen.insert((*table, *key));
+        let Some(chord) = KeyChord::parse(key) else {
+            // PotPlayer's `Alt+VK_17` names no key.
+            continue;
+        };
+        if *table == "118" {
+            if let Some(action) = ListAction::from_potplayer_id(id) {
+                list_keys += 1;
+                assert_eq!(
+                    bindings.list_keys.get(&chord),
+                    Some(&action),
+                    "{key} ({id})"
+                );
+            }
+            continue;
+        }
+        let Some((place, status)) = items.get(&id).filter(|_| *table == "157") else {
+            continue;
+        };
+        keys += 1;
+        match status {
+            ItemStatus::Window(action) if first => {
+                assert_eq!(bindings.key(&chord), Some(*action), "{key}: {place}");
+            }
+            ItemStatus::Window(_) => {}
+            // A submenu RVP fills: its key opens it.
+            ItemStatus::Runtime(_) => {
+                assert_eq!(
+                    bindings.key(&chord),
+                    Action::from_potplayer_id(id),
+                    "{key}: {place}"
+                );
+            }
+            ItemStatus::Missing(why) => {
+                assert!(
+                    !why.is_empty() && *why != "not in RVP yet",
+                    "{key}: {place} ({id}) needs its reason"
+                );
+            }
+            other @ ItemStatus::List(_) => panic!("{key}: {place} ({id}) is {other:?}"),
+        }
+    }
+    assert!(keys >= 60, "PotPlayer's playback and open keys: {keys}");
+    assert!(list_keys >= 40, "PotPlayer's playlist keys: {list_keys}");
+}
+
+#[test]
+fn every_command_line_switch_is_sorted_out() {
+    let switches = rvp_app::coverage::command_line_switches();
+    assert!(switches.len() >= 28, "{switches:?}");
+    for switch in switches {
+        assert!(
+            rvp_app::coverage::command_line_status(switch).is_some(),
+            "{switch} has no status"
+        );
+    }
+    check("command-line.md", &rvp_app::coverage::command_line_report());
 }
 
 #[test]

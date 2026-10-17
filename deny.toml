@@ -11,8 +11,17 @@ targets = [
 version = 2
 db-urls = ["https://github.com/rustsec/advisory-db"]
 yanked = "deny"
-# Nothing is ignored on purpose: any advisory fails the build.
-ignore = []
+# Any advisory fails the build, except these, each with its reason:
+ignore = [
+    # zbus 5's parts (MPRIS and idle inhibit on Linux, crates/platform) are
+    # "unmaintained" since zbus 6 took them in (2026-10). zbus 6 drops the
+    # blocking API RVP uses and brings tokio; the move is goal S's (the
+    # Linux goal), listed in docs/goals/goal-m-status.md. Not a
+    # vulnerability: no fix exists for 5.x.
+    { id = "RUSTSEC-2026-0370", reason = "zvariant merged into zbus 6; the move is goal S's" },
+    { id = "RUSTSEC-2026-0371", reason = "zbus_names merged into zbus 6; the move is goal S's" },
+    { id = "RUSTSEC-2026-0372", reason = "zvariant_derive merged into zbus 6; the move is goal S's" },
+]
 
 [licenses]
 version = 2

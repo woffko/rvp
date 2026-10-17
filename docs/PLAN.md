@@ -724,7 +724,9 @@ differences are listed.
   - DVD (`dvd://`, a folder or an `.IFO`) and Blu-ray (`bd://`, a folder
     or an `.MPLS`): titles, chapters, angles, audio and subtitle streams.
     DVD Control's speeds use `play-direction=backward` for reverse play
-    if it plays smoothly. The discs' menus are M16's.
+    if it plays smoothly. The discs' menus are M16's. (Goal M: backward
+    play is smooth on files but stalls on a disc's stream, so discs
+    refuse it.)
   - Audio CDs (`cdda://`).
   - Webcams and other devices (FFmpeg's `dshow` on Windows), listed from
     the system.
@@ -753,7 +755,7 @@ differences are listed.
 - **Studies.** Seamless playback (gapless audio, preloading the next
   file), and PotPlayer's file navigator and Open Box. Each goes in only if
   it keeps the album rules (mpv plays one entry at a time) and the GUI
-  thread free.
+  thread free. (Goal M: neither went in, `docs/spikes/m11-studies.md`.)
 - **Not possible.** TV tuners (WDM/BDA; non-goals).
 - **Tests.**
   - Headless tests on synthetic media: chapters, keyframes, subtitles,
@@ -1137,7 +1139,9 @@ installed.
   - generated subtitles with whisper.cpp's CUDA or Vulkan build;
   - the window commands Wayland refuses, listed with their reason;
   - Unified Remote Server for Linux with the remote;
-  - the translations.
+  - the translations;
+  - zbus 6 for MPRIS and idle inhibit (zbus 5's helper crates are
+    flagged unmaintained; `deny.toml` ignores them until then).
 - **Checks.** The Ubuntu VM runs the self-test's new sections and kit
   steps `m10` to `m16` (with `m17all` for all of them). The packages
   (AppImage, `.deb`, PKGBUILD) carry the new parts. The checklist gains

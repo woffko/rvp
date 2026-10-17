@@ -356,6 +356,59 @@ impl Engine {
             .map_err(|e| error("loadfile", &e))
     }
 
+    /// Opens a file or URL in place of the one that plays, with options
+    /// for this file only (`name=value`, as mpv's `loadfile` takes them:
+    /// `http-header-fields`, `force-media-title`).
+    ///
+    /// # Errors
+    /// Fails when libmpv rejects the command.
+    pub fn load_with_options(
+        &self,
+        target: &str,
+        options: &[(String, String)],
+    ) -> Result<(), EngineError> {
+        if options.is_empty() {
+            return self.load(target, false);
+        }
+        // Commas inside a value would split it: mpv takes `%N%` lengths.
+        let options = options
+            .iter()
+            .map(|(name, value)| format!("{name}=%{}%{value}", value.len()))
+            .collect::<Vec<_>>()
+            .join(",");
+        // mpv 0.38 put an index before the options.
+        let result = if self.version() >= (0, 38) {
+            self.mpv
+                .command("loadfile", &[target, "replace", "-1", &options])
+        } else {
+            self.mpv.command("loadfile", &[target, "replace", &options])
+        };
+        result.map_err(|e| error("loadfile", &e))
+    }
+
+    /// libmpv's version as (major, minor), from `mpv-version` (`mpv
+    /// 0.37.0`, `mpv v0.40.0-12-gabcdef`); (0, 0) when unknown.
+    #[must_use]
+    pub fn version(&self) -> (u32, u32) {
+        self.get_text("mpv-version")
+            .as_deref()
+            .map_or((0, 0), parse_version)
+    }
+
+    /// The protocols libmpv opens (`protocol-list`: `dvd`, `bd`, `cdda`,
+    /// `av`, `http`...).
+    #[must_use]
+    pub fn protocols(&self) -> Vec<String> {
+        // A string list: mpv gives it as text separated by commas.
+        self.get_text("protocol-list")
+            .unwrap_or_default()
+            .split(',')
+            .map(str::trim)
+            .filter(|name| !name.is_empty())
+            .map(str::to_owned)
+            .collect()
+    }
+
     /// # Errors
     /// Fails when libmpv rejects the command.
     pub fn set_pause(&self, pause: bool) -> Result<(), EngineError> {
@@ -661,6 +714,19 @@ impl Engine {
     }
 }
 
+/// (major, minor) of an `mpv-version` text.
+fn parse_version(text: &str) -> (u32, u32) {
+    let digits = text
+        .trim_start_matches("mpv")
+        .trim_start()
+        .trim_start_matches('v');
+    let mut parts = digits
+        .split(|c: char| !c.is_ascii_digit())
+        .filter(|part| !part.is_empty())
+        .map(|part| part.parse::<u32>().unwrap_or(0));
+    (parts.next().unwrap_or(0), parts.next().unwrap_or(0))
+}
+
 fn end_reason(reason: EndFileReason) -> EndReason {
     match reason {
         mpv_end_file_reason::Eof => EndReason::Eof,
@@ -668,5 +734,18 @@ fn end_reason(reason: EndFileReason) -> EndReason {
         mpv_end_file_reason::Error => EndReason::Error,
         mpv_end_file_reason::Redirect => EndReason::Redirect,
         _ => EndReason::Stop,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::parse_version;
+
+    #[test]
+    fn versions_read_from_mpv_version() {
+        assert_eq!(parse_version("mpv 0.37.0"), (0, 37));
+        assert_eq!(parse_version("mpv v0.40.0-12-gabcdef"), (0, 40));
+        assert_eq!(parse_version("mpv 0.38.0+git"), (0, 38));
+        assert_eq!(parse_version("something"), (0, 0));
     }
 }
