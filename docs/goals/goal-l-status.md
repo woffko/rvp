@@ -1,8 +1,6 @@
 # Goal L status: R2 and milestone M10 (PotPlayer parity: audio)
 
-Date: 2026-10-17. Result: **done**, except that GitHub CI could not run
-on the last two pushes (the account's billing; see "Checks on the Windows
-VM"): local CI and the VM checks pass. Precondition met: `goal-j-status.md`
+Date: 2026-10-17. Result: **done**. Precondition met: `goal-j-status.md`
 records goal J as done. The owner reported no findings from the audio
 audit's build, so nothing came before M8's Windows gap. The host session
 comparing RVP with PotPlayer ran with the owner's permission (two runs);
@@ -107,12 +105,14 @@ response, `aeval` and rubberband included). `C:\Users\<user>\rvp-test\rvp-l`
 holds the portable build of 644c138 (file copies only; `rvp.exe` SHA-256
 338e3e6e...).
 
-**GitHub CI did not run** for 56df046 and 644c138: GitHub started none of
-the jobs ("recent account payments have failed or your spending limit
-needs to be increased"), an account matter for the owner. The last run,
-ff6083a, passed on Linux and Windows. In its place `cargo xtask ci` passes
-locally, clippy passes for the Windows target, and the VM checks above
-pass; the workflow needs a re-run once billing allows it.
+GitHub CI started no jobs for a while (the account's billing, which the
+owner sorted out). Its first run after that found a gap the other checks
+could not: the Linux kit builds libmpv from source, and without
+librubberband, so the packages' self-test failed at Audio Stretching on
+Ubuntu 26.10 (finding 7). With 4842430 CI passes on Linux and Windows
+(run 39030252051), the packages' self-tests (87 checks each, the .deb
+and the AppImage) included. The change after 644c138 only adds an OSD
+message for a libmpv without rubberband, which Windows' has.
 
 ## Findings
 
@@ -136,6 +136,12 @@ pass; the workflow needs a re-run once billing allows it.
    under SYSTEM only.
 6. **The self-test misread Linux's refusal to record** once in CI; the
    status now says whether the recorder runs.
+7. **The Linux kit's libmpv had no rubberband**: `kit.sh` builds mpv from
+   source and its packages lacked `librubberband-dev`, so mpv refused the
+   chain with Audio Stretching (Windows' libmpv and Ubuntu's have it). The
+   kit now installs it and builds with `-Drubberband=enabled`; `MPV_BUILD`
+   rebuilds a cached libmpv of the same commit. RVP says on the OSD when
+   its libmpv has no rubberband.
 
 ## Differences from PotPlayer
 
