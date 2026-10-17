@@ -149,18 +149,28 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: ./.github/scripts/windows-libmpv.ps1
+      - name: NSIS cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ runner.temp }}/nsis
+          key: nsis-chocolatey-1
       - name: NSIS
         shell: pwsh
         run: |
-          $nsis = "${env:ProgramFiles(x86)}\NSIS\makensis.exe"
-          # The runner image may lack NSIS, and Chocolatey's download fails
-          # now and then: retry, and say so when it is still missing.
-          for ($attempt = 1; -not (Test-Path $nsis) -and $attempt -le 3; $attempt++) {
-            choco install nsis -y --no-progress
-            if (-not (Test-Path $nsis)) { Start-Sleep -Seconds 20 }
+          $cached = Join-Path $env:RUNNER_TEMP 'nsis\makensis.exe'
+          if (-not (Test-Path $cached)) {
+            # The runner image may lack NSIS, and Chocolatey's feed fails now
+            # and then: retry, and keep a copy (NSIS runs from any folder)
+            # for later runs, which then need no Chocolatey.
+            $nsis = "${env:ProgramFiles(x86)}\NSIS\makensis.exe"
+            for ($attempt = 1; -not (Test-Path $nsis) -and $attempt -le 3; $attempt++) {
+              choco install nsis -y --no-progress
+              if (-not (Test-Path $nsis)) { Start-Sleep -Seconds 20 }
+            }
+            if (-not (Test-Path $nsis)) { throw "NSIS is not installed: $nsis" }
+            Copy-Item -Recurse (Split-Path $nsis) (Join-Path $env:RUNNER_TEMP 'nsis')
           }
-          if (-not (Test-Path $nsis)) { throw "NSIS is not installed: $nsis" }
-          "MAKENSIS=$nsis" | Out-File -Append -Encoding utf8 $env:GITHUB_ENV
+          "MAKENSIS=$cached" | Out-File -Append -Encoding utf8 $env:GITHUB_ENV
       - name: Packages
         shell: pwsh
         run: |
