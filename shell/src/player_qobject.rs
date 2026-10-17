@@ -55,6 +55,7 @@ pub mod qobject {
         #[qproperty(bool, panel_has_position)]
         #[qproperty(i32, panel_x)]
         #[qproperty(i32, panel_y)]
+        #[qproperty(QString, record_path)]
         type Player = super::PlayerRust;
 
         /// Loads settings, the skin and libmpv; sets the `restore_*`
@@ -189,6 +190,18 @@ pub mod qobject {
         /// Sets the folder for saved frames.
         #[qinvokable]
         fn set_image_folder(self: Pin<&mut Self>, path: &QString);
+
+        /// Sets the audio sync from the Adjust Audio Sync dialog (seconds).
+        #[qinvokable]
+        fn set_audio_delay(self: Pin<&mut Self>, seconds: f64);
+
+        /// Records what RVP plays into the file the save dialog chose.
+        #[qinvokable]
+        fn start_recording(self: Pin<&mut Self>, path: &QString);
+
+        /// Sets the folder audio recordings go to.
+        #[qinvokable]
+        fn set_record_folder(self: Pin<&mut Self>, path: &QString);
 
         /// The About box's text.
         #[qinvokable]

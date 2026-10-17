@@ -119,6 +119,7 @@ impl Settings {
         self.validate_numbers(&mut notes);
         self.validate_texts(&mut notes);
         self.validate_subtitle_font(&mut notes);
+        self.audio.validate(&mut notes);
         notes
     }
 
@@ -367,7 +368,7 @@ pub fn import(path: &Path) -> Result<(Settings, Vec<String>), String> {
         Value::Object(map) => Value::Object(
             map.iter()
                 .map(|(key, value)| {
-                    let value = if key == "normalizer" {
+                    let value = if matches!(key.as_str(), "normalizer" | "audio") {
                         value.clone()
                     } else if value.is_object() {
                         Value::Object(Map::new())
@@ -475,11 +476,9 @@ impl App {
             set("sub-font", &font);
         }
         if old.normalizer.enabled != new.normalizer.enabled {
-            if !self.defer_chain_change() {
-                self.apply_normalizer(engine);
-                // As a toggle does: play on from here with the new chain.
-                self.resync_audio(engine);
-            }
+            self.configure_normalizer();
+            // As a toggle does: play on from here with the new chain.
+            self.audio_chain_changed(engine);
         } else if old.normalizer != new.normalizer {
             self.configure_normalizer();
         }
@@ -506,6 +505,7 @@ impl App {
         if old.output_speakers != new.output_speakers {
             self.speakers_changed(engine);
         }
+        self.apply_audio_settings(engine, &old, &mut applied.notes);
         self.apply_m6_settings(engine, &old, &mut applied);
         if old.skin != new.skin || old.vapoursynth.library != new.vapoursynth.library {
             applied.restart = true;
@@ -536,7 +536,7 @@ impl App {
         }
         let new = &self.settings;
         if old.equalizer.enabled != new.equalizer.enabled {
-            self.equalizer_chain_changed(engine);
+            self.audio_chain_changed(engine);
         } else if new.equalizer.enabled
             && old
                 .equalizer
@@ -576,6 +576,11 @@ impl App {
                 "output-speakers": crate::speakers::CHOICES
                     .iter()
                     .map(|choice| serde_json::json!({ "value": choice.value, "label": choice.label }))
+                    .collect::<Vec<_>>(),
+                "sample-rate": crate::audio::SAMPLE_RATES,
+                "equalizer-preset": crate::equalizer::PRESETS
+                    .iter()
+                    .map(|preset| preset.name)
                     .collect::<Vec<_>>(),
             },
             "file": self.settings_path().map(|path| path.display().to_string()),

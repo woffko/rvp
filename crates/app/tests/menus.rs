@@ -370,7 +370,7 @@ fn skin_menus_name_commands_and_builtin_submenus() {
     };
     let items = app.skin_menu(&eq, &Live::default());
     assert_eq!(items.len(), rvp_app::equalizer::PRESETS.len());
-    assert_eq!(items[0].label, "Flat");
+    assert_eq!(items[0].label, "(Default)");
     assert_eq!(items[0].checked, Some(false), "the equalizer is off");
     // A menu RVP has nothing for still answers.
     let empty = UserMenu {

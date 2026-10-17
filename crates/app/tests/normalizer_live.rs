@@ -10,7 +10,7 @@
 use std::path::Path;
 use std::time::{Duration, Instant};
 
-use rvp_app::normalizer::{Control, LABEL, Normalizer};
+use rvp_app::normalizer::{BLOCK, Control, LABEL, Normalizer};
 use rvp_engine::{EndReason, Engine, EngineEvent, EngineOptions, PlayerModel, PropertyId};
 
 const RATE: u32 = 48_000;
@@ -98,7 +98,7 @@ fn the_gain_follows_tomsteady_in_real_time() {
         ..Normalizer::default()
     };
     engine
-        .set_audio_filter(LABEL, Some(&normalizer.chain_entry(1.0)))
+        .set_audio_filter(LABEL, Some(&normalizer.chain_entry(1.0, BLOCK)))
         .expect("af add");
     engine
         .set_audio_filter(

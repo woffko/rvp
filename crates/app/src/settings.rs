@@ -44,6 +44,9 @@ pub struct Settings {
     /// While a video plays, resizing keeps the video's aspect ratio (R1
     /// finding 1).
     pub keep_aspect_window: bool,
+    /// Keep the screen saver and the display's power saving off while video
+    /// plays (PotPlayer's "Prevent screen saver during playback").
+    pub prevent_screen_saver: bool,
     /// The highest volume in percent; above 100 the sound is amplified.
     pub volume_max: f64,
     /// The audio normalizer (S5).
@@ -110,6 +113,8 @@ pub struct Settings {
     pub vapoursynth: VapourSynth,
     /// The ten-band equalizer.
     pub equalizer: Equalizer,
+    /// The rest of the audio processing (M10).
+    pub audio: crate::audio::Audio,
 }
 
 impl Default for Settings {
@@ -124,6 +129,7 @@ impl Default for Settings {
             reopen_last_file: true,
             fit_window_to_video: true,
             keep_aspect_window: true,
+            prevent_screen_saver: true,
             volume_max: 200.0,
             normalizer: Normalizer::default(),
             drive_map: BTreeMap::from([("V:".to_owned(), "/mnt/media".to_owned())]),
@@ -153,6 +159,7 @@ impl Default for Settings {
             shaders: Shaders::default(),
             vapoursynth: VapourSynth::default(),
             equalizer: Equalizer::default(),
+            audio: crate::audio::Audio::default(),
         }
     }
 }

@@ -7,7 +7,11 @@
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
-use rvp_app::speakers::{LABEL, chain_entry};
+use rvp_app::audio::Audio;
+use rvp_app::audio::chain::{Inputs, Responses, Source, build};
+use rvp_app::equalizer::Equalizer;
+use rvp_app::normalizer::Normalizer;
+use rvp_app::speakers::{LABEL, choice};
 use rvp_engine::{EndReason, Engine, EngineEvent, EngineOptions, PlayerModel};
 
 const RATE: u32 = 48_000;
@@ -120,6 +124,37 @@ fn read_stereo(path: &Path) -> Vec<[f64; 2]> {
     panic!("no data chunk in {}", path.display());
 }
 
+/// RVP's downmix entry for the stereo speakers and a 5.1 source, as the
+/// chain builds it with the default settings.
+fn stereo_downmix() -> String {
+    let audio = Audio::default();
+    let source = Source {
+        channels: vec!["FL", "FR", "FC", "LFE", "SL", "SR"],
+        ..Source::default()
+    };
+    let (equalizer, normalizer, responses) = (
+        Equalizer::default(),
+        Normalizer::default(),
+        Responses::default(),
+    );
+    let inputs = Inputs {
+        audio: &audio,
+        speakers: choice("stereo").expect("stereo"),
+        equalizer: &equalizer,
+        normalizer: &normalizer,
+        channel: rvp_app::audio::StereoChannel::Both,
+        source: &source,
+        gain: 1.0,
+        responses: &responses,
+    };
+    let (front, _) = build(&inputs);
+    front
+        .into_iter()
+        .find(|(label, _)| *label == LABEL)
+        .map(|(_, entry)| entry)
+        .expect("the downmix")
+}
+
 /// Renders `input` to stereo through `entry` (none: mpv's own mix).
 /// Without `keep-open` mpv drains its output before it ends the file.
 fn render(dir: &Path, input: &Path, entry: Option<&str>, name: &str) -> Vec<[f64; 2]> {
@@ -210,7 +245,8 @@ fn stereo_mixes_down_as_potplayer_and_unlike_mpv() {
     let minus3 = alone - 3.0103;
     let silent = -100.0;
 
-    let potplayer = burst_levels(&render(&dir, &input, chain_entry("stereo"), "rvp"));
+    let downmix = stereo_downmix();
+    let potplayer = burst_levels(&render(&dir, &input, Some(&downmix), "rvp"));
     let expected = [
         ("front left", [alone, silent]),
         ("front right", [silent, alone]),

@@ -3,6 +3,7 @@
 
 use std::time::{Duration, Instant};
 
+use rvp_app::audio::commands::AudioCommand;
 use rvp_app::playlist::local_path;
 use rvp_app::video::{ColorChange, ColorKind, Rotation, ShaderChange, VideoEffect};
 use rvp_app::volume::mpv_volume;
@@ -466,7 +467,76 @@ impl Harness {
                     "Zoom: 100 % (100 x 100 %), position +0 %, +0 %",
                 );
             }
+            Action::Audio(command) => self.check_audio(action, command),
             _ => self.check_video(action),
+        }
+    }
+
+    /// M10's audio commands with default keys: the effects switch on and
+    /// off in the chain, recording asks for a file, the volumes answer.
+    fn check_audio(&mut self, action: Action, command: AudioCommand) {
+        let label = match command {
+            AudioCommand::SwapChannels => Some(("Swap Stereo Channels", "@rvpchannel:")),
+            AudioCommand::Crystality => Some(("Crystality", "@rvpcrystality:")),
+            AudioCommand::NoiseReduction => Some(("Noise Reduction", "@rvpdenoise:")),
+            AudioCommand::Freeverb => Some(("Freeverb", "@rvpreverb:")),
+            AudioCommand::VoiceRemoval | AudioCommand::VoiceEmphasis => Some((
+                if command == AudioCommand::VoiceRemoval {
+                    "Voice Removal"
+                } else {
+                    "Voice Emphasis"
+                },
+                "@rvpvoice:",
+            )),
+            _ => None,
+        };
+        if let Some((name, filter)) = label {
+            self.osd(action, &format!("{name}: On"));
+            self.wait(name, |m| audio_filters(m).contains(filter));
+            self.osd(action, &format!("{name}: Off"));
+            self.wait(name, |m| !audio_filters(m).contains(filter));
+            return;
+        }
+        match command {
+            AudioCommand::RecordDialog => match self.dispatch(action) {
+                Some(UiRequest::RecordDialog(path)) => {
+                    let name = path.file_name().unwrap_or_default().to_string_lossy();
+                    assert!(name.starts_with("fixture-60s 00.00.30"), "{name}");
+                }
+                other => panic!("{action:?}: {other:?}"),
+            },
+            AudioCommand::MasterUp => {
+                self.osd(action, "Master volume: +1 dB");
+                self.osd(
+                    Action::Audio(AudioCommand::MasterDown),
+                    "Master volume: +0 dB",
+                );
+            }
+            AudioCommand::MasterDown => {
+                self.osd(action, "Master volume: -1 dB");
+                self.osd(
+                    Action::Audio(AudioCommand::MasterUp),
+                    "Master volume: +0 dB",
+                );
+            }
+            AudioCommand::SystemMasterUp
+            | AudioCommand::SystemMasterDown
+            | AudioCommand::SystemMasterMute => {
+                assert!(
+                    matches!(self.dispatch(action), Some(UiRequest::SystemVolume(_))),
+                    "{action:?}"
+                );
+            }
+            // Headless libmpv has no output stream to set: nothing, or the
+            // volume.
+            AudioCommand::SystemWaveUp
+            | AudioCommand::SystemWaveDown
+            | AudioCommand::SystemWaveMute => match self.dispatch(action) {
+                None => {}
+                Some(UiRequest::Osd(text)) => assert!(text.starts_with("Wave volume"), "{text}"),
+                other => panic!("{action:?}: {other:?}"),
+            },
+            _ => panic!("{action:?} has no check"),
         }
     }
 
@@ -480,7 +550,7 @@ impl Harness {
                 assert_eq!(self.dispatch(action), Some(UiRequest::ControlPanel(false)));
             }
             Action::ToggleEqualizer => {
-                self.osd(action, "Equalizer: Flat");
+                self.osd(action, "Equalizer: (Default)");
                 self.wait("equalizer on", |m| audio_filters(m).contains("@rvpeq:"));
                 self.osd(action, "Equalizer: off");
                 self.wait("equalizer off", |m| !audio_filters(m).contains("@rvpeq:"));
@@ -611,7 +681,7 @@ fn every_default_binding_triggers_its_action() {
     h.wait("loaded", |m| {
         m.media_loaded() && m.double(PropertyId::Duration).is_some()
     });
-    h.app.apply_normalizer(&h.engine);
+    h.app.apply_audio_chain(&h.engine);
     h.engine.set_pause(true).expect("pause");
     h.engine.set_volume(mpv_volume(50.0)).expect("volume");
     h.wait("paused at 50 %", |m| {

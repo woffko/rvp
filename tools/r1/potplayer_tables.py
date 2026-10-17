@@ -1,17 +1,29 @@
 #!/usr/bin/env python3
-"""Extracts PotPlayer's static context-menu tree and default hotkey tables
-from an installed copy, read-only, for R1 (docs/PLAN.md).
+"""Extracts PotPlayer's static context-menu tree, default hotkey tables,
+Preferences pages and command-line switches from an installed copy,
+read-only, for R1 and R2 (docs/PLAN.md). No program is started.
 
 Sources:
   PotPlayer64.dll   RT_MENU 101 (the popup menu: command IDs per item),
-                    RT_MENU 111 (the playlist panel's menu) and
+                    RT_MENU 111 (the playlist panel's menu),
                     RT_ACCELERATOR tables (default hotkeys: key -> command ID)
+                    and RT_DIALOG (the Preferences pages: each control's
+                    ID, class, style and place)
   Language/English.ini [MenuString]  English menu texts by index path,
-                    for example 101_0_1_2 = "Open Folder...<TAB>F2"
+                    for example 101_0_1_2 = "Open Folder...<TAB>F2";
+                    [Dialog(N)] the English texts of dialog N's controls
+  CmdLine64.txt     the command-line switches (its English block)
+
+The Preferences window builds its page tree in code, not from resources.
+PAGES below names each page's dialog: the top level and the Audio pages
+as R1's captures of the window show them, the other pages by their
+content and PotPlayer's page names (the string table, 2055-2097 and
+later).
 
 usage: potplayer_tables.py POTPLAYER_DIR OUT_DIR
 Writes OUT_DIR/menu-tree.tsv (docs/r1/menu-static.tsv),
-OUT_DIR/menu-playlist.tsv, OUT_DIR/hotkeys.tsv and OUT_DIR/summary.txt.
+OUT_DIR/menu-playlist.tsv, OUT_DIR/hotkeys.tsv, OUT_DIR/preferences.tsv,
+OUT_DIR/command-line.tsv and OUT_DIR/summary.txt.
 Needs pefile (pip install pefile==2024.8.26).
 """
 
@@ -153,6 +165,219 @@ def english_menu(ini_path: Path) -> dict[str, str]:
     return dict(parser.items("MenuString"))
 
 
+# The Preferences pages: tree path, dialog ID, and whether R1's captures of
+# the window show the page under that name (the rest is by content).
+PAGES: list[tuple[str, int, bool]] = [
+    ("General", 354, True),
+    ("General > When Starting", 457, False),
+    ("General > Keyboard", 367, False),
+    ("General > Mouse", 366, False),
+    ("General > Skins", 376, False),
+    ("General > Skins > Logo", 378, False),
+    ("General > Skins > On Screen Control", 434, False),
+    ("General > Skins > Visualization", 372, False),
+    ("General > Navigation", 443, False),
+    ("General > OSD Messages", 375, False),
+    ("General > Dialog Box", 436, False),
+    ("General > Playlist", 373, False),
+    ("General > Playlist > Color/View", 389, False),
+    ("Playback", 358, True),
+    ("Playback > Fullscreen Mode", 456, False),
+    ("Playback > Time Jump", 364, False),
+    ("Playback > Seamless Playback", 379, False),
+    ("Playback > Window Size", 490, False),
+    ("Playback > Scene Browser", 471, False),
+    ("Subtitles", 353, True),
+    ("Subtitles > Font Style", 383, False),
+    ("Subtitles > Fade/3D/Location", 368, False),
+    ("Subtitles > Language/Sync/Other", 442, False),
+    ("Subtitles > Subtitle Browser", 478, False),
+    ("Subtitles > Online Subtitle Database", 460, False),
+    ("Subtitles > Subtitle Translation", 493, False),
+    ("Subtitles > Word Searching", 466, False),
+    ("Device > Screen Capture", 428, False),
+    ("Device > Webcam", 427, False),
+    ("Device > Analog TV (WDM)", 380, False),
+    ("Device > Digital TV (BDA)", 381, False),
+    ("Device > TV Channels", 370, False),
+    ("Device > EPG", 482, False),
+    ("Device > DVD/Blu-ray", 382, False),
+    ("Device > CD/DVD-ROM", 429, False),
+    ("Filter Control", 359, True),
+    ("Filter Control > Source/Splitter", 350, True),
+    ("Filter Control > OpenCodec", 465, True),
+    ("Filter Control > Video Decoder", 360, True),
+    ("Filter Control > Audio Decoder", 361, True),
+    ("Filter Control > Transform Filters", 362, False),
+    ("Video", 355, True),
+    ("Video > Aspect Ratio", 432, False),
+    ("Video > Colorspaces", 384, False),
+    ("Video > Resize", 369, False),
+    ("Video > Extend/Crop", 374, False),
+    ("Video > Deinterlacing", 385, False),
+    ("Video > Levels/Offset", 371, False),
+    ("Video > Effects", 386, False),
+    ("Video > Pixel Shaders", 505, False),
+    ("Video > AviSynth", 452, False),
+    ("Video > VapourSynth", 487, False),
+    ("Video > H.264 MVC 3D", 448, False),
+    ("Audio", 356, True),
+    ("Audio > Volume Control", 390, True),
+    ("Audio > Equalizer", 363, True),
+    ("Audio > Normalizer/Freeverb", 387, True),
+    ("Audio > Crystality/Noise Reduction", 388, True),
+    ("Audio > Language/Sync/Other", 441, True),
+    ("Audio > Winamp DSP Plugins", 365, True),
+    ("Extensions", 496, True),
+    ("Extensions > Media URL", 497, False),
+    ("Extensions > Media Playlist/Playitem", 498, False),
+    ("Extensions > Media Source", 499, False),
+    ("Extensions > Online Subtitle Searching", 500, False),
+    ("Extensions > Web Account", 501, False),
+    ("Extensions > Playback Statistics", 502, False),
+    ("Accessibility > TTS", 468, False),
+    ("Accessibility > Touch", 447, False),
+    ("Accessibility > XInput", 479, False),
+    ("Association", 336, True),
+    ("Configuration", 377, True),
+    ("Screen Saver", 485, True),
+    ("Kakao TV", 357, False),
+    ("Kakao TV > Broadcast List", 511, False),
+    ("Kakao TV > CEF", 489, False),
+]
+
+# Dialog item classes by atom, and the kinds preferences.tsv names.
+ATOMS = {0x80: "Button", 0x81: "Edit", 0x82: "Static", 0x83: "ListBox", 0x84: "ScrollBar",
+         0x85: "ComboBox"}
+# Buttons next to an option that reset or browse it; they belong to it.
+HELPER_BUTTONS = {"Default", "R", "...", "D", "0 dB"}
+
+
+def sz_or_ord(data: bytes, offset: int) -> tuple[object, int]:
+    (first,) = struct.unpack_from("<H", data, offset)
+    if first == 0:
+        return "", offset + 2
+    if first == 0xFFFF:
+        (ordinal,) = struct.unpack_from("<H", data, offset + 2)
+        return ordinal, offset + 4
+    return read_wstring(data, offset)
+
+
+def parse_dialog(data: bytes) -> list[dict]:
+    """The controls of a DLGTEMPLATEEX in template order."""
+    _, _, _, _, style, count, _, _, _, _ = struct.unpack_from("<HHIIIHhhhh", data, 0)
+    offset = 26
+    for _ in range(3):  # menu, class, title
+        _, offset = sz_or_ord(data, offset)
+    if style & 0x40:  # DS_SETFONT: point size, weight, italic, charset, face
+        offset += 6
+        _, offset = sz_or_ord(data, offset)
+    items = []
+    for _ in range(count):
+        offset = (offset + 3) & ~3
+        _, _, item_style, x, y, cx, cy, ident = struct.unpack_from("<IIIhhhhI", data, offset)
+        offset += 24
+        cls, offset = sz_or_ord(data, offset)
+        text, offset = sz_or_ord(data, offset)
+        (extra,) = struct.unpack_from("<H", data, offset)
+        offset += 2 + extra
+        if isinstance(cls, int):
+            cls = ATOMS.get(cls, hex(cls))
+        items.append({"id": ident, "cls": cls, "style": item_style, "x": x, "y": y, "cx": cx,
+                      "cy": cy, "text": text if isinstance(text, str) else ""})
+    return items
+
+
+def control_kind(item: dict) -> str:
+    cls, style = item["cls"], item["style"]
+    if cls == "Button":
+        return {2: "check", 3: "check", 4: "radio", 5: "check", 6: "check", 7: "group",
+                9: "radio"}.get(style & 0xF, "button")
+    return {"ComboBox": "combo", "Static": "label", "Edit": "edit", "msctls_trackbar32": "slider",
+            "msctls_updown32": "spin", "SysLink": "label"}.get(cls, str(cls).lower())
+
+
+def plain_text(text: str) -> str:
+    """A control text without its accelerator marks and line breaks."""
+    return text.replace("&&", "\0").replace("&", "").replace("\0", "&").replace("\n", " ").strip()
+
+
+def english_dialogs(ini_path: Path) -> dict[int, dict[int, str]]:
+    parser = configparser.RawConfigParser(strict=False, interpolation=None, delimiters=("=",))
+    parser.optionxform = str
+    parser.read(ini_path, encoding="utf-8-sig")
+    texts = {}
+    for section in parser.sections():
+        if section.startswith("Dialog(") and section.endswith(")"):
+            texts[int(section[7:-1])] = {int(k): v for k, v in parser.items(section) if k.isdigit()}
+    return texts
+
+
+def preference_rows(dialog: list[dict], english: dict[int, str]) -> list[tuple]:
+    """(control, kind, text, group) of a page's options: check boxes, radio
+    buttons, sliders, lists, fields and buttons, each named by its own text
+    or the label on its left (or above), and the group box around it."""
+    for item in dialog:
+        item["kind"] = control_kind(item)
+        item["en"] = plain_text(english.get(item["id"], item["text"]))
+    groups = [i for i in dialog if i["kind"] == "group"]
+    # A check box can name the slider or field on its right.
+    labels = [i for i in dialog if i["kind"] in ("label", "check", "radio") and i["en"]]
+
+    def group_of(item: dict) -> str:
+        inside = [g for g in groups if g is not item and g["x"] <= item["x"] < g["x"] + g["cx"]
+                  and g["y"] <= item["y"] < g["y"] + g["cy"]]
+        return min(inside, key=lambda g: g["cx"] * g["cy"])["en"] if inside else ""
+
+    def label_of(item: dict) -> str:
+        # A combo box's height includes its open list: its row is the top.
+        middle = item["y"] + min(item["cy"], 14) / 2
+        left = [label for label in labels if label["x"] + label["cx"] <= item["x"] + 2
+                and label["y"] - 2 <= middle <= label["y"] + label["cy"] + 2]
+        if left:
+            return max(left, key=lambda label: label["x"])["en"]
+        above = [label for label in labels if item["y"] - 16 <= label["y"] + label["cy"] <= item["y"] + 1
+                 and label["x"] - 4 <= item["x"] <= label["x"] + label["cx"]]
+        return max(above, key=lambda label: label["y"])["en"] if above else ""
+
+    rows = []
+    for item in dialog:
+        kind = item["kind"]
+        if kind in ("label", "spin") or (kind == "button" and item["en"] in HELPER_BUTTONS):
+            continue
+        text = item["en"] if kind in ("check", "radio", "button", "group") else label_of(item)
+        rows.append((item["id"], kind, text, group_of(item) if kind != "group" else ""))
+    return rows
+
+
+def command_line(path: Path) -> list[tuple[str, str]]:
+    """The switches of the English block of CmdLine64.txt and what they do;
+    continuation lines join the switch above."""
+    text = path.read_text(encoding="utf-8-sig", errors="replace")
+    block = text[text.index("{$CP0="):]
+    block = block[:block.index("$}")]
+    switches: list[list[str]] = []
+    for line in block.splitlines()[1:]:
+        stripped = line.strip()
+        if not stripped or stripped.startswith("Usage:"):
+            continue
+        # The switch ends at the first colon outside brackets (/atv[:ch]).
+        depth, cut = 0, -1
+        for index, char in enumerate(stripped):
+            depth += {"[": 1, "]": -1}.get(char, 0)
+            if char == ":" and depth == 0:
+                cut = index
+                break
+        name, sep, rest = (stripped[:cut], ":", stripped[cut + 1:]) if cut >= 0 else (stripped, "", "")
+        if sep and not line[:1].isspace() and (name.startswith(("/", '"', "-")) or "=" in name):
+            switches.append([" ".join(name.split()), " ".join(rest.split())])
+        elif line[:1].isspace() and switches:
+            switches[-1][1] += " " + " ".join(stripped.lstrip("-").split())
+        elif stripped.startswith("- "):
+            switches.append(["-", " ".join(stripped[1:].lstrip(":").split())])
+    return [(name, description.strip()) for name, description in switches]
+
+
 def main() -> int:
     if len(sys.argv) != 3:
         print(__doc__)
@@ -233,7 +458,26 @@ def main() -> int:
                     names = "shown at: " + " | ".join(shown[normalize_key(key)])
                 tsv.write(f"{table}\t{key}\t{ident}\t{names}\n")
 
+    dialogs = resources(pe, pefile.RESOURCE_TYPE["RT_DIALOG"])
+    dialog_texts = english_dialogs(root / "Language" / "English.ini")
+    options = 0
+    with open(out / "preferences.tsv", "w", encoding="utf-8") as tsv:
+        tsv.write("page\tdialog\tcontrol\tkind\ttext\tgroup\tname_source\n")
+        for page, dialog_id, captured in PAGES:
+            for control, kind, label, group in preference_rows(parse_dialog(dialogs[dialog_id]),
+                                                               dialog_texts.get(dialog_id, {})):
+                options += kind != "group"
+                source = "capture" if captured else "content"
+                tsv.write(f"{page}\t{dialog_id}\t{control}\t{kind}\t{label}\t{group}\t{source}\n")
+    switches = command_line(root / "CmdLine64.txt")
+    with open(out / "command-line.tsv", "w", encoding="utf-8") as tsv:
+        tsv.write("switch\tdescription\n")
+        for name, description in switches:
+            tsv.write(f"{name}\t{description}\n")
+
     with open(out / "summary.txt", "w", encoding="utf-8") as summary:
+        summary.write(f"preference pages: {len(PAGES)}, options: {options}\n")
+        summary.write(f"command-line switches: {len(switches)}\n")
         summary.write(f"menu items: {len(rows)} (popups {sum(1 for r in rows if r[5])}, "
                       f"separators {sum(1 for r in rows if r[3] == '---')})\n")
         summary.write(f"english menu strings: {len([k for k in english if k.startswith('101_0')])}\n")

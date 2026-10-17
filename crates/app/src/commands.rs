@@ -47,6 +47,14 @@ pub struct Session {
     pub rotation: u16,
     /// The control panel window is shown.
     pub control_panel: bool,
+    /// Both, Left or Right channel of a stereo track.
+    pub stereo_channel: crate::audio::StereoChannel,
+    /// The audio recording under way.
+    pub recording: Option<std::path::PathBuf>,
+    /// When a volume key last changed the volume, and how fast it goes
+    /// ("Accelerate control speed").
+    pub last_volume_key: Option<std::time::Instant>,
+    pub volume_acceleration: f64,
 }
 
 impl Default for Session {
@@ -68,6 +76,10 @@ impl Default for Session {
             on_top: None,
             rotation: 0,
             control_panel: false,
+            stereo_channel: crate::audio::StereoChannel::Both,
+            recording: None,
+            last_volume_key: None,
+            volume_acceleration: 1.0,
         }
     }
 }
@@ -171,6 +183,18 @@ impl App {
                     .to_owned(),
                 ))
             }
+            Action::TogglePreventScreenSaver => {
+                self.settings.prevent_screen_saver = !self.settings.prevent_screen_saver;
+                self.save_settings();
+                Some(UiRequest::Osd(format!(
+                    "Prevent screen saver during playback: {}",
+                    if self.settings.prevent_screen_saver {
+                        "On"
+                    } else {
+                        "Off"
+                    }
+                )))
+            }
             Action::AfterPlaybackCycle => {
                 let next = match self.session.after {
                     AfterPlayback::Nothing => AfterPlayback::ExitAfterFile,
@@ -183,11 +207,22 @@ impl App {
             Action::CycleAudio => self.cycle_track(engine, TrackKind::Audio),
             Action::CycleSubtitles => self.cycle_track(engine, TrackKind::Subtitle),
             Action::CycleVideo => self.cycle_track(engine, TrackKind::Video),
+            Action::AudioDelay(Delay::Reset) => {
+                // The default sync of the Language/Sync page, in ms.
+                let default = self.settings.audio.default_delay / 1000.0;
+                self.set_audio_delay(engine, default)
+            }
             Action::AudioDelay(delay) => {
                 let step = self.settings.audio_delay_step;
-                self.delay(engine, "audio-delay", PropertyId::AudioDelay, delay, step)
-                    .map(|value| UiRequest::Osd(format!("Audio sync: {}", signed_seconds(value))))
+                let value =
+                    self.delay(engine, "audio-delay", PropertyId::AudioDelay, delay, step)?;
+                self.audio_delay_changed(value);
+                Some(UiRequest::Osd(format!(
+                    "Audio sync: {}",
+                    signed_seconds(value)
+                )))
             }
+            Action::Audio(command) => self.audio_command(engine, command),
             Action::SubtitleDelay(delay) => {
                 let step = self.settings.subtitle_delay_step;
                 self.delay(engine, "sub-delay", PropertyId::SubDelay, delay, step)
@@ -455,6 +490,11 @@ impl App {
             Some(track) => engine.set_text(property, &track.id.to_string()),
             None => engine.set_text(property, "no"),
         };
+        if kind == TrackKind::Audio
+            && let Some(track) = next
+        {
+            self.audio_track_chosen(track.id);
+        }
         result.ok().map(|()| {
             UiRequest::Osd(format!(
                 "{noun}: {}",
@@ -474,6 +514,11 @@ impl App {
             Some(id) => engine.set_text(property, &id.to_string()),
             None => engine.set_text(property, "no"),
         });
+        if kind == TrackKind::Audio
+            && let Some(id) = id
+        {
+            self.audio_track_chosen(id);
+        }
     }
 
     fn delay(

@@ -74,6 +74,17 @@ pub enum MediaCommand {
 pub const RATE_RANGE: (f64, f64) = (0.25, 4.0);
 
 impl App {
+    /// Whether the screen and the system stay awake now: video plays and
+    /// "Prevent screen saver during playback" is on (Linux's idle inhibit,
+    /// Windows' execution state).
+    #[must_use]
+    pub fn keeps_screen_on(&self) -> bool {
+        self.settings.prevent_screen_saver
+            && self.model.media_loaded()
+            && self.model.flag(PropertyId::Pause) != Some(true)
+            && self.model.int(PropertyId::VideoWidth).is_some()
+    }
+
     /// The state the media controls show now.
     #[must_use]
     pub fn media_state(&self) -> MediaState {

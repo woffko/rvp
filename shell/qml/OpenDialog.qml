@@ -1,6 +1,6 @@
 // The file dialogs, loaded on first use (Qt Quick Dialogs is not needed to
 // start RVP): media files to open or add, a subtitle file to load, where
-// to save the current frame, and the subtitle font.
+// to save the current frame or an audio recording, and the subtitle font.
 import QtQuick
 import QtQuick.Dialogs
 import Rvp
@@ -46,6 +46,21 @@ Item {
         fileMode: FileDialog.SaveFile
         nameFilters: ["Images (*.png *.jpg *.jpeg)", "All files (*)"]
         onAccepted: holder.player.save_frame_to(Tools.local_file(selectedFile))
+    }
+
+    // `suggested`: a file URL in the recording folder.
+    function askRecording(suggested) {
+        recordDialog.selectedFile = suggested
+        recordDialog.currentFolder = suggested.substring(0, suggested.lastIndexOf("/"))
+        recordDialog.open()
+    }
+
+    FileDialog {
+        id: recordDialog
+        title: "Record Audio"
+        fileMode: FileDialog.SaveFile
+        nameFilters: ["WAV audio (*.wav)", "All files (*)"]
+        onAccepted: holder.player.start_recording(Tools.local_file(selectedFile))
     }
 
     FileDialog {

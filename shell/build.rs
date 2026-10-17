@@ -65,6 +65,7 @@ fn main() {
         .qml_file("qml/Settings.qml")
         .qml_file("qml/UrlDialog.qml")
         .qml_file("qml/About.qml")
+        .qml_file("qml/AudioSync.qml")
         .qml_file("qml/ControlPanel.qml");
     CxxQtBuilder::new_qml_module(module)
         .qt_module("Gui")

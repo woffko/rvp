@@ -11,8 +11,10 @@
 //! * Where PotPlayer shows run-time lists, RVP puts its own: the audio,
 //!   video and subtitle tracks (in "Select Audio Stream", "Select Video
 //!   Stream" and "Add/Select Subtitles"), the chapters ("Chapter/Bookmark"),
-//!   the albums ("Album/Favorites") and the equalizer's presets ("Equalizer
-//!   Presets"). "Filters" lists what plays the file, as PotPlayer lists its
+//!   the albums ("Album/Favorites"), the equalizer's presets ("Equalizer
+//!   Presets"), the output speakers, formats and modes, and mpv's audio
+//!   devices ("Audio Renderer", its pass-through and second device).
+//!   "Filters" lists what plays the file, as PotPlayer lists its
 //!   filter graph there: the source, the video decoder (hardware or
 //!   software), the video filters, the video output, the audio decoder, the
 //!   audio filters and the audio output, as lines without a command.
@@ -183,6 +185,101 @@ pub enum Command {
     EqualizerPreset(usize),
     /// Choose the output speakers (index into `speakers::CHOICES`).
     Speakers(usize),
+    /// An audio output choice.
+    Audio(AudioChoice),
+}
+
+/// An audio output choice of the Audio menu's lists.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AudioChoice {
+    /// The audio device (0: mpv's automatic choice, then [`App::audio_devices`]).
+    Device(usize),
+    /// The pass-through device (0: the audio device).
+    PassthroughDevice(usize),
+    /// The second device (0: none).
+    SecondDevice(usize),
+    /// An output format of [`FORMATS`].
+    Format(usize),
+    /// A sample rate of `audio::SAMPLE_RATES`.
+    Rate(usize),
+    /// A resampler quality of [`QUALITIES`].
+    Resample(usize),
+    /// An output mode of [`MODES`].
+    Mode(usize),
+    /// "Use Pass-through output when at least 1 chs exist" on or off.
+    PassthroughAny,
+}
+
+/// Output Format's choices with PotPlayer's texts.
+pub const FORMATS: [(crate::audio::SampleFormat, &str); 6] = [
+    (crate::audio::SampleFormat::S16, "16-bit (Recommended)"),
+    (crate::audio::SampleFormat::S24, "24-bit"),
+    (crate::audio::SampleFormat::S32, "32-bit"),
+    (crate::audio::SampleFormat::Float, "32-bit (floating point)"),
+    (crate::audio::SampleFormat::S16Dither, "16-bit (dithering)"),
+    (
+        crate::audio::SampleFormat::Same,
+        "As the output device takes it",
+    ),
+];
+
+/// The resampler's qualities with PotPlayer's texts.
+pub const QUALITIES: [(crate::audio::ResampleQuality, &str); 3] = [
+    (crate::audio::ResampleQuality::High, "High quality"),
+    (
+        crate::audio::ResampleQuality::Normal,
+        "Normal quality (Recommended)",
+    ),
+    (crate::audio::ResampleQuality::Low, "Low quality"),
+];
+
+/// Output Mode's choices with PotPlayer's texts.
+pub const MODES: [(crate::audio::OutputMode, &str); 3] = [
+    (crate::audio::OutputMode::Pcm, "PCM (Default) (Recommended)"),
+    (crate::audio::OutputMode::Passthrough, "Pass-through"),
+    (
+        crate::audio::OutputMode::Ac3Encode,
+        "Pass-through after AC3 re-encoding",
+    ),
+];
+
+/// An audio device mpv knows: its name and its description.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct Device {
+    pub name: String,
+    pub description: String,
+}
+
+impl AudioChoice {
+    fn id(self) -> String {
+        let (kind, index) = match self {
+            AudioChoice::Device(i) => ("d", i),
+            AudioChoice::PassthroughDevice(i) => ("p", i),
+            AudioChoice::SecondDevice(i) => ("s", i),
+            AudioChoice::Format(i) => ("f", i),
+            AudioChoice::Rate(i) => ("r", i),
+            AudioChoice::Resample(i) => ("q", i),
+            AudioChoice::Mode(i) => ("m", i),
+            AudioChoice::PassthroughAny => ("a", 0),
+        };
+        format!("{kind}{index}")
+    }
+
+    fn parse(text: &str) -> Option<Self> {
+        let (kind, index) = text.split_at_checked(1)?;
+        let index: usize = index.parse().ok()?;
+        Some(match kind {
+            "d" => AudioChoice::Device(index),
+            "p" => AudioChoice::PassthroughDevice(index),
+            "s" => AudioChoice::SecondDevice(index),
+            "f" => AudioChoice::Format(index),
+            "r" => AudioChoice::Rate(index),
+            "q" => AudioChoice::Resample(index),
+            "m" => AudioChoice::Mode(index),
+            "a" => AudioChoice::PassthroughAny,
+            _ => return None,
+        })
+    }
 }
 
 impl Command {
@@ -208,6 +305,7 @@ impl Command {
             Command::Album(index) => format!("b:{index}"),
             Command::EqualizerPreset(index) => format!("e:{index}"),
             Command::Speakers(index) => format!("o:{index}"),
+            Command::Audio(choice) => format!("x:{}", choice.id()),
         }
     }
 
@@ -234,6 +332,7 @@ impl Command {
             "b" => value.parse().ok().map(Command::Album),
             "e" => value.parse().ok().map(Command::EqualizerPreset),
             "o" => value.parse().ok().map(Command::Speakers),
+            "x" => AudioChoice::parse(value).map(Command::Audio),
             _ => None,
         }
     }
@@ -270,39 +369,17 @@ impl MenuItem {
     }
 }
 
-/// Drops separators at the start and end and doubled ones.
-/// The filters of an mpv `af` or `vf` value (`@label:name=...,...`): label
-/// and filter name, in order. Values may be quoted as `%N%` followed by N
-/// bytes, or in brackets.
+/// The filters of an mpv `af` or `vf` value: label and filter name, in
+/// order.
 fn chain_entries(text: &str) -> Vec<(Option<&str>, &str)> {
-    let bytes = text.as_bytes();
-    let mut entries = Vec::new();
-    let (mut start, mut i) = (0, 0);
-    while i <= bytes.len() {
-        if i == bytes.len() || bytes[i] == b',' {
-            let entry = &text[start..i];
-            let (label, rest) = match entry.strip_prefix('@').and_then(|e| e.split_once(':')) {
-                Some((label, rest)) => (Some(label), rest),
-                None => (None, entry),
-            };
+    crate::audio::chain::split(text)
+        .into_iter()
+        .filter_map(|(label, entry)| {
+            let rest = label.map_or(entry, |label| &entry[label.len() + 2..]);
             let name = rest.split(['=', ':']).next().unwrap_or("");
-            if !name.is_empty() {
-                entries.push((label, name));
-            }
-            start = i + 1;
-            i += 1;
-        } else if bytes[i] == b'%'
-            && let Some(len) = text[i + 1..].find('%')
-            && let Ok(count) = text[i + 1..i + 1 + len].parse::<usize>()
-        {
-            i = (i + len + 2 + count).min(bytes.len());
-        } else if bytes[i] == b'[' {
-            i = text[i..].find(']').map_or(bytes.len(), |end| i + end + 1);
-        } else {
-            i += 1;
-        }
-    }
-    entries
+            (!name.is_empty()).then_some((label, name))
+        })
+        .collect()
 }
 
 /// What a filter of RVP's is, or mpv's name of another one.
@@ -310,7 +387,17 @@ fn filter_text(label: Option<&str>, name: &str) -> String {
     match label {
         Some(crate::equalizer::LABEL) => "Equalizer".to_owned(),
         Some(crate::normalizer::LABEL) => "Normalizer (TomSteady)".to_owned(),
-        Some(crate::normalizer::TEMPO_LABEL) => "Tempo (scaletempo2)".to_owned(),
+        Some(crate::normalizer::TEMPO_LABEL) => format!("Tempo ({name})"),
+        Some(crate::speakers::LABEL) => "Speakers' mix".to_owned(),
+        Some(crate::audio::chain::CHANNEL) => "Channels".to_owned(),
+        Some(crate::audio::chain::PREAMP) => "Pre-amplifier (AC3/DTS)".to_owned(),
+        Some(crate::audio::chain::VOICE) => "Voice removal/emphasis".to_owned(),
+        Some(crate::audio::chain::CRYSTALITY) => "Crystality".to_owned(),
+        Some(crate::audio::chain::DENOISE) => "Noise reduction".to_owned(),
+        Some(crate::audio::chain::REVERB) => "Freeverb".to_owned(),
+        Some(crate::audio::chain::CROSSFEED) => "Crossfeed".to_owned(),
+        Some(crate::audio::chain::GAINS) => "Individual volume".to_owned(),
+        Some(crate::audio::chain::AC3) => "AC3 encoder (pass-through)".to_owned(),
         Some(crate::video::SCRIPT_LABEL) => "VapourSynth script".to_owned(),
         Some("svp") => "SVP".to_owned(),
         Some(label) => crate::video::VideoEffect::ALL
@@ -324,6 +411,7 @@ fn filter_text(label: Option<&str>, name: &str) -> String {
     }
 }
 
+/// Drops separators at the start and end and doubled ones.
 fn tidy(items: Vec<MenuItem>) -> Vec<MenuItem> {
     let mut out: Vec<MenuItem> = Vec::with_capacity(items.len());
     for item in items {
@@ -479,6 +567,7 @@ impl App {
             }
             Command::EqualizerPreset(index) => self.set_equalizer_preset(engine, index),
             Command::Speakers(index) => self.set_speakers(engine, index),
+            Command::Audio(choice) => self.audio_choice(engine, choice),
         }
     }
 
@@ -495,6 +584,9 @@ impl App {
             // RVP's run-time lists where PotPlayer has its own.
             let extra = match node.path.as_str() {
                 "101_0_12_0" => self.tracks(live, TrackKind::Audio),
+                "101_0_12_1" => self.device_choices(AudioChoice::Device),
+                "101_0_12_2" => self.device_choices(AudioChoice::PassthroughDevice),
+                "101_0_12_3" => self.device_choices(AudioChoice::SecondDevice),
                 "101_0_11_0" => self.tracks(live, TrackKind::Video),
                 "101_0_10_0" => self.tracks(live, TrackKind::Subtitle),
                 "101_0_3" => self.albums(),
@@ -525,6 +617,12 @@ impl App {
         // "Output Speakers" lists the speakers RVP can choose.
         if node.id == 20005 {
             return MenuItem::submenu(&node.text, self.speaker_choices());
+        }
+        if node.id == 20006 {
+            return MenuItem::submenu(&node.text, self.format_choices());
+        }
+        if node.id == 20007 {
+            return MenuItem::submenu(&node.text, self.mode_choices());
         }
         None
     }
@@ -686,6 +784,112 @@ impl App {
                 ..MenuItem::default()
             })
             .collect()
+    }
+
+    /// mpv's audio devices for a device list; the first entry is the
+    /// list's default (automatic, the audio device, none).
+    fn device_choices(&self, make: fn(usize) -> AudioChoice) -> Vec<MenuItem> {
+        let audio = &self.settings.audio;
+        let (first, current) = match make(0) {
+            AudioChoice::Device(_) => (
+                "Auto select (Recommended)",
+                self.settings.audio_device.as_str(),
+            ),
+            AudioChoice::PassthroughDevice(_) => (
+                "Default Audio Device (Recommended)",
+                audio.passthrough_device.as_str(),
+            ),
+            _ => ("Disable (Recommended)", audio.second_device.as_str()),
+        };
+        let first_value = if matches!(make(0), AudioChoice::Device(_)) {
+            "auto"
+        } else {
+            ""
+        };
+        let mut items = vec![MenuItem {
+            label: first.to_owned(),
+            command: Some(Command::Audio(make(0))),
+            checked: Some(current == first_value),
+            ..MenuItem::default()
+        }];
+        items.extend(
+            self.audio_devices
+                .iter()
+                .enumerate()
+                .filter(|(_, device)| device.name != "auto")
+                .map(|(index, device)| MenuItem {
+                    label: device.description.clone(),
+                    command: Some(Command::Audio(make(index + 1))),
+                    checked: Some(current == device.name),
+                    ..MenuItem::default()
+                }),
+        );
+        items
+    }
+
+    fn format_choices(&self) -> Vec<MenuItem> {
+        let audio = &self.settings.audio;
+        let mut items: Vec<MenuItem> = FORMATS
+            .iter()
+            .enumerate()
+            .map(|(index, (format, label))| MenuItem {
+                label: (*label).to_owned(),
+                command: Some(Command::Audio(AudioChoice::Format(index))),
+                checked: Some(audio.sample_format == *format),
+                ..MenuItem::default()
+            })
+            .collect();
+        items.push(MenuItem::separator());
+        items.extend(
+            crate::audio::SAMPLE_RATES
+                .iter()
+                .enumerate()
+                .map(|(index, rate)| MenuItem {
+                    label: if *rate == 0 {
+                        "Same as input (Recommended)".to_owned()
+                    } else {
+                        format!("{rate}Hz")
+                    },
+                    command: Some(Command::Audio(AudioChoice::Rate(index))),
+                    checked: Some(audio.sample_rate == *rate),
+                    ..MenuItem::default()
+                }),
+        );
+        items.push(MenuItem::separator());
+        items.extend(
+            QUALITIES
+                .iter()
+                .enumerate()
+                .map(|(index, (quality, label))| MenuItem {
+                    label: (*label).to_owned(),
+                    command: Some(Command::Audio(AudioChoice::Resample(index))),
+                    checked: Some(audio.resample_quality == *quality),
+                    ..MenuItem::default()
+                }),
+        );
+        items
+    }
+
+    fn mode_choices(&self) -> Vec<MenuItem> {
+        let audio = &self.settings.audio;
+        let mut items: Vec<MenuItem> = MODES
+            .iter()
+            .enumerate()
+            .map(|(index, (mode, label))| MenuItem {
+                label: (*label).to_owned(),
+                command: Some(Command::Audio(AudioChoice::Mode(index))),
+                checked: Some(audio.output_mode == *mode),
+                ..MenuItem::default()
+            })
+            .collect();
+        items.push(MenuItem::separator());
+        items.push(MenuItem {
+            label: "Use Pass-through output when at least 1 chs exist".to_owned(),
+            command: Some(Command::Audio(AudioChoice::PassthroughAny)),
+            checked: Some(audio.passthrough_min_channels.is_none()),
+            ..MenuItem::default()
+        });
+        items
     }
 
     fn albums(&self) -> Vec<MenuItem> {

@@ -40,6 +40,32 @@ fn check(name: &str, report: &str) {
 }
 
 #[test]
+fn the_preferences_report_is_current() {
+    check("preferences.md", &rvp_app::coverage::preferences::report());
+}
+
+#[test]
+fn every_preference_setting_is_a_place_in_the_settings_file() {
+    use rvp_app::coverage::preferences::{Status, options, status};
+    let settings = serde_json::to_value(rvp_app::Settings::default()).expect("json");
+    for option in options() {
+        if let Status::Setting(place) = status(&option) {
+            let mut value = &settings;
+            for part in place.split('.') {
+                value = match value {
+                    serde_json::Value::Array(items) => {
+                        &items[part.parse::<usize>().expect("an index")]
+                    }
+                    other => other
+                        .get(part)
+                        .unwrap_or_else(|| panic!("{place} ({}) is not a setting", option.text)),
+                };
+            }
+        }
+    }
+}
+
+#[test]
 fn every_menu_item_is_carried_out_or_explained() {
     for tree in [context_tree(), playlist_tree()] {
         let items = commands(tree);

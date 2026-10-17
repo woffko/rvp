@@ -11,7 +11,7 @@
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
-use rvp_app::normalizer::{LABEL, Normalizer, TEMPO_ENTRY, TEMPO_LABEL};
+use rvp_app::normalizer::{BLOCK, LABEL, Normalizer, TEMPO_ENTRY, TEMPO_LABEL};
 use rvp_engine::{EndReason, Engine, EngineEvent, EngineOptions, PlayerModel};
 
 const RATE: u32 = 48_000;
@@ -147,7 +147,7 @@ fn render(dir: &Path, input: &Path, tempo: bool) -> Vec<f64> {
     ];
     let engine = Engine::new(&options).expect("libmpv starts");
     engine
-        .set_audio_filter(LABEL, Some(&Normalizer::default().chain_entry(1.0)))
+        .set_audio_filter(LABEL, Some(&Normalizer::default().chain_entry(1.0, BLOCK)))
         .expect("af add");
     if tempo {
         engine

@@ -10,6 +10,7 @@
 mod action;
 mod app;
 pub mod associations;
+pub mod audio;
 pub mod binding_editor;
 pub mod chrome;
 mod cli;

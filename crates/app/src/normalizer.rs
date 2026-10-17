@@ -4,8 +4,9 @@
 //!
 //! mpv runs no code of RVP's on its audio, so the gain control closes a loop
 //! through mpv's filter chain ([`chain_entry`](Normalizer::chain_entry)):
-//! ffmpeg cuts the audio into blocks of [`BLOCK`] samples (PotPlayer's block
-//! size, measured in S5's recordings), `astats` measures each block's peak
+//! ffmpeg cuts the audio into blocks ([`block_for`]: PotPlayer's block for
+//! the source as the recordings measured it), `astats` measures each
+//! block's peak
 //! and `ametadata` prints it to mpv's log. [`Control`] reads it there on a
 //! thread of its own (a weak client handle that asks for mpv's log at level
 //! `v`), feeds it to TomSteady and sends the gain for the next block to the
@@ -36,6 +37,7 @@ use rvp_engine::libmpv2::Mpv;
 use rvp_engine::libmpv2::events::Event;
 use serde::{Deserialize, Serialize};
 
+use crate::audio::chain::lavfi;
 use crate::tomsteady::{STEPPING_RANGE, Tomsteady};
 
 /// The label of RVP's filter in mpv's `af` chain; other filters (SVP's
@@ -46,8 +48,22 @@ pub const TEMPO_LABEL: &str = "rvptempo";
 /// mpv's pitch-correcting tempo filter, kept in the chain after the
 /// normalizer while it is on, so that speed changes retune it.
 pub const TEMPO_ENTRY: &str = "@rvptempo:scaletempo2";
-/// Samples per block, as PotPlayer runs TomSteady.
+/// Samples per block, as PotPlayer runs TomSteady on S5's clips and on a
+/// stereo FLAC.
 pub const BLOCK: u32 = 2048;
+
+/// PotPlayer's block for a source codec, as the audio audit measured it
+/// (finding 2): an AC3 frame (1536 samples), 3072 for a 5.1 PCM WAV, 2048
+/// for a stereo FLAC and S5's clips. Other codecs keep 2048 until a
+/// recording shows otherwise.
+#[must_use]
+pub fn block_for(codec: Option<&str>) -> u32 {
+    match codec {
+        Some("ac3" | "eac3") => 1536,
+        Some(pcm) if pcm.starts_with("pcm_") => 3072,
+        _ => BLOCK,
+    }
+}
 /// The filter that prints each block's peak, and the start of its lines in
 /// mpv's log.
 const PEAK_INSTANCE: &str = "ametadata@rvppeak";
@@ -73,6 +89,8 @@ pub struct Normalizer {
     /// 2026-10-16) and the plugin's; at 10 the gain moves by 1/1024 per
     /// block.
     pub release: f64,
+    /// "Operate only with video playback": music plays as it is.
+    pub video_only: bool,
 }
 
 impl Default for Normalizer {
@@ -84,6 +102,7 @@ impl Default for Normalizer {
             boost: true,
             level: 75.0,
             release: 10.0,
+            video_only: false,
         }
     }
 }
@@ -110,16 +129,20 @@ impl Normalizer {
         whole(self.release, STEPPING_RANGE.0, STEPPING_RANGE.1)
     }
 
-    /// The `af` entry, its gain starting at `gain`: blocks, their peak in
-    /// mpv's log, the gain [`Control`] sets, the ceiling.
+    /// The `af` entry, its gain starting at `gain`: blocks of `block`
+    /// samples, their peak in mpv's log, the gain [`Control`] sets, the
+    /// ceiling.
     #[must_use]
-    pub fn chain_entry(&self, gain: f64) -> String {
-        format!(
-            "@{LABEL}:lavfi=[asetnsamples=n={BLOCK}:p=0,\
-             astats=metadata=1:reset=1:measure_perchannel=none:measure_overall=Peak_level,\
-             {PEAK_INSTANCE}=mode=print:key=lavfi.astats.Overall.Peak_level,\
-             {GAIN_INSTANCE}=volume={gain:.9}:precision=float,\
-             alimiter=limit={CEILING:.5}:level=0]"
+    pub fn chain_entry(&self, gain: f64, block: u32) -> String {
+        lavfi(
+            LABEL,
+            &format!(
+                "asetnsamples=n={block}:p=0,\
+                 astats=metadata=1:reset=1:measure_perchannel=none:measure_overall=Peak_level,\
+                 {PEAK_INSTANCE}=mode=print:key=lavfi.astats.Overall.Peak_level,\
+                 {GAIN_INSTANCE}=volume={gain:.9}:precision=float,\
+                 alimiter=limit={CEILING:.5}:level=0"
+            ),
         )
     }
 }
@@ -258,19 +281,28 @@ mod tests {
 
     #[test]
     fn the_chain_measures_blocks_and_applies_the_gain() {
-        assert_eq!(
-            Normalizer::default().chain_entry(1.0),
-            "@rvpnorm:lavfi=[asetnsamples=n=2048:p=0,\
+        let graph = "asetnsamples=n=2048:p=0,\
              astats=metadata=1:reset=1:measure_perchannel=none:measure_overall=Peak_level,\
              ametadata@rvppeak=mode=print:key=lavfi.astats.Overall.Peak_level,\
              volume@rvpgain=volume=1.000000000:precision=float,\
-             alimiter=limit=0.91553:level=0]"
+             alimiter=limit=0.91553:level=0";
+        assert_eq!(
+            Normalizer::default().chain_entry(1.0, BLOCK),
+            format!("@rvpnorm:lavfi=graph=%{}%{graph}", graph.len())
         );
         assert!(
             Normalizer::default()
-                .chain_entry(2.5)
+                .chain_entry(2.5, 1536)
                 .contains("volume@rvpgain=volume=2.500000000:")
         );
+    }
+
+    #[test]
+    fn blocks_follow_the_source() {
+        assert_eq!(block_for(Some("ac3")), 1536);
+        assert_eq!(block_for(Some("pcm_s16le")), 3072);
+        assert_eq!(block_for(Some("flac")), 2048);
+        assert_eq!(block_for(None), 2048);
     }
 
     #[test]

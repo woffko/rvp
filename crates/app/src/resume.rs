@@ -58,6 +58,18 @@ pub struct ResumeState {
     pub panel: Option<(i32, i32)>,
     pub positions: BTreeMap<String, Position>,
     pub sequence: u64,
+    /// The audio track chosen in a file ("Remember audio track
+    /// selections"), by mpv's track ID.
+    #[serde(default)]
+    pub audio_tracks: BTreeMap<String, AudioTrack>,
+}
+
+/// The audio track chosen in one file.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AudioTrack {
+    pub id: i64,
+    /// Increases with every choice; the smallest is dropped first.
+    pub sequence: u64,
 }
 
 impl Default for ResumeState {
@@ -71,6 +83,7 @@ impl Default for ResumeState {
             panel: None,
             positions: BTreeMap::new(),
             sequence: 0,
+            audio_tracks: BTreeMap::new(),
         }
     }
 }
@@ -150,6 +163,36 @@ impl ResumeStore {
                 .map(|(name, _)| name.clone())
         {
             self.state.positions.remove(&oldest);
+        }
+    }
+
+    /// The audio track chosen last in `file`.
+    #[must_use]
+    pub fn audio_track(&self, file: &str) -> Option<i64> {
+        self.state.audio_tracks.get(file).map(|track| track.id)
+    }
+
+    /// Records the audio track chosen in `file`.
+    pub fn set_audio_track(&mut self, file: &str, id: i64) {
+        if self.audio_track(file) == Some(id) {
+            return;
+        }
+        self.state.sequence += 1;
+        let track = AudioTrack {
+            id,
+            sequence: self.state.sequence,
+        };
+        self.state.audio_tracks.insert(file.to_owned(), track);
+        self.dirty = true;
+        if self.state.audio_tracks.len() > MAX_POSITIONS
+            && let Some(oldest) = self
+                .state
+                .audio_tracks
+                .iter()
+                .min_by_key(|(_, track)| track.sequence)
+                .map(|(name, _)| name.clone())
+        {
+            self.state.audio_tracks.remove(&oldest);
         }
     }
 

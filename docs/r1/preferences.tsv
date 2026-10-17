@@ -1,0 +1,1184 @@
+page	dialog	control	kind	text	group	name_source
+General	354	3285	group	General Settings		capture
+General	354	3004	combo	Interface language:	General Settings	capture
+General	354	3003	combo	Stay on top:	General Settings	capture
+General	354	3005	combo	When files opened:	General Settings	capture
+General	354	3008	combo	Taskbar/Tray icon:	General Settings	capture
+General	354	3011	combo	Multiple instances:	General Settings	capture
+General	354	3010	combo	Auto check for updates:	General Settings	capture
+General	354	3128	check	Auto download files if an update is available	General Settings	capture
+General	354	3129	check	Fixed window position when minimized	General Settings	capture
+General	354	3094	check	Hide all windows when minimized	General Settings	capture
+General	354	3110	check	Pause playback when minimized	General Settings	capture
+General	354	3066	check	Pause playback when focus lost	General Settings	capture
+General	354	3130	check	Pause playback when screen locked	General Settings	capture
+General	354	3126	check	Resize window based on the center	General Settings	capture
+General	354	3127	check	Store and show recent items in fav menu	General Settings	capture
+General	354	3338	check	Don't get focus when started with a file	General Settings	capture
+General	354	3340	check	Use advanced drag and drop interaction	General Settings	capture
+General	354	3341	check	Ignore error messages if playback starts	General Settings	capture
+General	354	3083	check	Store settings into .ini file	General Settings	capture
+General	354	3084	check	Save settings instantly when paused	General Settings	capture
+General	354	3072	check	Show tooltips	General Settings	capture
+General	354	3073	check	Snap to edge/window	General Settings	capture
+General	354	3336	check	Enable enhanced taskbar features	General Settings	capture
+General	354	3337	check	Use system media transport control	General Settings	capture
+General	354	3123	check	Default window size on closing file	General Settings	capture
+General	354	3339	check	Use non-overlapping multi instances	General Settings	capture
+General	354	3116	check	Automatically run at system startup	General Settings	capture
+General	354	3064	check	Place browsers into inactive chat area	General Settings	capture
+General	354	3065	check	Auto rotate based on image dimensions		capture
+General > When Starting	457	3287	group	When Starting		content
+General > When Starting	457	3007	combo	Window Position:	When Starting	content
+General > When Starting	457	3274	edit	Window Position:	When Starting	content
+General > When Starting	457	3276	edit	×	When Starting	content
+General > When Starting	457	3006	combo	Window Size:	When Starting	content
+General > When Starting	457	3273	edit	Window Size:	When Starting	content
+General > When Starting	457	3275	edit	×	When Starting	content
+General > When Starting	457	3131	check	Restore window to its last state (Maximized/Minimized/Normal)	When Starting	content
+General > When Starting	457	3132	check	Play the last played item	When Starting	content
+General > Keyboard	367	3381	group	Hotkeys		content
+General > Keyboard	367	3242	syslistview32	You can define your own keyboard shortcuts to execute any functions of the program.User-defined shortcut keys will have priority over default hotkeys.	Hotkeys	content
+General > Keyboard	367	3119	check	Disable default hotkeys	Hotkeys	content
+General > Keyboard	367	3021	button	Add...	Hotkeys	content
+General > Keyboard	367	3024	button	Delete	Hotkeys	content
+General > Keyboard	367	3027	button	Edit...	Hotkeys	content
+General > Keyboard	367	3028	button	Up	Hotkeys	content
+General > Keyboard	367	3022	button	Down	Hotkeys	content
+General > Keyboard	367	3382	group	Multimedia Keyboard		content
+General > Keyboard	367	3044	check	Support multimedia keyboard	Multimedia Keyboard	content
+General > Keyboard	367	3034	check	Turn on global media control keys	Multimedia Keyboard	content
+General > Keyboard	367	3040	check	Turn on volume control keys	Multimedia Keyboard	content
+General > Keyboard	367	3041	check	Turn on navigation keys	Multimedia Keyboard	content
+General > Mouse	366	3381	group	Mouse Settings		content
+General > Mouse	366	3034	check	Operate the action 'Left Button - Single Click' in the video area only	Mouse Settings	content
+General > Mouse	366	3038	check	Prevent window from being dragged outside of title bar	Mouse Settings	content
+General > Mouse	366	3035	check	Activate Alt, Ctrl, Shift + Mouse Drag to Pan, Zoom and Stretch the image	Mouse Settings	content
+General > Mouse	366	3036	check	Activate Alt, Ctrl + Mouse Drag to set H/V screen position of subtitles	Mouse Settings	content
+General > Mouse	366	3037	check	Operate mouse wheel while X button is pressed down	Mouse Settings	content
+General > Skins	376	3381	group	Skin Settings		content
+General > Skins	376	3005	combo	Skins:	Skin Settings	content
+General > Skins	376	3027	button	Rescan Skin Files	Skin Settings	content
+General > Skins	376	3007	combo	Touch feature:	Skin Settings	content
+General > Skins	376	3024	button	Open Skin Folder	Skin Settings	content
+General > Skins	376	3012	combo	Context menu design:	Skin Settings	content
+General > Skins	376	3025	button	Open Menu Folder	Skin Settings	content
+General > Skins	376	3008	combo	Context menu style:	Skin Settings	content
+General > Skins	376	3076	check	System dark mode	Skin Settings	content
+General > Skins	376	3009	combo	Transparency of skinned context menu:	Skin Settings	content
+General > Skins	376	3026	button	Context Menu Items	Skin Settings	content
+General > Skins	376	3010	combo	Size of skinned context menu:	Skin Settings	content
+General > Skins	376	3011	combo	Size of skinned context menu:	Skin Settings	content
+General > Skins	376	3052	check	Auto hide main window skin while video screen is active	Skin Settings	content
+General > Skins	376	3057	check	Auto resize video image depending on fullscreen pop-ups	Skin Settings	content
+General > Skins	376	3072	check	Use video skin at program start	Skin Settings	content
+General > Skins	376	3073	check	Disable switching between skin modes	Skin Settings	content
+General > Skins	376	3074	check	Remember window position & size of each skin mode	Skin Settings	content
+General > Skins	376	3075	check	Keep window size while switching between skin modes	Skin Settings	content
+General > Skins	376	3342	check	Enable window animations	Skin Settings	content
+General > Skins	376	3343	check	Reverse elapsed/remaining times defined in skin	Skin Settings	content
+General > Skins	376	3344	check	Correct playback times defined in skin according to playback speed	Skin Settings	content
+General > Skins > Logo	378	3193	group	Logo (while playback is off)		content
+General > Skins > Logo	378	3315	systreeview32		Logo (while playback is off)	content
+General > Skins > Logo	378	3192	group	Logo (while starting playback)		content
+General > Skins > Logo	378	3317	systreeview32		Logo (while starting playback)	content
+General > Skins > Logo	378	3191	group	Logo Settings		content
+General > Skins > Logo	378	3005	combo	Logo position:	Logo Settings	content
+General > Skins > Logo	378	3021	button	Open Logo Folder	Logo Settings	content
+General > Skins > Logo	378	3061	check	Change logo randomly on each loading	Logo Settings	content
+General > Skins > Logo	378	3027	button	Rescan Logo Files	Logo Settings	content
+General > Skins > On Screen Control	434	3383	group	On Screen Control		content
+General > Skins > On Screen Control	434	3005	combo	Method:	On Screen Control	content
+General > Skins > On Screen Control	434	3034	check	Disable auto hide of OSC while mouse cursor is over it	On Screen Control	content
+General > Skins > On Screen Control	434	3043	slider	Opacity (%d%%):	On Screen Control	content
+General > Skins > On Screen Control	434	3384	group	Zoom Skinned Windows		content
+General > Skins > On Screen Control	434	3008	combo	Main:	Zoom Skinned Windows	content
+General > Skins > On Screen Control	434	3009	combo	Playlist:	Zoom Skinned Windows	content
+General > Skins > On Screen Control	434	3010	combo	Control Panel:	Zoom Skinned Windows	content
+General > Skins > On Screen Control	434	3011	combo	Capture:	Zoom Skinned Windows	content
+General > Skins > On Screen Control	434	3012	combo	Broadcast:	Zoom Skinned Windows	content
+General > Skins > On Screen Control	434	3013	combo	Chat/Browser:	Zoom Skinned Windows	content
+General > Skins > On Screen Control	434	3382	group	Color Themes		content
+General > Skins > On Screen Control	434	3006	combo	Color theme:	Color Themes	content
+General > Skins > On Screen Control	434	3066	check	HSB color theme	Color Themes	content
+General > Skins > On Screen Control	434	3067	check	RGB color theme	Color Themes	content
+General > Skins > On Screen Control	434	3028	button	Set Custom Color Theme	Color Themes	content
+General > Skins > Visualization	372	3292	group	Visualization settings		content
+General > Skins > Visualization	372	3040	check	Enable visualization for audio tracks	Visualization settings	content
+General > Skins > Visualization	372	3041	check	Display album art/cover pictures	Visualization settings	content
+General > Skins > Visualization	372	3337	combo	Visualization res./frame:	Visualization settings	content
+General > Skins > Visualization	372	3338	combo	Visualization res./frame:	Visualization settings	content
+General > Skins > Visualization	372	3012	combo	Visualization mode:	Visualization settings	content
+General > Skins > Visualization	372	3018	combo	WMP Visualization:	Visualization settings	content
+General > Skins > Visualization	372	3339	combo	WMP Visualization:	Visualization settings	content
+General > Skins > Visualization	372	3027	button	Settings	Visualization settings	content
+General > Skins > Visualization	372	3042	check	Change visualization	Visualization settings	content
+General > Skins > Visualization	372	3089	edit	every # sec.	Visualization settings	content
+General > Skins > Visualization	372	3021	button	Add...	Visualization settings	content
+General > Skins > Visualization	372	3024	button	Delete	Visualization settings	content
+General > Skins > Visualization	372	3242	listbox	Folder(s) containing pictures for the slideshow:	Visualization settings	content
+General > Skins > Visualization	372	3088	edit	Display Time:	Visualization settings	content
+General > Skins > Visualization	372	3095	edit	Trans speed:	Visualization settings	content
+General > Skins > Visualization	372	3015	combo	Slide Effect:	Visualization settings	content
+General > Skins > Visualization	372	3016	combo	Fill mode:	Visualization settings	content
+General > Skins > Visualization	372	3034	check	Random Slideshow	Visualization settings	content
+General > Skins > Visualization	372	3035	check	Show Filename	Visualization settings	content
+General > Navigation	443	3307	group	Home Folders		content
+General > Navigation	443	3075	edit	OpenBox:	Home Folders	content
+General > Navigation	443	3076	edit	Temp:	Home Folders	content
+General > Navigation	443	3077	edit	Playlist:	Home Folders	content
+General > Navigation	443	3078	edit	Whisper Model:	Home Folders	content
+General > Navigation	443	3079	edit	WebView2 Data:	Home Folders	content
+General > Navigation	443	3295	group	Storage Folders		content
+General > Navigation	443	3070	edit	Image:	Storage Folders	content
+General > Navigation	443	3034	check	Store image files into play folders (if available)	Storage Folders	content
+General > Navigation	443	3073	edit	Video:	Storage Folders	content
+General > Navigation	443	3035	check	Store video files into play folders (if available)	Storage Folders	content
+General > Navigation	443	3071	edit	Audio:	Storage Folders	content
+General > Navigation	443	3036	check	Store audio files into play folders (if available)	Storage Folders	content
+General > Navigation	443	3072	edit	Stream:	Storage Folders	content
+General > Navigation	443	3074	edit	Broadcast:	Storage Folders	content
+General > OSD Messages	375	3191	group	General OSD settings		content
+General > OSD Messages	375	3057	check	Show general info messages	General OSD settings	content
+General > OSD Messages	375	3014	combo	Output:	General OSD settings	content
+General > OSD Messages	375	3013	combo	Horizontal align:	General OSD settings	content
+General > OSD Messages	375	3005	combo	Vertical align:	General OSD settings	content
+General > OSD Messages	375	3099	edit	Top margin:	General OSD settings	content
+General > OSD Messages	375	3095	edit	Right margin:	General OSD settings	content
+General > OSD Messages	375	3040	check	Auto font size	General OSD settings	content
+General > OSD Messages	375	3021	button	Font	General OSD settings	content
+General > OSD Messages	375	3088	edit	Font size:	General OSD settings	content
+General > OSD Messages	375	3022	button	Font	General OSD settings	content
+General > OSD Messages	375	3089	edit	Font Size:	General OSD settings	content
+General > OSD Messages	375	3194	group	Content of Misc Info (Scroll Lock)		content
+General > OSD Messages	375	3061	check	Display misc info	Content of Misc Info (Scroll Lock)	content
+General > OSD Messages	375	3047	check	Operate only in fullscreen	Content of Misc Info (Scroll Lock)	content
+General > OSD Messages	375	3016	combo	Playback time:	Content of Misc Info (Scroll Lock)	content
+General > OSD Messages	375	3052	check	Percent value	Content of Misc Info (Scroll Lock)	content
+General > OSD Messages	375	3056	check	Number of elapsed frames	Content of Misc Info (Scroll Lock)	content
+General > OSD Messages	375	3003	combo	Local time:	Content of Misc Info (Scroll Lock)	content
+General > OSD Messages	375	3045	check	Display only in fullscreen	Content of Misc Info (Scroll Lock)	content
+General > OSD Messages	375	3055	check	Playlist sequence number	Content of Misc Info (Scroll Lock)	content
+General > OSD Messages	375	3044	check	Filename	Content of Misc Info (Scroll Lock)	content
+General > OSD Messages	375	3054	check	Bookmark/chapter info	Content of Misc Info (Scroll Lock)	content
+General > OSD Messages	375	3046	check	System power state	Content of Misc Info (Scroll Lock)	content
+General > OSD Messages	375	3195	group	Content of Short Playback Info (Shift+Tab)		content
+General > OSD Messages	375	3048	check	Filename	Content of Short Playback Info (Shift+Tab)	content
+General > OSD Messages	375	3049	check	Subtitle name	Content of Short Playback Info (Shift+Tab)	content
+General > OSD Messages	375	3050	check	Playback time	Content of Short Playback Info (Shift+Tab)	content
+General > OSD Messages	375	3051	check	Marked section	Content of Short Playback Info (Shift+Tab)	content
+General > OSD Messages	375	3053	check	Codec info	Content of Short Playback Info (Shift+Tab)	content
+General > Dialog Box	436	3191	group	General Dialog Box		content
+General > Dialog Box	436	3058	check	Enable	General Dialog Box	content
+General > Dialog Box	436	3021	button	Font	General Dialog Box	content
+General > Dialog Box	436	3057	check	Font size:	General Dialog Box	content
+General > Dialog Box	436	3088	edit	Font size:	General Dialog Box	content
+General > Dialog Box	436	3017	combo	Charset:	General Dialog Box	content
+General > Dialog Box	436	3192	group	Broadcast Tool Dialog Box		content
+General > Dialog Box	436	3060	check	Enable	Broadcast Tool Dialog Box	content
+General > Dialog Box	436	3022	button	Font	Broadcast Tool Dialog Box	content
+General > Dialog Box	436	3059	check	Font size:	Broadcast Tool Dialog Box	content
+General > Dialog Box	436	3089	edit	Font size:	Broadcast Tool Dialog Box	content
+General > Dialog Box	436	3018	combo	Charset:	Broadcast Tool Dialog Box	content
+General > Dialog Box	436	3193	group	Additional settings		content
+General > Dialog Box	436	3062	check	Use DPI-Awareness (requires restart)	Additional settings	content
+General > Dialog Box	436	3061	check	Use gdipp font renderer (ATextOut.dll)	Additional settings	content
+General > Dialog Box	436	3063	check	Always keep modeless dialog boxes on top	Additional settings	content
+General > Playlist	373	3295	group	Playlist Settings		content
+General > Playlist	373	3012	combo	View items as:	Playlist Settings	content
+General > Playlist	373	3089	edit	Thumbnail pos. (%):	Playlist Settings	content
+General > Playlist	373	3021	button	Font	Playlist Settings	content
+General > Playlist	373	3088	edit	Font Size:	Playlist Settings	content
+General > Playlist	373	3120	check	Show/Overlay icons	Playlist Settings	content
+General > Playlist	373	3104	check	Show numbers	Playlist Settings	content
+General > Playlist	373	3121	check	Show extensions	Playlist Settings	content
+General > Playlist	373	3125	check	Override thumbs with icons	Playlist Settings	content
+General > Playlist	373	3110	check	Show durations	Playlist Settings	content
+General > Playlist	373	3123	check	Show tooltips	Playlist Settings	content
+General > Playlist	373	3097	check	Remember default playlist/recent URLs	Playlist Settings	content
+General > Playlist	373	3129	check	Sort by folder	Playlist Settings	content
+General > Playlist	373	3115	check	Auto add similar files in play folder	Playlist Settings	content
+General > Playlist	373	3117	check	Detect durations after adding files to list	Playlist Settings	content
+General > Playlist	373	3118	check	Insert dragged files at the drop point	Playlist Settings	content
+General > Playlist	373	3122	check	Start instantly to play selected albums	Playlist Settings	content
+General > Playlist	373	3126	check	Open ext DPL files as a temp album	Playlist Settings	content
+General > Playlist	373	3119	check	Append files rather than clear playlist	Playlist Settings	content
+General > Playlist	373	3124	check	Do not add duplicate files	Playlist Settings	content
+General > Playlist	373	3127	check	Move focus to main win on manual play	Playlist Settings	content
+General > Playlist	373	3128	check	Sort dropped files before adding to list	Playlist Settings	content
+General > Playlist	373	3130	check	Support FTP/WebDAV file deletion function	Playlist Settings	content
+General > Playlist	373	3381	group	Hotkeys		content
+General > Playlist	373	3242	syslistview32		Hotkeys	content
+General > Playlist	373	3330	button	Add...	Hotkeys	content
+General > Playlist	373	3024	button	Delete	Hotkeys	content
+General > Playlist	373	3027	button	Edit...	Hotkeys	content
+General > Playlist	373	3028	button	Up	Hotkeys	content
+General > Playlist	373	3022	button	Down	Hotkeys	content
+General > Playlist > Color/View	389	3381	group	Color / View		content
+General > Playlist > Color/View	389	3006	combo	Opacity:	Color / View	content
+General > Playlist > Color/View	389	3046	check	Make only background transparent	Color / View	content
+General > Playlist > Color/View	389	3007	combo	Navigation Pane:	Color / View	content
+General > Playlist > Color/View	389	3091	edit	Width (%):	Color / View	content
+General > Playlist > Color/View	389	3065	check	Show preview in navigation pane	Color / View	content
+General > Playlist > Color/View	389	3008	combo	Content Pane:	Color / View	content
+General > Playlist > Color/View	389	3066	check	Show search box at the top of content pane	Color / View	content
+General > Playlist > Color/View	389	3048	check	Enlarge rollover items	Color / View	content
+General > Playlist > Color/View	389	3070	check	Enlarge the dialog's title bar and border	Color / View	content
+General > Playlist > Color/View	389	3382	group	Font / Window Size / Other		content
+General > Playlist > Color/View	389	3069	edit	Home Folder:	Font / Window Size / Other	content
+General > Playlist > Color/View	389	3021	button		Font / Window Size / Other	content
+General > Playlist > Color/View	389	3088	edit	Font Size:	Font / Window Size / Other	content
+General > Playlist > Color/View	389	3005	combo	Window Size:	Font / Window Size / Other	content
+General > Playlist > Color/View	389	3089	edit	Window Size:	Font / Window Size / Other	content
+General > Playlist > Color/View	389	3090	edit	Line spacing:	Font / Window Size / Other	content
+General > Playlist > Color/View	389	3071	check	Don't close file navigator dialog when an item is selected	Font / Window Size / Other	content
+General > Playlist > Color/View	389	3040	check	Disable mouse rollover feature	Font / Window Size / Other	content
+General > Playlist > Color/View	389	3044	check	Show video thumbnails	Font / Window Size / Other	content
+General > Playlist > Color/View	389	3067	check	Prioritize cover images	Font / Window Size / Other	content
+General > Playlist > Color/View	389	3072	check	Use 16:9 thumbnail ratio	Font / Window Size / Other	content
+General > Playlist > Color/View	389	3041	check	Show "Add all supported files in the navigation path to playlist"	Font / Window Size / Other	content
+General > Playlist > Color/View	389	3042	check	Show "Add all supported files in the navigation path tree to playlist"	Font / Window Size / Other	content
+General > Playlist > Color/View	389	3045	check	Favorites	Font / Window Size / Other	content
+General > Playlist > Color/View	389	3043	check	Current playlist	Font / Window Size / Other	content
+General > Playlist > Color/View	389	3060	check	Recent item list	Font / Window Size / Other	content
+General > Playlist > Color/View	389	3068	check	History	Font / Window Size / Other	content
+General > Playlist > Color/View	389	3064	check	Bookmarks/Chapters	Font / Window Size / Other	content
+General > Playlist > Color/View	389	3061	check	Scenes (Time-based)	Font / Window Size / Other	content
+General > Playlist > Color/View	389	3062	check	Scenes (Marker-based)	Font / Window Size / Other	content
+General > Playlist > Color/View	389	3063	check	Scenes (Subs-based)	Font / Window Size / Other	content
+General > Playlist > Color/View	389	3049	check	Desktop	Font / Window Size / Other	content
+General > Playlist > Color/View	389	3051	check	Links	Font / Window Size / Other	content
+General > Playlist > Color/View	389	3054	check	Music	Font / Window Size / Other	content
+General > Playlist > Color/View	389	3058	check	Downloads	Font / Window Size / Other	content
+General > Playlist > Color/View	389	3052	check	Documents	Font / Window Size / Other	content
+General > Playlist > Color/View	389	3055	check	Saved Games	Font / Window Size / Other	content
+General > Playlist > Color/View	389	3050	check	Videos	Font / Window Size / Other	content
+General > Playlist > Color/View	389	3053	check	Pictures	Font / Window Size / Other	content
+General > Playlist > Color/View	389	3056	check	Favorites	Font / Window Size / Other	content
+General > Playlist > Color/View	389	3057	check	Playlists	Font / Window Size / Other	content
+General > Playlist > Color/View	389	3059	check	Recent Items	Font / Window Size / Other	content
+General > Playlist > Color/View	389	3047	check	Network	Font / Window Size / Other	content
+Playback	358	3285	group	Playback Settings		capture
+Playback	358	3005	combo	Default window size:	Playback Settings	capture
+Playback	358	3273	edit	Default window size:	Playback Settings	capture
+Playback	358	3275	edit	×	Playback Settings	capture
+Playback	358	3095	check	Operate only with the first playback at a runtime	Playback Settings	capture
+Playback	358	3007	combo	Default window aspect ratio:	Playback Settings	capture
+Playback	358	3274	edit	Default window aspect ratio:	Playback Settings	capture
+Playback	358	3276	edit	×	Playback Settings	capture
+Playback	358	3014	combo	Audio speed control:	Playback Settings	capture
+Playback	358	3277	edit	Speed step:	Playback Settings	capture
+Playback	358	3017	combo	When playback failed:	Playback Settings	capture
+Playback	358	3006	combo	Process priority:	Playback Settings	capture
+Playback	358	3015	combo	Repeat video playback:	Playback Settings	capture
+Playback	358	3113	check	Shuffle video playback	Playback Settings	capture
+Playback	358	3016	combo	Repeat audio playback:	Playback Settings	capture
+Playback	358	3114	check	Shuffle audio playback	Playback Settings	capture
+Playback	358	3094	check	Open a file using worker thread	Playback Settings	capture
+Playback	358	3110	check	Auto load external audio files	Playback Settings	capture
+Playback	358	3068	check	Load previous/next files in play folder	Playback Settings	capture
+Playback	358	3084	check	Start playback in centered window	Playback Settings	capture
+Playback	358	3067	check	Auto rotate files based on metadata	Playback Settings	capture
+Playback	358	3072	check	Auto retitle items based on metadata	Playback Settings	capture
+Playback	358	3061	check	Remember video playback positions	Playback Settings	capture
+Playback	358	3071	check	Remember audio playback positions	Playback Settings	capture
+Playback	358	3083	check	Prevent screen saver during playback	Playback Settings	capture
+Playback	358	3089	check	Hide mouse cursor during playback	Playback Settings	capture
+Playback	358	3124	check	Close playback when playlist ends	Playback Settings	capture
+Playback	358	3125	check	Send played files to Recycle Bin	Playback Settings	capture
+Playback	358	3066	check	Show thumbnail previews on nav. bar	Playback Settings	capture
+Playback	358	3069	check	Include title of bookmark/chapter	Playback Settings	capture
+Playback	358	3070	check	Include time info	Playback Settings	capture
+Playback	358	3063	check	Show markers of bookmark/chapter	Playback Settings	capture
+Playback	358	3062	check	Show time info on tooltip	Playback Settings	capture
+Playback	358	3064	check	Pause when seeking with mouse	Playback Settings	capture
+Playback > Fullscreen Mode	456	3288	group	When on fullscreen mode		content
+Playback > Fullscreen Mode	456	3008	combo	Display:	When on fullscreen mode	content
+Playback > Fullscreen Mode	456	3009	combo	Extend video image to:	When on fullscreen mode	content
+Playback > Fullscreen Mode	456	3101	check	Split video image	When on fullscreen mode	content
+Playback > Fullscreen Mode	456	3010	combo	Resolution:	When on fullscreen mode	content
+Playback > Fullscreen Mode	456	3102	check	Pop up the docked window pane even if it's closed in windowed mode	When on fullscreen mode	content
+Playback > Fullscreen Mode	456	3103	check	Fill other monitors black in fullscreen	When on fullscreen mode	content
+Playback > Time Jump	364	3311	group	Time jump settings		content
+Playback > Time Jump	364	3267	edit	Left/Right Arrow Keys:	Time jump settings	content
+Playback > Time Jump	364	3270	edit	Ctrl + Left/Right Arrow Keys:	Time jump settings	content
+Playback > Time Jump	364	3271	edit	Shift + Left/Right Arrow Keys:	Time jump settings	content
+Playback > Time Jump	364	3272	edit	Ctrl + Alt + Left/Right Arrow Keys:	Time jump settings	content
+Playback > Time Jump	364	3034	check	Jump to keyframe	Time jump settings	content
+Playback > Seamless Playback	379	3292	group	Seamless Playback Mode		content
+Playback > Seamless Playback	379	3012	combo	Method:	Seamless Playback Mode	content
+Playback > Seamless Playback	379	3105	edit	Max files to process:	Seamless Playback Mode	content
+Playback > Seamless Playback	379	3041	check	Preload files before starting playback	Seamless Playback Mode	content
+Playback > Seamless Playback	379	3293	group	Playback of Streaming Media (mms, http, rtsp, rtmp, etc.)		content
+Playback > Seamless Playback	379	3040	check	Enable timeshift	Playback of Streaming Media (mms, http, rtsp, rtmp, etc.)	content
+Playback > Seamless Playback	379	3084	slider	Time:	Playback of Streaming Media (mms, http, rtsp, rtmp, etc.)	content
+Playback > Seamless Playback	379	3267	edit	Time:	Playback of Streaming Media (mms, http, rtsp, rtmp, etc.)	content
+Playback > Seamless Playback	379	3381	group	Custom Audio Storage Locations		content
+Playback > Seamless Playback	379	3315	systreeview32		Custom Audio Storage Locations	content
+Playback > Seamless Playback	379	3034	check	Prioritize the specified folders	Custom Audio Storage Locations	content
+Playback > Seamless Playback	379	3021	button	Add...	Custom Audio Storage Locations	content
+Playback > Seamless Playback	379	3024	button	Delete	Custom Audio Storage Locations	content
+Playback > Seamless Playback	379	3022	button	Up	Custom Audio Storage Locations	content
+Playback > Seamless Playback	379	3025	button	Down	Custom Audio Storage Locations	content
+Playback > Window Size	490	3293	group	Window Size Definition (Relative to Desktop Size)		content
+Playback > Window Size	490	3267	edit	Alt+1:	Window Size Definition (Relative to Desktop Size)	content
+Playback > Window Size	490	3268	edit	Alt+2:	Window Size Definition (Relative to Desktop Size)	content
+Playback > Window Size	490	3269	edit	Alt+3:	Window Size Definition (Relative to Desktop Size)	content
+Playback > Window Size	490	3270	edit	Alt+4:	Window Size Definition (Relative to Desktop Size)	content
+Playback > Window Size	490	3292	group	Window Size Limitation		content
+Playback > Window Size	490	3102	check		Window Size Limitation	content
+Playback > Window Size	490	3089	edit	On playback start, when 2x window width	Window Size Limitation	content
+Playback > Window Size	490	3103	check		Window Size Limitation	content
+Playback > Window Size	490	3090	edit		Window Size Limitation	content
+Playback > Window Size	490	3091	edit	Change to 2X Size:	Window Size Limitation	content
+Playback > Scene Browser	471	3381	group	Time-based Scene Browser (Shift+Z)		content
+Playback > Scene Browser	471	3088	edit	Scene size:	Time-based Scene Browser (Shift+Z)	content
+Playback > Scene Browser	471	3004	combo	Scrollbar type:	Time-based Scene Browser (Shift+Z)	content
+Playback > Scene Browser	471	3008	combo	Opacity:	Time-based Scene Browser (Shift+Z)	content
+Playback > Scene Browser	471	3046	check	Make only background transparent	Time-based Scene Browser (Shift+Z)	content
+Playback > Scene Browser	471	3003	combo	Time interval:	Time-based Scene Browser (Shift+Z)	content
+Playback > Scene Browser	471	3034	check	Close on scene changes	Time-based Scene Browser (Shift+Z)	content
+Playback > Scene Browser	471	3382	group	Marker-based Scene Browser (Alt+Z)		content
+Playback > Scene Browser	471	3089	edit	Scene size:	Marker-based Scene Browser (Alt+Z)	content
+Playback > Scene Browser	471	3006	combo	Scrollbar type:	Marker-based Scene Browser (Alt+Z)	content
+Playback > Scene Browser	471	3009	combo	Opacity:	Marker-based Scene Browser (Alt+Z)	content
+Playback > Scene Browser	471	3047	check	Make only background transparent	Marker-based Scene Browser (Alt+Z)	content
+Playback > Scene Browser	471	3038	check	Prompt for time-based one when there is no marker to display	Marker-based Scene Browser (Alt+Z)	content
+Playback > Scene Browser	471	3036	check	Close on scene changes	Marker-based Scene Browser (Alt+Z)	content
+Playback > Scene Browser	471	3383	group	Subtitle-based Scene Browser		content
+Playback > Scene Browser	471	3090	edit	Scene size:	Subtitle-based Scene Browser	content
+Playback > Scene Browser	471	3007	combo	Scrollbar type:	Subtitle-based Scene Browser	content
+Playback > Scene Browser	471	3010	combo	Opacity:	Subtitle-based Scene Browser	content
+Playback > Scene Browser	471	3048	check	Make only background transparent	Subtitle-based Scene Browser	content
+Playback > Scene Browser	471	3041	check	Prompt for time-based one when there are no subtitles to display	Subtitle-based Scene Browser	content
+Playback > Scene Browser	471	3039	check	Close on scene changes	Subtitle-based Scene Browser	content
+Subtitles	353	3285	group	Subtitle Settings		capture
+Subtitles	353	3003	combo	Output:	Subtitle Settings	capture
+Subtitles	353	3009	combo	Display engine:	Subtitle Settings	capture
+Subtitles	353	3007	combo	Font rendering:	Subtitle Settings	capture
+Subtitles	353	3008	combo	ASS/SSA subtitle style:	Subtitle Settings	capture
+Subtitles	353	3041	check	Absolute size	Subtitle Settings	capture
+Subtitles	353	3042	check	Relative size	Subtitle Settings	capture
+Subtitles	353	3043	check	Font face	Subtitle Settings	capture
+Subtitles	353	3044	check	Font color	Subtitle Settings	capture
+Subtitles	353	3045	check	All fonts	Subtitle Settings	capture
+Subtitles	353	3046	check	All styles	Subtitle Settings	capture
+Subtitles	353	3040	check	Show subtitles	Subtitle Settings	capture
+Subtitles	353	3119	check	Use smooth output on VMR/EVR surface	Subtitle Settings	capture
+Subtitles	353	3066	check	Correct AR with subs on the video itself	Subtitle Settings	capture
+Subtitles	353	3124	check	Ovrd center-align to left if starts with a -	Subtitle Settings	capture
+Subtitles	353	3126	check	Add a line break when subs have 1 line	Subtitle Settings	capture
+Subtitles	353	3130	check	Load ext font files from fonts folder	Subtitle Settings	capture
+Subtitles	353	3129	check	Process subtitles with online videos	Subtitle Settings	capture
+Subtitles	353	3131	check	Load only subs that match filenames	Subtitle Settings	capture
+Subtitles	353	3067	check	Load any subs in folder if none match	Subtitle Settings	capture
+Subtitles	353	3054	check	Capitalize only 1st letter in CC/TTX subs	Subtitle Settings	capture
+Subtitles	353	3049	check	Auto reload subtitles on file changes	Subtitle Settings	capture
+Subtitles	353	3059	check	Display bitmap subs outside the video	Subtitle Settings	capture
+Subtitles	353	3057	check	Display text subs inside the video	Subtitle Settings	capture
+Subtitles	353	3113	check	Force subs to display under the video	Subtitle Settings	capture
+Subtitles	353	3123	check	Override placement of bitmap subs	Subtitle Settings	capture
+Subtitles	353	3047	check	Add <BR> tags in SMI subtitles	Subtitle Settings	capture
+Subtitles	353	3048	check	Ignore the paragraph tags (<BR>)	Subtitle Settings	capture
+Subtitles	353	3050	check	Adjust time offsets in SMI subtitles	Subtitle Settings	capture
+Subtitles	353	3053	check	Enable subtitle animations	Subtitle Settings	capture
+Subtitles	353	3127	check	Remove left and right whitespaces	Subtitle Settings	capture
+Subtitles	353	3128	check	Remove whitespace lines	Subtitle Settings	capture
+Subtitles	353	3132	check	Remove {[ ], ( )}	Subtitle Settings	capture
+Subtitles	353	3004	combo	Max texture res.:	Subtitle Settings	capture
+Subtitles	353	3089	edit	Scale bitmap subtitles:	Subtitle Settings	capture
+Subtitles	353	3006	combo	Dynamic texture:	Subtitle Settings	capture
+Subtitles	353	3088	edit	Sub pictures to buffer:	Subtitle Settings	capture
+Subtitles > Font Style	383	3286	group	Font		content
+Subtitles > Font Style	383	3021	button	Font	Font	content
+Subtitles > Font Style	383	3022	button	Font	Font	content
+Subtitles > Font Style	383	3038	check	Restrict fonts to Korean alphabet	Font	content
+Subtitles > Font Style	383	3003	combo	Charset:	Font	content
+Subtitles > Font Style	383	3099	edit	Scale X:	Font	content
+Subtitles > Font Style	383	3105	edit	Scale Y:	Font	content
+Subtitles > Font Style	383	3088	edit	Size:	Font	content
+Subtitles > Font Style	383	3077	edit	Letter spacing:	Font	content
+Subtitles > Font Style	383	3095	edit	Line spacing:	Font	content
+Subtitles > Font Style	383	3096	edit	Ruby position:	Font	content
+Subtitles > Font Style	383	3290	group	Colors & Transparency & Outline & Shadow		content
+Subtitles > Font Style	383	3045	slider	Text:	Colors & Transparency & Outline & Shadow	content
+Subtitles > Font Style	383	3046	slider	Outline:	Colors & Transparency & Outline & Shadow	content
+Subtitles > Font Style	383	3069	edit	Outline:	Colors & Transparency & Outline & Shadow	content
+Subtitles > Font Style	383	3047	slider	2nd Outline:	Colors & Transparency & Outline & Shadow	content
+Subtitles > Font Style	383	3072	edit	2nd Outline:	Colors & Transparency & Outline & Shadow	content
+Subtitles > Font Style	383	3048	slider	Shadow:	Colors & Transparency & Outline & Shadow	content
+Subtitles > Font Style	383	3082	edit	Shadow:	Colors & Transparency & Outline & Shadow	content
+Subtitles > Font Style	383	3070	edit	Outline blur:	Colors & Transparency & Outline & Shadow	content
+Subtitles > Font Style	383	3071	edit	Outline gaussian blur:	Colors & Transparency & Outline & Shadow	content
+Subtitles > Font Style	383	3036	check	Use outline background (uses 1st outline color)	Colors & Transparency & Outline & Shadow	content
+Subtitles > Font Style	383	3035	check	Scale outline/shadow	Colors & Transparency & Outline & Shadow	content
+Subtitles > Font Style	383	3037	check	Scale 2nd outline	Colors & Transparency & Outline & Shadow	content
+Subtitles > Font Style	383	3298	group	Position & Margin		content
+Subtitles > Font Style	383	3005	combo	Paragraph align:	Position & Margin	content
+Subtitles > Font Style	383	3271	edit	Horizontal pos(%):	Position & Margin	content
+Subtitles > Font Style	383	3253	edit	Vertical pos(%):	Position & Margin	content
+Subtitles > Font Style	383	3267	edit	Top margin:	Position & Margin	content
+Subtitles > Font Style	383	3247	edit	Left margin:	Position & Margin	content
+Subtitles > Font Style	383	3251	edit	Right margin:	Position & Margin	content
+Subtitles > Font Style	383	3272	edit	Bottom margin:	Position & Margin	content
+Subtitles > Font Style	383	3313	group	Opaque box		content
+Subtitles > Font Style	383	3034	check	Enable	Opaque box	content
+Subtitles > Font Style	383	3044	slider	Enable	Opaque box	content
+Subtitles > Fade/3D/Location	368	3384	group	Subtitle Fade Effect		content
+Subtitles > Fade/3D/Location	368	3339	check	Enable	Subtitle Fade Effect	content
+Subtitles > Fade/3D/Location	368	3112	edit	Fade In:	Subtitle Fade Effect	content
+Subtitles > Fade/3D/Location	368	3114	edit	Fade Out:	Subtitle Fade Effect	content
+Subtitles > Fade/3D/Location	368	3385	group	Stereo 3D Subtitle		content
+Subtitles > Fade/3D/Location	368	3007	combo	Mode:	Stereo 3D Subtitle	content
+Subtitles > Fade/3D/Location	368	3006	combo	Scaling:	Stereo 3D Subtitle	content
+Subtitles > Fade/3D/Location	368	3116	edit	Width depth:	Stereo 3D Subtitle	content
+Subtitles > Fade/3D/Location	368	3117	edit	Height depth:	Stereo 3D Subtitle	content
+Subtitles > Fade/3D/Location	368	3143	check	Override depth of 3D subtitles	Stereo 3D Subtitle	content
+Subtitles > Fade/3D/Location	368	3142	check	Auto determine 3D subtitle mode from video filename	Stereo 3D Subtitle	content
+Subtitles > Fade/3D/Location	368	3381	group	Custom Subtitle Storage Locations		content
+Subtitles > Fade/3D/Location	368	3315	systreeview32	PotP only looks in play folder for matching subs unless extra folders are specified here.	Custom Subtitle Storage Locations	content
+Subtitles > Fade/3D/Location	368	3034	check	Prioritize the specified folders	Custom Subtitle Storage Locations	content
+Subtitles > Fade/3D/Location	368	3021	button	Add...	Custom Subtitle Storage Locations	content
+Subtitles > Fade/3D/Location	368	3024	button	Delete	Custom Subtitle Storage Locations	content
+Subtitles > Fade/3D/Location	368	3022	button	Up	Custom Subtitle Storage Locations	content
+Subtitles > Fade/3D/Location	368	3025	button	Down	Custom Subtitle Storage Locations	content
+Subtitles > Language/Sync/Other	442	3382	group	Language		content
+Subtitles > Language/Sync/Other	442	3003	combo	Subtitle priority:	Language	content
+Subtitles > Language/Sync/Other	442	3069	edit	Preferred languages:	Language	content
+Subtitles > Language/Sync/Other	442	3384	check	Don't auto select non-preferred subtitle languages	Language	content
+Subtitles > Language/Sync/Other	442	3070	edit	2nd preferred languages:	Language	content
+Subtitles > Language/Sync/Other	442	3117	edit	2nd subtitle position:	Language	content
+Subtitles > Language/Sync/Other	442	3044	check	Prefer multiple languages of SMI subtitles	Language	content
+Subtitles > Language/Sync/Other	442	3061	check	Invert screen position of multiple languages if preferred langs doesn't match	Language	content
+Subtitles > Language/Sync/Other	442	3062	check	Turn on 2nd subtitle output when different subtitles are available	Language	content
+Subtitles > Language/Sync/Other	442	3064	check	Show auto-generated subtitles	Language	content
+Subtitles > Language/Sync/Other	442	3063	check	Remember subtitle track selections	Language	content
+Subtitles > Language/Sync/Other	442	3383	group	Synchronization / Other		content
+Subtitles > Language/Sync/Other	442	3111	edit	Subtitle sync steps:	Synchronization / Other	content
+Subtitles > Language/Sync/Other	442	3112	edit	Subtitle sync steps:	Synchronization / Other	content
+Subtitles > Language/Sync/Other	442	3113	edit	Subtitle sync steps:	Synchronization / Other	content
+Subtitles > Language/Sync/Other	442	3380	check	Keep subtitle sync changes over whole runtime	Synchronization / Other	content
+Subtitles > Language/Sync/Other	442	3116	edit	Max showing period:	Synchronization / Other	content
+Subtitles > Language/Sync/Other	442	3115	edit	Min showing period:	Synchronization / Other	content
+Subtitles > Language/Sync/Other	442	3321	check	Max showing period:	Synchronization / Other	content
+Subtitles > Language/Sync/Other	442	3319	check	Min showing period:	Synchronization / Other	content
+Subtitles > Language/Sync/Other	442	3385	check	Allow overlapping subtitle time periods	Synchronization / Other	content
+Subtitles > Subtitle Browser	478	3381	group	Subtitle Browser Settings		content
+Subtitles > Subtitle Browser	478	3004	combo	Time visibility:	Subtitle Browser Settings	content
+Subtitles > Subtitle Browser	478	3003	combo	Sync visibility:	Subtitle Browser Settings	content
+Subtitles > Subtitle Browser	478	3008	combo	Opacity:	Subtitle Browser Settings	content
+Subtitles > Subtitle Browser	478	3021	button	Font	Subtitle Browser Settings	content
+Subtitles > Subtitle Browser	478	3088	edit	Font size:	Subtitle Browser Settings	content
+Subtitles > Subtitle Browser	478	3005	combo	Display lines:	Subtitle Browser Settings	content
+Subtitles > Subtitle Browser	478	3046	check	Make only BG transparent	Subtitle Browser Settings	content
+Subtitles > Subtitle Browser	478	3036	check	Auto move to current sync	Subtitle Browser Settings	content
+Subtitles > Online Subtitle Database	460	3385	group	Online Subtitle Database		content
+Subtitles > Online Subtitle Database	460	3004	combo	Auto search:	Online Subtitle Database	content
+Subtitles > Online Subtitle Database	460	3005	combo	After searching:	Online Subtitle Database	content
+Subtitles > Online Subtitle Database	460	3069	edit	Exclusion patterns:	Online Subtitle Database	content
+Subtitles > Online Subtitle Database	460	3036	check	Show the dialog when subtitles are found with auto search	Online Subtitle Database	content
+Subtitles > Online Subtitle Database	460	3040	check	Find only subtitles that exactly match filenames	Online Subtitle Database	content
+Subtitles > Online Subtitle Database	460	3242	syslistview32		Online Subtitle Database	content
+Subtitles > Online Subtitle Database	460	3037	button	Open file location	Online Subtitle Database	content
+Subtitles > Online Subtitle Database	460	3035	button	Reload files	Online Subtitle Database	content
+Subtitles > Online Subtitle Database	460	3038	button	Up	Online Subtitle Database	content
+Subtitles > Online Subtitle Database	460	3027	button	Down	Online Subtitle Database	content
+Subtitles > Online Subtitle Database	460	3039	button	Config File...	Online Subtitle Database	content
+Subtitles > Online Subtitle Database	460	3033	button	Setting...	Online Subtitle Database	content
+Subtitles > Online Subtitle Database	460	3034	button	Info	Online Subtitle Database	content
+Subtitles > Online Subtitle Database	460	3026	button	Test	Online Subtitle Database	content
+Subtitles > Subtitle Translation	493	3385	group	Online Subtitle Translation		content
+Subtitles > Subtitle Translation	493	3006	combo	Auto translation:	Online Subtitle Translation	content
+Subtitles > Subtitle Translation	493	3070	edit	Lang(s) to translate:	Online Subtitle Translation	content
+Subtitles > Subtitle Translation	493	3007	combo	Screen placement:	Online Subtitle Translation	content
+Subtitles > Subtitle Translation	493	3008	combo	Translation engine:	Online Subtitle Translation	content
+Subtitles > Subtitle Translation	493	3242	syslistview32	Translation engine:	Online Subtitle Translation	content
+Subtitles > Subtitle Translation	493	3037	button	Open file location	Online Subtitle Translation	content
+Subtitles > Subtitle Translation	493	3035	button	Reload files	Online Subtitle Translation	content
+Subtitles > Subtitle Translation	493	3036	button	Up	Online Subtitle Translation	content
+Subtitles > Subtitle Translation	493	3027	button	Down	Online Subtitle Translation	content
+Subtitles > Subtitle Translation	493	3004	combo	Source:	Online Subtitle Translation	content
+Subtitles > Subtitle Translation	493	3005	combo	Translation:	Online Subtitle Translation	content
+Subtitles > Subtitle Translation	493	3069	edit	Test:	Online Subtitle Translation	content
+Subtitles > Subtitle Translation	493	3026	button	Test	Online Subtitle Translation	content
+Subtitles > Subtitle Translation	493	3033	button	Setting...	Online Subtitle Translation	content
+Subtitles > Subtitle Translation	493	3034	button	Info	Online Subtitle Translation	content
+Subtitles > Word Searching	466	3384	group	Online Word Searching		content
+Subtitles > Word Searching	466	3004	combo	Word Search Usage:	Online Word Searching	content
+Subtitles > Word Searching	466	3005	combo	Browser:	Online Word Searching	content
+Subtitles > Word Searching	466	3063	check	Bring the browser window to front when a word is searched	Online Word Searching	content
+Subtitles > Word Searching	466	3242	syslistview32		Online Word Searching	content
+Subtitles > Word Searching	466	3062	check	Pause play when searching	Online Word Searching	content
+Subtitles > Word Searching	466	3021	button	Add...	Online Word Searching	content
+Subtitles > Word Searching	466	3023	button	Edit...	Online Word Searching	content
+Subtitles > Word Searching	466	3024	button	Delete	Online Word Searching	content
+Subtitles > Word Searching	466	3022	button	Up	Online Word Searching	content
+Subtitles > Word Searching	466	3025	button	Down	Online Word Searching	content
+Device > Screen Capture	428	3285	group	Screen Capture Settings		content
+Device > Screen Capture	428	3047	combo	Method:	Screen Capture Settings	content
+Device > Screen Capture	428	3267	edit	Resolution, FPS:	Screen Capture Settings	content
+Device > Screen Capture	428	3271	edit	×	Screen Capture Settings	content
+Device > Screen Capture	428	3021	button	▼	Screen Capture Settings	content
+Device > Screen Capture	428	3013	combo	×	Screen Capture Settings	content
+Device > Screen Capture	428	3063	button	Show Capture1 Area	Screen Capture Settings	content
+Device > Screen Capture	428	3068	button	Show Capture2 Area	Screen Capture Settings	content
+Device > Screen Capture	428	3064	button	Set Capture1 Area	Screen Capture Settings	content
+Device > Screen Capture	428	3069	button	Set Capture2 Area	Screen Capture Settings	content
+Device > Screen Capture	428	3042	button	Screen Capture Settings...	Screen Capture Settings	content
+Device > Screen Capture	428	3287	group	Audio Device Settings		content
+Device > Screen Capture	428	3046	combo	Device:	Audio Device Settings	content
+Device > Screen Capture	428	3051	combo	Input:	Audio Device Settings	content
+Device > Screen Capture	428	3034	check	Preview audio	Audio Device Settings	content
+Device > Webcam	427	3285	group	Video capture device		content
+Device > Webcam	427	3003	combo	Device:	Video capture device	content
+Device > Webcam	427	3005	combo	Type:	Video capture device	content
+Device > Webcam	427	3008	combo	Format:	Video capture device	content
+Device > Webcam	427	3006	combo	Audio:	Video capture device	content
+Device > Webcam	427	3024	button	Rescan Devices	Video capture device	content
+Device > Webcam	427	3291	group	Audio capture device		content
+Device > Webcam	427	3016	combo	Device:	Audio capture device	content
+Device > Webcam	427	3019	combo	Input:	Audio capture device	content
+Device > Webcam	427	3034	check	Preview audio	Audio capture device	content
+Device > Webcam	427	3295	group	Advanced Settings		content
+Device > Webcam	427	3040	check	Enable timeshift	Advanced Settings	content
+Device > Analog TV (WDM)	380	3285	group	Video capture device		content
+Device > Analog TV (WDM)	380	3003	combo	Device:	Video capture device	content
+Device > Analog TV (WDM)	380	3005	combo	Type:	Video capture device	content
+Device > Analog TV (WDM)	380	3008	combo	Format:	Video capture device	content
+Device > Analog TV (WDM)	380	3009	combo	Input:	Video capture device	content
+Device > Analog TV (WDM)	380	3055	edit	Channel:	Video capture device	content
+Device > Analog TV (WDM)	380	3006	combo	Audio:	Video capture device	content
+Device > Analog TV (WDM)	380	3024	button	Rescan Devices	Video capture device	content
+Device > Analog TV (WDM)	380	3027	button	Other Settings	Video capture device	content
+Device > Analog TV (WDM)	380	3291	group	Audio capture device		content
+Device > Analog TV (WDM)	380	3016	combo	Device:	Audio capture device	content
+Device > Analog TV (WDM)	380	3019	combo	Input:	Audio capture device	content
+Device > Analog TV (WDM)	380	3034	check	Preview audio	Audio capture device	content
+Device > Analog TV (WDM)	380	3295	group	Advanced Settings		content
+Device > Analog TV (WDM)	380	3040	check	Enable timeshift	Advanced Settings	content
+Device > Digital TV (BDA)	381	3285	group	BDA (HDTV) Devices		content
+Device > Digital TV (BDA)	381	3003	combo	Device:	BDA (HDTV) Devices	content
+Device > Digital TV (BDA)	381	3004	combo	Device Type:	BDA (HDTV) Devices	content
+Device > Digital TV (BDA)	381	3005	combo	Demuxer:	BDA (HDTV) Devices	content
+Device > Digital TV (BDA)	381	3070	edit	CLSID:	BDA (HDTV) Devices	content
+Device > Digital TV (BDA)	381	3034	check	Use Microsoft standard tuning method	BDA (HDTV) Devices	content
+Device > Digital TV (BDA)	381	3035	check	Use new connection (Recommended)	BDA (HDTV) Devices	content
+Device > Digital TV (BDA)	381	3288	group	Timeshift		content
+Device > Digital TV (BDA)	381	3040	check	Enable timeshift	Timeshift	content
+Device > Digital TV (BDA)	381	3084	slider	Time:	Timeshift	content
+Device > Digital TV (BDA)	381	3267	edit	Time:	Timeshift	content
+Device > Digital TV (BDA)	381	3291	group	Other		content
+Device > Digital TV (BDA)	381	3041	check	Enable background EPG parser	Other	content
+Device > TV Channels	370	3387	group	TV channel settings		content
+Device > TV Channels	370	3003	combo	Device type:	TV channel settings	content
+Device > TV Channels	370	3040	button	Add/Edit frequency lists...	TV channel settings	content
+Device > TV Channels	370	3242	syslistview32	Device type:	TV channel settings	content
+Device > TV Channels	370	3105	edit	Channel no:	TV channel settings	content
+Device > TV Channels	370	3111	edit	Video PID:	TV channel settings	content
+Device > TV Channels	370	3116	edit	Audio PID:	TV channel settings	content
+Device > TV Channels	370	3069	edit	Channel title:	TV channel settings	content
+Device > TV Channels	370	3005	combo	Channel title:	TV channel settings	content
+Device > TV Channels	370	3013	combo	Deinterlacing:	TV channel settings	content
+Device > TV Channels	370	3039	button	Rescan channel	TV channel settings	content
+Device > TV Channels	370	3106	edit	Frequency (KHz):	TV channel settings	content
+Device > TV Channels	370	3107	edit	Bandwidth (KHz):	TV channel settings	content
+Device > TV Channels	370	3108	edit	Symbol rate:	TV channel settings	content
+Device > TV Channels	370	3004	combo	Polarity:	TV channel settings	content
+Device > TV Channels	370	3021	button	Auto scan...	TV channel settings	content
+Device > TV Channels	370	3024	button	Add...	TV channel settings	content
+Device > TV Channels	370	3035	button	Add current ch	TV channel settings	content
+Device > TV Channels	370	3027	button	Delete	TV channel settings	content
+Device > TV Channels	370	3029	button	Clear all	TV channel settings	content
+Device > TV Channels	370	3031	button	Up	TV channel settings	content
+Device > TV Channels	370	3033	button	Down	TV channel settings	content
+Device > EPG	482	3381	group	EPG (Electronic Program Guide) Browser Settings		content
+Device > EPG	482	3008	combo	Opacity:	EPG (Electronic Program Guide) Browser Settings	content
+Device > EPG	482	3046	check	Make only BG transparent	EPG (Electronic Program Guide) Browser Settings	content
+Device > EPG	482	3021	button	Font	EPG (Electronic Program Guide) Browser Settings	content
+Device > EPG	482	3088	edit	Font size:	EPG (Electronic Program Guide) Browser Settings	content
+Device > DVD/Blu-ray	382	3291	group	DVD Settings		content
+Device > DVD/Blu-ray	382	3007	combo	Location:	DVD Settings	content
+Device > DVD/Blu-ray	382	3069	edit	Custom Location:	DVD Settings	content
+Device > DVD/Blu-ray	382	3008	combo	Navigator:	DVD Settings	content
+Device > DVD/Blu-ray	382	3070	edit	CLSID:	DVD Settings	content
+Device > DVD/Blu-ray	382	3003	combo	Menu Language:	DVD Settings	content
+Device > DVD/Blu-ray	382	3005	combo	Audio Language:	DVD Settings	content
+Device > DVD/Blu-ray	382	3006	combo	Subtitle Language:	DVD Settings	content
+Device > DVD/Blu-ray	382	3034	check	Display DVD Subtitles	DVD Settings	content
+Device > DVD/Blu-ray	382	3009	combo	Auto Resume:	DVD Settings	content
+Device > DVD/Blu-ray	382	3010	combo	Auto Skip:	DVD Settings	content
+Device > DVD/Blu-ray	382	3294	group	Blu-ray Settings		content
+Device > DVD/Blu-ray	382	3004	combo	Playback method:	Blu-ray Settings	content
+Device > DVD/Blu-ray	382	3267	edit	Min chapter processing:	Blu-ray Settings	content
+Device > CD/DVD-ROM	429	3034	check	Read table of contents (.toc file) of an Audio CD	CD/DVD-ROM Management	content
+Device > CD/DVD-ROM	429	3292	group	CD/DVD-ROM Management		content
+Device > CD/DVD-ROM	429	3035	check	Show volume labels of the drives in Open Menu	CD/DVD-ROM Management	content
+Device > CD/DVD-ROM	429	3293	group	Device Detection		content
+Device > CD/DVD-ROM	429	3036	check	Search for Kernel Streaming (KS) devices	Device Detection	content
+Filter Control	359	3315	group	Information		capture
+Filter Control	359	3311	group	Custom Filter Manager		capture
+Filter Control	359	3242	syslistview32	The filters that are specified here are considered on all presets.	Custom Filter Manager	capture
+Filter Control	359	3021	button	Add registered filter...	Custom Filter Manager	capture
+Filter Control	359	3031	button	Add external filter...	Custom Filter Manager	capture
+Filter Control	359	3033	button	Delete	Custom Filter Manager	capture
+Filter Control	359	3109	button	Filter information	Custom Filter Manager	capture
+Filter Control	359	3035	button	Up	Custom Filter Manager	capture
+Filter Control	359	3114	button	Down	Custom Filter Manager	capture
+Filter Control	359	3381	group	Priority		capture
+Filter Control	359	3209	radio	Block	Priority	capture
+Filter Control	359	3211	radio	Prefer	Priority	capture
+Filter Control	359	3214	radio	Set merit:	Priority	capture
+Filter Control	359	3069	edit	Set merit:	Priority	capture
+Filter Control > Source/Splitter	350	3311	group	Source/Splitter Filter		capture
+Filter Control > Source/Splitter	350	3110	button	Built-in Source/Splitter Settings	Source/Splitter Filter	capture
+Filter Control > Source/Splitter	350	3109	button	Filter Management	Source/Splitter Filter	capture
+Filter Control > OpenCodec	465	3315	group	Information		capture
+Filter Control > OpenCodec	465	3313	group	Available OpenCodec Presentations		capture
+Filter Control > Video Decoder	360	3311	group	Video Decoder		capture
+Filter Control > Video Decoder	360	3110	button	Built-in Video Codec/DXVA Settings	Video Decoder	capture
+Filter Control > Video Decoder	360	3109	button	Filter Management	Video Decoder	capture
+Filter Control > Audio Decoder	361	3311	group	Audio Decoder		capture
+Filter Control > Audio Decoder	361	3110	button	Built-in Audio Codec/Pass-through Settings	Audio Decoder	capture
+Filter Control > Audio Decoder	361	3109	button	Filter Management	Audio Decoder	capture
+Filter Control > Transform Filters	362	3315	group	Built-in Video/Audio Transform Filter Information		content
+Filter Control > Transform Filters	362	3313	group	Built-in Video Transform Filter Settings		content
+Filter Control > Transform Filters	362	3005	combo	Video Transform Filter Usage:	Built-in Video Transform Filter Settings	content
+Filter Control > Transform Filters	362	3041	check	If FourCC matches with	Built-in Video Transform Filter Settings	content
+Filter Control > Transform Filters	362	3069	edit	If FourCC matches with	Built-in Video Transform Filter Settings	content
+Filter Control > Transform Filters	362	3042	check	If file extension matches with	Built-in Video Transform Filter Settings	content
+Filter Control > Transform Filters	362	3070	edit	If file extension matches with	Built-in Video Transform Filter Settings	content
+Filter Control > Transform Filters	362	3043	check	If FPS is smaller than	Built-in Video Transform Filter Settings	content
+Filter Control > Transform Filters	362	3267	edit	If FPS is smaller than	Built-in Video Transform Filter Settings	content
+Filter Control > Transform Filters	362	3045	check	If input size is smaller than	Built-in Video Transform Filter Settings	content
+Filter Control > Transform Filters	362	3268	edit	If input size is smaller than	Built-in Video Transform Filter Settings	content
+Filter Control > Transform Filters	362	3269	edit	×	Built-in Video Transform Filter Settings	content
+Filter Control > Transform Filters	362	3006	combo	×	Built-in Video Transform Filter Settings	content
+Filter Control > Transform Filters	362	3046	check	If subtitles don't exist	Built-in Video Transform Filter Settings	content
+Filter Control > Transform Filters	362	3048	check	Use Built-in Video Stream Switcher	Built-in Video Transform Filter Settings	content
+Filter Control > Transform Filters	362	3314	group	Built-in Audio Transform Filter Settings		content
+Filter Control > Transform Filters	362	3044	check	Use Built-in Audio Transform Filter (Recommended)	Built-in Audio Transform Filter Settings	content
+Filter Control > Transform Filters	362	3047	check	Use Built-in Audio Stream Switcher	Built-in Audio Transform Filter Settings	content
+Filter Control > Transform Filters	362	3049	check	Use Built-in Audio Stream Switcher (Alternative)	Built-in Audio Transform Filter Settings	content
+Video	355	3383	group	Video Output Settings		capture
+Video	355	3036	combo	Video Renderer:	Video Output Settings	capture
+Video	355	3081	combo	VMR Surface:	Video Output Settings	capture
+Video	355	3076	combo	Direct3D Render Device:	Video Output Settings	capture
+Video	355	3075	combo	Direct3D Presentation:	Video Output Settings	capture
+Video	355	3073	combo	Resizer:	Video Output Settings	capture
+Video	355	3074	combo	Buffers:	Video Output Settings	capture
+Video	355	3077	combo	Surface Format:	Video Output Settings	capture
+Video	355	3062	check	10-bit output	Video Output Settings	capture
+Video	355	3341	combo	Fullscreen exclusive mode:	Video Output Settings	capture
+Video	355	3061	check	Restrict mouse cursor to current display	Video Output Settings	capture
+Video	355	3040	check	Enable VMR Mixing Mode	Video Output Settings	capture
+Video	355	3052	check	Use limited (16-235) color range	Video Output Settings	capture
+Video	355	3055	check	D3D11 GPU Super Resolution	Video Output Settings	capture
+Video	355	3056	check	D3D11 GPU RTX Video HDR	Video Output Settings	capture
+Video	355	3054	check	Use H/W HDR output mode	Video Output Settings	capture
+Video	355	3048	check	Use a new vsync method	Video Output Settings	capture
+Video	355	3049	check	Don't wait for vertical sync	Video Output Settings	capture
+Video	355	3047	check	Use Vsync time calculate	Video Output Settings	capture
+Video	355	3344	check	Enable flip mode compatibility	Video Output Settings	capture
+Video	355	3053	check	Disable 3D subtitle depth correction	Video Output Settings	capture
+Video	355	3382	group	Overlay Mixer Settings		capture
+Video	355	3343	combo	Color key:	Overlay Mixer Settings	capture
+Video	355	3066	check	Use exclusive screen mode (fixes problems when using DXVA on 2nd display)	Overlay Mixer Settings	capture
+Video > Aspect Ratio	432	3292	group	Aspect Ratio		content
+Video > Aspect Ratio	432	3012	combo	AR Mode:	Aspect Ratio	content
+Video > Aspect Ratio	432	3013	combo	Override AR:	Aspect Ratio	content
+Video > Aspect Ratio	432	3021	button	Set Custom AR	Aspect Ratio	content
+Video > Aspect Ratio	432	3014	combo	Output Device:	Aspect Ratio	content
+Video > Aspect Ratio	432	3040	check	Adjust AR to Window Size	Aspect Ratio	content
+Video > Aspect Ratio	432	3294	group	Aspect Ratio Mode in Fullscreen Mode		content
+Video > Aspect Ratio	432	3043	check	Enable the selected Aspect Ratio Mode when if the margin around the video	Aspect Ratio Mode in Fullscreen Mode	content
+Video > Aspect Ratio	432	3273	edit	- is less than	Aspect Ratio Mode in Fullscreen Mode	content
+Video > Aspect Ratio	432	3016	combo	%	Aspect Ratio Mode in Fullscreen Mode	content
+Video > Aspect Ratio	432	3293	group	Bottom Margin for Subtitles		content
+Video > Aspect Ratio	432	3041	check	Provide the specified area to force subtitle output in the margin at the bottom	Bottom Margin for Subtitles	content
+Video > Aspect Ratio	432	3044	check	Provide bottom margin by resizing image	Bottom Margin for Subtitles	content
+Video > Aspect Ratio	432	3042	check	Operate only in fullscreen mode	Bottom Margin for Subtitles	content
+Video > Aspect Ratio	432	3015	combo	As Bottom Margin:	Bottom Margin for Subtitles	content
+Video > Colorspaces	384	3296	group	Supported Colorspaces / YCbCr <-> RGB conversion		content
+Video > Colorspaces	384	3100	combo	Output color space:	Supported Colorspaces / YCbCr <-> RGB conversion	content
+Video > Colorspaces	384	3101	combo	Direct conversion:	Supported Colorspaces / YCbCr <-> RGB conversion	content
+Video > Colorspaces	384	3139	check	Multi-threaded conversion	Supported Colorspaces / YCbCr <-> RGB conversion	content
+Video > Colorspaces	384	3138	check	High quality YUY2/RGB24/32 conversion	Supported Colorspaces / YCbCr <-> RGB conversion	content
+Video > Colorspaces	384	3168	combo	YCbCr <-> RGB conv. matrix:	Supported Colorspaces / YCbCr <-> RGB conversion	content
+Video > Colorspaces	384	3176	combo	YCbCr processing area:	Supported Colorspaces / YCbCr <-> RGB conversion	content
+Video > Colorspaces	384	3180	combo	RGB processing area:	Supported Colorspaces / YCbCr <-> RGB conversion	content
+Video > Colorspaces	384	3289	group	Color Controls		content
+Video > Colorspaces	384	3045	slider	Brightness:	Color Controls	content
+Video > Colorspaces	384	3322	edit	Brightness:	Color Controls	content
+Video > Colorspaces	384	3043	slider	Contrast:	Color Controls	content
+Video > Colorspaces	384	3346	edit	Contrast:	Color Controls	content
+Video > Colorspaces	384	3058	slider	Saturation:	Color Controls	content
+Video > Colorspaces	384	3347	edit	Saturation:	Color Controls	content
+Video > Colorspaces	384	3053	slider	Hue:	Color Controls	content
+Video > Colorspaces	384	3348	edit	Hue:	Color Controls	content
+Video > Colorspaces	384	3083	check	Use hardware color controls (if possible)	Color Controls	content
+Video > Resize	369	3285	group	Video Resizing		content
+Video > Resize	369	3003	combo	Resize video:	Video Resizing	content
+Video > Resize	369	3029	button	Apply	Video Resizing	content
+Video > Resize	369	3005	combo	Method:	Video Resizing	content
+Video > Resize	369	3234	slider	Parameter (%d/%d):	Video Resizing	content
+Video > Resize	369	3016	combo	Aspect ratio:	Video Resizing	content
+Video > Resize	369	3344	slider	Level (%d%%):	Video Resizing	content
+Video > Resize	369	3179	radio	*Match size:	Video Resizing	content
+Video > Resize	369	3184	radio	*Display resolution:	Video Resizing	content
+Video > Resize	369	3267	edit	*Match size:	Video Resizing	content
+Video > Resize	369	3271	edit	×	Video Resizing	content
+Video > Resize	369	3021	button	Preset	Video Resizing	content
+Video > Resize	369	3004	combo	×	Video Resizing	content
+Video > Resize	369	3268	edit	*Display resolution:	Video Resizing	content
+Video > Resize	369	3178	radio	Multiply by:	Video Resizing	content
+Video > Resize	369	3183	radio	Specify size:	Video Resizing	content
+Video > Resize	369	3186	radio	Display resolution:	Video Resizing	content
+Video > Resize	369	3272	edit	Multiply by:	Video Resizing	content
+Video > Resize	369	3273	edit	Specify size:	Video Resizing	content
+Video > Resize	369	3275	edit	×	Video Resizing	content
+Video > Resize	369	3024	button	Preset	Video Resizing	content
+Video > Resize	369	3269	edit	Display resolution:	Video Resizing	content
+Video > Resize	369	3097	check	Auto calculate vertical size	Video Resizing	content
+Video > Resize	369	3013	combo	Interlaced mode:	Video Resizing	content
+Video > Extend/Crop	374	3293	group	Video Extending/Cropping		content
+Video > Extend/Crop	374	3073	combo	Method:	Video Extending/Cropping	content
+Video > Extend/Crop	374	3162	button	Apply	Video Extending/Cropping	content
+Video > Extend/Crop	374	3104	check	Use video extension before resizing	Video Extending/Cropping	content
+Video > Extend/Crop	374	3105	check	Scale only frame height	Video Extending/Cropping	content
+Video > Extend/Crop	374	3276	edit	Pixel:	Video Extending/Cropping	content
+Video > Extend/Crop	374	3277	edit	×	Video Extending/Cropping	content
+Video > Extend/Crop	374	3278	edit	Ratio:	Video Extending/Cropping	content
+Video > Extend/Crop	374	3279	edit	:	Video Extending/Cropping	content
+Video > Extend/Crop	374	3079	slider	H. Position (%):	Video Extending/Cropping	content
+Video > Extend/Crop	374	3088	edit	H. Position (%):	Video Extending/Cropping	content
+Video > Extend/Crop	374	3084	slider	V. Position (%):	Video Extending/Cropping	content
+Video > Extend/Crop	374	3095	edit	V. Position (%):	Video Extending/Cropping	content
+Video > Extend/Crop	374	3296	group	Bottom Margin		content
+Video > Extend/Crop	374	3110	check	Operate only when subtitles exist	Bottom Margin	content
+Video > Extend/Crop	374	3100	combo		Bottom Margin	content
+Video > Extend/Crop	374	3111	check	Use Pan&Scan method when Transform Filter fails	Bottom Margin	content
+Video > Deinterlacing	385	3304	group	Deinterlacing Settings		content
+Video > Deinterlacing	385	3349	combo	Deinterlacing mode:	Deinterlacing Settings	content
+Video > Deinterlacing	385	3176	combo	Default field order (in forced deinterlacing):	Deinterlacing Settings	content
+Video > Deinterlacing	385	3177	combo	Swap fields (Top <-> Bottom):	Deinterlacing Settings	content
+Video > Deinterlacing	385	3310	group	Deinterlacing Method		content
+Video > Deinterlacing	385	3350	combo	On videos which are flagged as interlaced:	Deinterlacing Method	content
+Video > Deinterlacing	385	3180	combo	On videos which are not flagged as interlaced:	Deinterlacing Method	content
+Video > Deinterlacing	385	3301	group	Software Deinterlacing		content
+Video > Deinterlacing	385	3351	combo	Method:	Software Deinterlacing	content
+Video > Deinterlacing	385	3352	combo	Field order:	Software Deinterlacing	content
+Video > Deinterlacing	385	3298	group	Hardware Deinterlacing		content
+Video > Deinterlacing	385	3107	combo	Method:	Hardware Deinterlacing	content
+Video > Deinterlacing	385	3172	combo	Field order:	Hardware Deinterlacing	content
+Video > Levels/Offset	371	3293	group	Level control		content
+Video > Levels/Offset	371	3057	check	Auto level control	Level control	content
+Video > Levels/Offset	371	3061	check	Full range (Y: 0 ~ 255)	Level control	content
+Video > Levels/Offset	371	3066	check	Level control	Level control	content
+Video > Levels/Offset	371	3072	check	Full range (Y: 0 ~ 255)	Level control	content
+Video > Levels/Offset	371	3083	check	Modify only luminance	Level control	content
+Video > Levels/Offset	371	3276	edit	Input:	Level control	content
+Video > Levels/Offset	371	3277	edit	~	Level control	content
+Video > Levels/Offset	371	3078	check	Automatic	Level control	content
+Video > Levels/Offset	371	3279	edit	Output:	Level control	content
+Video > Levels/Offset	371	3282	edit	~	Level control	content
+Video > Levels/Offset	371	3239	slider	Gamma Correction:	Level control	content
+Video > Levels/Offset	371	3321	edit	Gamma Correction:	Level control	content
+Video > Levels/Offset	371	3294	group	Offset control		content
+Video > Levels/Offset	371	3110	check	Offset control	Offset control	content
+Video > Levels/Offset	371	3354	slider	Luma offset X :	Offset control	content
+Video > Levels/Offset	371	3088	edit	Luma offset X :	Offset control	content
+Video > Levels/Offset	371	3355	slider	Luma offset Y :	Offset control	content
+Video > Levels/Offset	371	3095	edit	Luma offset Y :	Offset control	content
+Video > Levels/Offset	371	3356	slider	Chroma offset X :	Offset control	content
+Video > Levels/Offset	371	3254	edit	Chroma offset X :	Offset control	content
+Video > Levels/Offset	371	3357	slider	Chroma offset Y :	Offset control	content
+Video > Levels/Offset	371	3147	edit	Chroma offset Y :	Offset control	content
+Video > Effects	386	3061	check	Flip Vertical		content
+Video > Effects	386	3372	check	270 degrees		content
+Video > Effects	386	3374	check	Multi-threaded video processing		content
+Video > Effects	386	3149	check	Flip Horizontal		content
+Video > Effects	386	3373	check	Motion Blur		content
+Video > Effects	386	3110	check	Soften - Radius : %d             Luma : %d                      Chroma : %d		content
+Video > Effects	386	3359	slider	Soften - Radius : %d             Luma : %d                      Chroma : %d		content
+Video > Effects	386	3360	slider	Soften - Radius : %d             Luma : %d                      Chroma : %d		content
+Video > Effects	386	3361	slider	Soften - Radius : %d             Luma : %d                      Chroma : %d		content
+Video > Effects	386	3115	check	Sharpen - Luma : %d                                   Chroma : %d		content
+Video > Effects	386	3084	slider	Sharpen - Luma : %d                                   Chroma : %d		content
+Video > Effects	386	3353	slider	Sharpen - Luma : %d                                   Chroma : %d		content
+Video > Effects	386	3124	check	Deblock : %d		content
+Video > Effects	386	3231	slider	Deblock : %d		content
+Video > Effects	386	3138	check	Gradual Denoise : %d		content
+Video > Effects	386	3223	slider	Gradual Denoise : %d		content
+Video > Effects	386	3133	check	Denoise 3D  - Luma : %d     Chroma : %d              Time : %d		content
+Video > Effects	386	3332	check	High quality		content
+Video > Effects	386	3098	slider	Denoise 3D  - Luma : %d     Chroma : %d              Time : %d		content
+Video > Effects	386	3103	slider	Denoise 3D  - Luma : %d     Chroma : %d              Time : %d		content
+Video > Effects	386	3362	slider	Denoise 3D  - Luma : %d     Chroma : %d              Time : %d		content
+Video > Effects	386	3363	check	Temporal noise reducer : %d               %d                           %d		content
+Video > Effects	386	3364	slider	Temporal noise reducer : %d               %d                           %d		content
+Video > Effects	386	3227	slider	Temporal noise reducer : %d               %d                           %d		content
+Video > Effects	386	3365	slider	Temporal noise reducer : %d               %d                           %d		content
+Video > Effects	386	3366	check	Warpsharp - Depth : %d                              Threshold : %d		content
+Video > Effects	386	3367	slider	Warpsharp - Depth : %d                              Threshold : %d		content
+Video > Effects	386	3368	slider	Warpsharp - Depth : %d                              Threshold : %d		content
+Video > Effects	386	3370	check	Deband - Threshold : %g                             Radius : %d		content
+Video > Effects	386	3375	slider	Deband - Threshold : %g                             Radius : %d		content
+Video > Effects	386	3376	slider	Deband - Threshold : %g                             Radius : %d		content
+Video > Pixel Shaders	505	3382	group	Pixel Shader Settings		content
+Video > Pixel Shaders	505	3040	check	Enable Display ICC Color Gamut Correction	Pixel Shader Settings	content
+Video > Pixel Shaders	505	3041	check	Enable YCgCo Colorspace Correction	Pixel Shader Settings	content
+Video > Pixel Shaders	505	3042	check	Enable SMPTE ST 2084 HDR Correction	Pixel Shader Settings	content
+Video > Pixel Shaders	505	3239	slider	SDR monitor luminance(%d nits):	Pixel Shader Settings	content
+Video > Pixel Shaders	505	3100	combo	Tone mapping type:	Pixel Shader Settings	content
+Video > Pixel Shaders	505	3043	check	Enable SMPTE ST 2086 HDR Correction	Pixel Shader Settings	content
+Video > Pixel Shaders	505	3383	group	Pre-Resize Pixel Shaders		content
+Video > Pixel Shaders	505	3044	check	Enable	Pre-Resize Pixel Shaders	content
+Video > Pixel Shaders	505	3243	syslistview32	Enable	Pre-Resize Pixel Shaders	content
+Video > Pixel Shaders	505	3384	group	Post-Resize Pixel Shaders		content
+Video > Pixel Shaders	505	3045	check	Enable	Post-Resize Pixel Shaders	content
+Video > Pixel Shaders	505	3046	check	Apply only to video image	Post-Resize Pixel Shaders	content
+Video > Pixel Shaders	505	3244	syslistview32	Apply only to video image	Post-Resize Pixel Shaders	content
+Video > Pixel Shaders	505	3109	button	Stack...	Pre-Resize Pixel Shaders	content
+Video > Pixel Shaders	505	3110	button	Stack...	Post-Resize Pixel Shaders	content
+Video > AviSynth	452	3382	group	Information		content
+Video > AviSynth	452	3381	group	Settings		content
+Video > AviSynth	452	3036	check	Enable AviSynth processing	Settings	content
+Video > AviSynth	452	3041	check	Operate only in progressive frames	Settings	content
+Video > AviSynth	452	3037	check	Add "potplayer_source()"	Settings	content
+Video > AviSynth	452	3038	check	Reset on seek	Settings	content
+Video > AviSynth	452	3039	check	Delay	Settings	content
+Video > AviSynth	452	3090	edit	Delay	Settings	content
+Video > AviSynth	452	3034	check	Fast output	Settings	content
+Video > AviSynth	452	3035	check	Buffer (back/ahead)	Settings	content
+Video > AviSynth	452	3088	edit	Buffer (back/ahead)	Settings	content
+Video > AviSynth	452	3089	edit	Buffer (back/ahead)	Settings	content
+Video > AviSynth	452	3040	combo	Load script:	Settings	content
+Video > AviSynth	452	3360	button	Save	Settings	content
+Video > AviSynth	452	3069	edit	Load script:	Settings	content
+Video > VapourSynth	487	3382	group	Information		content
+Video > VapourSynth	487	3381	group	Settings		content
+Video > VapourSynth	487	3036	check	Enable VapourSynth processing	Settings	content
+Video > VapourSynth	487	3041	check	Operate only in progressive frames	Settings	content
+Video > VapourSynth	487	3039	check	Delay	Settings	content
+Video > VapourSynth	487	3090	edit	Delay	Settings	content
+Video > VapourSynth	487	3034	check	Fast output	Settings	content
+Video > VapourSynth	487	3040	combo	Load script:	Settings	content
+Video > VapourSynth	487	3360	button	Save	Settings	content
+Video > VapourSynth	487	3069	edit	Load script:	Settings	content
+Video > H.264 MVC 3D	448	3305	group	H.264 MVC 3D Support		content
+Video > H.264 MVC 3D	448	3142	check	Enable H.264 MVC 3D Decoder	H.264 MVC 3D Support	content
+Video > H.264 MVC 3D	448	3352	combo	Output Mode:	H.264 MVC 3D Support	content
+Video > H.264 MVC 3D	448	3304	group	3D Video Mode Settings		content
+Video > H.264 MVC 3D	448	3350	combo	3D Video Mode:	3D Video Mode Settings	content
+Video > H.264 MVC 3D	448	3349	combo	Input (Source):	3D Video Mode Settings	content
+Video > H.264 MVC 3D	448	3088	edit	Offset X:	3D Video Mode Settings	content
+Video > H.264 MVC 3D	448	3089	edit	Offset Y:	3D Video Mode Settings	content
+Video > H.264 MVC 3D	448	3138	check	Full resolution	3D Video Mode Settings	content
+Video > H.264 MVC 3D	448	3139	check	Swap left/right images	3D Video Mode Settings	content
+Video > H.264 MVC 3D	448	3351	combo	Output (Screen):	3D Video Mode Settings	content
+Video > H.264 MVC 3D	448	3141	check	Auto detect 3D input format (based on filename suffixes eg.-lr,-ab)	3D Video Mode Settings	content
+Audio	356	3285	group	Audio Output		capture
+Audio	356	3003	combo	Audio Renderer:	Audio Output	capture
+Audio	356	3016	combo	Pass-through Renderer:	Audio Output	capture
+Audio	356	3017	combo	2nd Audio Renderer:	Audio Output	capture
+Audio	356	3013	combo	Speakers:	Audio Output	capture
+Audio	356	3008	combo	Speakers:	Audio Output	capture
+Audio	356	3006	combo	Sample rate:	Audio Output	capture
+Audio	356	3012	combo	Sample rate:	Audio Output	capture
+Audio	356	3007	combo	Resample:	Audio Output	capture
+Audio	356	3083	edit	Resample:	Audio Output	capture
+Audio	356	3005	combo	Output:	Audio Output	capture
+Audio	356	3010	combo	Output:	Audio Output	capture
+Audio	356	3061	check	Use pass-through output when at least # channels exist	Audio Output	capture
+Audio	356	3082	edit	Use pass-through output when at least # channels exist	Audio Output	capture
+Audio	356	3358	button	Set Built-in Audio Decoder	Audio Output	capture
+Audio	356	3391	group	Mixer Settings		capture
+Audio	356	3089	check	Normalize matrix	Mixer Settings	capture
+Audio	356	3094	check	Expand stereo to center	Mixer Settings	capture
+Audio	356	3101	check	Expand stereo to surround	Mixer Settings	capture
+Audio	356	3393	group	Mixer Level		capture
+Audio	356	3103	slider	Front (%d):	Mixer Level	capture
+Audio	356	3108	slider	Center (%d):	Mixer Level	capture
+Audio	356	3112	slider	Surround (%d):	Mixer Level	capture
+Audio	356	3362	slider	LFE (%d):	Mixer Level	capture
+Audio	356	3395	group	Headphone & Dolby Decoder Settings		capture
+Audio	356	3104	slider	Distance (%d):	Headphone & Dolby Decoder Settings	capture
+Audio	356	3109	slider	Delay (%d ms):	Headphone & Dolby Decoder Settings	capture
+Audio	356	3389	group	LFE Redirection		capture
+Audio	356	3057	check	Enable	LFE Redirection	capture
+Audio	356	3066	check	Remove low frequencies	LFE Redirection	capture
+Audio	356	3069	edit	Low frequency:	LFE Redirection	capture
+Audio	356	3077	edit	Gain:	LFE Redirection	capture
+Audio > Volume Control	390	3381	group	Volume control setting		capture
+Audio > Volume Control	390	3008	combo	Method:	Volume control setting	capture
+Audio > Volume Control	390	3047	check	Adjust wave volume to max	Volume control setting	capture
+Audio > Volume Control	390	3048	check	Accelerate control speed	Volume control setting	capture
+Audio > Volume Control	390	3273	edit	Volume step:	Volume control setting	capture
+Audio > Volume Control	390	3274	edit	Max amplification:	Volume control setting	capture
+Audio > Volume Control	390	3049	check	Startup volume	Volume control setting	capture
+Audio > Volume Control	390	3275	edit	Startup volume	Volume control setting	capture
+Audio > Volume Control	390	3034	check	Enable individual volume control	Volume control setting	capture
+Audio > Volume Control	390	3079	slider	Master volume:	Volume control setting	capture
+Audio > Volume Control	390	3088	edit	Master volume:	Volume control setting	capture
+Audio > Volume Control	390	3084	slider	Left channel:	Volume control setting	capture
+Audio > Volume Control	390	3095	edit	Left channel:	Volume control setting	capture
+Audio > Volume Control	390	3098	slider	Right channel:	Volume control setting	capture
+Audio > Volume Control	390	3105	edit	Right channel:	Volume control setting	capture
+Audio > Volume Control	390	3108	slider	Center channel:	Volume control setting	capture
+Audio > Volume Control	390	3116	edit	Center channel:	Volume control setting	capture
+Audio > Volume Control	390	3362	slider	BackL channel:	Volume control setting	capture
+Audio > Volume Control	390	3126	edit	BackL channel:	Volume control setting	capture
+Audio > Volume Control	390	3130	slider	BackR channel:	Volume control setting	capture
+Audio > Volume Control	390	3135	edit	BackR channel:	Volume control setting	capture
+Audio > Volume Control	390	3140	slider	SideL channel:	Volume control setting	capture
+Audio > Volume Control	390	3143	edit	SideL channel:	Volume control setting	capture
+Audio > Volume Control	390	3146	slider	SideR channel:	Volume control setting	capture
+Audio > Volume Control	390	3147	edit	SideR channel:	Volume control setting	capture
+Audio > Volume Control	390	3153	slider	LFE channel:	Volume control setting	capture
+Audio > Volume Control	390	3158	edit	LFE channel:	Volume control setting	capture
+Audio > Volume Control	390	3373	check	Pre-amplify AC3/DTS Vol.	Volume control setting	capture
+Audio > Volume Control	390	3374	slider	Pre-amplify AC3/DTS Vol.	Volume control setting	capture
+Audio > Volume Control	390	3375	edit	Pre-amplify AC3/DTS Vol.	Volume control setting	capture
+Audio > Equalizer	363	3287	group	Equalizer		capture
+Audio > Equalizer	363	3066	check	Enable	Equalizer	capture
+Audio > Equalizer	363	3021	button	Preset	Equalizer	capture
+Audio > Equalizer	363	3005	combo	Enable	Equalizer	capture
+Audio > Equalizer	363	3072	check	SuperEQ	Equalizer	capture
+Audio > Equalizer	363	3043	slider	60	Equalizer	capture
+Audio > Equalizer	363	3045	slider	170	Equalizer	capture
+Audio > Equalizer	363	3053	slider	310	Equalizer	capture
+Audio > Equalizer	363	3058	slider	600	Equalizer	capture
+Audio > Equalizer	363	3062	slider	1K	Equalizer	capture
+Audio > Equalizer	363	3093	slider	3K	Equalizer	capture
+Audio > Equalizer	363	3098	slider	6K	Equalizer	capture
+Audio > Equalizer	363	3103	slider	12K	Equalizer	capture
+Audio > Equalizer	363	3108	slider	14K	Equalizer	capture
+Audio > Equalizer	363	3112	slider	16K	Equalizer	capture
+Audio > Normalizer/Freeverb	387	3385	group	Normalizer (Auto Volume Control)		capture
+Audio > Normalizer/Freeverb	387	3035	check	Enable (for broadcasting)	Normalizer (Auto Volume Control)	capture
+Audio > Normalizer/Freeverb	387	3034	check	Enable	Normalizer (Auto Volume Control)	capture
+Audio > Normalizer/Freeverb	387	3036	check	Operate only with video playback	Normalizer (Auto Volume Control)	capture
+Audio > Normalizer/Freeverb	387	3006	combo	Method:	Normalizer (Auto Volume Control)	capture
+Audio > Normalizer/Freeverb	387	3047	check	Boost audio	Normalizer (Auto Volume Control)	capture
+Audio > Normalizer/Freeverb	387	3353	slider	Level (%d%%):	Normalizer (Auto Volume Control)	capture
+Audio > Normalizer/Freeverb	387	3377	slider	Release time (%d):	Normalizer (Auto Volume Control)	capture
+Audio > Normalizer/Freeverb	387	3392	group	Freeverb		capture
+Audio > Normalizer/Freeverb	387	3072	check	Enable	Freeverb	capture
+Audio > Normalizer/Freeverb	387	3079	slider	Room size (%g):	Freeverb	capture
+Audio > Normalizer/Freeverb	387	3098	slider	Damping (%g):	Freeverb	capture
+Audio > Normalizer/Freeverb	387	3103	slider	Wet level (%g):	Freeverb	capture
+Audio > Normalizer/Freeverb	387	3108	slider	Dry level (%g):	Freeverb	capture
+Audio > Normalizer/Freeverb	387	3112	slider	Width (%g):	Freeverb	capture
+Audio > Crystality/Noise Reduction	388	3385	group	Crystallization (operates only in 16-bit sample)		capture
+Audio > Crystality/Noise Reduction	388	3040	check	Enable	Crystallization (operates only in 16-bit sample)	capture
+Audio > Crystality/Noise Reduction	388	3130	slider	Bandwidth extender (%d):	Crystallization (operates only in 16-bit sample)	capture
+Audio > Crystality/Noise Reduction	388	3098	slider	Extender's HPF  (%d):	Crystallization (operates only in 16-bit sample)	capture
+Audio > Crystality/Noise Reduction	388	3103	slider	Harmonic booster (%d):	Crystallization (operates only in 16-bit sample)	capture
+Audio > Crystality/Noise Reduction	388	3108	slider	Echo volume (%d):	Crystallization (operates only in 16-bit sample)	capture
+Audio > Crystality/Noise Reduction	388	3112	slider	Echo feedback (%d):	Crystallization (operates only in 16-bit sample)	capture
+Audio > Crystality/Noise Reduction	388	3140	slider	Extra stereo (%d):	Crystallization (operates only in 16-bit sample)	capture
+Audio > Crystality/Noise Reduction	388	3392	group	Noise Reduction (operates only in 16-bit sample)		capture
+Audio > Crystality/Noise Reduction	388	3083	check	Enable	Noise Reduction (operates only in 16-bit sample)	capture
+Audio > Crystality/Noise Reduction	388	3362	slider	Threshold (%d):	Noise Reduction (operates only in 16-bit sample)	capture
+Audio > Crystality/Noise Reduction	388	3393	group	Crossfeed		capture
+Audio > Crystality/Noise Reduction	388	3084	check	Enable	Crossfeed	capture
+Audio > Crystality/Noise Reduction	388	3069	edit	Remove low frequencies:	Crossfeed	capture
+Audio > Crystality/Noise Reduction	388	3077	edit	Gain:	Crossfeed	capture
+Audio > Language/Sync/Other	441	3401	group	Language/Stream Selection		capture
+Audio > Language/Sync/Other	441	3004	combo	Selection method:	Language/Stream Selection	capture
+Audio > Language/Sync/Other	441	3069	edit	*Preferred languages:	Language/Stream Selection	capture
+Audio > Language/Sync/Other	441	3070	edit	Turn off subtitles with*:	Language/Stream Selection	capture
+Audio > Language/Sync/Other	441	3112	edit	Preferred stream:	Language/Stream Selection	capture
+Audio > Language/Sync/Other	441	3044	check	Remember audio track selections	Language/Stream Selection	capture
+Audio > Language/Sync/Other	441	3403	group	Synchronization		capture
+Audio > Language/Sync/Other	441	3003	combo	Audio sync control:	Synchronization	capture
+Audio > Language/Sync/Other	441	3111	edit	Audio sync step (ms):	Synchronization	capture
+Audio > Language/Sync/Other	441	3114	edit	Default audio sync (ms):	Synchronization	capture
+Audio > Language/Sync/Other	441	3113	edit	Default audio sync of 2nd device (ms):	Synchronization	capture
+Audio > Language/Sync/Other	441	3402	group	Additional Settings		capture
+Audio > Language/Sync/Other	441	3378	check	Voice Removal	Additional Settings	capture
+Audio > Language/Sync/Other	441	3379	check	Voice Emphasis	Additional Settings	capture
+Audio > Language/Sync/Other	441	3381	check	Swap Stereo Channels	Additional Settings	capture
+Audio > Winamp DSP Plugins	365	3381	group	Winamp DSP audio plugins (operates only in 16-bit sample)		capture
+Audio > Winamp DSP Plugins	365	3034	check	Use plugins only in below 2 channels	Winamp DSP audio plugins (operates only in 16-bit sample)	capture
+Audio > Winamp DSP Plugins	365	3069	edit	Path:	Winamp DSP audio plugins (operates only in 16-bit sample)	capture
+Audio > Winamp DSP Plugins	365	3003	combo		Winamp DSP audio plugins (operates only in 16-bit sample)	capture
+Audio > Winamp DSP Plugins	365	3024	button	Settings	Winamp DSP audio plugins (operates only in 16-bit sample)	capture
+Audio > Winamp DSP Plugins	365	3315	systreeview32	Path:	Winamp DSP audio plugins (operates only in 16-bit sample)	capture
+Extensions	496	3292	group	Extensions		capture
+Extensions	496	3293	group	Additional Settings		capture
+Extensions	496	3034	check	Use JIT (Just-In-Time) Compiler	Additional Settings	capture
+Extensions	496	3035	check	Check for updates of extensions at program start	Additional Settings	capture
+Extensions	496	3242	syslistview32			capture
+Extensions	496	3038	button	Check for updates		capture
+Extensions	496	3037	button	Update/Install		capture
+Extensions > Media URL	497	3242	syslistview32		Media URL Extensions	content
+Extensions > Media URL	497	3037	button	Open file location	Media URL Extensions	content
+Extensions > Media URL	497	3385	group	Media URL Extensions		content
+Extensions > Media URL	497	3035	button	Reload files	Media URL Extensions	content
+Extensions > Media URL	497	3036	button	Up	Media URL Extensions	content
+Extensions > Media URL	497	3027	button	Down	Media URL Extensions	content
+Extensions > Media URL	497	3039	button	Config File...	Media URL Extensions	content
+Extensions > Media URL	497	3033	button	Setting...	Media URL Extensions	content
+Extensions > Media URL	497	3034	button	Info	Media URL Extensions	content
+Extensions > Media URL	497	3026	button	Test	Media URL Extensions	content
+Extensions > Media Playlist/Playitem	498	3385	group	Media Playlist/Playitem Extensions		content
+Extensions > Media Playlist/Playitem	498	3242	syslistview32		Media Playlist/Playitem Extensions	content
+Extensions > Media Playlist/Playitem	498	3037	button	Open file location	Media Playlist/Playitem Extensions	content
+Extensions > Media Playlist/Playitem	498	3035	button	Reload files	Media Playlist/Playitem Extensions	content
+Extensions > Media Playlist/Playitem	498	3036	button	Up	Media Playlist/Playitem Extensions	content
+Extensions > Media Playlist/Playitem	498	3027	button	Down	Media Playlist/Playitem Extensions	content
+Extensions > Media Playlist/Playitem	498	3038	button	Config File...	Media Playlist/Playitem Extensions	content
+Extensions > Media Playlist/Playitem	498	3033	button	Setting...	Media Playlist/Playitem Extensions	content
+Extensions > Media Playlist/Playitem	498	3034	button	Info	Media Playlist/Playitem Extensions	content
+Extensions > Media Playlist/Playitem	498	3026	button	Test	Media Playlist/Playitem Extensions	content
+Extensions > Media Source	499	3385	group	Media Source Extensions		content
+Extensions > Media Source	499	3242	syslistview32		Media Source Extensions	content
+Extensions > Media Source	499	3037	button	Open file location	Media Source Extensions	content
+Extensions > Media Source	499	3035	button	Reload files	Media Source Extensions	content
+Extensions > Media Source	499	3036	button	Up	Media Source Extensions	content
+Extensions > Media Source	499	3027	button	Down	Media Source Extensions	content
+Extensions > Media Source	499	3039	button	Config File...	Media Source Extensions	content
+Extensions > Media Source	499	3033	button	Setting...	Media Source Extensions	content
+Extensions > Media Source	499	3034	button	Info	Media Source Extensions	content
+Extensions > Media Source	499	3026	button	Test	Media Source Extensions	content
+Extensions > Online Subtitle Searching	500	3386	group	Online Subtitle Searching		content
+Extensions > Online Subtitle Searching	500	3243	syslistview32		Online Subtitle Searching	content
+Extensions > Online Subtitle Searching	500	3032	button	Info	Online Subtitle Searching	content
+Extensions > Online Subtitle Searching	500	3027	button	Add...	Online Subtitle Searching	content
+Extensions > Online Subtitle Searching	500	3028	button	Edit...	Online Subtitle Searching	content
+Extensions > Online Subtitle Searching	500	3029	button	Delete	Online Subtitle Searching	content
+Extensions > Online Subtitle Searching	500	3030	button	Up	Online Subtitle Searching	content
+Extensions > Online Subtitle Searching	500	3031	button	Down	Online Subtitle Searching	content
+Extensions > Web Account	501	3292	group	Web Account		content
+Extensions > Web Account	501	3242	syslistview32			content
+Extensions > Web Account	501	3038	button	Manage account		content
+Extensions > Playback Statistics	502	3385	group	Playback Statistics		content
+Extensions > Playback Statistics	502	3242	syslistview32			content
+Extensions > Playback Statistics	502	3037	button	Open file location		content
+Extensions > Playback Statistics	502	3035	button	Reload accounts		content
+Extensions > Playback Statistics	502	3038	button	Up		content
+Extensions > Playback Statistics	502	3027	button	Down		content
+Extensions > Playback Statistics	502	3039	button	Config File...		content
+Extensions > Playback Statistics	502	3033	button	Setting...		content
+Extensions > Playback Statistics	502	3034	button	Info...		content
+Extensions > Playback Statistics	502	3026	button	Test		content
+Accessibility > TTS	468	3191	group	TTS (Text to Speech) Setup		content
+Accessibility > TTS	468	3057	check	Read the messages displayed on the screen	TTS (Text to Speech) Setup	content
+Accessibility > TTS	468	3058	check	Read the movie subtitles comprised of text	TTS (Text to Speech) Setup	content
+Accessibility > TTS	468	3059	check	Read the tooltips displayed on mouse rollover of skin items	TTS (Text to Speech) Setup	content
+Accessibility > TTS	468	3015	combo	출력 장치:	TTS (Text to Speech) Setup	content
+Accessibility > TTS	468	3014	combo	TTS Engine:	TTS (Text to Speech) Setup	content
+Accessibility > TTS	468	3098	slider	Speed (%d):	TTS (Text to Speech) Setup	content
+Accessibility > TTS	468	3099	slider	Volume (%d%%):	TTS (Text to Speech) Setup	content
+Accessibility > TTS	468	3069	edit	Test:	TTS (Text to Speech) Setup	content
+Accessibility > TTS	468	3168	button	Test	TTS (Text to Speech) Setup	content
+Accessibility > TTS	468	3192	group	UIA (User Interface Automation) Setup for Screen Reader Programs		content
+Accessibility > TTS	468	3063	check	Read the messages displayed on the screen	UIA (User Interface Automation) Setup for Screen Reader Programs	content
+Accessibility > TTS	468	3064	check	Read the movie subtitles comprised of text	UIA (User Interface Automation) Setup for Screen Reader Programs	content
+Accessibility > TTS	468	3065	check	Read the tooltips displayed on mouse rollover of skin items	UIA (User Interface Automation) Setup for Screen Reader Programs	content
+Accessibility > TTS	468	3193	group	Window Title Setup		content
+Accessibility > TTS	468	3061	check	Output the messages displayed on the screen as window titles	Window Title Setup	content
+Accessibility > TTS	468	3060	check	Output the movie subtitles comprised of text as window titles	Window Title Setup	content
+Accessibility > TTS	468	3062	check	Output the tooltips displayed on mouse rollover of skin items as window titles	Window Title Setup	content
+Accessibility > Touch	447	3381	group	Touch Settings		content
+Accessibility > Touch	447	3035	check	Enable Touch Feature (requires at least Windows 7)	Touch Settings	content
+Accessibility > Touch	447	3003	combo	Single finger swipe action:	Touch Settings	content
+Accessibility > XInput	479	3381	group	XInput (Xbox 360 Controller) Settings		content
+Accessibility > XInput	479	3035	check	Enable XInput	XInput (Xbox 360 Controller) Settings	content
+Accessibility > XInput	479	3036	check	Operate only when PotPlayer has focus	XInput (Xbox 360 Controller) Settings	content
+Accessibility > XInput	479	3003	combo	Mouse emulation:	XInput (Xbox 360 Controller) Settings	content
+Association	336	3285	group	Associations		capture
+Association	336	3242	syslistview32		Associations	capture
+Association	336	3003	combo	Icon library:	Associations	capture
+Association	336	3088	edit	Extension:	Associations	capture
+Association	336	3095	edit	Description:	Associations	capture
+Association	336	3031	button	Add	Associations	capture
+Association	336	3033	button	Delete	Associations	capture
+Association	336	3027	button	Change Icon...	Associations	capture
+Association	336	3107	button	Select Video Ext	Associations	capture
+Association	336	3108	button	Select Audio Ext	Associations	capture
+Association	336	3109	button	Select Subtitle Ext	Associations	capture
+Association	336	3113	button	Select Playlist Ext	Associations	capture
+Association	336	3114	button	Select All	Associations	capture
+Association	336	3115	button	Deselect All	Associations	capture
+Association	336	3106	button	Restore to Default	Associations	capture
+Association	336	3029	button	Apply to System	Associations	capture
+Association	336	3117	button	Clear and Rebuild the Icon Cache	Associations	capture
+Association	336	3110	check	Add PotPlayer to folder context menu	Associations	capture
+Association	336	3111	check	Add "Add to" to file context menu	Associations	capture
+Association	336	3112	check	Add "Play with" to file context menu	Associations	capture
+Association	336	3120	button	Set File Extensions in File Open Dialog...	Associations	capture
+Association	336	3191	group	AutoPlay		capture
+Association	336	3057	check	Video files	AutoPlay	capture
+Association	336	3061	check	Audio files	AutoPlay	capture
+Association	336	3097	check	Audio CD	AutoPlay	capture
+Association	336	3098	check	VCD	AutoPlay	capture
+Association	336	3099	check	SVCD	AutoPlay	capture
+Association	336	3066	check	DVD	AutoPlay	capture
+Association	336	3067	check	Blu-ray	AutoPlay	capture
+Association	336	3192	group	Default Programs		capture
+Association	336	3118	button	Run Control Panel	Default Programs	capture
+Configuration	377	3292	group	Configuration Management		capture
+Configuration	377	3315	systreeview32		Configuration Management	capture
+Configuration	377	3021	button	Add	Configuration Management	capture
+Configuration	377	3024	button	Duplicate	Configuration Management	capture
+Configuration	377	3121	button	Activate	Configuration Management	capture
+Configuration	377	3029	button	Up	Configuration Management	capture
+Configuration	377	3033	button	Down	Configuration Management	capture
+Configuration	377	3027	button	Rename	Configuration Management	capture
+Configuration	377	3031	button	Delete	Configuration Management	capture
+Configuration	377	3034	check	Reopen current item when preset is manually activated	Configuration Management	capture
+Configuration	377	3040	check	Copy preset values into default preset when preset is manually activated	Configuration Management	capture
+Configuration	377	3083	check	Return to previous preset at playback end when preset is auto activated	Configuration Management	capture
+Configuration	377	3104	check	Activate default preset at program start	Configuration Management	capture
+Configuration	377	3311	group	Auto-Preset (You can automate the related preset using the following conditions)		capture
+Configuration	377	3044	check	File name	Auto-Preset (You can automate the related preset using the following conditions)	capture
+Configuration	377	3069	edit	File name	Auto-Preset (You can automate the related preset using the following conditions)	capture
+Configuration	377	3045	check	Album name	Auto-Preset (You can automate the related preset using the following conditions)	capture
+Configuration	377	3013	combo	Album name	Auto-Preset (You can automate the related preset using the following conditions)	capture
+Configuration	377	3126	check	Power source state	Auto-Preset (You can automate the related preset using the following conditions)	capture
+Configuration	377	3012	combo	Power source state	Auto-Preset (You can automate the related preset using the following conditions)	capture
+Configuration	377	3133	check	File duration (sec)	Auto-Preset (You can automate the related preset using the following conditions)	capture
+Configuration	377	3323	edit	File duration (sec)	Auto-Preset (You can automate the related preset using the following conditions)	capture
+Configuration	377	3011	combo	File duration (sec)	Auto-Preset (You can automate the related preset using the following conditions)	capture
+Configuration	377	3052	check	Video size	Auto-Preset (You can automate the related preset using the following conditions)	capture
+Configuration	377	3088	edit	Video size	Auto-Preset (You can automate the related preset using the following conditions)	capture
+Configuration	377	3095	edit	Video size	Auto-Preset (You can automate the related preset using the following conditions)	capture
+Configuration	377	3003	combo	Video size	Auto-Preset (You can automate the related preset using the following conditions)	capture
+Configuration	377	3005	combo	Video size	Auto-Preset (You can automate the related preset using the following conditions)	capture
+Configuration	377	3057	check	Video FourCC	Auto-Preset (You can automate the related preset using the following conditions)	capture
+Configuration	377	3077	edit	Video FourCC	Auto-Preset (You can automate the related preset using the following conditions)	capture
+Configuration	377	3066	check	Video FPS	Auto-Preset (You can automate the related preset using the following conditions)	capture
+Configuration	377	3099	edit	Video FPS	Auto-Preset (You can automate the related preset using the following conditions)	capture
+Configuration	377	3006	combo	Video FPS	Auto-Preset (You can automate the related preset using the following conditions)	capture
+Configuration	377	3067	check	Video aspect ratio	Auto-Preset (You can automate the related preset using the following conditions)	capture
+Configuration	377	3100	edit	Video aspect ratio	Auto-Preset (You can automate the related preset using the following conditions)	capture
+Configuration	377	3007	combo	Video aspect ratio	Auto-Preset (You can automate the related preset using the following conditions)	capture
+Configuration	377	3110	check	Audio format tag	Auto-Preset (You can automate the related preset using the following conditions)	capture
+Configuration	377	3116	edit	Audio format tag	Auto-Preset (You can automate the related preset using the following conditions)	capture
+Configuration	377	3123	check	Audio sample rate	Auto-Preset (You can automate the related preset using the following conditions)	capture
+Configuration	377	3321	edit	Audio sample rate	Auto-Preset (You can automate the related preset using the following conditions)	capture
+Configuration	377	3008	combo	Audio sample rate	Auto-Preset (You can automate the related preset using the following conditions)	capture
+Configuration	377	3132	check	Audio channels	Auto-Preset (You can automate the related preset using the following conditions)	capture
+Configuration	377	3322	edit	Audio channels	Auto-Preset (You can automate the related preset using the following conditions)	capture
+Configuration	377	3010	combo	Audio channels	Auto-Preset (You can automate the related preset using the following conditions)	capture
+Configuration	377	3124	check	If audio playback	Auto-Preset (You can automate the related preset using the following conditions)	capture
+Configuration	377	3125	check	If subtitles exist	Auto-Preset (You can automate the related preset using the following conditions)	capture
+Screen Saver	485	3292	group	Screen Saver		capture
+Screen Saver	485	3021	button	Set up...	Screen Saver	capture
+Screen Saver	485	3022	button	Settings...	Screen Saver	capture
+Screen Saver	485	3023	button	Preview	Screen Saver	capture
+Kakao TV	357	3295	group	Kakao TV Service		content
+Kakao TV	357	3118	button	Leave Kakao TV	Kakao TV Service	content
+Kakao TV	357	3119	button	Change agreement info	Kakao TV Service	content
+Kakao TV	357	3285	group	Temporary storage time		content
+Kakao TV	357	3219	slider	The network data will be temporarily stored during the specified time here.	Temporary storage time	content
+Kakao TV	357	3267	edit	The network data will be temporarily stored during the specified time here.	Temporary storage time	content
+Kakao TV > Broadcast List	511	3194	group	Broadcast List		content
+Kakao TV > Broadcast List	511	3003	combo	Broadcast list URL:	Broadcast List	content
+Kakao TV > CEF	489	3297	group	CEF (Chromium Embedded Framework) Info		content
+Kakao TV > CEF	489	3301	group	CEF Settings		content
+Kakao TV > CEF	489	3075	edit	Cache folder:	CEF Settings	content
+Kakao TV > CEF	489	3076	edit	User folder:	CEF Settings	content
+Kakao TV > CEF	489	3077	edit	User Agent:	CEF Settings	content

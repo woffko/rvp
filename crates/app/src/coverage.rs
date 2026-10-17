@@ -3,6 +3,8 @@
 //! why the others are not. `tests/coverage.rs` writes the reports to
 //! `docs/coverage/` (`RVP_BLESS=1`) and checks that they are current.
 
+pub mod preferences;
+
 use std::collections::BTreeMap;
 use std::fmt::Write as _;
 
@@ -37,7 +39,6 @@ const CONTEXT_REASONS: &[(&str, &str)] = &[
         "101_0_9_6",
         "keyframe steps, the jump dialog and the scene browsers are not in RVP yet",
     ),
-    ("101_0_9_7", "mpv always stretches the audio (scaletempo)"),
     ("101_0_9_8", "skipping intros and endings is not in RVP yet"),
     (
         "101_0_9_9",
@@ -98,18 +99,6 @@ const CONTEXT_REASONS: &[(&str, &str)] = &[
         "101_0_11_14",
         "AviSynth is not planned; RVP runs VapourSynth scripts (settings, SVP and VapourSynth page)",
     ),
-    ("101_0_12", "not in RVP yet"),
-    ("101_0_12_1", "the audio device is a setting"),
-    ("101_0_12_2", "pass-through is not in RVP yet"),
-    ("101_0_12_3", "a second audio device is not planned"),
-    ("101_0_12_8", "RVP sets mpv's volume"),
-    ("101_0_12_9", "the system volume is not RVP's to change"),
-    ("101_0_12_17", "keeping sync changes is not in RVP yet"),
-    (
-        "101_0_12_18",
-        "audio effects other than the normalizer are not in RVP yet",
-    ),
-    ("101_0_12_19", "audio recording is not planned"),
     ("101_0_13", "DirectShow filters do not apply to libmpv"),
     ("101_0_14", "RVP loads one skin, chosen in the settings"),
     ("101_0_15", "not in RVP yet"),
@@ -171,7 +160,6 @@ const ITEM_REASONS: &[(u32, &str)] = &[
         10121,
         "RVP hides the pointer only in fullscreen (after 2 s)",
     ),
-    (10122, "keeping the screen saver off is not in RVP yet"),
     (
         10445,
         "\"When Playback Finished\" covers closing after the list",
@@ -193,30 +181,9 @@ const ITEM_REASONS: &[(u32, &str)] = &[
     (10826, "subtitle styles are not in RVP yet"),
     (10827, "subtitle styles are not in RVP yet"),
     (
-        37750,
-        "playing one channel of a stereo track is not in RVP yet",
+        10454,
+        "DirectShow filters do not apply to libmpv (its functions are FFmpeg's filters in RVP's chain)",
     ),
-    (
-        37751,
-        "playing one channel of a stereo track is not in RVP yet",
-    ),
-    (
-        37752,
-        "playing one channel of a stereo track is not in RVP yet",
-    ),
-    (
-        20005,
-        "output channels and resampling are mpv's (not in RVP yet)",
-    ),
-    (
-        20006,
-        "output channels and resampling are mpv's (not in RVP yet)",
-    ),
-    (
-        20007,
-        "output channels and resampling are mpv's (not in RVP yet)",
-    ),
-    (10454, "DirectShow filters do not apply to libmpv"),
     (
         10917,
         "mpv manages colours and HDR itself (target colour space, tone mapping)",
@@ -258,6 +225,19 @@ fn reason(reasons: &[(&str, &'static str)], path: &str, id: u32) -> &'static str
         .map_or("not in RVP yet", |(_, reason)| reason)
 }
 
+/// The menu items PotPlayer fills at run time and RVP fills with its own
+/// list.
+fn runtime_list(id: u32) -> Option<&'static str> {
+    Some(match id {
+        20005 => "the output speakers (PotPlayer's 26)",
+        20006 => "the output formats, sample rates and resampler qualities",
+        20007 => "the output modes",
+        20008 => "the equalizer's presets",
+        37600 | 37650 | 37700 => "mpv's audio devices",
+        _ => return None,
+    })
+}
+
 /// What RVP does with one of PotPlayer's menu items.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ItemStatus {
@@ -281,8 +261,8 @@ pub fn item_status(item: &Recorded) -> ItemStatus {
     if item.id == 10324 {
         return ItemStatus::Runtime("the file's chapters");
     }
-    if item.id == 20008 {
-        return ItemStatus::Runtime("the equalizer's presets");
+    if let Some(what) = runtime_list(item.id) {
+        return ItemStatus::Runtime(what);
     }
     let reasons = if item.path.starts_with("111") {
         PLAYLIST_REASONS
@@ -361,7 +341,181 @@ pub fn menu_report() -> String {
     );
     menu_section(&mut out, "Context menu (resource 101)", context_tree());
     menu_section(&mut out, "Playlist menu (resource 111)", playlist_tree());
+    runtime_section(&mut out);
     out
+}
+
+const RUNTIME_TSV: &str = include_str!("../../../docs/r1/menu-runtime.tsv");
+
+/// Lists PotPlayer builds at run time (devices, presets, files): RVP's
+/// counterpart, by the list's place. A list counts once.
+const RUNTIME_LISTS: &[(&str, &str)] = &[
+    ("Audio > Audio Renderer", "mpv's audio devices"),
+    (
+        "Audio > Audio Renderer (Pass-through)",
+        "mpv's audio devices",
+    ),
+    ("Audio > Audio Renderer (2nd Device)", "mpv's audio devices"),
+    (
+        "Audio > Output Speakers",
+        "RVP's list of PotPlayer's 26 speaker choices",
+    ),
+    (
+        "Audio > Output Format/Resample",
+        "RVP's formats, sample rates and resampler qualities",
+    ),
+    (
+        "Audio > Output Mode",
+        "RVP's output modes (PotPlayer's LPCM is PCM to mpv)",
+    ),
+    ("Audio > Equalizer Presets", "PotPlayer's nineteen presets"),
+    ("Album/Favorites", "RVP's albums"),
+];
+
+/// Why run-time commands are not in RVP, by place; the longest wins.
+const RUNTIME_REASONS: &[(&str, &str)] = &[
+    ("Open", "planned in M11 (goal M)"),
+    ("Playback", "planned in M11 (goal M)"),
+    (
+        "Playback > Speed",
+        "RVP stretches with mpv's filters (Speed's three items); keeping speed changes: M11 (goal M)",
+    ),
+    ("Subtitles", "planned in M13 (goal O)"),
+    (
+        "Subtitles > Subtitle Translation",
+        "online subtitles: deferred by the owner (2026-10-16)",
+    ),
+    (
+        "Subtitles > Subtitle Searching",
+        "online subtitles: deferred by the owner (2026-10-16)",
+    ),
+    (
+        "Subtitles > Subtitle Font Renderer",
+        "mpv (libass) renders every subtitle",
+    ),
+    ("Video", "planned in M12 (goal N)"),
+    ("Frame Size", "planned in M12 (goal N)"),
+    ("Aspect Ratio", "planned in M12 (goal N)"),
+    ("Window Size", "planned in M12 (goal N)"),
+    ("Misc", "planned in M14 (goal P)"),
+    ("Skins", "planned in M14 (goal P)"),
+    (
+        "Audio > Audio Stretching",
+        "what PotPlayer's audio stretching does is checked against PotPlayer in goal L's host session",
+    ),
+];
+
+/// One command of R1's live menu that the static tree lacks: its place and
+/// ID.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RuntimeCommand {
+    pub place: String,
+    /// The place of the submenu it is in.
+    pub parent: String,
+    pub id: u32,
+}
+
+/// The live menu's commands whose IDs are in neither static tree.
+#[must_use]
+pub fn runtime_commands() -> Vec<RuntimeCommand> {
+    let mut known = std::collections::BTreeSet::new();
+    for tree in [context_tree(), playlist_tree()] {
+        crate::menu::walk(tree, &mut |item| {
+            known.insert(item.id);
+        });
+    }
+    let mut path: Vec<String> = Vec::new();
+    let mut out = Vec::new();
+    for line in RUNTIME_TSV.lines().skip(1) {
+        let cells: Vec<&str> = line.split('\t').collect();
+        let (Some(depth), Some(id), Some(text)) = (
+            cells.first().and_then(|d| d.parse::<usize>().ok()),
+            cells.get(1).and_then(|i| i.parse::<u32>().ok()),
+            cells.get(2),
+        ) else {
+            continue;
+        };
+        let text = text.trim().replace("&&", "&");
+        path.truncate(depth);
+        path.push(text.clone());
+        let submenu = cells.get(4).is_some_and(|flags| flags.contains("submenu"));
+        if submenu || id == 0 || text == "---" || known.contains(&id) {
+            continue;
+        }
+        out.push(RuntimeCommand {
+            place: path.join(" > "),
+            parent: path[..path.len() - 1].join(" > "),
+            id,
+        });
+    }
+    out
+}
+
+/// What RVP does with a run-time command.
+#[must_use]
+pub fn runtime_status(command: &RuntimeCommand) -> ItemStatus {
+    if let Some(action) = Action::from_potplayer_id(command.id) {
+        return ItemStatus::Window(action);
+    }
+    if let Some((_, what)) = RUNTIME_LISTS.iter().find(|(place, _)| {
+        command.parent == *place || command.parent.starts_with(&format!("{place} > "))
+    }) {
+        return ItemStatus::Runtime(what);
+    }
+    ItemStatus::Missing(
+        RUNTIME_REASONS
+            .iter()
+            .filter(|(place, _)| {
+                command.place == *place || command.place.starts_with(&format!("{place} > "))
+            })
+            .max_by_key(|(place, _)| place.len())
+            .map_or("not in RVP yet", |(_, reason)| reason),
+    )
+}
+
+fn runtime_section(out: &mut String) {
+    let commands = runtime_commands();
+    let mut done = Vec::new();
+    let mut lists: BTreeMap<&str, (usize, &str)> = BTreeMap::new();
+    let mut missing: BTreeMap<&str, Vec<String>> = BTreeMap::new();
+    for command in &commands {
+        match runtime_status(command) {
+            ItemStatus::Window(action) => done.push((command, action.name().to_owned())),
+            ItemStatus::Runtime(what) => {
+                let list = RUNTIME_LISTS
+                    .iter()
+                    .find(|(_, w)| *w == what)
+                    .map_or(command.parent.as_str(), |(place, _)| place);
+                lists.entry(list).or_insert((0, what)).0 += 1;
+            }
+            ItemStatus::List(_) => {}
+            ItemStatus::Missing(why) => missing
+                .entry(why)
+                .or_default()
+                .push(format!("{} ({})", command.place, command.id)),
+        }
+    }
+    let _ = writeln!(
+        out,
+        "\n## Run-time commands (R1's live menu)\n\n{} commands of the live menu \
+         (`docs/r1/menu-runtime.tsv`) are in neither static tree: {} carried out, {} in \
+         lists RVP fills itself (each list counts as one row), {} not.\n\n\
+         | Item | ID | RVP |\n|------|----|-----|",
+        commands.len(),
+        done.len(),
+        lists.values().map(|(count, _)| count).sum::<usize>(),
+        missing.values().map(Vec::len).sum::<usize>()
+    );
+    for (command, what) in done {
+        let _ = writeln!(out, "| {} | {} | `{what}` |", command.place, command.id);
+    }
+    for (place, (count, what)) in &lists {
+        let _ = writeln!(out, "| {place} ({count} entries) | list | {what} |");
+    }
+    let _ = writeln!(out, "\nNot carried out, by reason:\n");
+    for (why, places) in missing {
+        let _ = writeln!(out, "- **{why}** ({}): {}", places.len(), places.join("; "));
+    }
 }
 
 /// Skin commands the window shows data with (labels, sliders, images).

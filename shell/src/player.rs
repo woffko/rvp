@@ -77,6 +77,12 @@ pub mod request {
     /// The font dialog for the subtitles (`subtitle_font` is the current
     /// family).
     pub const SUBTITLE_FONT: i32 = 25;
+    /// The Adjust Audio Sync dialog; argument: the sync in milliseconds.
+    pub const AUDIO_SYNC: i32 = 26;
+    /// The save dialog for an audio recording (`record_path` suggests it).
+    pub const RECORD_AS: i32 = 27;
+    /// The folder dialog for audio recordings.
+    pub const RECORD_FOLDER: i32 = 28;
 }
 
 /// The skin, loaded once for the process (the painters read it on the
@@ -149,6 +155,10 @@ struct Core {
     /// The desktop's media controls (MPRIS, Windows' controls), once the
     /// application started.
     desktop: Option<crate::desktop::Integration>,
+    /// Windows' display kept on while video plays.
+    awake: crate::awake::KeepAwake,
+    /// The audio recording under way.
+    recorder: Option<crate::recorder::Recorder>,
 }
 
 /// Fitting the window to a video the user opened: requested, then the new
@@ -231,6 +241,7 @@ pub struct PlayerRust {
     pub(crate) panel_has_position: bool,
     pub(crate) panel_x: i32,
     pub(crate) panel_y: i32,
+    pub(crate) record_path: QString,
     /// The command line, parsed by `start`.
     cli: Cli,
     core: Option<Core>,
@@ -606,6 +617,8 @@ impl qobject::Player {
             portable,
             panel: None,
             desktop: None,
+            awake: crate::awake::KeepAwake::default(),
+            recorder: None,
         });
         if let Some(message) = messages.first() {
             self.as_mut().show_message(message);
@@ -672,6 +685,7 @@ impl qobject::Player {
         if let Some(desktop) = core.desktop.as_mut() {
             desktop.sync(&core.app, &drained.events);
         }
+        core.awake.set(core.app.keeps_screen_on());
         for event in &drained.events {
             match event {
                 EngineEvent::PlaybackRestart => crate::metrics::playback_restarted(),
@@ -1561,7 +1575,103 @@ impl qobject::Player {
             }
             UiRequest::Osd(text) => self.set_osd(QString::from(&text)),
             UiRequest::Message(text) => self.show_message(&text),
+            request @ (UiRequest::SystemVolume(_)
+            | UiRequest::AudioSyncDialog(_)
+            | UiRequest::RecordDialog(_)
+            | UiRequest::RecordFolderDialog
+            | UiRequest::Record(_)) => self.audio_request(request),
         }
+    }
+
+    /// The requests of the Audio menu (M10).
+    fn audio_request(mut self: Pin<&mut Self>, request: UiRequest) {
+        let Some(core) = self.as_mut().core_mut() else {
+            return;
+        };
+        match request {
+            UiRequest::SystemVolume(change) => {
+                let text = crate::system_volume::change(change).unwrap_or_else(|error| error);
+                self.set_osd(QString::from(&text));
+            }
+            UiRequest::AudioSyncDialog(seconds) => {
+                // Syncs are within ±10 s.
+                #[allow(clippy::cast_possible_truncation)]
+                let milliseconds = (seconds * 1000.0).round() as i32;
+                self.ui_request(request::AUDIO_SYNC, milliseconds);
+            }
+            UiRequest::RecordDialog(path) => {
+                self.as_mut()
+                    .set_record_path(QString::from(&file_url(&path)));
+                self.ui_request(request::RECORD_AS, 0);
+            }
+            UiRequest::RecordFolderDialog => self.ui_request(request::RECORD_FOLDER, 0),
+            UiRequest::Record(rvp_app::audio::commands::Record::Start(path)) => {
+                self.record_to(path);
+            }
+            UiRequest::Record(rvp_app::audio::commands::Record::Stop) => {
+                let text = match core.recorder.take() {
+                    Some(recorder) => match recorder.stop() {
+                        Ok(seconds) => format!("Audio recording stopped: {seconds:.1} s"),
+                        Err(error) => error,
+                    },
+                    None => "No audio recording".to_owned(),
+                };
+                self.set_osd(QString::from(&text));
+            }
+            _ => {}
+        }
+    }
+
+    /// Starts recording what RVP plays into `path`.
+    fn record_to(mut self: Pin<&mut Self>, path: PathBuf) {
+        let Some(core) = self.as_mut().core_mut() else {
+            return;
+        };
+        // One recording at a time.
+        if let Some(previous) = core.recorder.take() {
+            drop(previous.stop());
+        }
+        let text = match crate::recorder::Recorder::start(path) {
+            Ok(recorder) => {
+                let text = format!("Audio recording: {}", recorder.path().display());
+                core.app.recording_started(recorder.path().to_path_buf());
+                core.recorder = Some(recorder);
+                text
+            }
+            Err(error) => {
+                core.app.recording_stopped();
+                error
+            }
+        };
+        self.set_osd(QString::from(&text));
+    }
+
+    /// The Adjust Audio Sync dialog set the sync (seconds).
+    pub(crate) fn set_audio_delay(mut self: Pin<&mut Self>, seconds: f64) {
+        let Some(core) = self.as_mut().core_mut() else {
+            return;
+        };
+        if let Some(request) = core.app.set_audio_delay(core.engine, seconds) {
+            self.handle_request(request);
+        }
+    }
+
+    /// The save dialog chose where to record.
+    pub(crate) fn start_recording(self: Pin<&mut Self>, path: &QString) {
+        self.record_to(PathBuf::from(path.to_string()));
+    }
+
+    /// Sets the folder audio recordings go to.
+    pub(crate) fn set_record_folder(mut self: Pin<&mut Self>, path: &QString) {
+        let Some(core) = self.as_mut().core_mut() else {
+            return;
+        };
+        let folder = PathBuf::from(path.to_string());
+        core.app.set_record_folder(&folder);
+        self.set_osd(QString::from(&format!(
+            "Audio recordings go to {}",
+            folder.display()
+        )));
     }
 
     /// Saves the frame on a thread: mpv encodes the image, which takes

@@ -93,6 +93,17 @@ pub enum UiRequest {
     },
     /// A short notice over the video (volume, normalizer).
     Osd(String),
+    /// A change of the system's volume (the master volume).
+    SystemVolume(crate::audio::commands::SystemVolume),
+    /// The Adjust Audio Sync dialog, at this sync (seconds; then
+    /// `Player.set_audio_delay`).
+    AudioSyncDialog(f64),
+    /// A save dialog for an audio recording, suggesting this file.
+    RecordDialog(PathBuf),
+    /// Start or stop recording what RVP plays.
+    Record(crate::audio::commands::Record),
+    /// Ask for the folder recordings go to.
+    RecordFolderDialog,
     /// A non-blocking message (section 4: no modal interruptions).
     Message(String),
 }
@@ -205,6 +216,16 @@ pub struct App {
     pub(crate) svp: crate::svp::Watch,
     /// The normalizer's gain control (`App::start` starts it).
     normalizer: Option<crate::normalizer::Control>,
+    /// What the audio chain knows about the file that plays.
+    pub(crate) audio_source: crate::audio::chain::Source,
+    /// mpv's audio devices, read at start and when the settings window
+    /// asks (asking the system can take long).
+    pub audio_devices: Vec<crate::menu::Device>,
+    /// The `af` value RVP set last (`App::apply_audio_chain`).
+    applied_chain: Option<String>,
+    /// Freeverb's response for the settings it was made for: computing it
+    /// takes a few milliseconds, which chain changes need not repeat.
+    freeverb: Option<crate::audio::dsp::Response>,
     /// The seek bar while the mouse holds it (`App::drag_seek_bar`).
     seek_bar: Option<SeekBarHold>,
     /// Counts the files loaded: the media controls' track ID (`media`).
@@ -257,6 +278,10 @@ impl App {
             state_dir: state_dir.to_path_buf(),
             svp: crate::svp::Watch::default(),
             normalizer: None,
+            audio_source: crate::audio::chain::Source::default(),
+            audio_devices: Vec::new(),
+            applied_chain: None,
+            freeverb: None,
             seek_bar: None,
             media_track: 0,
         })
@@ -274,10 +299,10 @@ impl App {
             "volume-max".to_owned(),
             crate::volume::mpv_volume_max(self.settings.volume_max),
         ));
-        options.extra.push((
-            "audio-channels".to_owned(),
-            self.audio_channels().to_owned(),
-        ));
+        options
+            .extra
+            .push(("audio-channels".to_owned(), self.audio_channels()));
+        options.extra.extend(self.audio_options());
         let settings = &self.settings;
         for (name, value) in [
             ("audio-device", settings.audio_device.as_str()),
@@ -356,12 +381,16 @@ impl App {
         engine.set_mute(state.mute)?;
         self.started = true;
         let last_file = state.last_file.clone();
+        if let Some(volume) = self.settings.audio.startup_volume {
+            engine.set_volume(crate::volume::mpv_volume(volume))?;
+        }
         match crate::normalizer::Control::start(engine, self.settings.normalizer) {
             Ok(control) => self.normalizer = Some(control),
             Err(error) => self.warnings.push(format!("Normalizer: {error}")),
         }
-        self.apply_normalizer(engine);
-        self.apply_equalizer(engine);
+        self.configure_normalizer();
+        self.apply_audio_chain(engine);
+        self.read_audio_devices(engine);
         if let Err(error) = self.apply_picture_settings(engine) {
             self.warnings.push(format!("Picture settings: {error}"));
         }
@@ -541,6 +570,7 @@ impl App {
                 Some(self.model.flag(PropertyId::SubVisibility) != Some(false))
             }
             Action::ToggleKeyframeSeeks => Some(self.settings.keyframe_seeks),
+            Action::TogglePreventScreenSaver => Some(self.settings.prevent_screen_saver),
             Action::SetRepeat(repeat) => Some(self.settings.repeat == repeat),
             Action::SetOnTop(mode) => Some(self.settings.on_top == mode),
             Action::SetAfterPlayback(after) => Some(self.session.after == after),
@@ -564,6 +594,7 @@ impl App {
             }
             Action::ToggleVapourSynth => Some(self.settings.vapoursynth.enabled),
             Action::ControlPanel => Some(self.session.control_panel),
+            Action::Audio(command) => self.audio_checked(command),
             _ => None,
         }
     }
@@ -658,10 +689,8 @@ impl App {
             Action::ToggleSubtitles => engine.toggle_subtitles(),
             Action::ToggleNormalizer => {
                 self.settings.normalizer.enabled = !self.settings.normalizer.enabled;
-                if !self.defer_chain_change() {
-                    self.apply_normalizer(engine);
-                    self.resync_audio(engine);
-                }
+                self.configure_normalizer();
+                self.audio_chain_changed(engine);
                 return Some(self.normalizer_notice());
             }
             Action::ToggleBoost => {
@@ -692,8 +721,14 @@ impl App {
             Action::SeekForward(step) => {
                 self.seek_to(engine, Seek::Relative(self.settings.seek_seconds(step)))
             }
-            Action::VolumeUp => return self.change_volume(engine, self.settings.volume_step),
-            Action::VolumeDown => return self.change_volume(engine, -self.settings.volume_step),
+            Action::VolumeUp => {
+                let step = self.volume_step_now();
+                return self.change_volume(engine, step);
+            }
+            Action::VolumeDown => {
+                let step = self.volume_step_now();
+                return self.change_volume(engine, -step);
+            }
             Action::ToggleMute => {
                 let mute = self.model.flag(PropertyId::Mute) != Some(true);
                 return engine
@@ -936,27 +971,96 @@ impl App {
             .unwrap_or_else(|| name.to_owned())
     }
 
-    /// Applies the normalizer settings to its gain control and to mpv's
-    /// audio filters: the normalizer, starting at the gain it reached, then
-    /// the tempo filter that keeps speed changes from putting audio and
-    /// video out of step (`crate::normalizer`).
-    pub fn apply_normalizer(&self, engine: &Engine) {
-        let normalizer = self.settings.normalizer;
-        self.configure_normalizer();
-        let enabled = normalizer.enabled;
-        let gain = self
-            .normalizer
-            .as_ref()
-            .map_or(1.0, crate::normalizer::Control::gain);
-        let entry = enabled.then(|| normalizer.chain_entry(gain));
-        if let Err(error) = engine.set_audio_filter(crate::normalizer::LABEL, entry.as_deref()) {
-            eprintln!("rvp: cannot set the normalizer: {error}");
+    /// Sets RVP's audio filters (`crate::audio::chain`) for the settings
+    /// and the file that plays, with the normalizer starting at the gain it
+    /// reached; the user's own filters keep their places. Nothing happens
+    /// when the chain is the one RVP set last.
+    pub fn apply_audio_chain(&mut self, engine: &Engine) {
+        let responses = self.audio_responses();
+        let speakers = crate::speakers::choice(&self.settings.output_speakers)
+            .unwrap_or(&crate::speakers::CHOICES[1]);
+        let inputs = crate::audio::chain::Inputs {
+            audio: &self.settings.audio,
+            speakers,
+            equalizer: &self.settings.equalizer,
+            normalizer: &self.settings.normalizer,
+            channel: self.session.stereo_channel,
+            source: &self.audio_source,
+            gain: self
+                .normalizer
+                .as_ref()
+                .map_or(1.0, crate::normalizer::Control::gain),
+            responses: &responses,
+        };
+        let (front, back) = crate::audio::chain::build(&inputs);
+        let current = engine.get_text("af").unwrap_or_default();
+        let text = crate::audio::chain::assemble(&current, &front, &back);
+        if self.applied_chain.as_deref() == Some(text.as_str()) {
+            return;
         }
-        // Re-added after the normalizer, so it stays last.
-        let tempo = enabled.then_some(crate::normalizer::TEMPO_ENTRY);
-        if let Err(error) = engine.set_audio_filter(crate::normalizer::TEMPO_LABEL, tempo) {
-            eprintln!("rvp: cannot set the tempo filter: {error}");
+        match engine.set_text("af", &text) {
+            Ok(()) => self.applied_chain = Some(text),
+            Err(error) => eprintln!("rvp: cannot set the audio filters: {error}"),
         }
+    }
+
+    /// The impulse responses the chain needs now, computed into the state
+    /// folder when missing (`crate::audio::dsp`).
+    fn audio_responses(&mut self) -> crate::audio::chain::Responses {
+        let folder = self.state_dir.join("audio");
+        let audio = &self.settings.audio;
+        let freeverb = if audio.freeverb.enabled {
+            let (room, damping, width) = (
+                audio.freeverb.room_size,
+                audio.freeverb.damping,
+                audio.freeverb.width,
+            );
+            let path = crate::audio::dsp::freeverb_path(&folder, room, damping, width);
+            match &self.freeverb {
+                Some(response) if response.path == path && path.is_file() => Some(response.clone()),
+                _ => match crate::audio::dsp::freeverb_file(&folder, room, damping, width) {
+                    Ok(response) => {
+                        self.freeverb = Some(response.clone());
+                        Some(response)
+                    }
+                    Err(error) => {
+                        eprintln!("rvp: cannot write Freeverb's response: {error}");
+                        None
+                    }
+                },
+            }
+        } else {
+            None
+        };
+        let audio = &self.settings.audio;
+        let mode = crate::speakers::choice(&self.settings.output_speakers).map(|c| c.mode);
+        let distance = match mode {
+            Some(crate::speakers::Mode::VirtualHeadphone) => Some(0.0),
+            Some(crate::speakers::Mode::VirtualSurround) => Some(audio.virtualizer.distance),
+            _ => None,
+        };
+        let head_model = distance
+            .map(|distance| crate::audio::dsp::head_model_file(&folder, distance))
+            .and_then(|result| {
+                result
+                    .map_err(|error| eprintln!("rvp: cannot write the head model: {error}"))
+                    .ok()
+            });
+        crate::audio::chain::Responses {
+            freeverb,
+            head_model,
+        }
+    }
+
+    /// RVP's audio filters changed: they are set at once and playback goes
+    /// on from here, or near the end of a file they wait for the next one.
+    pub(crate) fn audio_chain_changed(&mut self, engine: &Engine) {
+        if self.defer_chain_change() {
+            return;
+        }
+        self.apply_audio_chain(engine);
+        // Rebuilding the chain drops what mpv had filtered ahead.
+        self.resync_audio(engine);
     }
 
     /// Gives the normalizer's settings to its gain control. Boost, level and
@@ -1001,8 +1105,7 @@ impl App {
         if !std::mem::take(&mut self.chain_pending) {
             return;
         }
-        self.apply_normalizer(engine);
-        self.apply_equalizer(engine);
+        self.apply_audio_chain(engine);
         if resync {
             self.resync_audio(engine);
         }
@@ -1067,8 +1170,18 @@ impl App {
         engine.seek_with(target, !self.settings.keyframe_seeks)
     }
 
+    /// The volume keys and the wheel: RVP's volume, or the system's wave or
+    /// master volume (the Volume Control page's method).
     fn change_volume(&mut self, engine: &Engine, delta: f64) -> Option<UiRequest> {
-        self.set_volume(engine, self.volume_percent() + delta)
+        match self.settings.audio.volume_method {
+            crate::audio::VolumeMethod::Player => {
+                self.set_volume(engine, self.volume_percent() + delta)
+            }
+            crate::audio::VolumeMethod::Wave => crate::audio::commands::change_wave(engine, delta),
+            crate::audio::VolumeMethod::Master => Some(UiRequest::SystemVolume(
+                crate::audio::commands::SystemVolume::MasterStep(delta),
+            )),
+        }
     }
 
     /// The volume as RVP shows it: PotPlayer's percent
@@ -1172,7 +1285,21 @@ impl App {
     /// A volume slider was set to `fraction` (0.0 to 1.0) of its length,
     /// which runs to the highest volume.
     pub fn set_volume_fraction(&mut self, engine: &Engine, fraction: f64) -> Option<UiRequest> {
-        self.set_volume(engine, fraction * self.settings.volume_max.max(100.0))
+        match self.settings.audio.volume_method {
+            crate::audio::VolumeMethod::Player => {
+                self.set_volume(engine, fraction * self.settings.volume_max.max(100.0))
+            }
+            crate::audio::VolumeMethod::Wave => {
+                let volume = (fraction * 100.0).clamp(0.0, 100.0);
+                engine
+                    .set_double("ao-volume", volume)
+                    .ok()
+                    .map(|()| UiRequest::Osd(format!("Wave volume: {volume:.0} %")))
+            }
+            crate::audio::VolumeMethod::Master => Some(UiRequest::SystemVolume(
+                crate::audio::commands::SystemVolume::MasterSet(fraction.clamp(0.0, 1.0)),
+            )),
+        }
     }
 
     /// Handles everything libmpv has reported: updates the model, the
@@ -1279,6 +1406,7 @@ impl App {
         if std::mem::take(&mut self.play_on_load) {
             drop(engine.set_pause(false));
         }
+        self.audio_file_loaded(engine);
         self.apply_pending_chain(engine, false);
         self.apply_ab(engine);
         self.svp

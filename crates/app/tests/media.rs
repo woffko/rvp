@@ -1,10 +1,11 @@
 //! The media controls' view of playback and their commands (M8: MPRIS,
-//! Windows' media controls), on headless libmpv: no window, no sound.
+//! Windows' media controls), and whether the screen stays on, on headless
+//! libmpv: no window, no sound.
 
 use std::time::{Duration, Instant};
 
 use rvp_app::media::{MediaCommand, Status};
-use rvp_app::{App, Settings, UiRequest};
+use rvp_app::{Action, App, Settings, UiRequest};
 use rvp_engine::{Engine, EngineOptions, PropertyId};
 
 const LONG: &str = concat!(
@@ -56,11 +57,27 @@ fn the_media_controls_see_and_steer_playback() {
             .is_some_and(|length| (length - 60.0).abs() < 1.0)
     );
     assert!(state.can_seek && state.can_play && !state.can_next && !state.can_previous);
+    drain_until(&mut app, &engine, "the video's size", |app| {
+        app.model.int(PropertyId::VideoWidth).is_some()
+    });
+    // Video plays: the screen stays on, unless the setting says otherwise.
+    assert!(app.keeps_screen_on());
+    assert_eq!(
+        app.dispatch(&engine, Action::TogglePreventScreenSaver),
+        Some(UiRequest::Osd(
+            "Prevent screen saver during playback: Off".to_owned()
+        ))
+    );
+    assert!(!app.keeps_screen_on());
+    assert_eq!(app.checked(Action::TogglePreventScreenSaver), Some(false));
+    app.dispatch(&engine, Action::TogglePreventScreenSaver);
+    assert!(app.keeps_screen_on());
 
     app.media_command(&engine, MediaCommand::Pause);
     drain_until(&mut app, &engine, "paused", |app| {
         app.media_state().status == Status::Paused
     });
+    assert!(!app.keeps_screen_on(), "paused: the screen may sleep");
     app.media_command(
         &engine,
         MediaCommand::SetPosition {

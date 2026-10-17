@@ -46,6 +46,9 @@ Window {
     readonly property int requestPanelMove: 23
     readonly property int requestSaveFrameAs: 24
     readonly property int requestSubtitleFont: 25
+    readonly property int requestAudioSync: 26
+    readonly property int requestRecordAs: 27
+    readonly property int requestRecordFolder: 28
 
     property bool wasMaximized: false
     // The window state RVP last asked for and when (see applyVisibility).
@@ -227,6 +230,18 @@ Window {
         case requestSubtitleFont:
             dialogLoader.active = true
             dialogLoader.item.askFont(player.subtitle_font)
+            break
+        case requestAudioSync:
+            syncLoader.active = true
+            syncLoader.item.ask(argument)
+            break
+        case requestRecordAs:
+            dialogLoader.active = true
+            dialogLoader.item.askRecording(player.record_path)
+            break
+        case requestRecordFolder:
+            folderLoader.active = true
+            folderLoader.item.ask("recordings")
             break
         case requestAlbumName:
             albumLoader.active = true
@@ -534,6 +549,13 @@ Window {
         z: 30
         active: false
         Component.onCompleted: setSource("About.qml", { player: player })
+    }
+    Loader {
+        id: syncLoader
+        anchors.fill: parent
+        z: 30
+        active: false
+        Component.onCompleted: setSource("AudioSync.qml", { player: player })
     }
     Loader {
         id: albumLoader
@@ -1712,6 +1734,65 @@ Window {
             t.next()
             break
         }
+        // M10: an effect in the chain and out, PotPlayer's speaker choices,
+        // the individual volume, Freeverb's response, the sync dialog.
+        case 322:
+            player.key(Qt.Key_C, Qt.ShiftModifier)
+            t.next()
+            break
+        case 323:
+            if (t.waitFor("shift_c_crystality_on", () => s.af !== null && s.af.indexOf("rvpcrystality") >= 0
+                              && String(s.osd).indexOf("Crystality: On") >= 0, 3000,
+                          () => "af " + s.af + " osd " + s.osd))
+                player.key(Qt.Key_C, Qt.ShiftModifier)
+            break
+        case 324:
+            t.waitFor("shift_c_crystality_off", () => s.af !== null && s.af.indexOf("rvpcrystality") < 0
+                          && s.af.indexOf("rvpnorm") >= 0, 3000, () => "af " + s.af)
+            break
+        case 325: {
+            const find = (items, label) => {
+                for (const item of items) {
+                    if (item.label === label)
+                        return item
+                    const inner = find(item.children || [], label)
+                    if (inner)
+                        return inner
+                }
+                return null
+            }
+            const speakers = find(JSON.parse(player.menu_json("context")), "Output Speakers")
+            t.check("speaker_menu_lists_potplayers_26", speakers !== null && speakers.children.length === 26,
+                    speakers ? speakers.children.length + " choices" : "no Output Speakers")
+            const result = JSON.parse(player.set_setting("audio.channel-volumes.enabled", "true"))
+            t.check("individual_volume_set", !result.error, result.error || "")
+            t.next()
+            break
+        }
+        case 326:
+            if (t.waitFor("individual_volume_in_chain", () => s.af !== null && s.af.indexOf("rvpgains") >= 0
+                              && s.af.indexOf("rvpnorm") < s.af.indexOf("rvpgains"), 3000,
+                          () => "af " + s.af)) {
+                player.set_setting("audio.channel-volumes.enabled", "false")
+                player.key(Qt.Key_R, Qt.ShiftModifier)
+            }
+            break
+        case 327:
+            if (t.waitFor("shift_r_freeverb_on", () => s.af !== null && s.af.indexOf("rvpreverb") >= 0
+                              && s.af.indexOf("rvpgains") < 0 && s.af.indexOf(".wav") >= 0, 3000,
+                          () => "af " + s.af))
+                player.key(Qt.Key_R, Qt.ShiftModifier)
+            break
+        case 328:
+            if (t.waitFor("shift_r_freeverb_off", () => s.af !== null && s.af.indexOf("rvpreverb") < 0,
+                          3000, () => "af " + s.af))
+                player.run_action("audio-sync-dialog")
+            break
+        case 329:
+            if (t.waitFor("audio_sync_dialog_opens", () => syncLoader.status === Loader.Ready
+                              && syncLoader.item.dialog.opened, 3000))
+                syncLoader.item.dialog.close()
+            break
         default:
             // Back to M3's steps.
             t.step = 126

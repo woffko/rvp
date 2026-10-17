@@ -1,16 +1,13 @@
 //! The desktop's media controls (M8): MPRIS and idle inhibit on Linux
 //! (`rvp_platform::Desktop`), the System Media Transport Controls on
 //! Windows (`crate::media_controls`). Both show `App::media_state` and send
-//! their commands to the window's thread (`Player::media_command`).
+//! their commands to the window's thread (`Player::media_command`). Windows'
+//! counterpart of the idle inhibit is `crate::awake`.
 
 use cxx_qt::CxxQtThread;
 use rvp_app::App;
 use rvp_app::media::MediaState;
-#[cfg(target_os = "linux")]
-use rvp_app::media::Status;
 use rvp_engine::EngineEvent;
-#[cfg(target_os = "linux")]
-use rvp_engine::PropertyId;
 
 use crate::player_qobject::qobject;
 
@@ -81,8 +78,7 @@ impl Integration {
             {
                 self.desktop.seeked(state.position);
             }
-            let video = app.model.int(PropertyId::VideoWidth).is_some();
-            let inhibit = state.status == Status::Playing && video;
+            let inhibit = app.keeps_screen_on();
             if inhibit != self.inhibited {
                 self.inhibited = inhibit;
                 self.desktop.inhibit(inhibit);

@@ -18,6 +18,7 @@
 // pipe or file that the caller redirects to.
 #![cfg_attr(windows, windows_subsystem = "windows")]
 
+mod awake;
 mod crash;
 mod desktop;
 mod ffi;
@@ -26,8 +27,10 @@ mod media_controls;
 mod metrics;
 mod player;
 mod player_qobject;
+mod recorder;
 mod skin_view;
 mod skin_view_qobject;
+mod system_volume;
 mod video;
 
 use std::time::{Duration, Instant};

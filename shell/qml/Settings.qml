@@ -24,6 +24,11 @@ ApplicationWindow {
         { key: "playback", title: "Playback" },
         { key: "playlist", title: "Playlist" },
         { key: "audio", title: "Audio" },
+        { key: "audio-volume", title: "Audio: Volume Control" },
+        { key: "equalizer", title: "Audio: Equalizer" },
+        { key: "normalizer", title: "Audio: Normalizer/Freeverb" },
+        { key: "audio-effects", title: "Audio: Crystality/Noise Reduction" },
+        { key: "audio-sync", title: "Audio: Language/Sync/Other" },
         { key: "video", title: "Video" },
         { key: "shaders", title: "Shaders" },
         { key: "svp", title: "SVP and VapourSynth" },
@@ -119,6 +124,14 @@ ApplicationWindow {
         const item = list.splice(index, 1)[0]
         list.splice(to, 0, item)
         set(path, list)
+    }
+    // Device descriptions by name; `none` names the empty value.
+    function deviceTexts(none) {
+        const texts = { "": none, "auto": none }
+        for (const d of view.choices["audio-device"] || [])
+            if (d.name !== "auto")
+                texts[d.name] = d.description
+        return texts
     }
     // A choice list that keeps a value typed into the file.
     function withCurrent(list, current) {
@@ -463,6 +476,7 @@ ApplicationWindow {
                     Heading { text: "Window" }
                     Check { path: "fit-window-to-video"; text: "Fit the window to a newly opened video" }
                     Check { path: "keep-aspect-window"; text: "Keep the video's shape while the window is resized" }
+                    Check { path: "prevent-screen-saver"; text: "Prevent screen saver during playback" }
                     Choice {
                         label: "Stay on top"
                         path: "on-top"
@@ -564,27 +578,29 @@ ApplicationWindow {
                 }
 
                 Page {
-                    Heading { text: "Normalizer" }
-                    Check { path: "normalizer.enabled"; text: "Normalize the volume (Shift+N)" }
-                    Check { path: "normalizer.boost"; text: "Boost audio (raise quiet passages)" }
-                    Amount { label: "Level"; path: "normalizer.level"; unit: "%"; from: 10; to: 100 }
-                    Amount { label: "Release time"; path: "normalizer.release"; from: 5; to: 10 }
-                    Heading { text: "Volume" }
-                    Amount { label: "Step (Up, Down, wheel)"; path: "volume-step"; unit: "%"; from: 1; to: 20 }
-                    Amount { label: "Maximum (above 100 amplifies)"; path: "volume-max"; unit: "%"
-                             values: [100, 110, 120, 130, 150, 175, 200, 250, 300, 400, 500, 700, 1000] }
-                    Heading { text: "Output" }
+                    Heading { text: "Audio Output" }
                     Choice {
-                        label: "Audio device"
+                        label: "Audio Renderer"
                         path: "audio-device"
                         values: win.withCurrent((win.view.choices["audio-device"] || []).map(d => d.name),
                                                 win.s["audio-device"])
-                        texts: {
-                            const texts = {}
-                            for (const d of win.view.choices["audio-device"] || [])
-                                texts[d.name] = d.description
-                            return texts
-                        }
+                        texts: win.deviceTexts("Auto select (Recommended)")
+                    }
+                    Choice {
+                        label: "Pass-through Renderer"
+                        path: "audio.passthrough-device"
+                        values: win.withCurrent([""].concat((win.view.choices["audio-device"] || [])
+                                                .map(d => d.name).filter(n => n !== "auto")),
+                                                win.value("audio.passthrough-device"))
+                        texts: win.deviceTexts("Default Audio Device (Recommended)")
+                    }
+                    Choice {
+                        label: "2nd Audio Renderer"
+                        path: "audio.second-device"
+                        values: win.withCurrent([""].concat((win.view.choices["audio-device"] || [])
+                                                .map(d => d.name).filter(n => n !== "auto")),
+                                                win.value("audio.second-device"))
+                        texts: win.deviceTexts("Disable (Recommended)")
                     }
                     Choice {
                         label: "Speakers"
@@ -597,14 +613,220 @@ ApplicationWindow {
                             return texts
                         }
                     }
+                    Choice {
+                        label: "Output format"
+                        path: "audio.sample-format"
+                        values: ["same", "s16", "s24", "s32", "float", "s16-dither"]
+                        texts: ({ "same": "As the output device takes it", "s16": "16-bit",
+                                  "s24": "24-bit", "s32": "32-bit", "float": "32-bit (floating point)",
+                                  "s16-dither": "16-bit (dithering)" })
+                    }
+                    Choice {
+                        label: "Sample rate"
+                        path: "audio.sample-rate"
+                        values: win.view.choices["sample-rate"] || [0]
+                        texts: {
+                            const texts = {}
+                            for (const rate of win.view.choices["sample-rate"] || [0])
+                                texts[rate] = rate === 0 ? "Same as input (Recommended)" : rate + " Hz"
+                            return texts
+                        }
+                    }
+                    Choice {
+                        label: "Resample"
+                        path: "audio.resample-quality"
+                        values: ["high", "normal", "low"]
+                        texts: ({ "high": "High quality", "normal": "Normal quality (Recommended)",
+                                  "low": "Low quality" })
+                    }
+                    Choice {
+                        label: "Output"
+                        path: "audio.output-mode"
+                        values: ["pcm", "passthrough", "ac3-encode"]
+                        texts: ({ "pcm": "PCM (Default) (Recommended)", "passthrough": "Pass-through",
+                                  "ac3-encode": "Pass-through after AC3 re-encoding" })
+                    }
+                    Choice {
+                        label: "Pass-through when the source has"
+                        path: "audio.passthrough-min-channels"
+                        values: [null, 2, 3, 4, 5, 6, 7, 8]
+                        texts: ({ "null": "Any number of channels", 2: "2 channels or more",
+                                  3: "3 channels or more", 4: "4 channels or more", 5: "5 channels or more",
+                                  6: "6 channels or more", 7: "7 channels or more", 8: "8 channels" })
+                    }
+                    Check { path: "audio.exclusive"; text: "Exclusive mode (the device plays only RVP)" }
+                    Heading { text: "Mixer Settings" }
+                    Check { path: "audio.mixer.normalize"; text: "Normalize matrix (scale the mix down so it cannot clip)" }
+                    Check { path: "audio.mixer.expand-center"; text: "Expand stereo to center" }
+                    Check { path: "audio.mixer.expand-surround"; text: "Expand stereo to surround" }
+                    Heading { text: "Mixer Level" }
+                    Amount { label: "Front"; path: "audio.mixer.front"; unit: "dB"; from: -30; to: 12; step: 0.5 }
+                    Amount { label: "Center"; path: "audio.mixer.center"; unit: "dB"; from: -30; to: 12; step: 0.5 }
+                    Amount { label: "Surround"; path: "audio.mixer.surround"; unit: "dB"; from: -30; to: 12; step: 0.5 }
+                    Amount { label: "LFE"; path: "audio.mixer.lfe"; unit: "dB"; from: -30; to: 12; step: 0.5 }
                     Note {
                         text: "Stereo mixes 5.1 and 7.1 down as PotPlayer does (centre and LFE at -3 dB, "
                               + "surround channels at their level) before the equalizer and the normalizer."
                     }
-                    Amount { label: "Audio sync step (Shift+, and Shift+.)"; path: "audio-delay-step"; values: [0.001, 0.005, 0.01, 0.02, 0.025, 0.05, 0.1, 0.2, 0.25, 0.5, 1, 2, 5, 10]; format: win.seconds }
+                    Heading { text: "Headphone & Dolby Decoder Settings" }
+                    Amount { label: "Distance (virtual speakers' room)"; path: "audio.virtualizer.distance"; from: 0; to: 100 }
+                    Amount { label: "Delay (decoded surround)"; path: "audio.virtualizer.delay"; unit: "ms"; from: 0; to: 100 }
+                    Heading { text: "LFE Redirection" }
+                    Check { path: "audio.lfe-redirect.enabled"; text: "Enable" }
+                    Check { path: "audio.lfe-redirect.remove-low"; text: "Remove low frequencies from the other speakers" }
+                    Amount { label: "Low frequency"; path: "audio.lfe-redirect.frequency"; unit: "Hz"; from: 20; to: 300; step: 5 }
+                    Amount { label: "Gain"; path: "audio.lfe-redirect.gain"; unit: "dB"; from: -20; to: 20; step: 0.5 }
+                    Heading { text: "Second Device" }
+                    Amount { label: "Sync of the 2nd device"; path: "audio.second-delay"; unit: "ms"; from: -2000; to: 2000; step: 10 }
+                }
+
+                Page {
+                    Heading { text: "Volume control setting" }
+                    Choice {
+                        label: "Method"
+                        path: "audio.volume-method"
+                        values: ["player", "wave", "master"]
+                        texts: ({ "player": "Default volume control (Recommended)",
+                                  "wave": "System Wave volume control",
+                                  "master": "System Master volume control" })
+                    }
+                    Check { path: "audio.wave-to-max"; text: "Adjust wave volume to max" }
+                    Check { path: "audio.accelerate"; text: "Accelerate control speed" }
+                    Amount { label: "Volume step (Up, Down, wheel)"; path: "volume-step"; unit: "%"; from: 1; to: 20 }
+                    Amount { label: "Max amplification (above 100 amplifies)"; path: "volume-max"; unit: "%"
+                             values: [100, 110, 120, 130, 150, 175, 200, 250, 300, 400, 500, 700, 1000] }
+                    CheckBox {
+                        text: "Startup volume"
+                        checked: win.value("audio.startup-volume") !== null
+                                 && win.value("audio.startup-volume") !== undefined
+                        onToggled: win.set("audio.startup-volume", checked ? 50 : null)
+                    }
+                    Amount { label: "Volume at every start"; path: "audio.startup-volume"; unit: "%"; from: 0; to: 200
+                             enabled: win.value("audio.startup-volume") !== null }
+                    Heading { text: "Individual volume control" }
+                    Check { path: "audio.channel-volumes.enabled"; text: "Enable individual volume control" }
+                    Amount { label: "Master volume"; path: "audio.channel-volumes.master"; unit: "dB"; from: -40; to: 12; step: 0.5; live: true }
+                    Amount { label: "Left channel"; path: "audio.channel-volumes.left"; unit: "dB"; from: -40; to: 12; step: 0.5; live: true }
+                    Amount { label: "Right channel"; path: "audio.channel-volumes.right"; unit: "dB"; from: -40; to: 12; step: 0.5; live: true }
+                    Amount { label: "Center channel"; path: "audio.channel-volumes.center"; unit: "dB"; from: -40; to: 12; step: 0.5; live: true }
+                    Amount { label: "BackL channel"; path: "audio.channel-volumes.back-left"; unit: "dB"; from: -40; to: 12; step: 0.5; live: true }
+                    Amount { label: "BackR channel"; path: "audio.channel-volumes.back-right"; unit: "dB"; from: -40; to: 12; step: 0.5; live: true }
+                    Amount { label: "SideL channel"; path: "audio.channel-volumes.side-left"; unit: "dB"; from: -40; to: 12; step: 0.5; live: true }
+                    Amount { label: "SideR channel"; path: "audio.channel-volumes.side-right"; unit: "dB"; from: -40; to: 12; step: 0.5; live: true }
+                    Amount { label: "LFE channel"; path: "audio.channel-volumes.lfe"; unit: "dB"; from: -40; to: 12; step: 0.5; live: true }
+                    Heading { text: "Pre-amplify" }
+                    Check { path: "audio.preamp.enabled"; text: "Pre-amplify AC3/DTS Vol." }
+                    Amount { label: "PreAmp"; path: "audio.preamp.gain"; unit: "dB"; from: 0; to: 20; step: 0.5 }
+                }
+
+                Page {
                     Heading { text: "Equalizer" }
-                    Check { path: "equalizer.enabled"; text: "Use the equalizer (Shift+E), before the normalizer" }
-                    Note { text: "Bands and presets: the control panel (F7) and the Audio menu." }
+                    Check { path: "equalizer.enabled"; text: "Enable (Shift+E), before the normalizer" }
+                    RowLayout {
+                        Label { text: "Preset"; Layout.preferredWidth: 240 }
+                        ComboBox {
+                            id: presetBox
+                            Layout.preferredWidth: 300
+                            model: win.view.choices["equalizer-preset"] || []
+                            currentIndex: (win.view.choices["equalizer-preset"] || [])
+                                .indexOf(win.value("equalizer.preset"))
+                            onActivated: (index) => {
+                                player.run_menu_command("e:" + index)
+                                win.reload()
+                            }
+                        }
+                        Button {
+                            text: "0 dB"
+                            onClicked: win.set("equalizer.bands", [0, 0, 0, 0, 0, 0, 0, 0, 0, 0])
+                        }
+                    }
+                    Check { path: "equalizer.superequalizer"; text: "SuperEQ (Naoki Shibata's equalizer, 18 bands)" }
+                    Repeater {
+                        model: ["60 Hz", "170 Hz", "310 Hz", "600 Hz", "1 kHz", "3 kHz", "6 kHz", "12 kHz", "14 kHz", "16 kHz"]
+                        delegate: Amount {
+                            required property string modelData
+                            required property int index
+                            label: modelData
+                            path: "equalizer.bands." + index
+                            unit: "dB"
+                            from: -12
+                            to: 12
+                            step: 0.5
+                            live: true
+                        }
+                    }
+                    Note { text: "The bands are also on the control panel (F7)." }
+                }
+
+                Page {
+                    Heading { text: "Normalizer (Auto Volume Control)" }
+                    Check { path: "normalizer.enabled"; text: "Enable (Shift+N)" }
+                    Check { path: "normalizer.video-only"; text: "Operate only with video playback" }
+                    Note { text: "Method: TomSteady 32-bit floating point arithmetic, PotPlayer's recommended one." }
+                    Check { path: "normalizer.boost"; text: "Boost audio (raise quiet passages)" }
+                    Amount { label: "Level"; path: "normalizer.level"; unit: "%"; from: 10; to: 100 }
+                    Amount { label: "Release time"; path: "normalizer.release"; from: 5; to: 10 }
+                    Heading { text: "Freeverb" }
+                    Check { path: "audio.freeverb.enabled"; text: "Enable (Shift+R)" }
+                    Note { text: "It operates only in 2 channels." }
+                    Amount { label: "Room size"; path: "audio.freeverb.room-size"; from: 0; to: 1; step: 0.01 }
+                    Amount { label: "Damping"; path: "audio.freeverb.damping"; from: 0; to: 1; step: 0.01 }
+                    Amount { label: "Wet level"; path: "audio.freeverb.wet"; from: 0; to: 1; step: 0.001 }
+                    Amount { label: "Dry level"; path: "audio.freeverb.dry"; from: 0; to: 1; step: 0.01 }
+                    Amount { label: "Width"; path: "audio.freeverb.width"; from: 0; to: 1; step: 0.01 }
+                }
+
+                Page {
+                    Heading { text: "Crystallization" }
+                    Check { path: "audio.crystality.enabled"; text: "Enable (Shift+C)" }
+                    Amount { label: "Bandwidth extender"; path: "audio.crystality.bandwidth-extender"; from: 0; to: 100 }
+                    Amount { label: "Extender's HPF"; path: "audio.crystality.extender-hpf"; from: 0; to: 100 }
+                    Amount { label: "Harmonic booster"; path: "audio.crystality.harmonic-booster"; from: 0; to: 100 }
+                    Amount { label: "Echo volume"; path: "audio.crystality.echo-volume"; from: 0; to: 100 }
+                    Amount { label: "Echo feedback"; path: "audio.crystality.echo-feedback"; from: 0; to: 100 }
+                    Amount { label: "Extra stereo"; path: "audio.crystality.extra-stereo"; from: 0; to: 100 }
+                    Heading { text: "Noise Reduction" }
+                    Check { path: "audio.noise-reduction.enabled"; text: "Enable (Shift+D)" }
+                    Amount { label: "Threshold"; path: "audio.noise-reduction.threshold"; from: 0; to: 100 }
+                    Heading { text: "Crossfeed" }
+                    Check { path: "audio.crossfeed.enabled"; text: "Enable" }
+                    Amount { label: "Low frequencies to the other ear below"; path: "audio.crossfeed.cut"; unit: "Hz"; from: 300; to: 2000; step: 50 }
+                    Amount { label: "Feed level"; path: "audio.crossfeed.feed"; unit: "dB"; from: 1; to: 15; step: 0.5 }
+                    Heading { text: "Voice and Channels" }
+                    Check { path: "audio.voice-removal"; text: "Voice Removal (Shift+V)" }
+                    Check { path: "audio.voice-emphasis"; text: "Voice Emphasis (Shift+A)" }
+                    Check { path: "audio.swap-channels"; text: "Swap Stereo Channels (Shift+T)" }
+                }
+
+                Page {
+                    Heading { text: "Language/Stream Selection" }
+                    Field { label: "Preferred languages"; path: "audio.languages"; placeholder: "rus,eng" }
+                    Field { label: "Turn off subtitles with"; path: "audio.subtitles-off"; placeholder: "rus" }
+                    Amount { label: "Preferred stream (0: none)"; path: "audio.preferred-stream"; from: 0; to: 9 }
+                    Check { path: "audio.remember-tracks"; text: "Remember audio track selections" }
+                    Heading { text: "Synchronization" }
+                    Choice {
+                        label: "Audio sync control"
+                        path: "audio.sync-keep"
+                        values: ["never", "runtime", "always"]
+                        texts: ({ "never": "Do not keep audio sync changes",
+                                  "runtime": "Keep audio sync changes over whole runtime",
+                                  "always": "Always keep audio sync changes" })
+                    }
+                    Amount { label: "Audio sync step (Shift+, and Shift+.)"; path: "audio-delay-step"; values: [0.001, 0.005, 0.01, 0.02, 0.025, 0.05, 0.1, 0.2, 0.25, 0.5, 1, 2, 5, 10]; format: win.seconds }
+                    Amount { label: "Default audio sync"; path: "audio.default-delay"; unit: "ms"; from: -2000; to: 2000; step: 10 }
+                    Heading { text: "Speed" }
+                    Choice {
+                        label: "Time stretching"
+                        path: "audio.stretch"
+                        values: ["high-quality", "default-quality", "pitch"]
+                        texts: ({ "high-quality": "High quality audio time stretching (Recommended)",
+                                  "default-quality": "Default quality audio time stretching",
+                                  "pitch": "Audio pitch shifting" })
+                    }
+                    Heading { text: "Audio Recording" }
+                    Field { label: "Storage folder"; path: "audio.recording.folder"; optional: true; placeholder: "Music/RVP" }
+                    Check { path: "audio.recording.in-media-folder"; text: "Store recorded audios into play folders (if available)" }
                 }
 
                 Page {

@@ -44,7 +44,7 @@ fn speed_changes_keep_audio_and_video_together_with_the_normalizer() {
     };
     assert!(settings.normalizer.enabled);
     let mut app = App::new(settings, &dir).expect("app");
-    app.apply_normalizer(&engine);
+    app.apply_audio_chain(&engine);
     app.open(&engine, &[LONG.to_owned()], false).expect("open");
     let deadline = Instant::now() + Duration::from_secs(10);
     while app.model.double(PropertyId::TimePos).unwrap_or(0.0) < 1.0 {

@@ -621,7 +621,10 @@ tests, and its own parts are listed for M17.
     slider and keys drive the session's or the device's volume (Windows'
     Core Audio through FFI in `shell/`; PipeWire in M17).
   - The System Volume menu: master and wave up, down and mute.
-  - Individual volume: a volume per file, kept in the resume store.
+  - Individual volume (Volume Control's "Enable individual volume
+    control", R2): a master gain and a gain per channel (left, right,
+    centre, back and side pairs, LFE), a labelled stage after the
+    normalizer.
   - Pre-amplifying AC3 and DTS, with PreAmp up and down (a labelled gain
     stage).
   - The volume control settings.

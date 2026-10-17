@@ -39,17 +39,26 @@ zbus = "=5.19.0"
 libc = "=0.2.190"
 # Microsoft's bindings for Windows' media controls and the crash minidump
 # (M8, shell/src/media_controls.rs and crash.rs); MIT or Apache-2.0.
+# The COM objects RVP implements (windows' `implement` macro names it).
+windows-core = "=0.62.2"
 windows = { version = "=0.62.2", features = [
     "Foundation",
     "Media",
     "Win32_Foundation",
+    "Win32_Media",
+    "Win32_Media_Audio",
+    "Win32_Media_Audio_Endpoints",
     "Win32_Security",
     "Win32_Storage_FileSystem",
+    "Win32_System_Com",
+    "Win32_System_Com_StructuredStorage",
     "Win32_System_Diagnostics_Debug",
     "Win32_System_IO",
     "Win32_System_Kernel",
     "Win32_System_Memory",
+    "Win32_System_Power",
     "Win32_System_Threading",
+    "Win32_System_Variant",
     "Win32_System_WinRT",
 ] }
 

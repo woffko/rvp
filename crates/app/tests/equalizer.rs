@@ -96,8 +96,8 @@ fn render(dir: &Path, input: &Path, gain: Option<f64>) -> f64 {
         settings.equalizer.enabled = true;
         settings.equalizer.bands[4] = gain;
     }
-    let app = App::new(settings, &dir.join("state")).expect("app");
-    app.apply_equalizer(&engine);
+    let mut app = App::new(settings, &dir.join("state")).expect("app");
+    app.apply_audio_chain(&engine);
     engine
         .load(&input.display().to_string(), false)
         .expect("loadfile");

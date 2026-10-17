@@ -31,6 +31,9 @@ libc.workspace = true
 
 [target.'cfg(windows)'.dependencies]
 windows.workspace = true
+# Audio recording's activation handler is a COM object of RVP's
+# (`windows::core::implement` expands to `windows_core` paths).
+windows-core.workspace = true
 
 [build-dependencies]
 cxx-qt-build.workspace = true
