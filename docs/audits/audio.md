@@ -343,7 +343,7 @@ an effect too: the 44.1 kHz recording leaves out the 48 kHz noise above
   scaled from 44.1 kHz: unscaled, RVP's response matches within 0.1 dB;
   scaled, it was up to 9 dB off. (PotPlayer probably runs a 44.1 kHz
   source at 44.1 kHz; RVP's response is at 48 kHz, where those echoes come
-  9 % sooner.)
+  8 % sooner.)
 - **Voice Removal** cancels the centre in both (PotPlayer's centre tone
   -86 dB, RVP's -100 dB): no change.
 - **Crystality** (its defaults are those of the XMMS Crystality plugin) was
