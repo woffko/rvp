@@ -1,6 +1,8 @@
 # Goal L status: R2 and milestone M10 (PotPlayer parity: audio)
 
-Date: 2026-10-17. Result: **done**. Precondition met: `goal-j-status.md`
+Date: 2026-10-17. Result: **done**, except that GitHub CI could not run
+on the last two pushes (the account's billing; see "Checks on the Windows
+VM"): local CI and the VM checks pass. Precondition met: `goal-j-status.md`
 records goal J as done. The owner reported no findings from the audio
 audit's build, so nothing came before M8's Windows gap. The host session
 comparing RVP with PotPlayer ran with the owner's permission (two runs);
@@ -101,9 +103,16 @@ under SYSTEM), the recording (2.1 s, a valid RIFF file; the VM has no
 sound device, so silence), the master volume answering "element not
 found" without a device, and `tests/audio_chain.rs` (15 tests) and
 `tests/speakers.rs` on Windows' own FFmpeg (the four-channel echo
-response, `aeval` and rubberband included). CI runs every test on Linux
-and Windows. `C:\Users\<user>\rvp-test\rvp-l` holds the portable build of
-this commit (file copies only).
+response, `aeval` and rubberband included). `C:\Users\<user>\rvp-test\rvp-l`
+holds the portable build of 644c138 (file copies only; `rvp.exe` SHA-256
+338e3e6e...).
+
+**GitHub CI did not run** for 56df046 and 644c138: GitHub started none of
+the jobs ("recent account payments have failed or your spending limit
+needs to be increased"), an account matter for the owner. The last run,
+ff6083a, passed on Linux and Windows. In its place `cargo xtask ci` passes
+locally, clippy passes for the Windows target, and the VM checks above
+pass; the workflow needs a re-run once billing allows it.
 
 ## Findings
 
