@@ -2473,6 +2473,7 @@ impl qobject::Player {
         .chain(Self::m6_status(core))
         .chain([
             ("panel_shown", self.panel_shown().to_string()),
+            ("recording", core.recorder.is_some().to_string()),
             ("message", text(Some(&self.message().to_string()))),
         ])
         .collect()

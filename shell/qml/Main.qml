@@ -1814,24 +1814,25 @@ Window {
             break
         case 332: {
             // Windows records RVP's own sound (process loopback); Linux
-            // with goal S, and a system without audio refuses.
-            const osd = String(s.osd)
-            if (osd.indexOf("Audio recording: ") === 0) {
+            // with goal S, and a system without audio refuses: its refusal
+            // is on the OSD, and the recorder never starts.
+            if (s.recording === true) {
                 if (Date.now() - t.stepStarted > 2000) {
-                    t.check("recording_starts", true, osd)
+                    t.check("recording_starts", true, String(s.osd))
                     player.run_action("record-audio-toggle")
                     t.next()
                 }
             } else if (Date.now() - t.stepStarted > 1500) {
-                Tools.log("check recording_starts=SKIPPED " + osd)
+                Tools.log("check recording_starts=SKIPPED " + s.osd)
                 t.step = 334
                 t.stepStarted = Date.now()
             }
             break
         }
         case 333:
-            t.waitFor("recording_stops", () => String(s.osd).indexOf("Audio recording stopped: ") === 0,
-                      5000, () => "osd " + s.osd)
+            t.waitFor("recording_stops", () => s.recording === false
+                          && String(s.osd).indexOf("Audio recording stopped: ") === 0,
+                      5000, () => "recording " + s.recording + " osd " + s.osd)
             break
         case 334:
             // The system's master volume, up and back down: the device's
