@@ -558,6 +558,19 @@ impl App {
             }
         } else if before != after {
             self.audio_chain_changed(engine);
+            // A libmpv built without rubberband refuses the chain: say so
+            // and leave the pitch as it is.
+            if after != 0
+                && !self.chain_pending
+                && !engine
+                    .get_text("af")
+                    .is_some_and(|af| af.contains("@rvptempo:rubberband"))
+            {
+                self.session.audio_stretching = 0;
+                return UiRequest::Osd(
+                    "Audio Stretching: this libmpv has no rubberband".to_owned(),
+                );
+            }
         }
         UiRequest::Osd(format!("Audio Stretching : {}%", 100 + after))
     }

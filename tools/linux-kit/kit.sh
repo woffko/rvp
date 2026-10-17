@@ -111,6 +111,10 @@ KIT_DIR=${RVP_KIT_DIR:-$HOME/.cache/rvp-kit}
 LOG_DIR=${RVP_LOG_DIR:-$KIT_DIR/logs}
 QT_VERSION=6.10.3
 MPV_COMMIT=b2c255c13e
+# The libmpv build's own revision, bumped when its options change (so that a
+# built or cached libmpv of the same commit is built again): 2 added
+# rubberband, which Audio Stretching needs.
+MPV_BUILD=2
 VS_TAG=R73
 # The version in the Windows bundle (spikes/tools/windows-deps.sh).
 MVTOOLS_TAG=v24
@@ -165,7 +169,7 @@ libx11-dev libxext-dev libxinerama-dev libxrandr-dev libxss-dev libxv-dev libxpr
 libxkbcommon-dev libwayland-dev wayland-protocols libegl-dev libgl-dev libgbm-dev libdrm-dev \
 libasound2-dev libpulse-dev libpipewire-0.3-dev libva-dev libvdpau-dev libffmpeg-nvenc-dev \
 zlib1g-dev libssl-dev liblcms2-dev libjpeg-dev \
-libvulkan-dev glslang-dev libunwind-dev libfftw3-dev \
+libvulkan-dev glslang-dev libunwind-dev libfftw3-dev librubberband-dev \
 libxcb-cursor0 libxcb-icccm4 libxcb-image0 libxcb-keysyms1 libxcb-render-util0 libxcb-xinerama0 \
 libxcb-xkb1 libxkbcommon-x11-0 libopengl0 libwayland-cursor0 libwayland-egl1 \
 lsof mesa-utils ffmpeg"
@@ -265,8 +269,8 @@ step_mpv() {
     prefix=$(mpv_prefix)
     # mpv-build always rebuilds FFmpeg from scratch; skip a finished build of
     # the same commit unless RVP_KIT_REBUILD=1.
-    if [ "${RVP_KIT_REBUILD:-0}" != 1 ] && [ "$(cat "$prefix/.kit-mpv" 2> /dev/null)" = "$MPV_COMMIT" ]; then
-        record mpv PASS "libmpv $MPV_COMMIT in $prefix (already built)"
+    if [ "${RVP_KIT_REBUILD:-0}" != 1 ] && [ "$(cat "$prefix/.kit-mpv" 2> /dev/null)" = "$MPV_COMMIT build $MPV_BUILD" ]; then
+        record mpv PASS "libmpv $MPV_COMMIT build $MPV_BUILD in $prefix (already built)"
         return 0
     fi
     {
@@ -288,7 +292,7 @@ step_mpv() {
         ./use-ffmpeg-release
         ./use-libplacebo-release
         ./use-mpv-custom "$MPV_COMMIT"
-        printf '%s\n' -Dlibmpv=true -Dcplayer=false -Dvapoursynth=enabled \
+        printf '%s\n' -Dlibmpv=true -Dcplayer=false -Dvapoursynth=enabled -Drubberband=enabled \
             -Dlua=disabled -Djavascript=disabled "--prefix=$prefix" > mpv_options
         printf '%s\n' --disable-programs --disable-doc > ffmpeg_options
         # FFmpeg's hwcontext_vulkan.h needs Vulkan headers 1.3.277+. With
@@ -307,8 +311,8 @@ step_mpv() {
         ./install
     } > "$log" 2>&1
     if [ -e "$prefix/lib/x86_64-linux-gnu/libmpv.so" ] || [ -e "$prefix/lib/libmpv.so" ]; then
-        echo "$MPV_COMMIT" > "$prefix/.kit-mpv"
-        record mpv PASS "libmpv $MPV_COMMIT in $prefix"
+        echo "$MPV_COMMIT build $MPV_BUILD" > "$prefix/.kit-mpv"
+        record mpv PASS "libmpv $MPV_COMMIT build $MPV_BUILD in $prefix"
     else
         record mpv FAIL "see $log"
         return 1
