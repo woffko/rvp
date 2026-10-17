@@ -97,7 +97,12 @@ Windows.
   algorithm, PotPlayer's own code is unknown. The comparison will fit them.
 - The virtual surround uses RVP's head model, not an HRTF set (FFmpeg's
   `sofalizer` needs libmysofa, which neither build has).
-- The presets are Winamp's values until PotPlayer's are measured.
+- The presets are Winamp's values (in VLC's dB form) until PotPlayer's are
+  measured. A read-only search of `PotPlayer64.dll` for a preset table (dB
+  as floats, doubles or tenths, Winamp's 0-63 slider values, and rows
+  shaped like (Default), Classical, Club and Dance) found none: the DLL
+  holds the names only, in its string table. The host session measures
+  them.
 - Winamp DSP plugins (PotPlayer's page) are not planned: they are Windows
   DLLs loaded into PotPlayer.
 
