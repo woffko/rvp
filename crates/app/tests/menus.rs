@@ -189,6 +189,9 @@ fn track(id: i64, kind: TrackKind, language: &str, selected: bool) -> Track {
         codec: Some("aac".to_owned()),
         selected,
         external: false,
+        channels: None,
+        sample_rate: None,
+        bitrate: None,
     }
 }
 

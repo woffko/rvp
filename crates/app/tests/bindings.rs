@@ -527,6 +527,26 @@ impl Harness {
                     "{action:?}"
                 );
             }
+            // Audio Stretching: rubberband in the chain, then out again.
+            AudioCommand::StretchingDown | AudioCommand::StretchingUp => {
+                let percent = if command == AudioCommand::StretchingUp {
+                    101
+                } else {
+                    99
+                };
+                self.osd(action, &format!("Audio Stretching : {percent}%"));
+                self.wait("Audio Stretching", |m| {
+                    audio_filters(m).contains("@rvptempo:rubberband")
+                });
+                self.osd(
+                    Action::Audio(AudioCommand::StretchingOff),
+                    "Audio Stretching : 100%",
+                );
+                self.wait("Audio Stretching off", |m| {
+                    !audio_filters(m).contains("@rvptempo:rubberband")
+                });
+            }
+            AudioCommand::StretchingOff => self.osd(action, "Audio Stretching : 100%"),
             // Headless libmpv has no output stream to set: nothing, or the
             // volume.
             AudioCommand::SystemWaveUp

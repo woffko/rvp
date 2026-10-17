@@ -18,7 +18,8 @@ the presets are compared relative to the pass without one (the players'
 own equalizer gain drops out); effects and speaker modes as levels, both
 players at gain 1 (volume 100) with their normalizers off.
 
-usage: m10.py --files DIR --render BIN --work DIR [--recording WAV]
+usage: m10.py --files DIR --render BIN --work DIR
+              [--recording WAV=presets,effects --recording WAV=speakers,blocks]
 
 Prints Markdown tables. Needs numpy. Recordings, renders and results stay
 out of the repository.
@@ -38,27 +39,27 @@ from tomsteady_fit import block_gains  # noqa: E402
 
 BANDS = [60, 170, 310, 600, 1000, 3000, 6000, 12000, 14000, 16000]
 # PotPlayer's presets in its menu's order and RVP's values for them
-# (crates/app/src/equalizer.rs).
+# (crates/app/src/equalizer.rs: PotPlayer's measured response).
 PRESETS = [
     ("(Default)", [0.0] * 10),
-    ("Classical", [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, -7.2, -7.2, -7.2, -9.6]),
-    ("Club", [0.0, 0.0, 8.0, 5.6, 5.6, 5.6, 3.2, 0.0, 0.0, 0.0]),
-    ("Dance", [9.6, 7.2, 2.4, 0.0, 0.0, -5.6, -7.2, -7.2, 0.0, 0.0]),
-    ("Full Bass", [-8.0, 9.6, 9.6, 5.6, 1.6, -4.0, -8.0, -10.4, -11.2, -11.2]),
-    ("Full Bass & Treble", [7.2, 5.6, 0.0, -7.2, -4.8, 1.6, 8.0, 11.2, 12.0, 12.0]),
-    ("Full Treble", [-9.6, -9.6, -9.6, -4.0, 2.4, 11.2, 12.0, 12.0, 12.0, 12.0]),
-    ("Laptop", [4.8, 11.2, 5.6, -3.2, -2.4, 1.6, 4.8, 9.6, 12.0, 12.0]),
-    ("Large Hall", [10.4, 10.4, 5.6, 5.6, 0.0, -4.8, -4.8, -4.8, 0.0, 0.0]),
-    ("Live", [-4.8, 0.0, 4.0, 5.6, 5.6, 5.6, 4.0, 2.4, 2.4, 2.4]),
-    ("Loudness", [6.0, 4.0, 1.0, 0.0, -1.0, 0.0, 1.0, 3.0, 4.0, 5.0]),
-    ("Party", [7.2, 7.2, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 7.2, 7.2]),
-    ("Pop", [-1.6, 4.8, 7.2, 8.0, 5.6, 0.0, -2.4, -2.4, -1.6, -1.6]),
-    ("Reggae", [0.0, 0.0, 0.0, -5.6, 0.0, 6.4, 6.4, 0.0, 0.0, 0.0]),
-    ("Rock", [8.0, 4.8, -5.6, -8.0, -3.2, 4.0, 8.8, 11.2, 11.2, 11.2]),
-    ("Ska", [-2.4, -4.8, -4.0, 0.0, 4.0, 5.6, 8.8, 9.6, 11.2, 9.6]),
-    ("Soft", [4.8, 1.6, 0.0, -2.4, 0.0, 4.0, 8.0, 9.6, 11.2, 12.0]),
-    ("Soft Rock", [4.0, 4.0, 2.4, 0.0, -4.0, -5.6, -3.2, 0.0, 2.4, 8.8]),
-    ("Techno", [8.0, 5.6, 0.0, -5.6, -4.8, 0.0, 8.0, 9.6, 9.6, 8.8]),
+    ("Classical", [0.0, 0.0, 0.0, -0.1, -0.3, -2.5, -7.3, -8.3, -8.1, -7.6]),
+    ("Club", [-0.1, 0.4, 1.3, 2.3, 2.3, 1.8, 1.2, 0.3, 0.2, 0.1]),
+    ("Dance", [3.3, 3.9, 2.7, 0.7, -0.1, -2.2, -3.0, -1.8, -1.5, -1.2]),
+    ("Full Bass", [3.4, 5.7, 6.0, 4.2, 2.1, -3.4, -7.8, -9.4, -9.2, -8.6]),
+    ("Full Bass & Treble", [1.9, 5.7, 0.1, -1.9, -1.2, 5.4, 9.7, 10.0, 9.6, 9.1]),
+    ("Full Treble", [-3.1, -4.7, -4.7, -1.4, 2.0, 13.0, 18.5, 17.5, 16.6, 15.6]),
+    ("Laptop", [1.3, -4.7, 2.9, 0.0, 0.0, 4.3, 7.7, 8.7, 8.6, 8.3]),
+    ("Large Hall", [3.4, 4.9, 4.4, 2.6, 1.0, -2.2, -3.3, -2.4, -2.1, -1.7]),
+    ("Live", [-1.8, 0.0, 1.1, 2.0, 2.1, 2.0, 1.6, 0.9, 0.8, 0.7]),
+    ("Loudness", [6.1, 7.8, 6.9, 4.3, 3.1, 7.4, 11.8, 13.0, 12.8, 12.4]),
+    ("Party", [2.0, 7.8, 1.2, 0.4, 0.4, 1.6, 2.8, 3.6, 3.6, 3.6]),
+    ("Pop", [-0.6, 1.7, 2.7, 2.8, 1.9, -1.5, -3.0, -2.8, -2.6, -2.3]),
+    ("Reggae", [0.0, 1.7, -0.9, -1.8, -0.5, 2.6, 2.6, 0.9, 0.5, 0.3]),
+    ("Rock", [2.7, 1.6, -1.5, -3.1, -1.7, 5.1, 8.4, 8.2, 7.8, 7.3]),
+    ("Ska", [-0.7, -1.6, -1.1, 0.1, 1.1, 4.2, 6.4, 6.2, 5.9, 5.4]),
+    ("Soft", [0.9, 0.3, -0.4, -0.9, 0.0, 5.1, 8.5, 8.8, 8.5, 8.1]),
+    ("Soft Rock", [1.0, 1.4, 0.9, -0.4, -1.0, -1.0, 0.3, 1.7, 1.9, 2.0]),
+    ("Techno", [2.4, 2.1, 0.4, -2.0, -1.7, 2.1, 4.7, 5.2, 5.0, 4.7]),
 ]
 EFFECTS = [
     ("none", {}),
@@ -68,6 +69,9 @@ EFFECTS = [
     ("voice-removal", {"audio": {"voice-removal": True}}),
     ("voice-emphasis", {"audio": {"voice-emphasis": True}}),
     ("crossfeed", {"audio": {"crossfeed": {"enabled": True}}}),
+    # PotPlayer's Audio Stretching at 110 % (RVP's is a session value,
+    # which render_chain does not take; tests/audio_chain.rs checks it).
+    ("stretch-110", None),
 ]
 SPEAKERS = [
     ("stereo", "stereo"),
@@ -89,7 +93,9 @@ BLOCK_FILES = [
     ("block-flac44.flac", "flac"),
 ]
 CANDIDATE_BLOCKS = [960, 1024, 1152, 1536, 2048, 2880, 3072, 4096]
-# The passes, as make_m10.py writes them: lead, marker and gap in seconds.
+# The passes, as make_m10.py writes them: the file's silence before the
+# first pass, then each pass's lead, marker and gap, in seconds.
+FILE_LEAD = 3.0
 LEAD, MARKER, GAP = 0.5, 0.25, 0.25
 PASS_SECONDS = {"bands": 5.25, "effects": 8.0, "speakers": 7.5}
 
@@ -170,6 +176,18 @@ def tone_db(x, rate, frequency, t0, t1):
     return db(amplitude / math.sqrt(2))
 
 
+def peak_hz(x, rate, t0, t1, low, high):
+    """The strongest frequency between `low` and `high` Hz in the segment."""
+    part = x[int(t0 * rate):int(t1 * rate)]
+    if len(part) < 16:
+        return float("nan")
+    size = 1 << 20
+    spectrum = np.abs(np.fft.rfft(part * np.hanning(len(part)), size))
+    freqs = np.fft.rfftfreq(size, 1 / rate)
+    band = (freqs >= low) & (freqs <= high)
+    return float(freqs[band][np.argmax(spectrum[band])])
+
+
 def rms_db(x, rate, t0, t1):
     part = x[int(t0 * rate):int(t1 * rate)]
     return db(math.sqrt(float(np.mean(part ** 2)))) if len(part) else float("-inf")
@@ -200,7 +218,9 @@ def markers(x, rate):
         frame = left[index * size:(index + 1) * size]
         energy = float(np.mean(frame ** 2))
         tone = abs(np.sum(frame * probe)) * 2 / size
-        is_marker = energy > 10 ** (-30 / 10) and (tone ** 2 / 2) > 0.6 * energy
+        # Only markers carry 2 kHz alone; PotPlayer's Crossfeed lowers one to
+        # -34 dB.
+        is_marker = energy > 10 ** (-50 / 10) and (tone ** 2 / 2) > 0.6 * energy
         if is_marker:
             run += 1
         else:
@@ -220,14 +240,21 @@ def measure_pass(kind, x, rate, onset):
     start = onset + MARKER + GAP
     left, right = x[:, 0], x[:, 1]
     if kind == "bands":
-        return [tone_db(left, rate, f, start + 0.4 * i + 0.05, start + 0.4 * i + 0.25) for i, f in enumerate(BANDS)]
+        # PotPlayer switches 0.7 to 1 s after the marker: the 170 Hz tone's
+        # window starts after that.
+        return [
+            tone_db(left, rate, f, start + 0.4 * i + (0.10 if i == 1 else 0.05), start + 0.4 * i + 0.25)
+            for i, f in enumerate(BANDS)
+        ]
     if kind == "effects":
         a, b, c = start, start + 1.1, start + 2.2
         burst = start + 3.3
         e = start + 5.5
+        # The centre tone's window starts after PotPlayer's switch, which
+        # comes 0.7 to 1 s after the marker.
         return {
-            "centre_L": tone_db(left, rate, 1000, a + 0.1, a + 0.7),
-            "centre_R": tone_db(right, rate, 1000, a + 0.1, a + 0.7),
+            "centre_L": tone_db(left, rate, 1000, a + 0.5, a + 0.75),
+            "centre_R": tone_db(right, rate, 1000, a + 0.5, a + 0.75),
             "left_L": tone_db(left, rate, 1000, b + 0.1, b + 0.7),
             "left_R": tone_db(right, rate, 1000, b + 0.1, b + 0.7),
             "mix_L500": tone_db(left, rate, 500, c + 0.1, c + 0.7),
@@ -242,6 +269,7 @@ def measure_pass(kind, x, rate, onset):
             "tail_1.2": rms_db(left, rate, burst + 1.2, burst + 1.9),
             "floor_tone": tone_db(left, rate, 1000, e + 0.1, e + 0.9),
             "floor_rest": residual_db(left, rate, [1000], e + 0.1, e + 0.9),
+            "centre_hz": peak_hz(left, rate, a + 0.5, a + 0.75, 800, 1300),
         }
     if kind == "speakers":
         rows = []
@@ -251,6 +279,18 @@ def measure_pass(kind, x, rate, onset):
             rows.append((tone_db(left, rate, f, t0, t0 + 0.6), tone_db(right, rate, f, t0, t0 + 0.6)))
         return rows
     raise ValueError(kind)
+
+
+def first_sound(x, rate, after):
+    """The first 10 ms above -60 dB after `after` seconds."""
+    size = rate // 100
+    start = int(after * rate)
+    for index in range(start, len(x) - size, size):
+        if rms_db(x[:, 0], rate, index / rate, (index + size) / rate) > -60 or rms_db(
+            x[:, 1], rate, index / rate, (index + size) / rate
+        ) > -60:
+            return index / rate
+    return None
 
 
 def block_segments(x, rate, after):
@@ -271,17 +311,19 @@ def block_segments(x, rate, after):
     return segments
 
 
-def fit_block(x, rate, start, end):
-    """TomSteady's block that fits a block file's level best: (block, rms)."""
-    step = 0.1
+def fit_block(x, rate, start, end, source_rate=48000):
+    """TomSteady's block (in the source's samples) that fits a block file's
+    level best, in steps of 16: (block, rms, offset)."""
+    step = 0.05
     times = np.arange(0.3, min(end - start, 9.5) - step, step)
     recorded = np.array([rms_db(x[:, 0], rate, start + t, start + t + step) for t in times])
     best = None
-    for block in CANDIDATE_BLOCKS:
-        blocks = int((times[-1] + 1) * 48000 / block) + 2
-        peaks = np.full(blocks, 0.95 * 32768.0)
-        gains = block_gains(peaks, 75, 10, True)
-        model = np.array([db(0.95 / math.sqrt(2) * gains[min(int(t * 48000 / block), blocks - 1)]) for t in times])
+    for block in range(512, 8193, 16):
+        blocks = int((times[-1] + 1) * source_rate / block) + 2
+        gains = block_gains(np.full(blocks, 0.95 * 32768.0), 75, 10, True)
+        model = np.array([
+            db(0.95 / math.sqrt(2) * gains[min(int(t * source_rate / block), blocks - 1)]) for t in times
+        ])
         offset = float(np.median(recorded - model))
         error = float(np.sqrt(np.mean((recorded - model - offset) ** 2)))
         if best is None or error < best[1]:
@@ -301,7 +343,7 @@ def one_pass(files, name, seconds, channels, mask, work):
     """The first pass of a file, for RVP's renders."""
     x, rate = read_wav(files / name)
     path = work / f"pass-{name}"
-    write_wav(path, x[: int(seconds * rate)], rate, mask)
+    write_wav(path, x[int(FILE_LEAD * rate): int((FILE_LEAD + seconds) * rate)], rate, mask)
     return path
 
 
@@ -314,6 +356,9 @@ def rvp_side(files, binary, work):
         results["presets"].append(measure_pass("bands", x, rate, markers(x, rate)[0]))
     effects = one_pass(files, "m10-effects.wav", PASS_SECONDS["effects"], 2, None, work)
     for name, settings in EFFECTS:
+        if settings is None:
+            results["effects"].append(None)
+            continue
         x, rate = render(binary, effects, settings, work / "rvp" / f"effect-{name}.wav")
         results["effects"].append(measure_pass("effects", x, rate, markers(x, rate)[0]))
     surround = one_pass(files, "m10-51.wav", PASS_SECONDS["speakers"], 6, 0x60F, work)
@@ -323,33 +368,69 @@ def rvp_side(files, binary, work):
     return results
 
 
-def potplayer_side(recording):
-    x, rate = read_wav(recording)
-    onsets = markers(x, rate)
-    expected = len(PRESETS) + len(EFFECTS) + len(SPEAKERS)
-    print(f"<!-- recording {recording}: {rate} Hz, {len(x) / rate:.1f} s, {len(onsets)} markers (expected {expected}) -->")
-    if len(onsets) != expected:
-        raise SystemExit(f"{len(onsets)} markers found, {expected} expected: {[round(t, 2) for t in onsets]}")
-    presets = onsets[: len(PRESETS)]
-    effects = onsets[len(PRESETS): len(PRESETS) + len(EFFECTS)]
-    speakers = onsets[len(PRESETS) + len(EFFECTS):]
-    results = {
-        "presets": [measure_pass("bands", x, rate, t) for t in presets],
-        "effects": [measure_pass("effects", x, rate, t) for t in effects],
-        "speakers": [measure_pass("speakers", x, rate, t) for t in speakers],
-        "blocks": [],
-    }
-    segments = block_segments(x, rate, speakers[-1] + PASS_SECONDS["speakers"])
-    print(f"<!-- block segments: {[(round(a, 2), round(b, 2)) for a, b in segments]} -->")
-    for (name, codec), (start, end) in zip(BLOCK_FILES, segments):
-        block, error, offset = fit_block(x, rate, start, end)
-        results["blocks"].append((name, codec, block, error, offset))
+SECTION_PASSES = {"presets": len(PRESETS), "effects": len(EFFECTS), "speakers": len(SPEAKERS)}
+SECTION_KIND = {"presets": "bands", "effects": "effects", "speakers": "speakers"}
+
+
+def potplayer_side(recordings):
+    """PotPlayer's measurements from `(wav, [sections])` pairs, the sections
+    in the order the recording holds them; `blocks` comes last."""
+    results = {"presets": [], "effects": [], "speakers": [], "blocks": []}
+    for recording, sections in recordings:
+        x, rate = read_wav(recording)
+        onsets = markers(x, rate)
+        expected = sum(SECTION_PASSES.get(section, 0) for section in sections)
+        print(f"<!-- recording {Path(recording).name}: {rate} Hz, {len(x) / rate:.1f} s, "
+              f"{len(onsets)} markers (expected {expected}) for {', '.join(sections)} -->")
+        if len(onsets) == expected - 1 and onsets:
+            # A mode that restarts PotPlayer's output (Virtual Dolby
+            # Decoder) loses the last pass's marker: that pass starts half a
+            # second before its first sound.
+            onset = first_sound(x, rate, onsets[-1] + 5.0)
+            if onset is not None:
+                print(f"<!-- last marker missing: the pass placed by its first sound at {onset:.2f} s -->")
+                onsets.append(onset - MARKER - GAP)
+        if len(onsets) != expected:
+            raise SystemExit(f"{len(onsets)} markers found, {expected} expected: {[round(t, 2) for t in onsets]}")
+        at = 0
+        for section in sections:
+            if section == "blocks":
+                continue
+            count = SECTION_PASSES[section]
+            mine = onsets[at:at + count]
+            following = onsets[at + count] if at + count < len(onsets) else None
+            at += count
+            for index, t in enumerate(mine):
+                row = measure_pass(SECTION_KIND[section], x, rate, t)
+                if section == "effects":
+                    nxt = mine[index + 1] if index + 1 < len(mine) else following
+                    if nxt is not None:
+                        row["pass_s"] = nxt - t
+                results[section].append(row)
+            if section == "presets":
+                # PotPlayer's 60 Hz tone still plays the previous preset
+                # (its switch comes 0.7 to 1 s after the marker): each
+                # preset's 60 Hz is the next pass's, the last one's unknown.
+                rows = results["presets"][-count:]
+                lows = [row[0] for row in rows]
+                for row, low in zip(rows, lows[1:] + [float("nan")]):
+                    row[0] = low
+                print("<!-- PotPlayer's 60 Hz: each preset's from the next pass -->")
+        if "blocks" in sections:
+            after = onsets[-1] + PASS_SECONDS["speakers"] if onsets else 0.0
+            segments = block_segments(x, rate, after)
+            print(f"<!-- block segments: {[(round(a, 2), round(b, 2)) for a, b in segments]} -->")
+            for (name, codec), (start, end) in zip(BLOCK_FILES, segments):
+                block, error, offset = fit_block(x, rate, start, end, 44100 if "44" in name else 48000)
+                results["blocks"].append((name, codec, block, error, offset))
     return results
 
 
 def fmt(value):
     """A level, or a dash below -100 dB (nothing there)."""
-    return "—" if not math.isfinite(value) or value < -100 else f"{value:+.1f}"
+    if not math.isfinite(value) or value < -100:
+        return "—"
+    return f"{value:.0f}" if value > 100 else f"{value:+.1f}"
 
 
 def report(pot, rvp):
@@ -364,8 +445,16 @@ def report(pot, rvp):
                 rows.append((label, [a - b for a, b in zip(side["presets"][index], flat)]))
         for label, gains in rows:
             print(f"| {name if label == rows[0][0] else ''} | {label} | " + " | ".join(fmt(g) for g in gains) + " |")
+    # PotPlayer's output reached the recording lower than RVP's renders:
+    # its levels are raised by the difference on a tone both play alike
+    # (the left-only 1 kHz without an effect, FR in 2.0 Stereo).
+    effect_offset = speaker_offset = 0.0
+    if pot and rvp:
+        effect_offset = rvp["effects"][0]["left_L"] - pot["effects"][0]["left_L"]
+        speaker_offset = rvp["speakers"][0][1][1] - pot["speakers"][0][1][1]
+        print(f"\n<!-- PotPlayer raised by {effect_offset:+.1f} dB (effects) and {speaker_offset:+.1f} dB (speakers) -->")
     print("\n### Effects (levels in dB of full scale; both players at gain 1, normalizers off)\n")
-    keys = list(rvp["effects"][0].keys()) if rvp else list(pot["effects"][0].keys())
+    keys = list(pot["effects"][0].keys()) if pot else list(rvp["effects"][0].keys())
     print("| Effect | Player | " + " | ".join(keys) + " |")
     print("|---|---|" + "---:|" * len(keys))
     for index, (name, _) in enumerate(EFFECTS):
@@ -373,7 +462,10 @@ def report(pot, rvp):
             if not side:
                 continue
             row = side["effects"][index]
-            values = [row[k] for k in keys]
+            if row is None:
+                continue
+            shift = effect_offset if label == "PotPlayer" else 0.0
+            values = [row.get(k, float("nan")) + (shift if k not in ("centre_hz", "pass_s") else 0.0) for k in keys]
             print(f"| {name if label == 'PotPlayer' or not pot else ''} | {label} | " + " | ".join(fmt(v) for v in values) + " |")
     print("\n### Speaker modes (left / right level of each source channel, dB)\n")
     print("| Mode | Player | " + " | ".join(SPEAKER_CHANNELS) + " |")
@@ -381,10 +473,11 @@ def report(pot, rvp):
     for index, (name, _) in enumerate(SPEAKERS):
         for label, side in (("PotPlayer", pot), ("RVP", rvp)):
             if side:
-                cells = [f"{fmt(l)} / {fmt(r)}" for l, r in side["speakers"][index]]
+                shift = speaker_offset if label == "PotPlayer" else 0.0
+                cells = [f"{fmt(l + shift)} / {fmt(r + shift)}" for l, r in side["speakers"][index]]
                 print(f"| {name if label == 'PotPlayer' or not pot else ''} | {label} | " + " | ".join(cells) + " |")
     if pot and pot.get("blocks"):
-        rules = {"ac3": 1536, "eac3": 1536, "pcm_s16le": 3072}
+        rules = {"ac3": 1536, "eac3": 1536, "mp3": 2304, "opus": 2880, "pcm_s16le": 3000}
         print("\n### Normalizer blocks (PotPlayer's fit, RVP's rule)\n")
         print("| File | Codec | PotPlayer | fit RMS, dB | RVP |")
         print("|---|---|---:|---:|---:|")
@@ -397,11 +490,15 @@ def main():
     parser.add_argument("--files", required=True, type=Path)
     parser.add_argument("--render", required=True)
     parser.add_argument("--work", required=True, type=Path)
-    parser.add_argument("--recording", type=Path)
+    parser.add_argument(
+        "--recording", action="append", default=[],
+        help="WAV=section,section... (presets, effects, speakers, blocks), in the recording's order",
+    )
     args = parser.parse_args()
     args.work.mkdir(parents=True, exist_ok=True)
     rvp = rvp_side(args.files, args.render, args.work)
-    pot = potplayer_side(args.recording) if args.recording else None
+    recordings = [(Path(item.split("=")[0]), item.split("=")[1].split(",")) for item in args.recording]
+    pot = potplayer_side(recordings) if recordings else None
     (args.work / "results.json").write_text(json.dumps({"rvp": rvp, "potplayer": pot}, indent=1))
     report(pot, rvp)
 

@@ -19,7 +19,9 @@ use rvp_engine::{Engine, EngineEvent, PropertyId};
 
 use crate::app::{App, UiRequest};
 use crate::audio::second::Second;
-use crate::audio::{OutputMode, SampleFormat, StereoChannel, Stretch, SyncKeep, VolumeMethod};
+use crate::audio::{
+    OutputMode, SampleFormat, Selection, StereoChannel, Stretch, SyncKeep, VolumeMethod,
+};
 use crate::settings::Settings;
 
 /// A change of the system's volume, which the window makes.
@@ -66,6 +68,9 @@ pub enum AudioCommand {
     SyncDialog,
     Keep(SyncKeep),
     Stretch(Stretch),
+    StretchingDown,
+    StretchingUp,
+    StretchingOff,
     RecordDialog,
     RecordToggle,
     RecordFolderDialog,
@@ -75,6 +80,62 @@ pub enum AudioCommand {
 
 /// A step of the individual volume's master and of the pre-amplifier, dB.
 const GAIN_STEP: f64 = 1.0;
+
+/// The audio track of the highest quality ("Prefer highest quality
+/// ones"): the most channels, then the highest sample rate, then the
+/// highest bitrate; the first of equals. `None` with fewer than two.
+fn best_quality(tracks: &[rvp_engine::Track]) -> Option<i64> {
+    if tracks.len() < 2 {
+        return None;
+    }
+    let mut best: Option<&rvp_engine::Track> = None;
+    for track in tracks {
+        let key = |t: &rvp_engine::Track| {
+            (
+                t.channels.unwrap_or(0),
+                t.sample_rate.unwrap_or(0),
+                t.bitrate.unwrap_or(0),
+            )
+        };
+        if best.is_none_or(|current| key(track) > key(current)) {
+            best = Some(track);
+        }
+    }
+    best.map(|track| track.id)
+}
+
+/// Whether audio settings that RVP's filter chain is built from changed.
+fn chain_settings_changed(new: &crate::audio::Audio, previous: &crate::audio::Audio) -> bool {
+    new.mixer != previous.mixer
+        || new.lfe_redirect != previous.lfe_redirect
+        || new.virtualizer != previous.virtualizer
+        || new.channel_volumes != previous.channel_volumes
+        || new.preamp != previous.preamp
+        || new.crystality != previous.crystality
+        || new.noise_reduction != previous.noise_reduction
+        || new.freeverb != previous.freeverb
+        || new.crossfeed != previous.crossfeed
+        || (new.voice_removal, new.voice_emphasis, new.swap_channels)
+            != (
+                previous.voice_removal,
+                previous.voice_emphasis,
+                previous.swap_channels,
+            )
+        || new.stretch != previous.stretch
+        || new.output_mode != previous.output_mode
+        || new.ac3_bitrate != previous.ac3_bitrate
+}
+
+/// The playing audio track's sample rate as its demuxer reports it.
+fn source_rate(engine: &Engine) -> Option<u32> {
+    engine
+        .get_int("current-tracks/audio/demux-samplerate")
+        .and_then(|rate| u32::try_from(rate).ok())
+}
+
+/// "Audio Stretching"'s range in percent from 100: 50 % to 200 %
+/// (PotPlayer's limits are unknown).
+const STRETCHING_RANGE: (i32, i32) = (-50, 100);
 
 fn on_off(on: bool) -> &'static str {
     if on { "On" } else { "Off" }
@@ -101,8 +162,9 @@ impl App {
         if audio.sample_format == SampleFormat::S16Dither {
             options.push(("audio-swresample-o", "dither_method=triangular".to_owned()));
         }
+        // Each file then gets the rate its source asks for (`audio_file_loaded`).
         if audio.sample_rate != 0 {
-            options.push(("audio-samplerate", audio.sample_rate.to_string()));
+            options.push(("audio-samplerate", audio.output_rate(None).to_string()));
         }
         if audio.resample_quality != crate::audio::ResampleQuality::Normal {
             let (filter_size, phase_shift) = audio.resample_quality.mpv();
@@ -119,7 +181,7 @@ impl App {
         if delay.abs() > 1e-9 {
             options.push(("audio-delay", format!("{delay:.3}")));
         }
-        if !audio.languages.trim().is_empty() {
+        if audio.selection != Selection::Default && !audio.languages.trim().is_empty() {
             options.push(("alang", audio.languages.trim().to_owned()));
         }
         options
@@ -153,6 +215,12 @@ impl App {
             }
         };
         set("audio-spdif", &audio.spdif(count));
+        if audio.sample_rate != 0 {
+            set(
+                "audio-samplerate",
+                &audio.output_rate(source_rate(engine)).to_string(),
+            );
+        }
         // Pass-through goes to its own device when one is chosen.
         let passes = audio.output_mode == OutputMode::Passthrough
             && !audio.passthrough_device.is_empty()
@@ -221,10 +289,16 @@ impl App {
                 .as_deref()
                 .is_some_and(|language| languages.contains(&language.to_ascii_lowercase()))
         });
-        let preferred = (audio.preferred_stream > 0 && !language_matches)
-            .then(|| i64::from(audio.preferred_stream))
-            .filter(|id| tracks.iter().any(|track| track.id == *id));
-        let chosen = remembered.or(preferred);
+        let preferred = i64::from(audio.preferred_stream);
+        let preferred = (preferred > 0 && tracks.iter().any(|track| track.id == preferred))
+            .then_some(preferred);
+        let rule = match audio.selection {
+            Selection::Languages => preferred.filter(|_| !language_matches),
+            Selection::Stream => preferred,
+            Selection::Quality => best_quality(&tracks),
+            Selection::Default => None,
+        };
+        let chosen = remembered.or(rule);
         if let Some(id) = chosen {
             drop(engine.set_text("aid", &id.to_string()));
         }
@@ -294,6 +368,9 @@ impl App {
             AudioCommand::SyncDialog | AudioCommand::Keep(_) | AudioCommand::Stretch(_) => {
                 Some(self.sync_command(engine, command))
             }
+            AudioCommand::StretchingDown
+            | AudioCommand::StretchingUp
+            | AudioCommand::StretchingOff => Some(self.stretching_command(engine, command)),
             AudioCommand::RecordDialog
             | AudioCommand::RecordToggle
             | AudioCommand::RecordFolderDialog
@@ -453,6 +530,36 @@ impl App {
                 UiRequest::AudioSyncDialog(self.model.double(PropertyId::AudioDelay).unwrap_or(0.0))
             }
         }
+    }
+
+    /// "Audio Stretching": PotPlayer's raises or lowers the pitch by 1 %
+    /// at a time and keeps the speed (goal L's host session: at 110 % a
+    /// 1 kHz tone played at 1.1 kHz, its timing unchanged). RVP's is
+    /// rubberband's pitch in its tempo filter's place
+    /// ([`crate::audio::chain::build`]); a change of pitch goes to the
+    /// running filter, a change to or from 100 % builds the chain again.
+    fn stretching_command(&mut self, engine: &Engine, command: AudioCommand) -> UiRequest {
+        let before = self.session.audio_stretching;
+        let after = match command {
+            AudioCommand::StretchingDown => (before - 1).max(STRETCHING_RANGE.0),
+            AudioCommand::StretchingUp => (before + 1).min(STRETCHING_RANGE.1),
+            _ => 0,
+        };
+        self.session.audio_stretching = after;
+        // A chain that waits for the next file takes the new pitch then.
+        if before != 0 && after != 0 && !self.chain_pending {
+            let pitch = format!("{:.4}", crate::audio::chain::stretching_pitch(after));
+            let arguments = [crate::normalizer::TEMPO_LABEL, "set-pitch", &pitch];
+            if let Some(second) = &self.second {
+                drop(second.engine().command("af-command", &arguments));
+            }
+            if engine.command("af-command", &arguments).is_err() {
+                self.audio_chain_changed(engine);
+            }
+        } else if before != after {
+            self.audio_chain_changed(engine);
+        }
+        UiRequest::Osd(format!("Audio Stretching : {}%", 100 + after))
     }
 
     /// Audio recording.
@@ -654,8 +761,17 @@ impl App {
                 },
             );
         }
-        if new.sample_rate != previous.sample_rate {
-            set("audio-samplerate", &new.sample_rate.to_string());
+        if (new.sample_rate, new.resample_when, new.resample_limit)
+            != (
+                previous.sample_rate,
+                previous.resample_when,
+                previous.resample_limit,
+            )
+        {
+            set(
+                "audio-samplerate",
+                &new.output_rate(source_rate(engine)).to_string(),
+            );
         }
         if new.resample_quality != previous.resample_quality {
             let (size, shift) = new.resample_quality.mpv();
@@ -672,31 +788,22 @@ impl App {
                 },
             );
         }
-        if new.languages != previous.languages {
-            set("alang", new.languages.trim());
+        if (&new.languages, new.selection) != (&previous.languages, previous.selection) {
+            set(
+                "alang",
+                if new.selection == Selection::Default {
+                    ""
+                } else {
+                    new.languages.trim()
+                },
+            );
         }
         let second_device = new.second_device != previous.second_device;
         let second_options = new.stretch != previous.stretch;
         if format_waits {
             notes.push("The output format goes back to the device's at the next start".to_owned());
         }
-        let chain = new.mixer != previous.mixer
-            || new.lfe_redirect != previous.lfe_redirect
-            || new.virtualizer != previous.virtualizer
-            || new.channel_volumes != previous.channel_volumes
-            || new.preamp != previous.preamp
-            || new.crystality != previous.crystality
-            || new.noise_reduction != previous.noise_reduction
-            || new.freeverb != previous.freeverb
-            || new.crossfeed != previous.crossfeed
-            || (new.voice_removal, new.voice_emphasis, new.swap_channels)
-                != (
-                    previous.voice_removal,
-                    previous.voice_emphasis,
-                    previous.swap_channels,
-                )
-            || new.stretch != previous.stretch
-            || new.output_mode != previous.output_mode
+        let chain = chain_settings_changed(new, previous)
             || self.settings.equalizer.superequalizer != old.equalizer.superequalizer
             || self.settings.normalizer.video_only != old.normalizer.video_only;
         if second_device {
@@ -936,4 +1043,38 @@ fn dirs_music() -> PathBuf {
         .or_else(|| std::env::var_os("HOME"))
         .map_or_else(std::env::temp_dir, PathBuf::from);
     home.join("Music")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn track(id: i64, channels: i64, sample_rate: i64, bitrate: i64) -> rvp_engine::Track {
+        rvp_engine::Track {
+            id,
+            kind: rvp_engine::TrackKind::Audio,
+            title: None,
+            language: None,
+            codec: None,
+            selected: id == 1,
+            external: false,
+            channels: Some(channels),
+            sample_rate: Some(sample_rate),
+            bitrate: Some(bitrate),
+        }
+    }
+
+    #[test]
+    fn the_best_track_has_the_most_channels_then_rate_then_bitrate() {
+        assert_eq!(best_quality(&[track(1, 2, 48_000, 192_000)]), None);
+        let tracks = [
+            track(1, 2, 48_000, 320_000),
+            track(2, 6, 48_000, 448_000),
+            track(3, 6, 48_000, 640_000),
+            track(4, 6, 44_100, 1_500_000),
+        ];
+        assert_eq!(best_quality(&tracks), Some(3));
+        let equal = [track(1, 2, 48_000, 0), track(2, 2, 48_000, 0)];
+        assert_eq!(best_quality(&equal), Some(1));
+    }
 }

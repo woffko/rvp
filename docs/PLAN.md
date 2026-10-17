@@ -644,6 +644,10 @@ tests, and its own parts are listed for M17.
   - Voice Emphasis (`dialoguenhance`);
   - Crossfeed.
 
+  (Goal L's host comparison replaced these with fits to PotPlayer's
+  measured effects, and found Audio Stretching to be a pitch shift:
+  `docs/audits/audio.md`, "M10".)
+
   The chain has one documented order: downmix, channel, preamp,
   equalizer, effects, normalizer, tempo. It keeps the end-of-file rule
   (`App::defer_chain_change`).

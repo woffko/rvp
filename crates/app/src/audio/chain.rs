@@ -24,9 +24,12 @@
 //! rebuilds it once. Graphs are quoted with mpv's `%N%` length prefix,
 //! which takes brackets and commas as they are.
 //!
-//! PotPlayer's effects are its own code; where FFmpeg has no equal RVP
-//! builds them from FFmpeg's filters (Crystality, noise reduction,
-//! crossfeed), and the audio audit compares the results with PotPlayer's.
+//! PotPlayer's effects are its own code; RVP builds them from FFmpeg's
+//! filters, fitted to what goal L's host session measured of PotPlayer's
+//! at their defaults (`docs/audits/audio.md`, "M10"): voice emphasis and
+//! noise reduction are fixed filters there, crossfeed is bs2b, Crystality
+//! a rectifier, shelves, extra stereo and a measured echo, Freeverb the
+//! original's delays.
 
 use std::fmt::Write as _;
 use std::path::{Path, PathBuf};
@@ -62,6 +65,7 @@ pub struct Source {
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct Responses {
     pub freeverb: Option<dsp::Response>,
+    pub crystality: Option<dsp::Response>,
     pub head_model: Option<PathBuf>,
 }
 
@@ -73,6 +77,8 @@ pub struct Inputs<'a> {
     pub equalizer: &'a Equalizer,
     pub normalizer: &'a Normalizer,
     pub channel: StereoChannel,
+    /// "Audio Stretching" in percent from 100 (`commands::Session`).
+    pub stretching: i32,
     pub source: &'a Source,
     /// The normalizer's current gain.
     pub gain: f64,
@@ -126,13 +132,17 @@ pub fn output_channels<'a>(speakers: &Choice, source: &'a Source) -> Vec<&'a str
 }
 
 /// The mixer's swresample options: the levels for the centre, the
-/// surround channels and the LFE, relative to the front, which the mix
-/// then gets through a `volume`.
-fn mix_options(audio: &Audio) -> String {
+/// surround channels and the LFE (or none), relative to the front, which
+/// the mix then gets through a `volume`.
+fn mix_options(audio: &Audio, with_lfe: bool) -> String {
     let mixer = &audio.mixer;
     let front = db(mixer.front);
     // swresample gives each side the LFE at -3 dB with lfe_mix_level 1.
-    let lfe = db(mixer.lfe + 3.0103);
+    let lfe = if with_lfe {
+        db(mixer.lfe + 3.0103)
+    } else {
+        0.0
+    };
     format!(
         "clev={:.6}:slev={:.6}:lfe_mix_level={:.6}:rematrix_maxval={}",
         db(mixer.center) / front,
@@ -223,8 +233,15 @@ fn lfe_redirect(audio: &Audio, channels: &[&str]) -> Option<String> {
 
 /// `headphone`'s gain in dB: the filter lowers its output by 3 dB per
 /// input channel (its `convert_coeffs`), which this gives back for the
-/// eight speakers of 7.1, less 3 dB of headroom for all of them together.
-const HEADPHONE_GAIN: i32 = 3 * 8 - 3;
+/// eight speakers of 7.1, less 3 dB of headroom for all of them together
+/// and 13.5 dB more: PotPlayer's Virtual Headphone and Virtual Surround
+/// played a speaker about that much below its 2.0 Stereo (goal L's host
+/// session; the LFE less, `HEADPHONE_LFE_GAIN`).
+const HEADPHONE_GAIN: f64 = 3.0 * 8.0 - 3.0 - 13.5;
+/// `headphone` gives the LFE to both ears as it is, with this gain in dB:
+/// PotPlayer's virtual modes played it 4.6 and 7 dB below its 2.0 Stereo,
+/// 7.7 dB above the other speakers.
+const HEADPHONE_LFE_GAIN: f64 = 7.7;
 
 /// The `@rvpdownmix` graph.
 fn downmix(inputs: &Inputs) -> Option<String> {
@@ -237,7 +254,7 @@ fn downmix(inputs: &Inputs) -> Option<String> {
             let mix = expansion(audio, channels, source).unwrap_or_else(|| {
                 format!(
                     "aresample=ochl={name}:{}{}",
-                    mix_options(audio),
+                    mix_options(audio, true),
                     front_volume(audio)
                 )
             });
@@ -249,9 +266,11 @@ fn downmix(inputs: &Inputs) -> Option<String> {
             })
         }
         Mode::Matrix(encoding, lfe) => {
+            // PotPlayer's Dolby Surround and Pro Logic II leave the LFE out
+            // (goal L's host session); "+LFE" gives it a channel of its own.
             let stereo = format!(
                 "aresample=ochl=stereo:matrix_encoding={encoding}:{}{}",
-                mix_options(audio),
+                mix_options(audio, false),
                 front_volume(audio)
             );
             if lfe && source.channels.contains(&"LFE") {
@@ -272,8 +291,8 @@ fn downmix(inputs: &Inputs) -> Option<String> {
                 .join("|");
             Some(format!(
                 "{float},aresample=ochl=7.1:{},aresample={}[a];amovie=filename={}[h];\
-                 [a][h]headphone=map={map}:hrir=multich:gain={HEADPHONE_GAIN}",
-                mix_options(audio),
+                 [a][h]headphone=map={map}:hrir=multich:gain={HEADPHONE_GAIN:.1}:lfe={HEADPHONE_LFE_GAIN:.1}",
+                mix_options(audio, true),
                 dsp::RATE,
                 graph_path(path)
             ))
@@ -283,7 +302,7 @@ fn downmix(inputs: &Inputs) -> Option<String> {
             Some(format!(
                 "{float},aresample=ochl=stereo:{},surround=chl_out=5.1,\
                  adelay=delays=0|0|0|0|{delay:.0}|{delay:.0}",
-                mix_options(audio)
+                mix_options(audio, true)
             ))
         }
     }
@@ -322,11 +341,12 @@ fn preamp(inputs: &Inputs) -> Option<String> {
         .then(|| format!("volume={:.2}dB", preamp.gain))
 }
 
-/// How much Voice Emphasis raises the voice, in dB.
-const VOICE_EMPHASIS: f64 = 3.0;
+/// Voice Emphasis' band: its centre in Hz and its Q.
+const VOICE_BAND: f64 = 1000.0;
+const VOICE_Q: f64 = 2.9;
 
 /// Voice removal (the centre cancelled: each side less the other) and
-/// voice emphasis (the voice found in the centre and raised).
+/// voice emphasis (the voice's band kept, the rest lowered).
 fn voice(inputs: &Inputs, channels: &[&str]) -> Option<String> {
     let audio = inputs.audio;
     let mut parts = Vec::new();
@@ -339,78 +359,109 @@ fn voice(inputs: &Inputs, channels: &[&str]) -> Option<String> {
         }));
     }
     if audio.voice_emphasis {
-        let gain = db(VOICE_EMPHASIS);
-        parts.push(if channels == ["FL", "FR"] {
-            // `dialoguenhance` finds the voice in the centre of a stereo
-            // pair and puts it alone in its own centre channel, which goes
-            // back into both sides.
-            format!(
-                "dialoguenhance=original=0:enhance=1:voice=2,\
-                 pan=stereo|FL=FL+{boost:.6}*FC|FR=FR+{boost:.6}*FC",
-                boost = gain - 1.0
-            )
-        } else if channels.contains(&"FC") {
-            pan(channels, |channel| {
-                if channel == "FC" {
-                    format!("{gain:.6}*FC")
-                } else {
-                    channel.to_owned()
-                }
-            })
-        } else {
-            // No centre to find: the voice's band raised.
-            format!("equalizer=f=1500:t=o:w=2:g={VOICE_EMPHASIS:.1}")
-        });
+        // PotPlayer's Voice Emphasis keeps the voice's band: 1 kHz as it
+        // was, 500 Hz 13 dB down, 3 kHz 18 dB, 5 kHz 23 dB, white noise
+        // 16 dB (goal L's host session): a band-pass at 1 kHz with a Q of
+        // 2.9.
+        parts.push(format!(
+            "bandpass=f={VOICE_BAND:.0}:width_type=q:width={VOICE_Q:.1}"
+        ));
     }
     (!parts.is_empty()).then(|| parts.join(","))
 }
 
-/// Crystality from FFmpeg's filters: the bandwidth extender and its
-/// high-pass as `aexciter`, the harmonic booster as `crystalizer`, the
-/// echo as `aecho`, extra stereo (stereo only) as `extrastereo`.
+/// Crystality as PotPlayer's measured in goal L's host session (at its
+/// defaults; the other settings scale the parts below):
+///
+/// * the harmonic booster adds the signal's magnitude, `|x|` (a full-wave
+///   rectifier): a tone's even harmonics, 30 dB down for the second at 43;
+/// * the bandwidth extender raised every tone 0.6 dB and noise above
+///   16 kHz 3 dB more at 28: two high shelves (the extender's HPF, 1 to
+///   3, moves the lower one, measured at 3 only);
+/// * extra stereo widens the sides (FFmpeg's `extrastereo`);
+/// * the echo is [`dsp::crystality_echo`]'s response, convolved on the
+///   stereo output.
+///
+/// All of it at the echo's rate, 48 kHz.
 fn crystality(inputs: &Inputs, channels: &[&str]) -> Option<String> {
     let c = &inputs.audio.crystality;
     if !c.enabled {
         return None;
     }
-    let mut parts = vec![
-        format!(
-            "aexciter=amount={:.3}:drive=8.5:freq={:.0}:blend=0",
-            (c.bandwidth_extender / 100.0 * 3.0).max(0.001),
-            (2000.0 + c.extender_hpf * 100.0).min(12_000.0)
-        ),
-        format!("crystalizer=i={:.3}", c.harmonic_booster / 100.0 * 4.0),
-    ];
-    if c.echo_volume > 0.0 {
-        let echo = c.echo_volume / 100.0;
-        let feedback = c.echo_feedback / 100.0;
-        parts.push(format!(
-            "aecho=in_gain=1:out_gain={:.4}:delays=20|40:decays={:.4}|{:.4}",
-            1.0 / (1.0 + echo + echo * feedback),
-            echo,
-            (echo * feedback).max(0.0001)
-        ));
+    let booster = c.harmonic_booster / 100.0 * HARMONIC_BOOSTER;
+    let magnitudes = (0..channels.len())
+        .map(|channel| format!("val({channel})+{booster:.5}*abs(val({channel}))"))
+        .collect::<Vec<_>>()
+        .join("|");
+    let extender = c.bandwidth_extender / EXTENDER_DEFAULT;
+    // HPF 3 is the measured 300 Hz; each step below it an octave higher.
+    let corner = EXTENDER_CORNER * 2f64.powf(3.0 - c.extender_hpf);
+    let mut wet = format!(
+        "aeval=exprs={magnitudes}:c=same,highpass=f=5:p=1,\
+         highshelf=f={corner:.0}:g={:.3},highshelf=f=16000:g={:.3}",
+        extender * EXTENDER_GAIN,
+        extender * EXTENDER_TOP_GAIN
+    );
+    let stereo = channels == ["FL", "FR"];
+    if stereo && c.extra_stereo > 0.0 {
+        // Writing to a String does not fail.
+        let _ = write!(
+            wet,
+            ",extrastereo=m={:.4}",
+            1.0 + c.extra_stereo / 100.0 * EXTRA_STEREO
+        );
     }
-    if c.extra_stereo > 0.0 && channels == ["FL", "FR"] {
-        parts.push(format!(
-            "extrastereo=m={:.3}",
-            1.0 + c.extra_stereo / 100.0 * 2.5
-        ));
-    }
-    Some(parts.join(","))
-}
-
-/// Noise reduction: FFmpeg's FFT denoiser with its noise floor from the
-/// threshold.
-fn denoise(inputs: &Inputs) -> Option<String> {
-    let n = &inputs.audio.noise_reduction;
-    n.enabled.then(|| {
-        format!(
-            "afftdn=nr=12:nf={:.1}:tn=1",
-            (-80.0 + n.threshold * 0.6).min(-20.0)
-        )
+    let echo = inputs
+        .responses
+        .crystality
+        .as_ref()
+        .filter(|response| stereo && c.echo_volume > 0.0 && response.levels.len() == 4);
+    Some(match echo {
+        Some(response) => {
+            let l = &response.levels;
+            format!(
+                "aresample={rate},asplit=2[dry][e];[dry]{wet}[w];\
+                 [e]pan=4.0|c0=c0|c1=c1|c2=c0|c3=c1[e4];amovie=filename={file}[ir];[e4][ir]afir[x4];\
+                 [x4]pan=stereo|c0={:.6}*c0+{:.6}*c1|c1={:.6}*c2+{:.6}*c3[echo];\
+                 [w][echo]amix=inputs=2:normalize=0",
+                l[0],
+                l[1],
+                l[2],
+                l[3],
+                rate = dsp::RATE,
+                file = graph_path(&response.path),
+            )
+        }
+        None => format!("aresample={},{wet}", dsp::RATE),
     })
 }
+
+/// The harmonic booster's `|x|` at 100 (0.0745 at PotPlayer's 43).
+const HARMONIC_BOOSTER: f64 = 0.173;
+/// The bandwidth extender's level where it was measured, its lower
+/// shelf's corner (HPF 3) and gain there, and its top shelf's gain, in dB.
+const EXTENDER_DEFAULT: f64 = 28.0;
+const EXTENDER_CORNER: f64 = 300.0;
+const EXTENDER_GAIN: f64 = 0.6;
+const EXTENDER_TOP_GAIN: f64 = 3.0;
+/// Extra stereo's `extrastereo` factor at 100, less 1: a side tone leaked
+/// to the other side 20 dB down at PotPlayer's 11.
+const EXTRA_STEREO: f64 = 2.05;
+
+/// Noise reduction as PotPlayer's measured in goal L's host session: 1 kHz
+/// and below as they were, 3 kHz 8 dB down, 5 kHz 18 dB, white noise
+/// 10 dB, which a low-pass at 1875 Hz with a Q of 0.76 matches within
+/// 0.7 dB. That was at PotPlayer's default threshold (100, of 1 to 5000);
+/// RVP has no threshold (`crate::audio::NoiseReduction`).
+fn denoise(inputs: &Inputs) -> Option<String> {
+    let n = &inputs.audio.noise_reduction;
+    n.enabled
+        .then(|| format!("lowpass=f={DENOISE_CUT:.0}:width_type=q:width={DENOISE_Q:.2}"))
+}
+
+/// Noise reduction's low-pass: its corner in Hz and its Q.
+const DENOISE_CUT: f64 = 1875.0;
+const DENOISE_Q: f64 = 0.76;
 
 /// Freeverb on a stereo output: the sum of both sides through its
 /// response (wet), with the response's levels put back, beside the dry
@@ -435,17 +486,31 @@ fn reverb(inputs: &Inputs, channels: &[&str]) -> Option<String> {
     ))
 }
 
-/// Crossfeed on a stereo output, FFmpeg's `crossfeed` set from the cut
-/// frequency and feed level.
+/// Crossfeed on a stereo output, bs2b's filters with its formulas: each
+/// side gets the other through a one-pole low-pass at the cut frequency,
+/// and keeps its own less a low-passed part of it (bs2b's "high boost"),
+/// all then raised to make up for the bass the two take away. PotPlayer's
+/// is bs2b: at its 700 Hz and 6 dB it matched these within 0.1 dB (goal
+/// L's host session).
 fn crossfeed(inputs: &Inputs, channels: &[&str]) -> Option<String> {
     let c = &inputs.audio.crossfeed;
-    (c.enabled && channels == ["FL", "FR"]).then(|| {
-        format!(
-            "crossfeed=strength={:.3}:range={:.3}",
-            (c.feed / 15.0).clamp(0.0, 1.0),
-            ((c.cut - 300.0) / 1700.0).clamp(0.0, 1.0)
-        )
-    })
+    if !c.enabled || channels != ["FL", "FR"] {
+        return None;
+    }
+    let low_db = -c.feed * 5.0 / 6.0 - 3.0;
+    let high_db = c.feed / 6.0 - 3.0;
+    let low = db(low_db);
+    let high = 1.0 - db(high_db);
+    let high_cut = c.cut * 2f64.powf((low_db - 20.0 * high.log10()) / 12.0);
+    let gain = 1.0 / (1.0 - high + low);
+    Some(format!(
+        "asplit=3[own][part][other];\
+         [part]lowpass=f={high_cut:.1}:poles=1,pan=stereo|c0={own:.6}*c0|c1={own:.6}*c1[boost];\
+         [other]lowpass=f={cut:.1}:poles=1,pan=stereo|c0={low:.6}*c1|c1={low:.6}*c0[fed];\
+         [own][boost][fed]amix=inputs=3:normalize=0,volume={gain:.6}",
+        own = -high,
+        cut = c.cut,
+    ))
 }
 
 /// The individual channel volumes.
@@ -457,6 +522,12 @@ fn gains(inputs: &Inputs, channels: &[&str]) -> Option<String> {
     Some(pan(channels, |channel| {
         format!("{:.6}*{channel}", db(volumes.gain(channel)))
     }))
+}
+
+/// The pitch factor of "Audio Stretching" at `percent` from 100.
+#[must_use]
+pub fn stretching_pitch(percent: i32) -> f64 {
+    f64::from(100 + percent) / 100.0
 }
 
 /// RVP's filters before the user's, and after them.
@@ -502,21 +573,37 @@ pub fn build(inputs: &Inputs) -> (Vec<Entry>, Vec<Entry>) {
         back.push((GAINS, lavfi(GAINS, &graph)));
     }
     // The normalizer needs RVP's tempo filter (crate::normalizer); without
-    // it mpv puts in its own scaletempo2 when the speed changes.
-    match inputs.audio.stretch {
-        Stretch::HighQuality if normalize => back.push((
+    // it mpv puts in its own scaletempo2 when the speed changes. "Audio
+    // Stretching" takes that place with rubberband, which also keeps the
+    // speed's pitch.
+    if inputs.stretching != 0 {
+        back.push((
             crate::normalizer::TEMPO_LABEL,
-            crate::normalizer::TEMPO_ENTRY.to_owned(),
-        )),
-        Stretch::DefaultQuality => back.push((
-            crate::normalizer::TEMPO_LABEL,
-            format!("@{}:scaletempo", crate::normalizer::TEMPO_LABEL),
-        )),
-        Stretch::HighQuality | Stretch::Pitch => {}
+            format!(
+                "@{}:rubberband=pitch-scale={:.4}",
+                crate::normalizer::TEMPO_LABEL,
+                stretching_pitch(inputs.stretching)
+            ),
+        ));
+    } else {
+        match inputs.audio.stretch {
+            Stretch::HighQuality if normalize => back.push((
+                crate::normalizer::TEMPO_LABEL,
+                crate::normalizer::TEMPO_ENTRY.to_owned(),
+            )),
+            Stretch::DefaultQuality => back.push((
+                crate::normalizer::TEMPO_LABEL,
+                format!("@{}:scaletempo", crate::normalizer::TEMPO_LABEL),
+            )),
+            Stretch::HighQuality | Stretch::Pitch => {}
+        }
     }
     // "Pass-through after AC3 re-encoding": mpv's AC3 encoder, last.
     if inputs.audio.output_mode == OutputMode::Ac3Encode {
-        back.push((AC3, format!("@{AC3}:lavcac3enc")));
+        back.push((
+            AC3,
+            format!("@{AC3}:lavcac3enc=bitrate={}", inputs.audio.ac3_bitrate),
+        ));
     }
     (front, back)
 }
@@ -597,6 +684,7 @@ mod tests {
             equalizer,
             normalizer,
             channel: StereoChannel::Both,
+            stretching: 0,
             source,
             gain: 1.0,
             responses,
@@ -652,8 +740,9 @@ mod tests {
         let responses = Responses {
             freeverb: Some(dsp::Response {
                 path: PathBuf::from("/tmp/fv.wav"),
-                levels: [20.0, 20.0],
+                levels: vec![20.0, 20.0],
             }),
+            crystality: None,
             head_model: None,
         };
         let eq = Equalizer {
@@ -713,6 +802,7 @@ mod tests {
         assert_eq!(graph("virtual-headphone", &none), "");
         let responses = Responses {
             freeverb: None,
+            crystality: None,
             head_model: Some(PathBuf::from("C:\\Users\\a b\\head.wav")),
         };
         let virtual_graph = graph("virtual-headphone", &responses);

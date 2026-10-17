@@ -69,9 +69,10 @@ in the DLL, English through `[Dialog(N)]` of `English.ini`). The pages'
 sliders, 143 group boxes, 168 buttons and a few lists; 365 rows carry the
 control's own text, 818 the text of the label beside or above it. The
 combo boxes' lists are filled at run time and are not in the resources;
-goal L's host session reads the audio pages' lists and values from the
-running dialog (`host-session m10`, read only). The page's runtime labels
-show their slider's value in place of `%d` or `%g`.
+goal L's host session read the audio pages' lists and values from the
+running dialog (`host-session m10`, read only; what they hold is in
+`docs/audits/audio.md`, "M10"). The page's runtime labels show their
+slider's value in place of `%d` or `%g`.
 
 `cargo test -p rvp-app --test coverage` writes `docs/coverage/preferences.md`
 from `preferences.tsv`: every option, the RVP setting that does it, or the

@@ -640,12 +640,21 @@ ApplicationWindow {
                                   "low": "Low quality" })
                     }
                     Choice {
+                        label: "Change the sample rate"
+                        path: "audio.resample-when"
+                        values: ["always", "below", "above"]
+                        texts: ({ "always": "Always", "below": "When sample rate is smaller than",
+                                  "above": "When sample rate is larger than" })
+                    }
+                    Amount { label: "That sample rate"; path: "audio.resample-limit"; unit: "Hz"; values: [8000, 11025, 12000, 16000, 22050, 24000, 32000, 44100, 48000, 96000, 192000] }
+                    Choice {
                         label: "Output"
                         path: "audio.output-mode"
                         values: ["pcm", "passthrough", "ac3-encode"]
                         texts: ({ "pcm": "PCM (Default) (Recommended)", "passthrough": "Pass-through",
                                   "ac3-encode": "Pass-through after AC3 re-encoding" })
                     }
+                    Amount { label: "AC3 re-encoding bitrate"; path: "audio.ac3-bitrate"; unit: "kbps"; values: [64, 80, 96, 112, 128, 160, 192, 224, 256, 320, 384, 448, 512, 576, 640] }
                     Choice {
                         label: "Pass-through when the source has"
                         path: "audio.passthrough-min-channels"
@@ -749,8 +758,8 @@ ApplicationWindow {
                             label: modelData
                             path: "equalizer.bands." + index
                             unit: "dB"
-                            from: -12
-                            to: 12
+                            from: -20
+                            to: 20
                             step: 0.5
                             live: true
                         }
@@ -780,18 +789,17 @@ ApplicationWindow {
                     Heading { text: "Crystallization" }
                     Check { path: "audio.crystality.enabled"; text: "Enable (Shift+C)" }
                     Amount { label: "Bandwidth extender"; path: "audio.crystality.bandwidth-extender"; from: 0; to: 100 }
-                    Amount { label: "Extender's HPF"; path: "audio.crystality.extender-hpf"; from: 0; to: 100 }
+                    Amount { label: "Extender's HPF"; path: "audio.crystality.extender-hpf"; from: 1; to: 3 }
                     Amount { label: "Harmonic booster"; path: "audio.crystality.harmonic-booster"; from: 0; to: 100 }
                     Amount { label: "Echo volume"; path: "audio.crystality.echo-volume"; from: 0; to: 100 }
                     Amount { label: "Echo feedback"; path: "audio.crystality.echo-feedback"; from: 0; to: 100 }
                     Amount { label: "Extra stereo"; path: "audio.crystality.extra-stereo"; from: 0; to: 100 }
                     Heading { text: "Noise Reduction" }
                     Check { path: "audio.noise-reduction.enabled"; text: "Enable (Shift+D)" }
-                    Amount { label: "Threshold"; path: "audio.noise-reduction.threshold"; from: 0; to: 100 }
                     Heading { text: "Crossfeed" }
                     Check { path: "audio.crossfeed.enabled"; text: "Enable" }
-                    Amount { label: "Low frequencies to the other ear below"; path: "audio.crossfeed.cut"; unit: "Hz"; from: 300; to: 2000; step: 50 }
-                    Amount { label: "Feed level"; path: "audio.crossfeed.feed"; unit: "dB"; from: 1; to: 15; step: 0.5 }
+                    Amount { label: "Remove low frequencies"; path: "audio.crossfeed.cut"; unit: "Hz"; from: 300; to: 2000; step: 50 }
+                    Amount { label: "Gain"; path: "audio.crossfeed.feed"; unit: "dB"; from: 1; to: 15; step: 0.5 }
                     Heading { text: "Voice and Channels" }
                     Check { path: "audio.voice-removal"; text: "Voice Removal (Shift+V)" }
                     Check { path: "audio.voice-emphasis"; text: "Voice Emphasis (Shift+A)" }
@@ -800,6 +808,15 @@ ApplicationWindow {
 
                 Page {
                     Heading { text: "Language/Stream Selection" }
+                    Choice {
+                        label: "Selection method"
+                        path: "audio.selection"
+                        values: ["languages", "stream", "quality", "default"]
+                        texts: ({ "languages": "Prefer specified languages (Recommended)",
+                                  "stream": "Prefer specified stream",
+                                  "quality": "Prefer highest quality ones",
+                                  "default": "Use default selection" })
+                    }
                     Field { label: "Preferred languages"; path: "audio.languages"; placeholder: "rus,eng" }
                     Field { label: "Turn off subtitles with"; path: "audio.subtitles-off"; placeholder: "rus" }
                     Amount { label: "Preferred stream (0: none)"; path: "audio.preferred-stream"; from: 0; to: 9 }

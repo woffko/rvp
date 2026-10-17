@@ -173,6 +173,9 @@ began to close, and its release (self-test `menu_closing_press_kept`,
 
 ## What RVP lacks
 
+(As of this audit. Goal L added most of it; its comparison with PotPlayer
+is in "M10" below, and `docs/coverage/` lists what remains with reasons.)
+
 PotPlayer's Audio menu (R1) against RVP after this audit:
 
 | PotPlayer | RVP | How, with mpv |
@@ -221,7 +224,232 @@ RVP had. Commands per top-level menu, PotPlayer's (R1) and RVP's:
 
 - A run on the host comparing RVP after this audit with PotPlayer on the
   same tones (and a film's 5.1 track) would confirm the match by ear and by
-  level.
-- The normalizer's block per source (finding 2).
+  level. (Goal L's session below compared the new functions.)
+- The normalizer's block per source (finding 2): measured in M10 below.
 - Which of the missing functions to add, and in what order (the owner's
-  choice).
+  choice): goal L added the audio ones.
+
+## M10: goal L's comparison with PotPlayer (2026-10-17)
+
+### Method
+
+Two sessions on the owner's host, with permission, recorded the default
+device (FiiO Q series over S/PDIF, 44.1 kHz) with WASAPI loopback while
+`spikes/host-session` `m10` played `tools/audio-audit/make_m10.py`'s files
+in PotPlayer and switched its settings through its menu commands
+(`WM_COMMAND`) in the silence before each pass (each pass starts with a
+2 kHz marker on the left):
+
+1. run 2: the 19 equalizer presets on ten tones (the bands' frequencies,
+   -26 dBFS), then no effect, each effect and Audio Stretching at 110 % on
+   a pass of tones, a noise burst and a noise floor; then RVP (goal L's
+   build) playing pips to the default device and its second device (the
+   monitor's HDMI audio), both recorded with their capture times;
+2. run 3: 2.0 Stereo and five speaker modes on a 5.1 file with one channel
+   at a time, then the normalizer (on in a silent instance first) on the
+   audit's 1 kHz tone in eight codecs.
+
+PotPlayer's state (the bits each switch depends on) was read from its
+Preferences pages, which the tool also dumped (every control's text,
+value and list; `docs/r1/preferences.tsv` gives the controls). Before each
+run its registry key and playlist folder were saved and afterwards written
+back; a registry diff and the playlists were the same as before. RVP's
+side is rendered through RVP's own chain (`render_chain`) and measured the
+same way by `tools/audio-audit/m10.py`, which also calibrates PotPlayer's
+recording: it reached the recording 12.4 dB lower than RVP's renders (the
+host's volume), measured on the left-only 1 kHz tone of the pass without
+an effect, and FR of 2.0 Stereo.
+
+PotPlayer applies a switch 0.7 to 1 s after the command: the first
+tone of a pass still plays the previous setting. The measurements start
+after that (the 170 Hz band from 0.1 s, the centre tone from 0.5 s); each
+preset's 60 Hz is the next pass's (unknown for the last, Techno; RVP keeps
+an estimate). Virtual Dolby Decoder restarts PotPlayer's output and lost
+its pass's marker; the pass is found by its first sound.
+
+### Equalizer presets
+
+PotPlayer's presets are not Winamp's values: its sliders reach ±20 dB, and
+its bands are broad and overlap, so a preset's response at each band is
+not the slider. RVP's equalizer now takes ±20 dB and its presets are these
+measured responses (gain at each band against (Default), dB); RVP renders
+them within the last column:
+
+| Preset | 60 Hz | 170 Hz | 310 Hz | 600 Hz | 1000 Hz | 3000 Hz | 6000 Hz | 12000 Hz | 14000 Hz | 16000 Hz | RVP within |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| (Default) | +0.0 | +0.0 | +0.0 | +0.0 | +0.0 | +0.0 | +0.0 | +0.0 | +0.0 | +0.0 | 0.0 dB |
+| Classical | +0.0 | +0.0 | +0.0 | -0.1 | -0.3 | -2.5 | -7.3 | -8.3 | -8.1 | -7.6 | 0.0 dB |
+| Club | -0.1 | +0.4 | +1.3 | +2.3 | +2.3 | +1.8 | +1.2 | +0.3 | +0.2 | +0.1 | 0.0 dB |
+| Dance | +3.3 | +3.9 | +2.7 | +0.7 | -0.1 | -2.2 | -3.0 | -1.8 | -1.5 | -1.2 | 0.1 dB |
+| Full Bass | +3.4 | +5.7 | +6.0 | +4.2 | +2.1 | -3.4 | -7.8 | -9.4 | -9.2 | -8.6 | 0.2 dB |
+| Full Bass & Treble | +1.9 | +5.7 | +0.1 | -1.9 | -1.2 | +5.4 | +9.7 | +10.0 | +9.6 | +9.1 | 0.5 dB |
+| Full Treble | -3.1 | -4.7 | -4.7 | -1.4 | +2.0 | +13.0 | +18.5 | +17.5 | +16.6 | +15.6 | 0.1 dB |
+| Laptop | +1.3 | -4.7 | +2.9 | +0.0 | -0.0 | +4.3 | +7.7 | +8.7 | +8.6 | +8.3 | 0.8 dB |
+| Large Hall | +3.4 | +4.9 | +4.4 | +2.6 | +1.0 | -2.2 | -3.3 | -2.4 | -2.1 | -1.7 | 0.1 dB |
+| Live | -1.9 | +0.0 | +1.1 | +2.0 | +2.1 | +2.0 | +1.6 | +0.9 | +0.8 | +0.7 | 0.2 dB |
+| Loudness | +6.1 | +7.8 | +6.9 | +4.3 | +3.1 | +7.4 | +11.8 | +13.0 | +12.8 | +12.4 | 0.2 dB |
+| Party | +2.0 | +7.8 | +1.2 | +0.4 | +0.4 | +1.6 | +2.8 | +3.6 | +3.6 | +3.6 | 0.7 dB |
+| Pop | -0.6 | +1.7 | +2.7 | +2.8 | +1.9 | -1.5 | -3.0 | -2.8 | -2.6 | -2.3 | 0.2 dB |
+| Reggae | +0.0 | +1.7 | -0.9 | -1.8 | -0.5 | +2.6 | +2.6 | +0.9 | +0.5 | +0.3 | 0.2 dB |
+| Rock | +2.7 | +1.6 | -1.5 | -3.1 | -1.7 | +5.1 | +8.4 | +8.2 | +7.8 | +7.3 | 0.1 dB |
+| Ska | -0.7 | -1.6 | -1.1 | +0.1 | +1.1 | +4.2 | +6.4 | +6.2 | +5.9 | +5.4 | 0.1 dB |
+| Soft | +0.9 | +0.3 | -0.4 | -0.9 | +0.0 | +5.1 | +8.5 | +8.8 | +8.5 | +8.1 | 0.0 dB |
+| Soft Rock | +1.0 | +1.4 | +0.9 | -0.4 | -1.0 | -1.0 | +0.3 | +1.7 | +1.9 | +2.0 | 0.1 dB |
+| Techno | — | +2.1 | +0.4 | -2.0 | -1.7 | +2.1 | +4.7 | +5.2 | +5.0 | +4.7 | 0.1 dB |
+
+### Effects
+
+Levels in dB of full scale, both players at gain 1 with their normalizers
+off, PotPlayer calibrated as above (`left`: a 1 kHz tone on the left only,
+its level on each side; `mix`: 500 Hz in the centre, 3 kHz left and 5 kHz
+right, `mix_L5k` the 5 kHz that reached the left; `burst`: 0.2 s of white
+noise; `tail`: what follows it, 0.05 to 0.3 s, 0.4 to 0.9 s and 1 to 1.7 s
+after its end; `floor_rest`: a -46 dBFS noise floor under a 1 kHz tone,
+the tone left out):
+
+| Effect | Player | left_L | left_R | mix_L500 | mix_L3k | mix_R5k | mix_L5k | burst | tail_0.1 | tail_0.5 | tail_1.2 | floor_rest |
+|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| none | PotPlayer | -15.1 | — | -23.0 | -23.0 | -23.0 | — | -19.4 | — | — | — | -46.6 |
+|  | RVP | -15.1 | — | -23.0 | -23.0 | -23.0 | — | -18.8 | — | — | — | -46.0 |
+| Crystality | PotPlayer | -13.5 | -33.9 | -22.4 | -21.5 | -21.5 | -41.2 | -16.9 | -44.6 | -48.5 | -66.2 | -40.7 |
+|  | RVP | -13.8 | -34.3 | -22.6 | -21.3 | -21.2 | -40.6 | -16.0 | -44.5 | -49.0 | -64.3 | -39.9 |
+| Noise Reduction | PotPlayer | -15.8 | — | -23.2 | -31.2 | -41.1 | — | -29.1 | — | — | — | -56.4 |
+|  | RVP | -15.1 | — | -22.9 | -31.5 | -40.5 | — | -29.1 | — | — | — | -56.3 |
+| Freeverb | PotPlayer | -10.3 | -27.4 | -24.0 | -19.1 | -18.6 | -31.1 | -15.6 | -32.4 | -56.5 | -88.6 | -33.8 |
+|  | RVP | -10.3 | -27.4 | -24.0 | -19.1 | -18.6 | -31.1 | -15.0 | -32.0 | -56.5 | -89.4 | -33.7 |
+| Voice Removal | PotPlayer | -15.1 | -15.1 | — | -23.0 | -23.0 | -23.0 | -16.3 | — | — | — | -43.6 |
+|  | RVP | -15.1 | -15.1 | — | -23.0 | -23.0 | -23.0 | -15.8 | — | — | — | -43.0 |
+| Voice Emphasis | PotPlayer | -15.1 | — | -35.9 | -40.9 | -46.1 | — | -35.7 | — | — | — | -62.6 |
+|  | RVP | -15.1 | — | -36.0 | -41.0 | -46.2 | — | -35.4 | — | — | — | -62.6 |
+| Crossfeed | PotPlayer | -17.5 | -29.4 | -23.6 | -24.8 | -24.7 | -49.5 | -21.1 | — | — | — | -48.3 |
+|  | RVP | -17.5 | -29.4 | -23.6 | -24.8 | -24.7 | -49.5 | -20.5 | — | — | — | -47.7 |
+
+The noise's levels differ by about 0.6 dB in every row, the pass without
+an effect too: the 44.1 kHz recording leaves out the 48 kHz noise above
+22 kHz. What each effect is, and what changed in RVP:
+
+- **Voice Emphasis** keeps the voice's band: 1 kHz as it was, 500 Hz
+  13 dB down, 3 kHz 18 dB, 5 kHz 23 dB. RVP's band-pass at 1 kHz (Q 2.9)
+  replaced `dialoguenhance`, which raised the centre instead.
+- **Noise Reduction** at its default threshold is a fixed low-pass:
+  3 kHz 8 dB down, 5 kHz 18 dB, noise 10 dB. RVP's low-pass at 1875 Hz
+  (Q 0.76) replaced `afftdn`; how PotPlayer's threshold moves it was not
+  measured, so RVP has no threshold (`docs/coverage/preferences.md`).
+- **Crossfeed** is bs2b: at PotPlayer's "Remove low frequencies" 700 Hz and
+  "Gain" 6 dB (bs2b's Chu Moy setting) bs2b's own formulas give every
+  level within 0.1 dB. RVP now builds bs2b's filters from FFmpeg's (FFmpeg's
+  `crossfeed` filter is not bs2b) with PotPlayer's defaults.
+- **Freeverb** runs Jezar's tuning in samples at the stream's rate, not
+  scaled from 44.1 kHz: unscaled, RVP's response matches within 0.1 dB;
+  scaled, it was up to 9 dB off. (PotPlayer probably runs a 44.1 kHz
+  source at 44.1 kHz; RVP's response is at 48 kHz, where those echoes come
+  9 % sooner.)
+- **Voice Removal** cancels the centre in both (PotPlayer's centre tone
+  -86 dB, RVP's -100 dB): no change.
+- **Crystality** (its defaults are those of the XMMS Crystality plugin) was
+  taken apart from the recording: the harmonic booster adds the signal's
+  magnitude (even harmonics only, the second 30 dB under a tone at 43), the
+  bandwidth extender raises everything 0.6 dB and noise above 16 kHz 3 dB
+  more, extra stereo widens the sides (a side tone leaks 20 dB down,
+  inverted), and the echo is four repeats of 17500, 28000, 35000 and
+  45500 samples (at 48 kHz) with a gain from each side to each side,
+  mostly the sides' difference (a centre tone's echo is 32 dB down, a side
+  tone's 25 dB), each pass low-passed, and a weak tail to 2 s. RVP
+  rebuilt it from that: `aeval`'s `|x|`, two high shelves, `extrastereo`
+  and the echo as a computed response (`dsp::crystality_echo`, convolved
+  by `afir`); before, its own mix of `aexciter`, `crystalizer` and `aecho`
+  was up to 15 dB louder. Only the defaults were measured; the sliders
+  scale the parts. PotPlayer's echo also wavers slightly (±4 to 10 Hz
+  sidebands on a tone), RVP's does not.
+
+**Audio Stretching** (Audio > Audio Stretching, Shift+H, J, K; 1 % a step,
+"Audio Stretching : 101%" on the OSD) is a pitch shift at the same speed:
+at 110 % the 1 kHz tone played at 1100 Hz and the pass kept its timing.
+RVP now has it, with rubberband's `pitch-scale` in its tempo filter's place
+(both libmpv builds have rubberband).
+
+### Speaker modes
+
+Left / right level of each channel of the 5.1 (side) file, dB. FL, the
+first channel of a pass, still played the previous mode in PotPlayer:
+
+| Mode | Player | FL | FR | FC | LFE | SL | SR |
+|---|---|---|---|---|---|---|---|
+| 2.0 Stereo | PotPlayer | -9.0 / — | — / -9.0 | -12.0 / -12.0 | -12.0 / -12.0 | -9.0 / — | — / -9.0 |
+|  | RVP | -9.0 / — | — / -9.0 | -12.0 / -12.0 | -12.0 / -12.0 | -9.0 / — | — / -9.0 |
+| Virtual Headphone | PotPlayer | (-13.7 / -37.4) | -25.5 / -23.8 | -27.1 / -27.1 | -16.6 / -16.6 | -26.3 / -28.0 | -28.0 / -26.3 |
+|  | RVP | -24.3 / -27.5 | -27.5 / -24.3 | -26.3 / -26.3 | -17.8 / -17.8 | -22.2 / -27.5 | -27.5 / -22.2 |
+| Virtual Surround | PotPlayer | (-20.1 / -27.6) | -24.1 / -16.3 | -22.6 / -22.6 | -19.0 / -19.0 | — / — | — / — |
+|  | RVP | -21.1 / -24.3 | -24.2 / -21.1 | -23.1 / -23.1 | -17.8 / -17.8 | -18.9 / -24.3 | -24.2 / -19.0 |
+| Dolby Surround | PotPlayer | (-16.2 / -26.0) | — / -9.0 | -12.0 / -12.0 | — / — | — / — | — / — |
+|  | RVP | -9.0 / — | — / -9.0 | -12.0 / -12.0 | — / — | -12.0 / -12.0 | -12.0 / -12.0 |
+| Dolby Pro Logic II | PotPlayer | -9.0 / — | — / -9.0 | -12.0 / -12.0 | — / — | — / — | — / — |
+|  | RVP | -9.0 / — | — / -9.0 | -12.0 / -12.0 | — / — | -7.3 / -12.0 | -12.0 / -7.3 |
+
+- 2.0 Stereo matches exactly.
+- PotPlayer's virtual modes play a speaker about 13.5 dB below its 2.0
+  Stereo and the LFE 4.6 to 7 dB below: RVP's virtual modes now have the
+  same levels (`headphone`'s gain and its `lfe`). The ears' difference is
+  RVP's head model's (PotPlayer's virtual headphone gives a side speaker
+  only 1.7 dB more in the near ear at 1 kHz, RVP's 5 dB).
+- PotPlayer's Dolby Surround and Pro Logic II leave the LFE out: RVP's
+  now do too ("+LFE" keeps it on a channel of its own).
+- PotPlayer's Dolby modes and Virtual Surround left the file's side
+  surrounds out entirely. The file is a 5.1 (side) WAV (mask 0x60F); a
+  decoder's 5.1 may name its surrounds otherwise, so this may be how
+  PotPlayer reads this mask rather than its matrix. RVP encodes the
+  surrounds, as the matrices are meant to.
+- Virtual Dolby Decoder outputs 5.1 in both players; PotPlayer's went to
+  the stereo device through Windows' own downmix, RVP's render is the 5.1
+  itself, so their levels are not comparable here.
+
+### Normalizer blocks
+
+TomSteady's block that fits PotPlayer's gain steps on each file (in the
+source's samples, 16-sample grid; the fit is about 1 % short on the
+frame-sized blocks, so it reads 2288 for 2304), and RVP's rule:
+
+| File | Codec | PotPlayer | fit RMS, dB | RVP |
+|---|---|---:|---:|---:|
+| block-mp3.mp3 | MP3 | 2288 | 0.005 | 2304 (2 frames) |
+| block-aac.m4a | AAC | — (no single block fits) | 0.161 | 2048 |
+| block-opus.opus | Opus | 2848 | 0.004 | 2880 (3 frames) |
+| block-pcm16.wav | PCM | 2992 | 0.003 | 3000 (1/16 s) |
+| block-ac3-stereo.mkv | AC3 | 1536 | 0.004 | 1536 (1 frame) |
+| block-eac3.mkv | E-AC3 | 1520 | 0.006 | 1536 (1 frame) |
+| block-dts.mkv | DTS | 2032 | 0.005 | 2048 (4 frames) |
+| block-flac44.flac | FLAC, 44.1 kHz, 925-sample frames | 2768 | 0.003 | 2048 |
+
+The blocks are whole decoder frames: the FLAC file's 925-sample frames
+took three (2775), where S5's and the audit's FLAC (1024-sample frames)
+took two (2048). RVP cannot see a FLAC file's frame size and keeps 2048.
+
+### Second device
+
+RVP played pips (1 kHz, 20 ms, every 0.5 s, 34 s) to the FiiO and, as
+its second device, to the monitor's HDMI audio; both loopback recordings
+carry their capture times (QPC), so each pip's arrival on the two devices
+is compared on one clock. After the first pip (the second device started
+30 ms early) the second device stayed within 0.6 ms of the first: mean
++0.06 ms, standard deviation 0.33 ms, drift -0.2 ms a minute. Loopback
+sees the stream as Windows mixes it; each device's own output latency
+(an HDMI display's in particular) comes on top, which the second device's
+delay setting is for.
+
+### PotPlayer's audio Preferences, read
+
+The dump answered the lists PotPlayer fills at run time: output format
+(16-bit (Recommended), 24-bit, 32-bit, 32-bit float, 16-bit with
+dithering), sample rate (Same as input, 192000 to 8000 Hz), resampling
+quality (High, Normal (Recommended), Low), resampling condition (Always,
+when the source's rate is smaller or larger than an edit, 48000), output
+(PCM, LPCM, Pass-through after AC3 re-encoding), the AC3 bitrate (64 to
+640 kbps, 640 set), the normalizer's method (TomSteady 32-bit float
+(Recommended), 32-bit simple, 32-bit complex) and the audio selection
+method (Prefer specified languages (Recommended), Prefer specified
+stream, Prefer highest quality ones, Use default selection). RVP now has
+the resampling condition, the AC3 bitrate and the selection method; the
+normalizer's two other methods keep a reason. Defaults read there:
+Crossfeed 700 Hz and 6 dB (RVP's feed was 4.5 dB), Noise Reduction's
+threshold 100 of 1 to 5000, Extender's HPF 1 to 3 (RVP took 0 to 100),
+Freeverb's and Crystality's defaults as RVP's.

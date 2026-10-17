@@ -22,9 +22,15 @@
 //! bands are interpolated to its eighteen, and band changes rebuild the
 //! chain.
 //!
-//! The presets are PotPlayer's names; their values are Winamp's presets,
-//! whose names PotPlayer's are (Loudness is RVP's own curve), clipped to
-//! the bands' range until the audio audit has measured PotPlayer's.
+//! The presets are PotPlayer's 19 with PotPlayer's response at the ten
+//! bands, as goal L's host session measured them on tones
+//! (`docs/audits/audio.md`, M10). PotPlayer's bands are broad, overlapping
+//! filters, so a preset's response is not its slider positions (Full Bass
+//! & Treble's sliders are 30, 20, 0, -30, -20, 10, 40, 50, 50, 50 of
+//! PotPlayer's ±100); RVP's equalizer passes through the same ten points.
+//! PotPlayer takes about 1.4 s to switch a preset, so each preset's 60 Hz
+//! value comes from the next pass of the session; Techno, the last, has
+//! its 60 Hz estimated (about 0.3 of Winamp's value, as the others show).
 
 use std::fmt::Write as _;
 
@@ -36,8 +42,10 @@ use crate::audio::chain::lavfi;
 
 /// The bands' centre frequencies in Hz.
 pub const BANDS: [u32; 10] = [60, 170, 310, 600, 1000, 3000, 6000, 12000, 14000, 16000];
-/// The largest boost or cut in dB.
-pub const RANGE: f64 = 12.0;
+/// The largest boost or cut in dB: PotPlayer's sliders run 0 to 200
+/// around 100, and its Full Treble preset reaches +18.5 dB at 6 kHz
+/// (goal L's host session).
+pub const RANGE: f64 = 20.0;
 /// The filter's label in mpv's `af` chain.
 pub const LABEL: &str = "rvpeq";
 /// The filter's instance name inside the label's graph.
@@ -100,71 +108,68 @@ const fn preset(name: &'static str, bands: [f64; 10]) -> Preset {
     }
 }
 
-/// PotPlayer's presets, in its order (R1's live menu).
+/// PotPlayer's presets in its order (R1's live menu), each as PotPlayer's
+/// response at the ten bands, measured in goal L's host session
+/// (`docs/audits/audio.md`, M10; see the module comment).
 pub const PRESETS: &[Preset] = &[
     preset(DEFAULT_PRESET, [0.0; 10]),
     preset(
         "Classical",
-        [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, -7.2, -7.2, -7.2, -9.6],
+        [0.0, 0.0, 0.0, -0.1, -0.3, -2.5, -7.3, -8.3, -8.1, -7.6],
     ),
-    preset("Club", [0.0, 0.0, 8.0, 5.6, 5.6, 5.6, 3.2, 0.0, 0.0, 0.0]),
+    preset("Club", [-0.1, 0.4, 1.3, 2.3, 2.3, 1.8, 1.2, 0.3, 0.2, 0.1]),
     preset(
         "Dance",
-        [9.6, 7.2, 2.4, 0.0, 0.0, -5.6, -7.2, -7.2, 0.0, 0.0],
+        [3.3, 3.9, 2.7, 0.7, -0.1, -2.2, -3.0, -1.8, -1.5, -1.2],
     ),
     preset(
         "Full Bass",
-        [-8.0, 9.6, 9.6, 5.6, 1.6, -4.0, -8.0, -10.4, -11.2, -11.2],
+        [3.4, 5.7, 6.0, 4.2, 2.1, -3.4, -7.8, -9.4, -9.2, -8.6],
     ),
     preset(
         "Full Bass & Treble",
-        [7.2, 5.6, 0.0, -7.2, -4.8, 1.6, 8.0, 11.2, 12.0, 12.0],
+        [1.9, 5.7, 0.1, -1.9, -1.2, 5.4, 9.7, 10.0, 9.6, 9.1],
     ),
     preset(
         "Full Treble",
-        [-9.6, -9.6, -9.6, -4.0, 2.4, 11.2, 16.0, 16.0, 16.0, 16.8],
+        [-3.1, -4.7, -4.7, -1.4, 2.0, 13.0, 18.5, 17.5, 16.6, 15.6],
     ),
     preset(
         "Laptop",
-        [4.8, 11.2, 5.6, -3.2, -2.4, 1.6, 4.8, 9.6, 12.8, 14.4],
+        [1.3, -4.7, 2.9, 0.0, 0.0, 4.3, 7.7, 8.7, 8.6, 8.3],
     ),
     preset(
         "Large Hall",
-        [10.4, 10.4, 5.6, 5.6, 0.0, -4.8, -4.8, -4.8, 0.0, 0.0],
+        [3.4, 4.9, 4.4, 2.6, 1.0, -2.2, -3.3, -2.4, -2.1, -1.7],
     ),
-    preset("Live", [-4.8, 0.0, 4.0, 5.6, 5.6, 5.6, 4.0, 2.4, 2.4, 2.4]),
+    preset("Live", [-1.8, 0.0, 1.1, 2.0, 2.1, 2.0, 1.6, 0.9, 0.8, 0.7]),
     preset(
         "Loudness",
-        [6.0, 4.0, 1.0, 0.0, -1.0, 0.0, 1.0, 3.0, 4.0, 5.0],
+        [6.1, 7.8, 6.9, 4.3, 3.1, 7.4, 11.8, 13.0, 12.8, 12.4],
     ),
-    preset("Party", [7.2, 7.2, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 7.2, 7.2]),
+    preset("Party", [2.0, 7.8, 1.2, 0.4, 0.4, 1.6, 2.8, 3.6, 3.6, 3.6]),
     preset(
         "Pop",
-        [-1.6, 4.8, 7.2, 8.0, 5.6, 0.0, -2.4, -2.4, -1.6, -1.6],
+        [-0.6, 1.7, 2.7, 2.8, 1.9, -1.5, -3.0, -2.8, -2.6, -2.3],
     ),
     preset(
         "Reggae",
-        [0.0, 0.0, 0.0, -5.6, 0.0, 6.4, 6.4, 0.0, 0.0, 0.0],
+        [0.0, 1.7, -0.9, -1.8, -0.5, 2.6, 2.6, 0.9, 0.5, 0.3],
     ),
     preset(
         "Rock",
-        [8.0, 4.8, -5.6, -8.0, -3.2, 4.0, 8.8, 11.2, 11.2, 11.2],
+        [2.7, 1.6, -1.5, -3.1, -1.7, 5.1, 8.4, 8.2, 7.8, 7.3],
     ),
-    preset(
-        "Ska",
-        [-2.4, -4.8, -4.0, 0.0, 4.0, 5.6, 8.8, 9.6, 11.2, 9.6],
-    ),
-    preset(
-        "Soft",
-        [4.8, 1.6, 0.0, -2.4, 0.0, 4.0, 8.0, 9.6, 11.2, 12.0],
-    ),
+    preset("Ska", [-0.7, -1.6, -1.1, 0.1, 1.1, 4.2, 6.4, 6.2, 5.9, 5.4]),
+    preset("Soft", [0.9, 0.3, -0.4, -0.9, 0.0, 5.1, 8.5, 8.8, 8.5, 8.1]),
     preset(
         "Soft Rock",
-        [4.0, 4.0, 2.4, 0.0, -4.0, -5.6, -3.2, 0.0, 2.4, 8.8],
+        [1.0, 1.4, 0.9, -0.4, -1.0, -1.0, 0.3, 1.7, 1.9, 2.0],
     ),
+    // Techno's 60 Hz is estimated (see the module comment).
     preset(
         "Techno",
-        [8.0, 5.6, 0.0, -5.6, -4.8, 0.0, 8.0, 9.6, 9.6, 8.8],
+        [2.4, 2.1, 0.4, -2.0, -1.7, 2.1, 4.7, 5.2, 5.0, 4.7],
     ),
 ];
 
@@ -308,11 +313,11 @@ mod tests {
     fn the_filter_lists_every_band() {
         let mut eq = Equalizer::default();
         eq.bands[0] = 3.0;
-        eq.bands[9] = -20.0;
+        eq.bands[9] = -30.0;
         assert_eq!(
             eq.gain_entry(),
             "entry(60,3.0);entry(170,0.0);entry(310,0.0);entry(600,0.0);entry(1000,0.0);\
-             entry(3000,0.0);entry(6000,0.0);entry(12000,0.0);entry(14000,0.0);entry(16000,-12.0)"
+             entry(3000,0.0);entry(6000,0.0);entry(12000,0.0);entry(14000,0.0);entry(16000,-20.0)"
         );
         assert!(
             eq.chain_entry().contains("lavfi=graph=%"),
@@ -326,7 +331,7 @@ mod tests {
         eq.superequalizer = true;
         let entry = eq.chain_entry();
         assert!(entry.contains("superequalizer=1b=1.3755:"), "{entry}");
-        assert!(entry.contains(":18b=0.2512"), "{entry}");
+        assert!(entry.contains(":18b=0.1000"), "{entry}");
     }
 
     #[test]

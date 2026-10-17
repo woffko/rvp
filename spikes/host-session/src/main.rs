@@ -5,7 +5,8 @@
 //!     [--sizes 1280x720,...] [--states idle,playing|none] [--menu yes|no] [--mouse-page yes|no]
 //! host-session s5 --potplayer EXE --out DIR --clip FILE:SECONDS [--clip FILE:SECONDS ...]
 //! host-session audio --potplayer EXE --rvp RVP_EXE --files DIR --out DIR [--levels 100,90,...] [--hold-ms N]
-//! host-session m10 --potplayer EXE --files DIR --out DIR [--rvp RVP_EXE --second NAME]
+//! host-session m10 --potplayer EXE --files DIR --out DIR [--sections presets,effects,speakers,blocks]
+//!     [--rvp RVP_EXE --second NAME]
 //! host-session s3-input --s3 S3_EXE --skin DSF
 //! host-session record --out FILE.wav --seconds N
 //! host-session check

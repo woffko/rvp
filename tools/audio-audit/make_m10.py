@@ -4,12 +4,14 @@
 starts with half a second of silence and a marker (2 kHz, left only, 0.25 s,
 so that voice removal keeps it), so a recording can be cut into passes by
 the markers; `host-session m10` switches PotPlayer's setting for the next
-pass during that silence.
+pass during that silence. The pass files start with 3 s of silence, which
+PotPlayer may play before the tool pauses it.
 
   m10-bands.wav    19 passes, one per equalizer preset: the ten bands'
                    frequencies one after the other (0.3 s, 0.1 s apart) at
                    0.1 of full scale, room for the presets' 12 dB.
-  m10-effects.wav  7 passes (none, then each effect): a 1 kHz tone in the
+  m10-effects.wav  8 passes (none, each effect, Audio Stretching at 110 %):
+                   a 1 kHz tone in the
                    centre, the same on the left only, 500 Hz in the centre
                    with 3 kHz left and 5 kHz right, a noise burst and two
                    seconds of silence (a reverb's tail), a tone over a
@@ -35,8 +37,11 @@ import numpy as np
 
 RATE = 48000
 BANDS = [60, 170, 310, 600, 1000, 3000, 6000, 12000, 14000, 16000]
+# Silence before the first pass: PotPlayer starts playing a file before
+# the session's tool can pause it.
+FILE_LEAD = 3.0
 PRESET_PASSES = 19
-EFFECT_PASSES = 7
+EFFECT_PASSES = 8
 SPEAKER_PASSES = 6
 FADE = 0.005
 
@@ -155,10 +160,13 @@ def main():
     ffmpeg, out = sys.argv[1], Path(sys.argv[2])
     out.mkdir(parents=True, exist_ok=True)
     rng = np.random.default_rng(20261017)
-    write_wav(out / "m10-bands.wav", np.concatenate([bands_pass() for _ in range(PRESET_PASSES)]))
-    write_wav(out / "m10-effects.wav", np.concatenate([effects_pass(rng) for _ in range(EFFECT_PASSES)]))
+    write_wav(out / "m10-bands.wav", np.concatenate(
+        [silence(FILE_LEAD, 2)] + [bands_pass() for _ in range(PRESET_PASSES)]))
+    write_wav(out / "m10-effects.wav", np.concatenate(
+        [silence(FILE_LEAD, 2)] + [effects_pass(rng) for _ in range(EFFECT_PASSES)]))
     # FL FR FC LFE SL SR.
-    write_wav(out / "m10-51.wav", np.concatenate([surround_pass() for _ in range(SPEAKER_PASSES)]), 0x60F)
+    write_wav(out / "m10-51.wav", np.concatenate(
+        [silence(FILE_LEAD, 6)] + [surround_pass() for _ in range(SPEAKER_PASSES)]), 0x60F)
     write_wav(out / "m10-clicks.wav", clicks())
     tone_source = ["-f", "lavfi", "-i", "aevalsrc=0.95*sin(2*PI*1000*t)|0.95*sin(2*PI*1000*t):s=48000:d=15"]
     encodings = {

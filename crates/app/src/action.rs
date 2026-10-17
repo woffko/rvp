@@ -1133,6 +1133,30 @@ pub const ACTIONS: &[ActionInfo] = &[
         &[10398],
         &[],
     ),
+    info(
+        Action::Audio(AudioCommand::StretchingDown),
+        "audio-stretching-down",
+        "Decrease Audio Stretching",
+        Some("Shift+H"),
+        &[11110],
+        &[],
+    ),
+    info(
+        Action::Audio(AudioCommand::StretchingUp),
+        "audio-stretching-up",
+        "Increase Audio Stretching",
+        Some("Shift+J"),
+        &[11111],
+        &[],
+    ),
+    info(
+        Action::Audio(AudioCommand::StretchingOff),
+        "audio-stretching-off",
+        "Disable Audio Stretching",
+        Some("Shift+K"),
+        &[11112],
+        &[],
+    ),
     // Subtitles.
     info(
         Action::ToggleSubtitles,

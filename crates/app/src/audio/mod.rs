@@ -90,6 +90,41 @@ impl ResampleQuality {
     }
 }
 
+/// When the output rate applies (the Audio page's "Resample"): always, or
+/// only to sources below or above a rate.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Default, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum ResampleWhen {
+    #[default]
+    Always,
+    Below,
+    Above,
+}
+
+/// How a file's audio track is chosen ("Selection method").
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Default, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum Selection {
+    /// "Prefer specified languages": the languages, then the preferred
+    /// stream.
+    #[default]
+    Languages,
+    /// "Prefer specified stream".
+    Stream,
+    /// "Prefer highest quality ones": the most channels, then the highest
+    /// rate, then the highest bitrate.
+    Quality,
+    /// "Use default selection": the file's own (mpv's choice without the
+    /// languages).
+    Default,
+}
+
+/// The bitrates of "Pass-through after AC3 re-encoding", in kbps
+/// (PotPlayer's list; 640 is its default and mpv's).
+pub const AC3_BITRATES: [u32; 15] = [
+    64, 80, 96, 112, 128, 160, 192, 224, 256, 320, 384, 448, 512, 576, 640,
+];
+
 /// How a source is mixed to the speakers (the Audio page's Mixer Settings
 /// and Mixer Level). The levels are in dB; the defaults are PotPlayer's mix
 /// as the audio audit measured it.
@@ -282,21 +317,13 @@ impl Default for Crystality {
     }
 }
 
-/// Noise Reduction: its threshold, 0 to 100.
-#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+/// Noise Reduction: on or off. PotPlayer's threshold (1 to 5000, 100 by
+/// default) is not here: goal L's host session measured its filter at the
+/// default only (`crate::audio::chain`'s `denoise`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 #[serde(default, rename_all = "kebab-case")]
 pub struct NoiseReduction {
     pub enabled: bool,
-    pub threshold: f64,
-}
-
-impl Default for NoiseReduction {
-    fn default() -> Self {
-        Self {
-            enabled: false,
-            threshold: 30.0,
-        }
-    }
 }
 
 /// Freeverb (Jezar at Dreampoint's public-domain reverb): its five
@@ -326,9 +353,10 @@ impl Default for Freeverb {
     }
 }
 
-/// Crossfeed for headphones: part of each side goes to the other ear
-/// below a cut frequency (Hz), at a feed level (dB), as Bauer's
-/// stereophonic-to-binaural crossfeed does.
+/// Crossfeed for headphones, Bauer's stereophonic-to-binaural (bs2b):
+/// each side goes to the other ear below a cut frequency (Hz) at a feed
+/// level (dB). PotPlayer's defaults, "Remove low frequencies" 700 Hz and
+/// "Gain" 6 dB, are bs2b's "Chu Moy" setting.
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 #[serde(default, rename_all = "kebab-case")]
 pub struct Crossfeed {
@@ -342,7 +370,7 @@ impl Default for Crossfeed {
         Self {
             enabled: false,
             cut: 700.0,
-            feed: 4.5,
+            feed: 6.0,
         }
     }
 }
@@ -423,6 +451,12 @@ pub struct Audio {
     /// Hz; 0: as the source ("Same as input").
     pub sample_rate: u32,
     pub resample_quality: ResampleQuality,
+    /// The sample rate applies always, or to sources below or above
+    /// `resample_limit` Hz.
+    pub resample_when: ResampleWhen,
+    pub resample_limit: u32,
+    /// "Pass-through after AC3 re-encoding"'s bitrate, kbps.
+    pub ac3_bitrate: u32,
     pub mixer: Mixer,
     pub lfe_redirect: LfeRedirect,
     pub virtualizer: Virtualizer,
@@ -459,6 +493,7 @@ pub struct Audio {
     /// Subtitles are turned off when the audio is in one of these
     /// languages ("Turn off subtitles with").
     pub subtitles_off: String,
+    pub selection: Selection,
     /// The audio track every file starts with when no language matches
     /// ("Preferred stream", 1 the first); 0: mpv's choice.
     pub preferred_stream: u32,
@@ -478,6 +513,9 @@ impl Default for Audio {
             sample_format: SampleFormat::Same,
             sample_rate: 0,
             resample_quality: ResampleQuality::Normal,
+            resample_when: ResampleWhen::Always,
+            resample_limit: 48_000,
+            ac3_bitrate: 640,
             mixer: Mixer::default(),
             lfe_redirect: LfeRedirect::default(),
             virtualizer: Virtualizer::default(),
@@ -503,6 +541,7 @@ impl Default for Audio {
             recording: Recording::default(),
             languages: String::new(),
             subtitles_off: String::new(),
+            selection: Selection::Languages,
             preferred_stream: 0,
             remember_tracks: false,
         }
@@ -579,6 +618,20 @@ impl Audio {
                 self.sample_rate
             ));
             self.sample_rate = 0;
+        }
+        if !(8_000..=192_000).contains(&self.resample_limit) {
+            notes.push(format!(
+                "audio resample-limit {} must be 8000 to 192000 Hz: 48000 used",
+                self.resample_limit
+            ));
+            self.resample_limit = 48_000;
+        }
+        if !AC3_BITRATES.contains(&self.ac3_bitrate) {
+            notes.push(format!(
+                "audio ac3-bitrate {} is not one of PotPlayer's: 640 used",
+                self.ac3_bitrate
+            ));
+            self.ac3_bitrate = 640;
         }
         for (languages, name) in [
             (&mut self.languages, "languages"),
@@ -683,7 +736,6 @@ impl Audio {
                 &mut crystality.bandwidth_extender,
                 "crystality bandwidth-extender",
             ),
-            (&mut crystality.extender_hpf, "crystality extender-hpf"),
             (
                 &mut crystality.harmonic_booster,
                 "crystality harmonic-booster",
@@ -695,10 +747,10 @@ impl Audio {
             clamp(value, 0.0, 100.0, name, notes);
         }
         clamp(
-            &mut self.noise_reduction.threshold,
-            0.0,
-            100.0,
-            "noise-reduction threshold",
+            &mut crystality.extender_hpf,
+            1.0,
+            3.0,
+            "crystality extender-hpf",
             notes,
         );
         let reverb = &mut self.freeverb;
@@ -719,6 +771,19 @@ impl Audio {
             notes,
         );
         clamp(&mut self.crossfeed.feed, 1.0, 15.0, "crossfeed feed", notes);
+    }
+
+    /// mpv's `audio-samplerate` for a source of `source_rate` Hz (unknown:
+    /// the setting as it is): the chosen rate when it applies, else 0 (the
+    /// source's own).
+    #[must_use]
+    pub fn output_rate(&self, source_rate: Option<u32>) -> u32 {
+        let applies = match (self.resample_when, source_rate) {
+            (ResampleWhen::Always, _) | (_, None) => true,
+            (ResampleWhen::Below, Some(rate)) => rate < self.resample_limit,
+            (ResampleWhen::Above, Some(rate)) => rate > self.resample_limit,
+        };
+        if applies { self.sample_rate } else { 0 }
     }
 
     /// mpv's `audio-spdif` for a source with `channels` channels.
@@ -747,6 +812,24 @@ mod tests {
     use super::*;
 
     #[test]
+    fn the_output_rate_follows_the_resample_rule() {
+        let mut audio = Audio {
+            sample_rate: 48_000,
+            ..Audio::default()
+        };
+        assert_eq!(audio.output_rate(Some(44_100)), 48_000);
+        audio.resample_when = ResampleWhen::Below;
+        assert_eq!(audio.output_rate(Some(44_100)), 48_000);
+        assert_eq!(audio.output_rate(Some(96_000)), 0);
+        audio.resample_when = ResampleWhen::Above;
+        assert_eq!(audio.output_rate(Some(44_100)), 0);
+        assert_eq!(audio.output_rate(Some(96_000)), 48_000);
+        assert_eq!(audio.output_rate(None), 48_000);
+        audio.sample_rate = 0;
+        assert_eq!(audio.output_rate(Some(96_000)), 0);
+    }
+
+    #[test]
     fn the_defaults_are_valid_and_out_of_range_values_are_repaired() {
         let mut notes = Vec::new();
         let mut audio = Audio::default();
@@ -758,6 +841,8 @@ mod tests {
             passthrough_codecs: "ac3,mp3".to_owned(),
             passthrough_min_channels: Some(12),
             sample_rate: 12_345,
+            resample_limit: 5,
+            ac3_bitrate: 700,
             languages: "en;rm".to_owned(),
             ..Audio::default()
         };
@@ -770,7 +855,8 @@ mod tests {
         assert!(audio.languages.is_empty());
         assert!((audio.freeverb.room_size - 1.0).abs() < 1e-12);
         assert!((audio.crossfeed.cut - 300.0).abs() < 1e-12);
-        assert_eq!(notes.len(), 6, "{notes:?}");
+        assert_eq!((audio.resample_limit, audio.ac3_bitrate), (48_000, 640));
+        assert_eq!(notes.len(), 8, "{notes:?}");
     }
 
     #[test]

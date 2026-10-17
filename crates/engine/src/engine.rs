@@ -164,6 +164,11 @@ pub struct Track {
     pub selected: bool,
     /// Loaded from a separate file (a subtitle added later).
     pub external: bool,
+    /// An audio track's channels, sample rate (Hz) and bitrate (bit/s),
+    /// as the demuxer reports them.
+    pub channels: Option<i64>,
+    pub sample_rate: Option<i64>,
+    pub bitrate: Option<i64>,
 }
 
 /// One chapter (mpv's `chapter-list`).
@@ -479,6 +484,9 @@ impl Engine {
                     codec: text(&track["codec"]),
                     selected: track["selected"].as_bool().unwrap_or(false),
                     external: track["external"].as_bool().unwrap_or(false),
+                    channels: track["demux-channel-count"].as_i64(),
+                    sample_rate: track["demux-samplerate"].as_i64(),
+                    bitrate: track["demux-bitrate"].as_i64(),
                 })
             })
             .collect()

@@ -95,6 +95,37 @@ fn effects_switch_while_a_file_plays() {
             assert_eq!(app.model.flag(PropertyId::Pause), Some(false));
         }
     }
+    // Audio Stretching: rubberband in the tempo filter's place, its pitch
+    // changed while it plays, then the tempo filter back.
+    for (command, rubberband) in [
+        (AudioCommand::StretchingUp, true),
+        (AudioCommand::StretchingUp, true),
+        (AudioCommand::StretchingOff, false),
+    ] {
+        let before = app.model.double(PropertyId::TimePos).unwrap_or(0.0);
+        let switched = Instant::now();
+        app.dispatch(&engine, Action::Audio(command));
+        let deadline = switched + Duration::from_secs(5);
+        while app.model.double(PropertyId::TimePos).unwrap_or(0.0) < before + 0.1 {
+            assert!(
+                Instant::now() < deadline,
+                "{command:?}: stopped at {before:.2}"
+            );
+            pump(&mut app, &engine, 20);
+        }
+        let af = engine.get_text("af").unwrap_or_default();
+        assert_eq!(
+            af.contains("@rvptempo:rubberband"),
+            rubberband,
+            "{command:?}: {af}"
+        );
+        let after = app.model.double(PropertyId::TimePos).unwrap_or(0.0);
+        let elapsed = switched.elapsed().as_secs_f64();
+        assert!(
+            after < before + elapsed + 0.5,
+            "{command:?}: from {before:.2} to {after:.2} in {elapsed:.2} s"
+        );
+    }
     // The left channel on both sides, then both again.
     app.dispatch(
         &engine,

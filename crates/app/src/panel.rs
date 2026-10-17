@@ -228,7 +228,7 @@ mod tests {
     #[test]
     fn slider_positions_and_values_meet_in_the_middle() {
         assert!((to_fraction(0.0, RANGE) - 0.5).abs() < 1e-6);
-        assert!((to_fraction(12.0, RANGE) - 1.0).abs() < 1e-6);
+        assert!((to_fraction(20.0, RANGE) - 1.0).abs() < 1e-6);
         assert!((to_fraction(-30.0, RANGE)).abs() < 1e-6);
         assert!((from_fraction(0.5, RANGE)).abs() < 1e-9);
         assert!((from_fraction(1.0, COLOR_RANGE) - 100.0).abs() < 1e-9);

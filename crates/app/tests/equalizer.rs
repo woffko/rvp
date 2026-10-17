@@ -208,7 +208,7 @@ fn the_equalizer_runs_before_the_normalizer_and_keeps_sync() {
     );
     let bands = app.settings.equalizer.bands;
     assert!(
-        (bands[0] - 12.0).abs() < 1e-9 && (bands[4] + 6.0).abs() < 1e-9,
+        (bands[0] - 20.0).abs() < 1e-9 && (bands[4] + 10.0).abs() < 1e-9,
         "{bands:?}"
     );
     assert_eq!(app.settings.equalizer.preset_text(), "Custom");

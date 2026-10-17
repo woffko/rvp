@@ -196,7 +196,7 @@ pub struct App {
     /// RVP's audio filters changed near the end of a file ([`NEAR_END`])
     /// and wait for the next file or for playback to leave the end
     /// (`App::defer_chain_change`).
-    chain_pending: bool,
+    pub(crate) chain_pending: bool,
     /// The entry being loaded is to play: mpv may still carry the pause
     /// keep-open set at the end of the one before (seen on the Windows VM),
     /// so it is unpaused again once loaded.
@@ -226,6 +226,7 @@ pub struct App {
     /// Freeverb's response for the settings it was made for: computing it
     /// takes a few milliseconds, which chain changes need not repeat.
     freeverb: Option<crate::audio::dsp::Response>,
+    crystality_echo: Option<crate::audio::dsp::Response>,
     /// The second audio device's core (`crate::audio::second`).
     pub(crate) second: Option<crate::audio::second::Second>,
     /// mpv options the second core gets last: the command line's
@@ -287,6 +288,7 @@ impl App {
             audio_devices: Vec::new(),
             applied_chain: None,
             freeverb: None,
+            crystality_echo: None,
             second: None,
             second_mpv_options: Vec::new(),
             seek_bar: None,
@@ -993,6 +995,7 @@ impl App {
             equalizer: &self.settings.equalizer,
             normalizer: &self.settings.normalizer,
             channel: self.session.stereo_channel,
+            stretching: self.session.audio_stretching,
             source: &self.audio_source,
             gain: self
                 .normalizer
@@ -1060,6 +1063,26 @@ impl App {
             None
         };
         let audio = &self.settings.audio;
+        let crystality = if audio.crystality.enabled && audio.crystality.echo_volume > 0.0 {
+            let (volume, feedback) = (audio.crystality.echo_volume, audio.crystality.echo_feedback);
+            let path = crate::audio::dsp::crystality_echo_path(&folder, volume, feedback);
+            match &self.crystality_echo {
+                Some(response) if response.path == path && path.is_file() => Some(response.clone()),
+                _ => match crate::audio::dsp::crystality_echo_file(&folder, volume, feedback) {
+                    Ok(response) => {
+                        self.crystality_echo = Some(response.clone());
+                        Some(response)
+                    }
+                    Err(error) => {
+                        eprintln!("rvp: cannot write Crystality's echo: {error}");
+                        None
+                    }
+                },
+            }
+        } else {
+            None
+        };
+        let audio = &self.settings.audio;
         let mode = crate::speakers::choice(&self.settings.output_speakers).map(|c| c.mode);
         let distance = match mode {
             Some(crate::speakers::Mode::VirtualHeadphone) => Some(0.0),
@@ -1075,6 +1098,7 @@ impl App {
             });
         crate::audio::chain::Responses {
             freeverb,
+            crystality,
             head_model,
         }
     }

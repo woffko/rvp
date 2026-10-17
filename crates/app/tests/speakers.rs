@@ -143,6 +143,7 @@ fn stereo_downmix() -> String {
         equalizer: &equalizer,
         normalizer: &normalizer,
         channel: rvp_app::audio::StereoChannel::Both,
+        stretching: 0,
         source: &source,
         gain: 1.0,
         responses: &responses,

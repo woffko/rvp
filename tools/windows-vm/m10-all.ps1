@@ -9,7 +9,8 @@
 # 1. The functional self-test on RVP Default, with M10's steps: effects in
 #    the chain, PotPlayer's 26 speaker choices, the individual volume,
 #    Freeverb's response, the sync dialog, the second device (its core on
-#    ao=null as well), recording and the system's master volume.
+#    ao=null as well), recording, the system's master volume and Audio
+#    Stretching (Shift+J, Shift+K).
 # 2. Kept awake: while the self-test plays video, `powercfg /requests`
 #    lists rvp.exe, and not after it. Session 0 has no display, so Windows
 #    lists the request under SYSTEM only (a probe asking for both from

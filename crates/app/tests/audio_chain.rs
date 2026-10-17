@@ -114,6 +114,7 @@ struct Case<'a> {
     speakers: &'a str,
     source: Source,
     channel: StereoChannel,
+    stretching: i32,
     equalizer: Equalizer,
     responses: Responses,
 }
@@ -128,6 +129,7 @@ impl<'a> Case<'a> {
                 ..Source::default()
             },
             channel: StereoChannel::Both,
+            stretching: 0,
             equalizer: Equalizer::default(),
             responses: Responses::default(),
         }
@@ -146,6 +148,7 @@ impl<'a> Case<'a> {
             equalizer: &self.equalizer,
             normalizer: &normalizer,
             channel: self.channel,
+            stretching: self.stretching,
             source: &self.source,
             gain: 1.0,
             responses: &self.responses,
@@ -350,10 +353,10 @@ fn the_virtual_headphone_puts_the_front_left_speaker_to_the_left() {
     let out = case.render(&dir, &input, "headphone");
     let (left, right) = (level(&out, 0, 0.2, 1.8), level(&out, 1, 0.2, 1.8));
     assert!(left > right + 6.0, "near ear {left} dB, far ear {right} dB");
-    // The speaker's level, less the 3 dB of headroom, plus the near ear's
-    // gain (about 2.4 dB at 4 kHz).
+    // The speaker's level, less the 3 dB of headroom and PotPlayer's
+    // 13.5 dB, plus the near ear's gain (about 2.4 dB at 4 kHz).
     assert!(
-        (left - (HALF - 3.0 + 2.4)).abs() < 1.5,
+        (left - (HALF - 3.0 - 13.5 + 2.4)).abs() < 1.5,
         "near ear {left} dB"
     );
     let _ = std::fs::remove_dir_all(&dir);
@@ -444,13 +447,15 @@ fn every_effect_plays() {
     });
     let plain = Case::new("stereo", vec!["FL", "FR"]);
     let reference = level(&plain.render(&dir, &input, "plain"), 0, 0.2, 1.8);
+    // Voice emphasis lowers all but the voice's band: its own test.
     let effects: [(&str, Switch); 6] = [
         ("crystality", |c| c.audio.crystality.enabled = true),
+        // With its echo's response (below).
+        ("crystality-echo", |c| c.audio.crystality.enabled = true),
         ("noise-reduction", |c| {
             c.audio.noise_reduction.enabled = true;
         }),
         ("crossfeed", |c| c.audio.crossfeed.enabled = true),
-        ("voice-emphasis", |c| c.audio.voice_emphasis = true),
         ("superequalizer", |c| {
             c.equalizer.enabled = true;
             c.equalizer.superequalizer = true;
@@ -461,6 +466,10 @@ fn every_effect_plays() {
     for (name, switch) in effects {
         let mut case = Case::new("stereo", vec!["FL", "FR"]);
         switch(&mut case);
+        if name == "crystality-echo" {
+            case.responses.crystality =
+                Some(dsp::crystality_echo_file(&dir, 11.0, 30.0).expect("Crystality's echo"));
+        }
         let out = case.render(&dir, &input, name);
         let got = level(&out, 0, 0.2, 1.8);
         assert!(
@@ -472,32 +481,165 @@ fn every_effect_plays() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
+/// Centred tones of 500 Hz, 1, 3 and 5 kHz, a second each.
+const BAND_TONES: [f64; 4] = [500.0, 1000.0, 3000.0, 5000.0];
+
+fn band_tones(path: &Path) {
+    write_wav(path, 2, RATE * 4, |n, _| {
+        tone(BAND_TONES[(n / RATE) as usize], 0.25, n)
+    });
+}
+
+/// Each band tone's change by an effect, in dB.
+fn band_changes(dir: &Path, switch: Switch) -> Vec<f64> {
+    let input = dir.join("bands.wav");
+    band_tones(&input);
+    let plain = Case::new("stereo", vec!["FL", "FR"]).render(dir, &input, "plain");
+    let mut case = Case::new("stereo", vec!["FL", "FR"]);
+    switch(&mut case);
+    let out = case.render(dir, &input, "effect");
+    (0..BAND_TONES.len())
+        .map(|i| {
+            // Tone indexes are below 4.
+            #[allow(clippy::cast_precision_loss)]
+            let start = i as f64;
+            level(&out, 0, start + 0.3, start + 0.9) - level(&plain, 0, start + 0.3, start + 0.9)
+        })
+        .collect()
+}
+
+fn near(got: f64, want: f64, tolerance: f64) -> bool {
+    (got - want).abs() <= tolerance
+}
+
 #[test]
-fn voice_emphasis_raises_the_centre_and_not_the_sides() {
+fn voice_emphasis_keeps_the_voice_band() {
     let dir = scratch("emphasis");
-    let input = dir.join("centre-and-side.wav");
-    // A centred voice-band tone, then the same tone in the left side only.
-    write_wav(&input, 2, RATE * 4, |n, c| {
-        if n < RATE * 2 || c == 0 {
-            tone(700.0, 0.25, n)
+    let changes = band_changes(&dir, |c| c.audio.voice_emphasis = true);
+    // PotPlayer's (goal L's host session): 500 Hz 13 dB down, 1 kHz as it
+    // was, 3 kHz 18 dB down, 5 kHz 23 dB.
+    for (got, want) in changes.iter().zip([-13.0, 0.0, -18.0, -23.0]) {
+        assert!(near(*got, want, 1.5), "{changes:?}");
+    }
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn noise_reduction_lowers_the_highs() {
+    let dir = scratch("denoise");
+    let changes = band_changes(&dir, |c| c.audio.noise_reduction.enabled = true);
+    // PotPlayer's: 3 kHz 8 dB down, 5 kHz 18 dB.
+    for (got, want) in changes.iter().zip([0.0, 0.0, -8.0, -18.0]) {
+        assert!(near(*got, want, 1.5), "{changes:?}");
+    }
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn crossfeed_feeds_each_side_to_the_other() {
+    let dir = scratch("crossfeed");
+    let input = dir.join("left.wav");
+    // 1 kHz, then 5 kHz, on the left only.
+    write_wav(&input, 2, RATE * 2, |n, c| {
+        if c == 0 {
+            tone(if n < RATE { 1000.0 } else { 5000.0 }, 0.25, n)
         } else {
             0.0
         }
     });
-    let plain = Case::new("stereo", vec!["FL", "FR"]).render(&dir, &input, "plain");
     let mut case = Case::new("stereo", vec!["FL", "FR"]);
-    case.audio.voice_emphasis = true;
-    let emphasized = case.render(&dir, &input, "emphasis");
-    let (centre_plain, centre) = (level(&plain, 0, 0.5, 1.5), level(&emphasized, 0, 0.5, 1.5));
-    let (side_plain, side) = (level(&plain, 0, 2.5, 3.5), level(&emphasized, 0, 2.5, 3.5));
-    assert!(
-        centre - centre_plain > 1.5,
-        "the centre raised: {centre_plain:.2} -> {centre:.2} dB"
+    case.audio.crossfeed.enabled = true;
+    let out = case.render(&dir, &input, "crossfeed");
+    let fed = |start: f64| {
+        level(&out, 1, start + 0.3, start + 0.9) - level(&out, 0, start + 0.3, start + 0.9)
+    };
+    // PotPlayer's (bs2b at 700 Hz and 6 dB): 11.9 dB down at 1 kHz,
+    // 24.8 dB at 5 kHz.
+    assert!(near(fed(0.0), -11.9, 1.0), "1 kHz: {}", fed(0.0));
+    assert!(near(fed(1.0), -24.8, 1.0), "5 kHz: {}", fed(1.0));
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn crystality_echoes_the_sides_more_than_the_centre() {
+    let dir = scratch("crystality");
+    let input = dir.join("tones.wav");
+    // A centred 1 kHz tone (0.8 s), silence, the same on the left only,
+    // silence.
+    write_wav(&input, 2, RATE * 4, |n, c| {
+        let t = f64::from(n) / f64::from(RATE);
+        if t < 0.8 || ((2.0..2.8).contains(&t) && c == 0) {
+            tone(1000.0, 0.25, n)
+        } else {
+            0.0
+        }
+    });
+    let mut case = Case::new("stereo", vec!["FL", "FR"]);
+    case.audio.crystality.enabled = true;
+    case.responses.crystality =
+        Some(dsp::crystality_echo_file(&dir, 11.0, 30.0).expect("Crystality's echo"));
+    let out = case.render(&dir, &input, "crystality");
+    // In the silences the echoes play: PotPlayer's of the centre tone 32 dB
+    // under it, of the left one 33 dB on the left and 25 dB on the right.
+    let tone_level = level(&out, 0, 0.3, 0.7);
+    let centre = level(&out, 0, 0.85, 1.05) - tone_level;
+    let (left, right) = (
+        level(&out, 0, 2.85, 3.05) - tone_level,
+        level(&out, 1, 2.85, 3.05) - tone_level,
     );
+    assert!(centre < -26.0, "the centre's echo: {centre}");
     assert!(
-        (side - side_plain).abs() < 1.0,
-        "a side alone stays: {side_plain:.2} -> {side:.2} dB"
+        near(right, -25.0, 3.0),
+        "the left tone's echo on the right: {right}"
     );
+    assert!(left < -28.0, "and on the left: {left}");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// A tone's frequency from its zero crossings between `from` and `to`
+/// seconds after the onset.
+fn frequency(channels: &[Vec<f64>], from: f64, to: f64) -> f64 {
+    let onset = (0..channels[0].len())
+        .find(|&n| channels[0][n].abs() > 1e-3)
+        .expect("some sound");
+    // Seconds within a few minutes.
+    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+    let part = &channels[0]
+        [onset + (from * f64::from(RATE)) as usize..onset + (to * f64::from(RATE)) as usize];
+    let crossings = part
+        .windows(2)
+        .filter(|pair| pair[0] < 0.0 && pair[1] >= 0.0)
+        .count();
+    // Crossing counts are small.
+    #[allow(clippy::cast_precision_loss)]
+    let rate = crossings as f64 / (to - from);
+    rate
+}
+
+/// The sound's length: from the first to the last sample above -40 dBFS.
+fn sounding(channels: &[Vec<f64>]) -> f64 {
+    let loud = |n: &usize| channels[0][*n].abs() > 0.01;
+    let first = (0..channels[0].len()).find(loud).expect("some sound");
+    let last = (0..channels[0].len()).rev().find(loud).expect("some sound");
+    // Sample counts are far below 2^52.
+    #[allow(clippy::cast_precision_loss)]
+    let seconds = (last - first) as f64 / f64::from(RATE);
+    seconds
+}
+
+#[test]
+fn audio_stretching_raises_the_pitch_and_keeps_the_time() {
+    let dir = scratch("stretching");
+    let input = dir.join("tone.wav");
+    write_wav(&input, 2, RATE * 2, |n, _| tone(1000.0, 0.25, n));
+    let mut case = Case::new("stereo", vec!["FL", "FR"]);
+    case.stretching = 10;
+    let out = case.render(&dir, &input, "stretching");
+    // PotPlayer's at 110 %: the tone at 1.1 kHz, its length as it was.
+    let pitch = frequency(&out, 0.5, 1.5);
+    assert!((pitch - 1100.0).abs() < 5.0, "the pitch: {pitch} Hz");
+    let length = sounding(&out);
+    assert!((length - 2.0).abs() < 0.05, "the length: {length} s");
     let _ = std::fs::remove_dir_all(&dir);
 }
 

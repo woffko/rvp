@@ -399,10 +399,6 @@ const RUNTIME_REASONS: &[(&str, &str)] = &[
     ("Window Size", "planned in M12 (goal N)"),
     ("Misc", "planned in M14 (goal P)"),
     ("Skins", "planned in M14 (goal P)"),
-    (
-        "Audio > Audio Stretching",
-        "what PotPlayer's audio stretching does is checked against PotPlayer in goal L's host session",
-    ),
 ];
 
 /// One command of R1's live menu that the static tree lacks: its place and

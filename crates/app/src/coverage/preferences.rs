@@ -36,8 +36,6 @@ use Status::{Missing, Setting};
 const DAUM: &str = "Daum's and Kakao's broadcasting services, discontinued";
 const WINAMP_DSP: &str = "mpv's audio chain runs FFmpeg's filters only: native Winamp DSP \
                           plugins cannot run in it";
-const RUNTIME_LIST: &str =
-    "PotPlayer fills this list at run time; what it holds is read in goal L's host session";
 
 /// The options RVP has, and the reasons for single ones it lacks, by
 /// dialog and control.
@@ -47,13 +45,13 @@ const ITEMS: &[(u32, u32, Status)] = &[
     (356, 3016, Setting("audio.passthrough-device")),
     (356, 3017, Setting("audio.second-device")),
     (356, 3013, Setting("output-speakers")),
-    (356, 3008, Missing(RUNTIME_LIST)),
+    (356, 3008, Setting("audio.sample-format")),
     (356, 3006, Setting("audio.sample-rate")),
-    (356, 3012, Missing(RUNTIME_LIST)),
-    (356, 3007, Setting("audio.resample-quality")),
-    (356, 3083, Missing(RUNTIME_LIST)),
+    (356, 3012, Setting("audio.resample-quality")),
+    (356, 3007, Setting("audio.resample-when")),
+    (356, 3083, Setting("audio.resample-limit")),
     (356, 3005, Setting("audio.output-mode")),
-    (356, 3010, Missing(RUNTIME_LIST)),
+    (356, 3010, Setting("audio.ac3-bitrate")),
     (356, 3061, Setting("audio.passthrough-min-channels")),
     (356, 3082, Setting("audio.passthrough-min-channels")),
     (
@@ -130,7 +128,7 @@ const ITEMS: &[(u32, u32, Status)] = &[
         387,
         3006,
         Missing(
-            "RVP runs TomSteady, PotPlayer's recommended method (D13); the list's other methods are read in goal L's host session",
+            "RVP runs TomSteady, PotPlayer's recommended method (D13); the list's other two, \"32-bit simple arithmetic\" and \"32-bit complex arithmetic\" (goal L's host session), are PotPlayer's own and were not measured",
         ),
     ),
     (387, 3047, Setting("normalizer.boost")),
@@ -151,12 +149,18 @@ const ITEMS: &[(u32, u32, Status)] = &[
     (388, 3112, Setting("audio.crystality.echo-feedback")),
     (388, 3140, Setting("audio.crystality.extra-stereo")),
     (388, 3083, Setting("audio.noise-reduction.enabled")),
-    (388, 3362, Setting("audio.noise-reduction.threshold")),
+    (
+        388,
+        3362,
+        Missing(
+            "RVP's noise reduction is PotPlayer's filter as goal L's host session measured it at the default threshold (100); how the threshold changes it was not measured",
+        ),
+    ),
     (388, 3084, Setting("audio.crossfeed.enabled")),
     (388, 3069, Setting("audio.crossfeed.cut")),
     (388, 3077, Setting("audio.crossfeed.feed")),
     // Audio's Language/Sync/Other (441).
-    (441, 3004, Missing(RUNTIME_LIST)),
+    (441, 3004, Setting("audio.selection")),
     (441, 3069, Setting("audio.languages")),
     (441, 3070, Setting("audio.subtitles-off")),
     (441, 3112, Setting("audio.preferred-stream")),

@@ -52,15 +52,21 @@ pub const TEMPO_ENTRY: &str = "@rvptempo:scaletempo2";
 /// stereo FLAC.
 pub const BLOCK: u32 = 2048;
 
-/// PotPlayer's block for a source codec, as the audio audit measured it
-/// (finding 2): an AC3 frame (1536 samples), 3072 for a 5.1 PCM WAV, 2048
-/// for a stereo FLAC and S5's clips. Other codecs keep 2048 until a
-/// recording shows otherwise.
+/// PotPlayer's block for a source codec, as the audio audit (2026-10-16)
+/// and goal L's host session (2026-10-17) measured it: whole decoder
+/// frames, one AC3 or E-AC3 frame (1536 samples), two MP3 frames (2304),
+/// three Opus frames (2880), four DTS frames (2048), and for FLAC two
+/// frames of its usual 1024 (S5's clips and the audit's file; a file of
+/// 925-sample frames took three, which RVP cannot see). PCM took 3000
+/// samples, a 16th of a second of the 48 kHz file. AAC fitted no single
+/// block; it and the rest keep 2048.
 #[must_use]
 pub fn block_for(codec: Option<&str>) -> u32 {
     match codec {
         Some("ac3" | "eac3") => 1536,
-        Some(pcm) if pcm.starts_with("pcm_") => 3072,
+        Some("mp3" | "mp2") => 2304,
+        Some("opus") => 2880,
+        Some(pcm) if pcm.starts_with("pcm_") => 3000,
         _ => BLOCK,
     }
 }
@@ -361,7 +367,11 @@ mod tests {
     #[test]
     fn blocks_follow_the_source() {
         assert_eq!(block_for(Some("ac3")), 1536);
-        assert_eq!(block_for(Some("pcm_s16le")), 3072);
+        assert_eq!(block_for(Some("eac3")), 1536);
+        assert_eq!(block_for(Some("mp3")), 2304);
+        assert_eq!(block_for(Some("opus")), 2880);
+        assert_eq!(block_for(Some("dts")), 2048);
+        assert_eq!(block_for(Some("pcm_s16le")), 3000);
         assert_eq!(block_for(Some("flac")), 2048);
         assert_eq!(block_for(None), 2048);
     }

@@ -142,6 +142,12 @@ FFmpeg, Qt or the platform cannot do it.
   written at a level every version leaves alone (`audio/dsp.rs`);
   `headphone` lowers its output by 3 dB per input channel. mpv refuses
   `audio-format=no` (set only non-default output options).
+- The effects are fits to PotPlayer's, measured in goal L's host session
+  (`docs/audits/audio.md`, "M10"; re-run `tools/audio-audit/m10.py` after
+  changing one). Freeverb's and Crystality's echo are responses RVP
+  computes (`audio/dsp.rs`) into the state folder, named by their
+  parameters: a change to how one is computed needs a new file name.
+  Audio Stretching puts rubberband (`pitch-scale`) in `@rvptempo`'s place.
 - The second audio device (`crates/app/src/audio/second.rs`) is a second
   core that follows the main one; it is started after the main core (so
   ffmpeg's log stays with the main core) and its chain has

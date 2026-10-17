@@ -1736,7 +1736,8 @@ Window {
         }
         // M10: an effect in the chain and out, PotPlayer's speaker choices,
         // the individual volume, Freeverb's response, the sync dialog, the
-        // second device, recording and the system's master volume.
+        // second device, recording, the system's master volume and Audio
+        // Stretching.
         case 322:
             player.key(Qt.Key_C, Qt.ShiftModifier)
             t.next()
@@ -1844,6 +1845,23 @@ Window {
             if (t.waitFor("master_volume_answers", () => String(s.osd).toLowerCase().indexOf("master volume") >= 0,
                           3000, () => "osd " + s.osd))
                 player.run_action("system-master-down")
+            break
+        case 336:
+            // Audio Stretching: Shift+J raises the pitch 1 % (rubberband in
+            // the tempo filter's place), Shift+K takes it back.
+            player.key(Qt.Key_J, Qt.ShiftModifier)
+            t.next()
+            break
+        case 337:
+            if (t.waitFor("shift_j_audio_stretching_up", () => s.af !== null && s.af.indexOf("rubberband") >= 0
+                              && String(s.osd).indexOf("Audio Stretching : 101%") >= 0, 3000,
+                          () => "af " + s.af + " osd " + s.osd))
+                player.key(Qt.Key_K, Qt.ShiftModifier)
+            break
+        case 338:
+            t.waitFor("shift_k_audio_stretching_off", () => s.af !== null && s.af.indexOf("rubberband") < 0
+                          && String(s.osd).indexOf("Audio Stretching : 100%") >= 0, 3000,
+                      () => "af " + s.af + " osd " + s.osd)
             break
         default:
             // Back to M3's steps.

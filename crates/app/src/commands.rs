@@ -49,6 +49,9 @@ pub struct Session {
     pub control_panel: bool,
     /// Both, Left or Right channel of a stereo track.
     pub stereo_channel: crate::audio::StereoChannel,
+    /// "Audio Stretching": the pitch in percent above (or below) 100, at
+    /// the same speed.
+    pub audio_stretching: i32,
     /// The audio recording under way.
     pub recording: Option<std::path::PathBuf>,
     /// When a volume key last changed the volume, and how fast it goes
@@ -77,6 +80,7 @@ impl Default for Session {
             rotation: 0,
             control_panel: false,
             stereo_channel: crate::audio::StereoChannel::Both,
+            audio_stretching: 0,
             recording: None,
             last_volume_key: None,
             volume_acceleration: 1.0,
