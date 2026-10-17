@@ -7,6 +7,7 @@
 //! * [`dsp`] computes the impulse responses some filters convolve with
 //!   (Freeverb's reverb, the virtual speakers' head model).
 //! * [`commands`] carries out the Audio menu's commands.
+//! * [`second`] plays the same sound on a second device.
 //!
 //! The settings here are `settings.json`'s `audio` object; the speakers,
 //! the equalizer and the normalizer keep their own places.
@@ -14,6 +15,7 @@
 pub mod chain;
 pub mod commands;
 pub mod dsp;
+pub mod second;
 
 use std::path::PathBuf;
 

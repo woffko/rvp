@@ -471,3 +471,76 @@ fn every_effect_plays() {
     }
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+#[test]
+fn voice_emphasis_raises_the_centre_and_not_the_sides() {
+    let dir = scratch("emphasis");
+    let input = dir.join("centre-and-side.wav");
+    // A centred voice-band tone, then the same tone in the left side only.
+    write_wav(&input, 2, RATE * 4, |n, c| {
+        if n < RATE * 2 || c == 0 {
+            tone(700.0, 0.25, n)
+        } else {
+            0.0
+        }
+    });
+    let plain = Case::new("stereo", vec!["FL", "FR"]).render(&dir, &input, "plain");
+    let mut case = Case::new("stereo", vec!["FL", "FR"]);
+    case.audio.voice_emphasis = true;
+    let emphasized = case.render(&dir, &input, "emphasis");
+    let (centre_plain, centre) = (level(&plain, 0, 0.5, 1.5), level(&emphasized, 0, 0.5, 1.5));
+    let (side_plain, side) = (level(&plain, 0, 2.5, 3.5), level(&emphasized, 0, 2.5, 3.5));
+    assert!(
+        centre - centre_plain > 1.5,
+        "the centre raised: {centre_plain:.2} -> {centre:.2} dB"
+    );
+    assert!(
+        (side - side_plain).abs() < 1.0,
+        "a side alone stays: {side_plain:.2} -> {side:.2} dB"
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn every_preset_shapes_its_bands() {
+    use rvp_app::equalizer::{BANDS, PRESETS};
+    let dir = scratch("presets");
+    let input = dir.join("bands.wav");
+    // The ten bands' frequencies one after the other, 0.4 s each, at
+    // -26 dBFS: room for the presets' 12 dB.
+    let slot = RATE * 2 / 5;
+    write_wav(&input, 2, slot * 10, |n, _| {
+        tone(f64::from(BANDS[(n / slot) as usize]), 0.05, n)
+    });
+    let band_levels = |out: &[Vec<f64>]| -> Vec<f64> {
+        (0..10)
+            .map(|band| {
+                let start = f64::from(slot) / f64::from(RATE) * f64::from(band);
+                level(out, 0, start + 0.1, start + 0.3)
+            })
+            .collect()
+    };
+    let flat = band_levels(&Case::new("stereo", vec!["FL", "FR"]).render(&dir, &input, "flat"));
+    for preset in PRESETS {
+        let mut case = Case::new("stereo", vec!["FL", "FR"]);
+        case.equalizer.enabled = true;
+        case.equalizer.bands = preset.bands;
+        case.equalizer.preset = preset.name.to_owned();
+        let levels = band_levels(&case.render(&dir, &input, "preset"));
+        for (band, ((got, reference), want)) in
+            levels.iter().zip(&flat).zip(preset.bands).enumerate()
+        {
+            // The 20 ms filter resolves the low bands less finely: Full
+            // Bass jumps 18 dB from 60 to 170 Hz.
+            let tolerance = if BANDS[band] < 300 { 1.5 } else { 1.0 };
+            assert!(
+                (got - reference - want).abs() < tolerance,
+                "{}: band {} Hz {:.2} dB, the preset's {want:.1} dB",
+                preset.name,
+                BANDS[band],
+                got - reference
+            );
+        }
+    }
+    let _ = std::fs::remove_dir_all(&dir);
+}

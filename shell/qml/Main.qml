@@ -1735,7 +1735,8 @@ Window {
             break
         }
         // M10: an effect in the chain and out, PotPlayer's speaker choices,
-        // the individual volume, Freeverb's response, the sync dialog.
+        // the individual volume, Freeverb's response, the sync dialog, the
+        // second device, recording and the system's master volume.
         case 322:
             player.key(Qt.Key_C, Qt.ShiftModifier)
             t.next()
@@ -1790,8 +1791,58 @@ Window {
             break
         case 329:
             if (t.waitFor("audio_sync_dialog_opens", () => syncLoader.status === Loader.Ready
-                              && syncLoader.item.dialog.opened, 3000))
+                              && syncLoader.item.dialog.opened, 3000)) {
                 syncLoader.item.dialog.close()
+                // The second device: its core gets --mpv-options too, so
+                // the self-test's ao=null keeps it silent.
+                const result = JSON.parse(player.set_setting("audio.second-device", "\"auto\""))
+                t.check("second_device_set", !result.error, result.error || "")
+            }
+            break
+        case 330:
+            if (t.waitFor("second_device_follows", () => s.second_device === "auto"
+                              && s.second_offset_ms !== null && Math.abs(s.second_offset_ms) < 80
+                              && (s.second_playing || !s.playing), 15000,
+                          () => "device " + s.second_device + " playing " + s.second_playing
+                              + " offset " + s.second_offset_ms + " main playing " + s.playing))
+                player.set_setting("audio.second-device", "\"\"")
+            break
+        case 331:
+            if (t.waitFor("second_device_off", () => s.second_device === "", 3000,
+                          () => "device " + s.second_device))
+                player.start_recording(t.outDir + "/recording.wav")
+            break
+        case 332: {
+            // Windows records RVP's own sound (process loopback); Linux
+            // with goal S, and a system without audio refuses.
+            const osd = String(s.osd)
+            if (osd.indexOf("Audio recording: ") === 0) {
+                if (Date.now() - t.stepStarted > 2000) {
+                    t.check("recording_starts", true, osd)
+                    player.run_action("record-audio-toggle")
+                    t.next()
+                }
+            } else if (Date.now() - t.stepStarted > 1500) {
+                Tools.log("check recording_starts=SKIPPED " + osd)
+                t.step = 334
+                t.stepStarted = Date.now()
+            }
+            break
+        }
+        case 333:
+            t.waitFor("recording_stops", () => String(s.osd).indexOf("Audio recording stopped: ") === 0,
+                      5000, () => "osd " + s.osd)
+            break
+        case 334:
+            // The system's master volume, up and back down: the device's
+            // answer (Windows), or why not.
+            player.run_action("system-master-up")
+            t.next()
+            break
+        case 335:
+            if (t.waitFor("master_volume_answers", () => String(s.osd).toLowerCase().indexOf("master volume") >= 0,
+                          3000, () => "osd " + s.osd))
+                player.run_action("system-master-down")
             break
         default:
             // Back to M3's steps.

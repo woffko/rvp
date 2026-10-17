@@ -15,9 +15,10 @@
 use std::path::PathBuf;
 use std::time::Instant;
 
-use rvp_engine::{Engine, PropertyId};
+use rvp_engine::{Engine, EngineEvent, PropertyId};
 
 use crate::app::{App, UiRequest};
+use crate::audio::second::Second;
 use crate::audio::{OutputMode, SampleFormat, StereoChannel, Stretch, SyncKeep, VolumeMethod};
 use crate::settings::Settings;
 
@@ -674,6 +675,8 @@ impl App {
         if new.languages != previous.languages {
             set("alang", new.languages.trim());
         }
+        let second_device = new.second_device != previous.second_device;
+        let second_options = new.stretch != previous.stretch;
         if format_waits {
             notes.push("The output format goes back to the device's at the next start".to_owned());
         }
@@ -696,6 +699,11 @@ impl App {
             || new.output_mode != previous.output_mode
             || self.settings.equalizer.superequalizer != old.equalizer.superequalizer
             || self.settings.normalizer.video_only != old.normalizer.video_only;
+        if second_device {
+            self.second_device_changed(engine);
+        } else if second_options {
+            self.update_second_options();
+        }
         if chain {
             self.audio_chain_changed(engine);
         }
@@ -814,8 +822,91 @@ impl App {
                 )
             }
         };
+        if matches!(choice, AudioChoice::SecondDevice(_)) {
+            self.second_device_changed(engine);
+        }
         self.save_settings();
         Some(UiRequest::Osd(text))
+    }
+
+    /// Starts, changes or stops the second audio device's core
+    /// (`crate::audio::second`) after `audio.second-device` changed.
+    pub(crate) fn second_device_changed(&mut self, engine: &Engine) {
+        let wanted = self.settings.audio.second_device.clone();
+        let current = self.second.as_ref().map(Second::device);
+        if current == Some(wanted.as_str()) || (current.is_none() && wanted.is_empty()) {
+            return;
+        }
+        self.stop_second();
+        if wanted.is_empty() {
+            return;
+        }
+        match Second::start(&wanted, &self.second_options()) {
+            Ok(second) => {
+                if let Some(control) = &self.normalizer {
+                    control.follow(Some(second.engine()));
+                }
+                self.second = Some(second);
+                self.apply_audio_chain(engine);
+                self.follow_second(engine, &[], Instant::now());
+            }
+            Err(error) => eprintln!("rvp: cannot start the second audio device: {error}"),
+        }
+    }
+
+    /// Stops the second device's core; the normalizer's thread lets go of
+    /// it first (`normalizer::Control::follow`).
+    pub(crate) fn stop_second(&mut self) {
+        if let Some(control) = &self.normalizer {
+            control.follow(None);
+        }
+        self.second = None;
+    }
+
+    /// The options of the main core's the second core shares: the
+    /// speakers and the speed's pitch correction.
+    fn second_options(&self) -> Vec<(String, String)> {
+        let pitch = if self.settings.audio.stretch == Stretch::Pitch {
+            "no"
+        } else {
+            "yes"
+        };
+        let mut options = vec![
+            ("audio-channels".to_owned(), self.audio_channels()),
+            ("audio-pitch-correction".to_owned(), pitch.to_owned()),
+        ];
+        options.extend(self.second_mpv_options.iter().cloned());
+        options
+    }
+
+    /// Gives a running second core the main core's shared options again.
+    pub(crate) fn update_second_options(&self) {
+        if let Some(second) = &self.second {
+            for (name, value) in self.second_options() {
+                drop(second.engine().set_text(&name, &value));
+            }
+        }
+    }
+
+    /// The second core follows the main core; `events` are what the main
+    /// core's last drain brought.
+    pub(crate) fn follow_second(&mut self, engine: &Engine, events: &[EngineEvent], now: Instant) {
+        let delay = self.settings.audio.second_delay / 1000.0;
+        if let Some(second) = self.second.as_mut() {
+            second.follow(engine, &self.model, events, delay, now);
+        }
+    }
+
+    /// The shell's tick: the second core follows while the main core sends
+    /// no events (paused, or between files).
+    pub fn tick_second(&mut self, engine: &Engine, now: Instant) {
+        self.follow_second(engine, &[], now);
+    }
+
+    /// The second device's core, while one plays.
+    #[must_use]
+    pub fn second(&self) -> Option<&Second> {
+        self.second.as_ref()
     }
 
     /// The output mode changed: pass-through for the file that plays, and

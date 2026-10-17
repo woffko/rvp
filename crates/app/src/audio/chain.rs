@@ -322,8 +322,11 @@ fn preamp(inputs: &Inputs) -> Option<String> {
         .then(|| format!("volume={:.2}dB", preamp.gain))
 }
 
+/// How much Voice Emphasis raises the voice, in dB.
+const VOICE_EMPHASIS: f64 = 3.0;
+
 /// Voice removal (the centre cancelled: each side less the other) and
-/// voice emphasis (the voice band raised).
+/// voice emphasis (the voice found in the centre and raised).
 fn voice(inputs: &Inputs, channels: &[&str]) -> Option<String> {
     let audio = inputs.audio;
     let mut parts = Vec::new();
@@ -336,7 +339,28 @@ fn voice(inputs: &Inputs, channels: &[&str]) -> Option<String> {
         }));
     }
     if audio.voice_emphasis {
-        parts.push("equalizer=f=1500:t=o:w=2:g=6".to_owned());
+        let gain = db(VOICE_EMPHASIS);
+        parts.push(if channels == ["FL", "FR"] {
+            // `dialoguenhance` finds the voice in the centre of a stereo
+            // pair and puts it alone in its own centre channel, which goes
+            // back into both sides.
+            format!(
+                "dialoguenhance=original=0:enhance=1:voice=2,\
+                 pan=stereo|FL=FL+{boost:.6}*FC|FR=FR+{boost:.6}*FC",
+                boost = gain - 1.0
+            )
+        } else if channels.contains(&"FC") {
+            pan(channels, |channel| {
+                if channel == "FC" {
+                    format!("{gain:.6}*FC")
+                } else {
+                    channel.to_owned()
+                }
+            })
+        } else {
+            // No centre to find: the voice's band raised.
+            format!("equalizer=f=1500:t=o:w=2:g={VOICE_EMPHASIS:.1}")
+        });
     }
     (!parts.is_empty()).then(|| parts.join(","))
 }

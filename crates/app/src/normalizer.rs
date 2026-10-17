@@ -145,6 +145,21 @@ impl Normalizer {
             ),
         )
     }
+
+    /// The entry for a core that takes its gain from another one (the
+    /// second audio device): the gain and the limiter without the
+    /// measurement, whose lines would reach the first core's log (libmpv
+    /// gives ffmpeg's log to the first core of a process).
+    #[must_use]
+    pub fn follower_entry(gain: f64) -> String {
+        lavfi(
+            LABEL,
+            &format!(
+                "{GAIN_INSTANCE}=volume={gain:.9}:precision=float,\
+                 alimiter=limit={CEILING:.5}:level=0"
+            ),
+        )
+    }
 }
 
 /// A block's peak (full scale 1) from a line `ametadata` printed to mpv's
@@ -160,13 +175,26 @@ fn block_peak(text: &str) -> Option<f64> {
 }
 
 /// What the thread and the application share.
-#[derive(Debug)]
 struct Shared {
     settings: Normalizer,
     /// Start over at gain 1 with the next block.
     restart: bool,
     /// The gain sent last.
     gain: f64,
+    /// A weak handle of the second device's core, which gets each gain too
+    /// ([`Control::follow`]).
+    follower: Option<Mpv>,
+}
+
+impl std::fmt::Debug for Shared {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Shared")
+            .field("settings", &self.settings)
+            .field("restart", &self.restart)
+            .field("gain", &self.gain)
+            .field("follower", &self.follower.is_some())
+            .finish()
+    }
 }
 
 /// The thread that keeps the chain's gain at TomSteady's.
@@ -193,6 +221,7 @@ impl Control {
             settings,
             restart: true,
             gain: 1.0,
+            follower: None,
         }));
         let stop = Arc::new(AtomicBool::new(false));
         let (thread_shared, thread_stop) = (Arc::clone(&shared), Arc::clone(&stop));
@@ -212,6 +241,32 @@ impl Control {
             shared.gain = 1.0;
         }
         shared.settings = settings;
+    }
+
+    /// Sends each gain to `engine`'s core as well (the second audio
+    /// device, `crate::audio::second`, whose chain has
+    /// [`Normalizer::follower_entry`]), or to no other core.
+    ///
+    /// The thread holds a weak handle of that core, and mpv waits for weak
+    /// handles when it destroys a core: call this with `None` before the
+    /// core is dropped. The handle is released here, on the caller's thread.
+    pub fn follow(&self, engine: Option<&Engine>) {
+        let follower = engine.and_then(|engine| {
+            engine
+                .mpv()
+                .create_weak_client(Some("rvp_normalizer_follower"))
+                .map_err(|error| eprintln!("rvp: normalizer follower: {error}"))
+                .ok()
+        });
+        let previous = std::mem::replace(
+            &mut self
+                .shared
+                .lock()
+                .unwrap_or_else(PoisonError::into_inner)
+                .follower,
+            follower,
+        );
+        drop(previous);
     }
 
     /// The gain sent last, for a chain built again.
@@ -268,10 +323,16 @@ fn run(client: &Mpv, shared: &Mutex<Shared>, stop: &AtomicBool) {
         };
         // Sent for every block: mpv builds the graph again when the audio
         // format changes, and the new one starts at the entry's gain.
-        drop(client.command(
-            "af-command",
-            &[LABEL, "volume", &format!("{gain:.9}"), GAIN_INSTANCE],
-        ));
+        let value = format!("{gain:.9}");
+        let arguments = [LABEL, "volume", value.as_str(), GAIN_INSTANCE];
+        drop(client.command("af-command", &arguments));
+        if let Some(follower) = &shared
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .follower
+        {
+            drop(follower.command("af-command", &arguments));
+        }
     }
 }
 

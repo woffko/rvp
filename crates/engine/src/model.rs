@@ -91,6 +91,7 @@ properties! {
     Chapter = "chapter", Int;
     Chapters = "chapters", Int;
     VideoOutAspect = "video-out-params/aspect", Double;
+    Aid = "aid", Int;
 }
 
 impl PropertyId {

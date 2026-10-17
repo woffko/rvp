@@ -316,6 +316,7 @@ impl App {
         if let Err(error) = engine.set_text("audio-channels", &self.audio_channels()) {
             eprintln!("rvp: cannot set the speakers: {error}");
         }
+        self.update_second_options();
         self.audio_chain_changed(engine);
     }
 }

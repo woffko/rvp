@@ -4,7 +4,11 @@
 //!
 //! It is one FFmpeg `firequalizer` in mpv's audio chain under the label
 //! `@rvpeq`, before the effects and the normalizer (which then levels the
-//! equalized sound; `crate::audio::chain`). Band changes go to the running
+//! equalized sound; `crate::audio::chain`). Its filter is 20 ms long
+//! (`delay=0.02`, twice FFmpeg's default), which brings the presets' steep
+//! low bands to within 1.5 dB of their values (the default's 10 ms missed
+//! Full Bass's 60 Hz by 3 dB, `tests/audio_chain.rs`); the sound comes
+//! 20 ms late for it, which mpv's sync does not see. Band changes go to the running
 //! filter as a command (`af-command`, aimed at the filter's instance name,
 //! since mpv reports a failure for the default target `all`), so the chain
 //! is not rebuilt and the normalizer keeps its ten seconds of look-ahead;
@@ -213,7 +217,7 @@ impl Equalizer {
         } else {
             lavfi(
                 LABEL,
-                &format!("{INSTANCE}=gain_entry='{}'", self.gain_entry()),
+                &format!("{INSTANCE}=delay=0.02:gain_entry='{}'", self.gain_entry()),
             )
         }
     }
@@ -317,7 +321,7 @@ mod tests {
         );
         assert!(
             eq.chain_entry()
-                .contains("%firequalizer@eq=gain_entry='entry(60,3.0);")
+                .contains("%firequalizer@eq=delay=0.02:gain_entry='entry(60,3.0);")
         );
         eq.superequalizer = true;
         let entry = eq.chain_entry();

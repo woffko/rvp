@@ -554,6 +554,7 @@ impl qobject::Player {
         app.prepare_svp(VSSCRIPT.get().cloned().flatten());
         let mut options = app.engine_options();
         options.extra.extend(extra_mpv_options(&cli));
+        app.second_mpv_options = extra_mpv_options(&cli);
         let mut engine = match Engine::new(&options) {
             Ok(engine) => engine,
             Err(error) => {
@@ -2293,6 +2294,7 @@ impl qobject::Player {
         let Some(core) = self.as_mut().core_mut() else {
             return;
         };
+        core.app.tick_second(core.engine, Instant::now());
         if let Err(error) = core.app.tick(Instant::now()) {
             let text = format!("cannot save the playback state: {error}");
             self.show_message(&text);
@@ -2501,6 +2503,23 @@ impl qobject::Player {
             ("shaders_enabled", settings.shaders.enabled.to_string()),
             ("svp_status", text(&core.app.svp_status())),
         ];
+        let second = core.app.second();
+        fields.push((
+            "second_device",
+            text(second.map_or("", rvp_app::audio::second::Second::device)),
+        ));
+        fields.push((
+            "second_playing",
+            second
+                .is_some_and(rvp_app::audio::second::Second::playing)
+                .to_string(),
+        ));
+        fields.push((
+            "second_offset_ms",
+            second
+                .and_then(rvp_app::audio::second::Second::offset)
+                .map_or_else(|| "null".to_owned(), |s| format!("{:.1}", s * 1000.0)),
+        ));
         for kind in rvp_app::video::ColorKind::ALL {
             fields.push((kind.property(), settings.color.applied(kind).to_string()));
         }

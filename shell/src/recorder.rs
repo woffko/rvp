@@ -219,19 +219,21 @@ fn activate_loopback() -> Result<windows::Win32::Media::Audio::IAudioClient, Str
         ActivateAudioInterfaceAsync, IActivateAudioInterfaceCompletionHandler, IAudioClient,
         PROCESS_LOOPBACK_MODE_INCLUDE_TARGET_PROCESS_TREE, VIRTUAL_AUDIO_DEVICE_PROCESS_LOOPBACK,
     };
-    use windows::Win32::System::Com::BLOB;
     use windows::Win32::System::Com::StructuredStorage::PROPVARIANT;
+    use windows::Win32::System::Com::{BLOB, CoTaskMemAlloc};
     use windows::Win32::System::Threading::GetCurrentProcessId;
     use windows::Win32::System::Variant::VT_BLOB;
     use windows::core::Interface as _;
 
-    // SAFETY: FFI point. The activation parameters live on this stack
-    // until `GetActivateResult` returned, which is after the activation
-    // completed (the handler's message); the PROPVARIANT only borrows them
-    // as a blob and is never cleared. The out-parameters are locals.
+    // SAFETY: FFI point. The activation takes the parameters' blob and
+    // frees it (`CoTaskMemFree`) when it is done: a blob on this stack
+    // corrupted the heap (Windows 11 build 26340, the test VM). So the blob
+    // comes from `CoTaskMemAlloc`, is written whole before the call and is
+    // never touched or freed here after it; the PROPVARIANT that points to
+    // it is never cleared. The out-parameters are locals.
     #[allow(unsafe_code)]
     unsafe {
-        let mut parameters = AUDIOCLIENT_ACTIVATION_PARAMS {
+        let parameters = AUDIOCLIENT_ACTIVATION_PARAMS {
             ActivationType: AUDIOCLIENT_ACTIVATION_TYPE_PROCESS_LOOPBACK,
             Anonymous: AUDIOCLIENT_ACTIVATION_PARAMS_0 {
                 ProcessLoopbackParams: AUDIOCLIENT_PROCESS_LOOPBACK_PARAMS {
@@ -240,13 +242,18 @@ fn activate_loopback() -> Result<windows::Win32::Media::Audio::IAudioClient, Str
                 },
             },
         };
+        let size = std::mem::size_of::<AUDIOCLIENT_ACTIVATION_PARAMS>();
+        let blob = CoTaskMemAlloc(size).cast::<AUDIOCLIENT_ACTIVATION_PARAMS>();
+        if blob.is_null() {
+            return Err("Audio recording: out of memory".to_owned());
+        }
+        blob.write(parameters);
         let mut variant = PROPVARIANT::default();
         let inner = &mut *variant.Anonymous.Anonymous;
         inner.vt = VT_BLOB;
         inner.Anonymous.blob = BLOB {
-            cbSize: u32::try_from(std::mem::size_of::<AUDIOCLIENT_ACTIVATION_PARAMS>())
-                .unwrap_or_default(),
-            pBlobData: std::ptr::addr_of_mut!(parameters).cast::<u8>(),
+            cbSize: u32::try_from(size).unwrap_or_default(),
+            pBlobData: blob.cast::<u8>(),
         };
         let (done, finished) = std::sync::mpsc::channel();
         let handler: IActivateAudioInterfaceCompletionHandler = loopback::Done(done).into();
@@ -412,6 +419,28 @@ mod tests {
         assert_eq!(u32::from_le_bytes(bytes[40..44].try_into().expect("4")), 40);
         assert_eq!(u32::from_le_bytes(bytes[4..8].try_into().expect("4")), 76);
         assert_eq!(bytes[44..48], 0.5f32.to_le_bytes());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// The capture on the system it runs on (Windows; run by hand with
+    /// `--ignored`): it starts and stops, or says why not.
+    #[test]
+    #[ignore = "uses the system's audio engine"]
+    fn records_its_own_sound() {
+        let dir = std::env::temp_dir().join(format!("rvp-record-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let path = dir.join("take.wav");
+        eprintln!("starting");
+        match Recorder::start(path.clone()) {
+            Ok(recorder) => {
+                eprintln!("started");
+                std::thread::sleep(std::time::Duration::from_secs(1));
+                eprintln!("stopped: {:?}", recorder.stop());
+                let bytes = std::fs::read(&path).expect("the file");
+                assert!(bytes.len() >= 44, "{} bytes", bytes.len());
+            }
+            Err(error) => eprintln!("refused: {error}"),
+        }
         let _ = std::fs::remove_dir_all(&dir);
     }
 }

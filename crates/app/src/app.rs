@@ -215,7 +215,7 @@ pub struct App {
     /// SVP mode's watch over the file that plays (M6).
     pub(crate) svp: crate::svp::Watch,
     /// The normalizer's gain control (`App::start` starts it).
-    normalizer: Option<crate::normalizer::Control>,
+    pub(crate) normalizer: Option<crate::normalizer::Control>,
     /// What the audio chain knows about the file that plays.
     pub(crate) audio_source: crate::audio::chain::Source,
     /// mpv's audio devices, read at start and when the settings window
@@ -226,6 +226,11 @@ pub struct App {
     /// Freeverb's response for the settings it was made for: computing it
     /// takes a few milliseconds, which chain changes need not repeat.
     freeverb: Option<crate::audio::dsp::Response>,
+    /// The second audio device's core (`crate::audio::second`).
+    pub(crate) second: Option<crate::audio::second::Second>,
+    /// mpv options the second core gets last: the command line's
+    /// `--mpv-options` (the self-test's `ao=null`), or a test's.
+    pub second_mpv_options: Vec<(String, String)>,
     /// The seek bar while the mouse holds it (`App::drag_seek_bar`).
     seek_bar: Option<SeekBarHold>,
     /// Counts the files loaded: the media controls' track ID (`media`).
@@ -282,6 +287,8 @@ impl App {
             audio_devices: Vec::new(),
             applied_chain: None,
             freeverb: None,
+            second: None,
+            second_mpv_options: Vec::new(),
             seek_bar: None,
             media_track: 0,
         })
@@ -391,6 +398,7 @@ impl App {
         self.configure_normalizer();
         self.apply_audio_chain(engine);
         self.read_audio_devices(engine);
+        self.second_device_changed(engine);
         if let Err(error) = self.apply_picture_settings(engine) {
             self.warnings.push(format!("Picture settings: {error}"));
         }
@@ -995,6 +1003,25 @@ impl App {
         let (front, back) = crate::audio::chain::build(&inputs);
         let current = engine.get_text("af").unwrap_or_default();
         let text = crate::audio::chain::assemble(&current, &front, &back);
+        if let Some(second) = self.second.as_mut() {
+            // The second device: the gain from the main core's normalizer,
+            // and PCM (no AC3 encoding for pass-through).
+            let back: Vec<crate::audio::chain::Entry> = back
+                .iter()
+                .filter(|(label, _)| *label != crate::audio::chain::AC3)
+                .map(|(label, entry)| {
+                    if *label == crate::normalizer::LABEL {
+                        (
+                            *label,
+                            crate::normalizer::Normalizer::follower_entry(inputs.gain),
+                        )
+                    } else {
+                        (*label, entry.clone())
+                    }
+                })
+                .collect();
+            second.set_chain(&crate::audio::chain::assemble(&current, &front, &back));
+        }
         if self.applied_chain.as_deref() == Some(text.as_str()) {
             return;
         }
@@ -1358,6 +1385,7 @@ impl App {
             self.library.update_current(Some(duration), true);
         }
 
+        self.follow_second(engine, &events, now);
         requests.extend(self.track_position(engine));
         self.settle_seek_bar(now);
         if let Some(top) = self.on_top_change() {
@@ -1519,6 +1547,7 @@ impl App {
     /// # Errors
     /// Fails on I/O errors.
     pub fn shutdown(&mut self, engine: &Engine, now: Instant) -> io::Result<()> {
+        self.stop_second();
         drop(engine.stop());
         self.writer.flush();
         self.library.flush()?;
