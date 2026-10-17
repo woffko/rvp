@@ -282,7 +282,9 @@ FFmpeg, Qt or the platform cannot do it.
   (bit-exact; dvdauthor for the DVD). Tests that run elsewhere take
   them from `RVP_TESTDATA`.
 - Self-tests move the pointer through Player's handlers; the window's
-  own hover is ignored while one runs (Qt repeats it every frame).
+  own hover is ignored while one runs (Qt repeats it every frame). A
+  self-test option must not share a name with PotPlayer's switches
+  (`/dvd`, `/cd`, `/sub`...): both reach the same command-line value.
 - RVP chooses the next entry itself (queue, shuffle, the end of a file):
   seamless playback and the file navigator were studied and left out
   (`docs/spikes/m11-studies.md`).

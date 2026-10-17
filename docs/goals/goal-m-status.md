@@ -19,7 +19,7 @@ was only copied there.
 | Other playback items | Played and related files to the Recycle Bin after RVP's own confirmation (Windows' shell file operation with undo); the pointer hidden over playing video in the window; remembering positions as a toggle | `shell/src/recycle.rs`, `playback.rs` |
 | Opening | Load External Audio and Reload Subtitle; DVD (a folder, a drive or an `.IFO`: titles from the disc's title table, chapters, angles, audio and subtitle streams, DVD Control's speeds) and Blu-ray (a folder, a drive or an `.MPLS`); audio CDs; webcams and other devices (DirectShow's list); the screen (`gdigrab`, or `ddagrab` through lavfi); HTTP, HTTPS, FTP and WebDAV addresses; streaming sites through the user's yt-dlp (RVP does what mpv's `ytdl_hook` does: an EDL of the formats, the headers, the title); the clipboard; recent items and favorites (files and folders); the Default Open Action; "When Files Opened" (the file alone, similar files, or the whole folder) | `crates/app/src/sources.rs`, `crates/app/src/ytdl.rs`, `shell/src/devices.rs` |
 | Playlist panel | The playback queue (it plays before the next entry), sorting by title, name, extension, size, duration, date, folder and release year, search, editing titles, renaming files, opening the folder, moving and copying files (on a thread), copy and paste (the recent list too), Add URL, file information, playlist files in and out (`.dpl`, `.m3u`/`.m3u8`, `.pls`), remembering the default playlist and recent URLs, durations found in the background, thumbnail views of 2 to 7 lines with details and 16:9 pictures, starting albums from menus, the playlist storage folder, deleting files to the Recycle Bin, "Play within a new instance" | `crates/app/src/albums.rs`, `crates/app/src/playlist_files.rs`, `crates/skin/src/playlist.rs` |
-| Command line | 25 of PotPlayer's 29 switches: `/seek`, `/sub`, `/aud`, `/title`, `/user_agent`, `/referer`, `/headers` for the first file; `/add`, `/insert`, `/autoplay`, `/same`, `/sort`, `/randomize`, `/new`, `/current`, `/clipboard`; the dialogs; `/cap`, `/cam`, `/dvd`, `/cd`; standard input | `crates/app/src/instance.rs`, `docs/coverage/command-line.md` |
+| Command line | 25 of PotPlayer's 29 switches: files, folders and URLs (When Files Opened applies); `/seek`, `/sub`, `/aud`, `/title`, `/user_agent`, `/referer`, `/headers` for the first file; `/add`, `/insert`, `/autoplay`, `/same`, `/sort`, `/randomize`, `/new`, `/current`, `/clipboard`; the dialogs; `/cap`, `/cam`, `/dvd`, `/cd`; standard input | `crates/app/src/instance.rs`, `docs/coverage/command-line.md` |
 | Studies | Seamless playback and the file navigator with Open Box: neither went in (below) | `docs/spikes/m11-studies.md` |
 | Coverage | Every item of the context menu's Open (20 with Open File(s)), Playback (116), Album/Favorites (3) and DVD Control (13) menus and of the playlist menu (53) is carried out; the Playback, Time Jump, Scene Browser, Playlist, Device and DVD/Blu-ray pages' options are settings or keep a reason; the keys of these menus work or say why not | `crates/app/src/coverage.rs`, `docs/coverage/` |
 
@@ -29,12 +29,12 @@ was only copied there.
 added: libmpv preloads and joins files only inside its own playlist or an
 EDL, and either would let mpv move on (or merge entries) where RVP decides
 (the queue, shuffle, Skip Ending, "When Playback Finished", the Recycle
-Bin, resume positions). Today's switch costs about 70 ms headless between
-the end of one entry and the next entry's first frame (68 to 74 ms in
-WSL, 88 to 102 ms on the Windows VM). **The file
-navigator and Open Box** are not added: they could keep the album rules,
-but they are a second file manager for ways in RVP already has. Whether
-RVP should grow either is the owner's call (below).
+Bin, resume positions). Today's switch, measured headless from the end of
+one entry to the next entry's first frame, takes 68 to 74 ms in WSL and
+85 to 102 ms on the Windows VM. **The file navigator and Open Box** are
+not added: they could keep the album rules, but they are a second file
+manager for ways in RVP already has. Whether RVP should grow either is
+the owner's call (below).
 
 ## Tests
 
@@ -94,12 +94,27 @@ SSH, software OpenGL, no sound device), all pass:
   the SSH user's Recycle Bin (its `$I` record names it), and its playlist
   entry went with it; the script then removed it from the Recycle Bin.
 - `tests/thumbnails.rs` (8 tests, 3 to 4 ms a picture) and `tests/m11.rs`
-  (11 tests, the DVD with shinchiro's libdvdnav, backward play 1 s in
-  1.19 s, the gap between entries 88 to 102 ms) on Windows' own libmpv.
+  (11 tests: the DVD with shinchiro's libdvdnav, backward play 1 s in
+  1.16 to 1.19 s, the gap between entries 85 to 102 ms) on Windows' own
+  libmpv.
 
 The first run found one failure, in the self-test itself: its Recycle Bin
 check counted the playlist from before the file went (Linux skips that
 check, so only Windows showed it).
+
+Both scripts ran again on the package built from f447a7d (`rvp.exe`
+SHA-256 4a06fbbb...), all passing: `m11-all.ps1` as above and, as a
+regression check of M11's changes to the window, `m10-all.ps1`'s
+functional self-test (failures 0, the awake request, the recording).
+
+GitHub CI's run on f447a7d (39061769338) found what the VM's scripts
+could not: two unit tests with Unix paths on Windows, and the Linux
+package check's M11 self-test without DVD support (findings 11 to 13).
+After the fixes, every test executable of the workspace (38, built for
+Windows in debug as CI builds them) ran on the VM with the repository
+mirrored at the path compiled into them: all pass, except
+`tests/resume.rs`, whose three tests start a helper program from the
+build machine's path (GitHub's Windows runner runs them).
 
 ## Findings
 
@@ -135,6 +150,20 @@ check, so only Windows showed it).
    now ignore the window's own hover.
 10. **"Reset A-B Section Repeat" left the repeat flagged on** with no
     points; it now ends it.
+11. **Open DVD's answer skipped libmpv's protocol list**: with a libmpv
+    without libdvdnav (the Linux kit's, found by CI's package check) the
+    disc replaced playback with an address mpv cannot open. The disc
+    dialog's answer now refuses with a notice, as the Open menu did.
+12. **A self-test option was also a PotPlayer switch**: `--dvd=FOLDER`
+    and `/dvd` reach the same command-line value, so the self-test also
+    asked to open the DVD at start. It is `--dvd-folder` now.
+13. **Two unit tests used Unix paths** (`/films/...` has no drive on
+    Windows); GitHub's Windows runner found them. CI's test step now runs
+    every test binary after a failure (`--no-fail-fast`), so one run shows
+    all of them.
+14. **The self-test's resize raced the first file's fit** to its 96x72
+    video: the window is made larger once that file has loaded, and the
+    pointer moves wait for the skin's layout at the new size.
 
 ## Differences from PotPlayer
 

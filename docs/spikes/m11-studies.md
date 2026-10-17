@@ -43,7 +43,7 @@ What the switch costs today: RVP keeps the last frame (`keep-open`) and
 loads the next entry with `loadfile replace` as soon as it sees the end.
 `crates/app/tests/m11.rs` (`the_next_entry_follows_the_end_of_a_file`)
 measures, headless, the time from mpv's end of one fixture to the next
-entry's first frame: 68 to 74 ms in WSL (local files) and 88 to 102 ms
+entry's first frame: 68 to 74 ms in WSL (local files) and 85 to 102 ms
 on the Windows test VM. A window's video output and the audio device add their
 own start on top.
 The last frame stays on screen meanwhile, so the gap shows as a short

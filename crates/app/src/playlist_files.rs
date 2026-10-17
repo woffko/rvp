@@ -204,8 +204,15 @@ pub fn write(format: Format, entries: &[Entry]) -> String {
 mod tests {
     use super::*;
 
+    /// An absolute path of this system (`/films` has no drive on Windows).
+    const FILM: &str = if cfg!(windows) {
+        "C:\\films\\a.mkv"
+    } else {
+        "/films/a.mkv"
+    };
+
     fn entries() -> Vec<Entry> {
-        let mut first = Entry::new("/films/a.mkv");
+        let mut first = Entry::new(FILM);
         first.title = Some("Film A".to_owned());
         first.duration = Some(90.4);
         let mut second = Entry::new("https://example.com/b.mp4");
@@ -227,7 +234,7 @@ mod tests {
             std::fs::write(&path, write(format, &entries())).expect("write");
             let back = read(&path, &crate::dpl::DriveMap::default()).expect("read");
             assert_eq!(back.len(), 2, "{name}");
-            assert_eq!(back[0].path, Entry::new("/films/a.mkv").path, "{name}");
+            assert_eq!(back[0].path, Entry::new(FILM).path, "{name}");
             assert_eq!(back[0].title.as_deref(), Some("Film A"), "{name}");
             let duration = back[0].duration.expect("duration");
             assert!((duration - 90.0).abs() <= 0.5, "{name}: {duration}");

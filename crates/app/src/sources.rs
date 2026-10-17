@@ -577,6 +577,14 @@ impl App {
 
     /// The disc dialog's answer: a drive, a folder or a file of the disc.
     pub fn open_disc(&mut self, engine: &Engine, path: &Path, bluray: bool) -> Option<UiRequest> {
+        let (protocol, what, missing) = if bluray {
+            ("bd", "Blu-ray", "libbluray")
+        } else {
+            ("dvd", "DVD", "dvdnav")
+        };
+        if !self.protocol_available(engine, protocol) {
+            return Some(self.cannot_open(what, missing));
+        }
         let address = disc_address(path, bluray);
         self.open_now(engine, &[address])
     }
@@ -1035,18 +1043,26 @@ mod tests {
 
     #[test]
     fn the_clipboard_gives_paths_and_addresses() {
-        let text =
-            "\"/films/a b.mkv\"\nfile:///films/c%20d.mkv\n\nhttps://example.com/v\nnot a path\n";
-        let items = clipboard_items(text);
-        let expected_c = if cfg!(windows) {
-            "films/c d.mkv"
+        // An absolute path of this system, a file URL, an address, an empty
+        // line and a line that is neither.
+        let (path, url, from_url) = if cfg!(windows) {
+            (
+                "C:\\films\\a b.mkv",
+                "file:///C:/films/c%20d.mkv",
+                "C:/films/c d.mkv",
+            )
         } else {
-            "/films/c d.mkv"
+            (
+                "/films/a b.mkv",
+                "file:///films/c%20d.mkv",
+                "/films/c d.mkv",
+            )
         };
-        assert_eq!(items[0], "/films/a b.mkv");
-        assert_eq!(items[1], expected_c);
-        assert_eq!(items[2], "https://example.com/v");
-        assert_eq!(items.len(), 3);
+        let text = format!("\"{path}\"\n{url}\n\nhttps://example.com/v\nnot a path\n");
+        assert_eq!(
+            clipboard_items(&text),
+            [path, from_url, "https://example.com/v"]
+        );
     }
 
     #[test]

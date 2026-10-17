@@ -9,7 +9,7 @@
 // Player's handlers, as in the functional check.
 //
 // Files: testdata/media/fixture-chapters.mkv (with its .srt), then
-// fixture-60s.mkv and fixture-3s.mkv; `--dvd=FOLDER` names the DVD fixture
+// fixture-60s.mkv and fixture-3s.mkv; `--dvd-folder=FOLDER` names the DVD fixture
 // (testdata/media/dvd). The command line is checked with `/seek=0:00:03`
 // and `/title="M11 title"`.
 import QtQuick
@@ -48,16 +48,16 @@ Item {
         switch (t.step) {
         case 0:
             // The fixtures are 96x72: a window fitted to them leaves the
-            // seek bar and the playlist a few pixels.
+            // seek bar and the playlist a few pixels. No fits after the
+            // first file's (step 2 makes the window larger).
             setSetting("fit-window-to-video", false)
-            host.width = 1000
-            host.height = 700
             t.next()
             break
         case 1:
             if (t.waitFor("chapters_file_plays", () => s.loaded && endsWith(s.path, "fixture-chapters.mkv")
                               && s.duration > 19 && s.marks >= 3, 20000,
                           () => "path " + s.path + " marks " + s.marks)) {
+                m11.chaptersFile = s.path
                 // The command line: /seek and /title.
                 t.check("command_line_seek", s.time !== null && s.time >= 2.5, "time " + s.time)
                 t.check("command_line_title", s.media_title === "M11 title", "title " + s.media_title)
@@ -66,16 +66,24 @@ Item {
             }
             break
         case 2: {
-            if (host.width < 900 && Date.now() - t.stepStarted < 3000)
-                break
+            // The first file was fitted when it loaded. The window system
+            // applies a new size later: wait for the skin's layout at that
+            // size (a seek bar of some 800 pixels).
+            if (host.width < 900) {
+                host.width = 1000
+                host.height = 700
+            }
             const r = seekBar()
+            if (r.width < 400 && Date.now() - t.stepStarted < 5000)
+                break
             player.mouse_move(r.x + r.width / 2, r.y + r.height / 2)
             t.next()
             break
         }
         case 3:
             t.waitFor("seek_bar_time_tooltip", () => s.seek_tip_shown && s.seek_tip.indexOf("00:00:1") === 0,
-                      3000, () => "tip " + s.seek_tip)
+                      3000, () => "tip " + s.seek_tip + " bar " + JSON.stringify(seekBar())
+                          + " window " + host.width + "x" + host.height)
             break
         case 4:
             if (t.waitFor("seek_bar_preview", () => s.preview_width > 0, 8000,
@@ -282,17 +290,26 @@ Item {
                             "error " + error + " entries " + after.shown_entries)
                 else
                     t.check("recycle_bin", true, "SKIPPED (Linux: goal S) " + error)
-                player.open_disc(player.option("dvd"), false)
+                player.open_disc(player.option("dvd-folder"), false)
             }
             break
         }
         case 34:
-            // The Linux packages' libmpv is built without libdvdnav (goal S).
+            // The Linux packages' libmpv is built without libdvdnav (goal S):
+            // RVP refuses the disc, and the audio joins a file that plays.
             if (!s.dvd_supported) {
-                t.check("dvd_folder_plays", true, "SKIPPED this libmpv opens no DVD")
-                m11.audioTracks = s.audio_tracks
-                player.load_external_audio(player.option("audio"))
-                t.next()
+                if (!m11.dvdSkipped) {
+                    m11.dvdSkipped = true
+                    t.check("dvd_folder_plays", true, "SKIPPED this libmpv opens no DVD")
+                    if (!(s.loaded && s.duration - s.time > 5))
+                        player.open_files(m11.chaptersFile, false)
+                }
+                if (t.waitFor("audio_joins_a_file", () => s.loaded && s.duration - s.time > 5
+                                  && s.audio_tracks > 0, 10000,
+                              () => "path " + s.path + " time " + s.time)) {
+                    m11.audioTracks = s.audio_tracks
+                    player.load_external_audio(player.option("audio"))
+                }
                 break
             }
             if (t.waitFor("dvd_folder_plays", () => s.loaded && String(s.path).indexOf("dvd://") === 0
@@ -315,7 +332,9 @@ Item {
                 player.run_action("favorite-item")
             break
         case 37:
-            if (t.waitFor("favorites_and_recent", () => s.favorites === 1 && s.recent >= 4, 3000,
+            // The files of the command line and the DVD (unless skipped).
+            if (t.waitFor("favorites_and_recent", () => s.favorites === 1
+                              && s.recent >= (m11.dvdSkipped ? 3 : 4), 3000,
                           () => "favorites " + s.favorites + " recent " + s.recent)) {
                 setSetting("open.ytdl-path", "rvp-no-such-yt-dlp")
                 player.open_files("https://127.0.0.1:9/watch?v=m11", false)
@@ -340,4 +359,6 @@ Item {
     }
     property string listFile: ""
     property int audioTracks: 0
+    property string chaptersFile: ""
+    property bool dvdSkipped: false
 }

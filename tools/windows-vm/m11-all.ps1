@@ -56,7 +56,7 @@ foreach ($old in (Get-RecycledFrom $recycled)) {
 }
 
 Write-Host '== M11 self-test'
-$extra = @('--selftest=m11', "--out=$out", "--dvd=$bundle\dvd", "--audio=$bundle\fixture-3s.mkv",
+$extra = @('--selftest=m11', "--out=$out", "--dvd-folder=$bundle\dvd", "--audio=$bundle\fixture-3s.mkv",
     "--clip=$bundle\fixture-60s.mkv", '--mpv-options=ao=null', '/seek=0:00:03', '/title=M11 title',
     "$bundle\fixture-chapters.mkv", "$bundle\fixture-60s.mkv", "$bundle\fixture-3s.mkv")
 & "$PSScriptRoot\run.ps1" -Exe $Exe -Extra $extra | Select-String -NotMatch $filter |

@@ -75,7 +75,7 @@ functional=(--selftest --out=/tmp/rvp/out --skin= --mpv-options=ao=null,hwdec=no
 selftest deb /usr/bin/rvp "${functional[@]}"
 selftest appimage env APPIMAGE_EXTRACT_AND_RUN=1 "$packages"/RVP-*-x86_64.AppImage "${functional[@]}"
 selftest m11 /usr/bin/rvp --selftest=m11 --out=/tmp/rvp/out --skin= --mpv-options=ao=null,hwdec=no \
-    "--dvd=$fixtures/dvd" "--audio=$fixtures/fixture-3s.mkv" "--clip=$fixtures/fixture-60s.mkv" \
+    "--dvd-folder=$fixtures/dvd" "--audio=$fixtures/fixture-3s.mkv" "--clip=$fixtures/fixture-60s.mkv" \
     /seek=0:00:03 "/title=M11 title" "$fixtures/fixture-chapters.mkv" "$fixtures/fixture-60s.mkv" \
     "$fixtures/fixture-3s.mkv"
 echo "failures=$failures"

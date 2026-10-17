@@ -855,7 +855,7 @@ Window {
     //   --selftest=m11        M11's checks (SelfTestM11.qml): the thumbnail
     //                         core, jumps, A-B, skips, bookmarks, the
     //                         playlist's commands, the power actions
-    //                         through the dry-run hook, discs (--dvd=DIR),
+    //                         through the dry-run hook, discs (--dvd-folder=DIR),
     //                         external audio (--audio=FILE), the clipboard
     //                         (--clip=FILE), yt-dlp's fallback; the files:
     //                         fixture-chapters.mkv, fixture-60s.mkv,
