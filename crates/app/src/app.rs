@@ -1092,7 +1092,7 @@ impl App {
 
     /// Gives the normalizer's settings to its gain control. Boost, level and
     /// release time need nothing else; switching it on or off changes the
-    /// chain too (`App::apply_normalizer`).
+    /// chain too (`App::audio_chain_changed`).
     pub(crate) fn configure_normalizer(&self) {
         if let Some(control) = &self.normalizer {
             control.configure(self.settings.normalizer);

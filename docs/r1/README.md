@@ -15,6 +15,8 @@ holds the tables and findings.
 | `menu-runtime.tsv` | The live context menu while a video plays: 1580 items, including run-time lists (skins, languages, audio renderers, devices). Recent files and album names are replaced by placeholders | `host-session r1`, then `tools/r1/redact_menu.py` |
 | `hotkeys.tsv` | Default hotkeys: accelerator table 157 (main window, 259 keys) and 118 (playlist, 54 keys), with the menu items they trigger | `tools/r1/potplayer_tables.py` |
 | `mouse-actions.tsv` | Preferences → General → Mouse: each action, its current value, its index and all choices; the page's check boxes | `host-session r1` (Win32 messages, read-only) |
+| `preferences.tsv` | R2 (goal L): every control of the 76 Preferences pages: page path, dialog, control ID, kind, English text, its group box, and whether the text is the control's own or a label beside it | `tools/r1/potplayer_tables.py` (read-only: the dialogs of `PotPlayer64.dll`, page names from its string table, texts from `Language/English.ini`) |
+| `command-line.tsv` | R2: PotPlayer's 29 command-line switches with their descriptions | `tools/r1/potplayer_tables.py` (read-only: `CmdLine64.txt`'s English block) |
 
 ## Hotkeys
 
@@ -57,6 +59,23 @@ released outside itself, which cancels the click; PotPlayer did nothing).
 Playing (the synthetic 1080p23.976 clip, SVP active), at widths 1280, 1920
 and 2560 with the same three states, plus the top of the context menu and
 the Preferences dialog.
+
+## R2: Preferences and the command line (goal L, 2026-10-17)
+
+PotPlayer's Preferences dialog is a page tree (string table entries
+2055-2097 name the pages) beside one dialog per page (`RT_DIALOG`, Korean
+in the DLL, English through `[Dialog(N)]` of `English.ini`). The pages'
+1,183 controls are 379 check boxes, 193 combo boxes, 186 edit fields, 82
+sliders, 143 group boxes, 168 buttons and a few lists; 365 rows carry the
+control's own text, 818 the text of the label beside or above it. The
+combo boxes' lists are filled at run time and are not in the resources;
+goal L's host session reads the audio pages' lists and values from the
+running dialog (`host-session m10`, read only). The page's runtime labels
+show their slider's value in place of `%d` or `%g`.
+
+`cargo test -p rvp-app --test coverage` writes `docs/coverage/preferences.md`
+from `preferences.tsv`: every option, the RVP setting that does it, or the
+reason RVP has none (`crates/app/src/coverage/preferences.rs`).
 
 ## Findings for RVP
 

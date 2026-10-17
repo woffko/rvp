@@ -5,6 +5,7 @@
 //!     [--sizes 1280x720,...] [--states idle,playing|none] [--menu yes|no] [--mouse-page yes|no]
 //! host-session s5 --potplayer EXE --out DIR --clip FILE:SECONDS [--clip FILE:SECONDS ...]
 //! host-session audio --potplayer EXE --rvp RVP_EXE --files DIR --out DIR [--levels 100,90,...] [--hold-ms N]
+//! host-session m10 --potplayer EXE --files DIR --out DIR [--rvp RVP_EXE --second NAME]
 //! host-session s3-input --s3 S3_EXE --skin DSF
 //! host-session record --out FILE.wav --seconds N
 //! host-session check
@@ -17,7 +18,10 @@
 //! (WASAPI loopback) while PotPlayer plays each clip. `audio` records RVP's
 //! and PotPlayer's output of the volume audit's tones: RVP at known volumes
 //! with its normalizer on and off, PotPlayer's volume from 100 % down set
-//! with its remote messages, and the 5.1 tones in both. `s3-input` drags the
+//! with its remote messages, and the 5.1 tones in both. `m10` reads
+//! PotPlayer's audio settings and records its presets, effects, speaker
+//! modes and normalizer blocks for goal L, and RVP's second device
+//! (`win/m10.rs`). `s3-input` drags the
 //! S3 spike's frameless window with the real mouse. `record` only records;
 //! `check` reports monitors, processes and the output device.
 //!

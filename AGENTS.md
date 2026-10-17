@@ -117,21 +117,37 @@ FFmpeg, Qt or the platform cannot do it.
 - The Windows test VM's checks are `tools/windows-vm/m3-all.ps1`,
   `m4-all.ps1`, `m6-all.ps1`, `m7-all.ps1` (RVP Default with no skin
   set, then the test copy of BlackSpace; copy them and `run.ps1` to
-  `C:\rvp-test` with the bundle and `testdata/media/fixture-marker.*`) and
-  `m8-all.ps1` (the packages, see below).
+  `C:\rvp-test` with the bundle and `testdata/media/fixture-marker.*`),
+  `m8-all.ps1` (the packages, see below) and `m10-all.ps1` (M10's
+  self-test steps, the awake request, the recording's file, and
+  `tests/audio_chain.rs` and `tests/speakers.rs` built with `cargo xwin
+  test --no-run` beside the bundle's libmpv: Windows' FFmpeg).
 - Video filters: RVP adds and removes only its own, by label (`@rvp*`,
   `vf pre`), and never touches SVP's `@svp` (goal H's rule 4).
-- Audio filters: PotPlayer's downmix first (`@rvpdownmix`, the stereo
-  speakers, `crates/app/src/speakers.rs`), the equalizer, the normalizer,
-  then `@rvptempo` (`scaletempo2`, which keeps speed changes from putting
-  audio and video out of step). The downmix and the equalizer both go in
-  with `af pre`, so `apply_equalizer` puts the downmix in front again
-  every time. Changes go through `App::defer_chain_change` and
-  `App::resync_audio`: a chain change or seek at the very end of a file
-  leaves mpv's `eof-reached` false and the album stops, so in the last
-  `NEAR_END` (1.5 s) they wait for the next file. While a file loads, the
-  old file's end is ignored (`Tracking::Loading`), or the album moves on
-  twice.
+- Audio filters: RVP's part of mpv's `af` is built at once by
+  `crates/app/src/audio/chain.rs` in one order (downmix, channel, preamp,
+  equalizer, effects, the user's own filters, normalizer, channel gains,
+  `@rvptempo`, AC3 encoding) and set as one value
+  (`App::apply_audio_chain`); every change goes through
+  `App::audio_chain_changed`. Graphs are `lavfi` entries quoted with mpv's
+  `%N%` prefix (`chain::lavfi`). A chain change or seek at the very end of
+  a file leaves mpv's `eof-reached` false and the album stops, so in the
+  last `NEAR_END` (1.5 s) changes wait for the next file
+  (`App::defer_chain_change`); otherwise `App::resync_audio` plays on from
+  the current position. While a file loads, the old file's end is ignored
+  (`Tracking::Loading`), or the album moves on twice.
+- FFmpeg differs between Linux (6.1 in CI and the sysroot) and Windows
+  (shinchiro's, newer): use options every version has. `afir` normalizes
+  its response itself (6.1 has no `irnorm`), so Freeverb's response is
+  written at a level every version leaves alone (`audio/dsp.rs`);
+  `headphone` lowers its output by 3 dB per input channel. mpv refuses
+  `audio-format=no` (set only non-default output options).
+- The second audio device (`crates/app/src/audio/second.rs`) is a second
+  core that follows the main one; it is started after the main core (so
+  ffmpeg's log stays with the main core) and its chain has
+  `Normalizer::follower_entry`. The normalizer's thread holds a weak
+  handle of it: `Control::follow(None)` before the core is dropped, or
+  mpv waits for that handle and the window's thread hangs.
 - The normalizer is TomSteady (D13, `crates/app/src/tomsteady.rs`, its
   rules checked against S5's PotPlayer recordings by
   `tools/s5/tomsteady_fit.py`). Its chain prints each 2048-sample block's
@@ -140,6 +156,18 @@ FFmpeg, Qt or the platform cannot do it.
   ffmpeg's log to the first player core of a process only: keep one core
   per process, and give tests that need the log a test binary of their
   own (`tests/normalizer_live.rs`).
+- Windows' audio in `shell/`: the master volume (`system_volume.rs`,
+  Core Audio) and recording RVP's own sound (`recorder.rs`, process
+  loopback). `ActivateAudioInterfaceAsync` frees the activation blob it
+  is given: allocate it with `CoTaskMemAlloc` (a stack blob corrupted the
+  heap). The display stays on through `awake.rs`
+  (`SetThreadExecutionState`); in the VM's session 0 `powercfg /requests`
+  lists that request under SYSTEM only.
+- Silent self-test in WSL (no window on the desktop, no sound): Xvfb
+  (`xvfb-run`), `QT_QPA_PLATFORM=xcb` with `WAYLAND_DISPLAY` unset, the xcb
+  libraries unpacked into `~/rvp-deps/sysroot`, `--mpv-options=ao=null`
+  (the second device's core gets the same options) and `RVP_CONFIG_DIR`
+  and `RVP_STATE_DIR` in a temporary folder.
 - The VapourSynth runtime is chosen before any thread starts
   (`point_at_vapoursynth` sets `VSSCRIPT_PATH` through `rvp_set_env`); do
   not set environment variables later or from Rust (`set_var` is unsafe).
@@ -232,6 +260,15 @@ FFmpeg, Qt or the platform cannot do it.
   recording by their levels (`tools/audio-audit/audit.py`), not by the
   log's times. `tools/audio-audit/fit_downmix.py` fits PotPlayer's 5.1 mix
   with the S5 TomSteady model.
+- Goal L's comparison: `tools/audio-audit/make_m10.py` writes test files
+  whose passes start with a 2 kHz marker; `host-session m10` reads
+  PotPlayer's context menu and audio Preferences pages (read only, the
+  dialog closed without applying), records the presets, effects, speaker
+  modes and normalizer blocks, switching passes by PotPlayer's position
+  (`WM_USER` `0x5004`), and puts PotPlayer's checked states back;
+  `tools/audio-audit/m10.py` cuts the recording by its markers, renders
+  the same passes through RVP's chain (`cargo run --release -p rvp-app
+  --example render_chain`) and prints the tables.
 
 ## Test environments
 
