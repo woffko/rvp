@@ -1165,6 +1165,8 @@ Window {
         property int decoderLast: 0
         property real svpSeen: -1
         property real stepStarted: 0
+        // When a step last asked for room before a file's end.
+        property real roomAsked: 0
         property int failures: 0
         property var before: ({})
         property var dragTo: ({})
@@ -2374,7 +2376,23 @@ Window {
             break
         case 336:
             // Audio Stretching: Shift+J raises the pitch 1 % (rubberband in
-            // the tempo filter's place), Shift+K takes it back.
+            // the tempo filter's place), Shift+K takes it back. Away from
+            // the file's end, where chain changes wait for the next file
+            // (a slow machine gets near the short file's end by now).
+            if (s.duration > 0 && s.duration - s.time < 8) {
+                if (Date.now() - t.roomAsked > 2000) {
+                    t.roomAsked = Date.now()
+                    if (s.duration < 20)
+                        player.run_action("previous")
+                    else
+                        player.seek_fraction(0.25)
+                }
+                if (Date.now() - t.stepStarted > 15000) {
+                    t.check("audio_stretching_room", false, "time " + s.time + " of " + s.duration)
+                    t.next()
+                }
+                break
+            }
             player.key(Qt.Key_J, Qt.ShiftModifier)
             t.next()
             break
