@@ -16,6 +16,8 @@ headless tests green, and list Linux-only parts for M17 (goal S). By the
 end of each parity goal, every PotPlayer item of its area that RVP lacks
 keeps a reason in `crates/app/src/coverage.rs` that says why libmpv,
 FFmpeg, Qt or the platform cannot do it.
+Goal T (M18, D16, added 2026-10-18) follows goal N: RVP's own motion
+smoothing for users without SVP, after a study of the engines.
 
 ## Shared rules (PLAN.md section 10)
 

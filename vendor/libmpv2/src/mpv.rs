@@ -489,4 +489,90 @@ impl Mpv {
     pub fn get_time_us(&self) -> i64 {
         unsafe { libmpv2_sys::mpv_get_time_us(self.ctx.as_ptr()) }
     }
+
+    /// RVP patch: the frame as `screenshot-raw` gives it (`flags`: `video`,
+    /// `subtitles` or `window`), copied out of mpv's reply.
+    pub fn screenshot_raw(&self, flags: &str) -> Result<RawImage> {
+        let args = [CString::new("screenshot-raw")?, CString::new(flags)?];
+        let mut pointers: Vec<*const ctype::c_char> = args.iter().map(|arg| arg.as_ptr()).collect();
+        pointers.push(ptr::null());
+        let mut node = MaybeUninit::<libmpv2_sys::mpv_node>::zeroed();
+        // SAFETY: the argument list is NULL-terminated and its strings live
+        // until the call returns; mpv fills `node` only on success.
+        mpv_err((), unsafe {
+            libmpv2_sys::mpv_command_ret(self.ctx.as_ptr(), pointers.as_mut_ptr(), node.as_mut_ptr())
+        })?;
+        // SAFETY: on success `node` is initialised by mpv.
+        let mut node = unsafe { node.assume_init() };
+        // SAFETY: `node` is mpv's own reply, read before it is freed.
+        let image = unsafe { read_raw_image(&node) };
+        // SAFETY: the reply is freed once, after reading.
+        unsafe { libmpv2_sys::mpv_free_node_contents(&mut node) };
+        image.ok_or(Error::Raw(libmpv2_sys::mpv_error_MPV_ERROR_PROPERTY_FORMAT))
+    }
+}
+
+/// RVP patch: an image `screenshot-raw` gave: `stride` bytes a row in
+/// `format` (`bgr0`, `bgra`, `rgba` or `rgba64`), rows top first.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RawImage {
+    pub width: usize,
+    pub height: usize,
+    pub stride: usize,
+    pub format: String,
+    pub data: Vec<u8>,
+}
+
+/// Reads `screenshot-raw`'s map: `w`, `h`, `stride`, `format` and `data`.
+///
+/// # Safety
+/// `node` must be a node mpv returned and not yet freed.
+unsafe fn read_raw_image(node: &libmpv2_sys::mpv_node) -> Option<RawImage> {
+    if node.format != libmpv2_sys::mpv_format_MPV_FORMAT_NODE_MAP {
+        return None;
+    }
+    let list = unsafe { node.u.list.as_ref()? };
+    let count = usize::try_from(list.num).ok()?;
+    let (mut width, mut height, mut stride) = (None, None, None);
+    let mut format = None;
+    let mut data = None;
+    for index in 0..count {
+        let key = unsafe { std::ffi::CStr::from_ptr(*list.keys.add(index)) };
+        let value = unsafe { &*list.values.add(index) };
+        let int = || {
+            (value.format == libmpv2_sys::mpv_format_MPV_FORMAT_INT64)
+                .then(|| usize::try_from(unsafe { value.u.int64 }).ok())
+                .flatten()
+        };
+        match key.to_bytes() {
+            b"w" => width = int(),
+            b"h" => height = int(),
+            b"stride" => stride = int(),
+            b"format" if value.format == libmpv2_sys::mpv_format_MPV_FORMAT_STRING => {
+                format = Some(
+                    unsafe { std::ffi::CStr::from_ptr(value.u.string) }
+                        .to_string_lossy()
+                        .into_owned(),
+                );
+            }
+            b"data" if value.format == libmpv2_sys::mpv_format_MPV_FORMAT_BYTE_ARRAY => {
+                let bytes = unsafe { value.u.ba.as_ref()? };
+                data = Some(if bytes.size == 0 {
+                    Vec::new()
+                } else {
+                    unsafe { std::slice::from_raw_parts(bytes.data.cast::<u8>(), bytes.size) }
+                        .to_vec()
+                });
+            }
+            _ => {}
+        }
+    }
+    let (width, height, stride, data) = (width?, height?, stride?, data?);
+    (stride.checked_mul(height)? <= data.len()).then_some(RawImage {
+        width,
+        height,
+        stride,
+        format: format?,
+        data,
+    })
 }

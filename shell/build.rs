@@ -68,6 +68,7 @@ fn main() {
         .qml_file("qml/AudioSync.qml")
         .qml_file("qml/ControlPanel.qml")
         .qml_file("qml/PlaybackDialogs.qml")
+        .qml_file("qml/VideoDialogs.qml")
         .qml_file("qml/SceneBrowser.qml")
         .qml_file("qml/SelfTestM11.qml");
     CxxQtBuilder::new_qml_module(module)

@@ -408,6 +408,30 @@ void Tools::set_clipboard_text(const QString &text) const
     QGuiApplication::clipboard()->setText(text);
 }
 
+QString Tools::screen_json(QWindow *window) const
+{
+    QScreen *screen = window != nullptr ? window->screen() : QGuiApplication::primaryScreen();
+    if (screen == nullptr)
+        return QStringLiteral("{}");
+    const qreal ratio = screen->devicePixelRatio();
+    const QSize size = screen->geometry().size();
+    const QSizeF physical = screen->physicalSize();
+    const QRect available = screen->availableGeometry();
+    const QJsonObject object{
+        {QStringLiteral("width"), qRound(size.width() * ratio)},
+        {QStringLiteral("height"), qRound(size.height() * ratio)},
+        {QStringLiteral("width_mm"), physical.width()},
+        {QStringLiteral("height_mm"), physical.height()},
+        {QStringLiteral("name"), screen->name()},
+        // The free area (without task bars) in the window's coordinates.
+        {QStringLiteral("x"), available.x()},
+        {QStringLiteral("y"), available.y()},
+        {QStringLiteral("available_width"), available.width()},
+        {QStringLiteral("available_height"), available.height()},
+    };
+    return QString::fromUtf8(QJsonDocument(object).toJson(QJsonDocument::Compact));
+}
+
 bool Tools::show_file(const QString &path) const
 {
 #ifdef Q_OS_WIN

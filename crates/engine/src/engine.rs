@@ -118,6 +118,35 @@ pub enum EngineEvent {
 }
 
 /// An engine failure.
+/// A frame from [`Engine::screenshot_raw`]: `stride` bytes a row in mpv's
+/// `format` (`bgr0` unless asked otherwise), rows top first.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Image {
+    pub width: usize,
+    pub height: usize,
+    pub stride: usize,
+    pub format: String,
+    pub data: Vec<u8>,
+}
+
+impl Image {
+    /// The red, green and blue of the pixel at (`x`, `y`) of an 8-bit
+    /// image (`bgr0`, `bgra`, `rgba`), or `None` outside it.
+    #[must_use]
+    pub fn rgb(&self, x: usize, y: usize) -> Option<[u8; 3]> {
+        if x >= self.width || y >= self.height {
+            return None;
+        }
+        let at = y.checked_mul(self.stride)?.checked_add(x.checked_mul(4)?)?;
+        let pixel = self.data.get(at..at + 4)?;
+        match self.format.as_str() {
+            "bgr0" | "bgra" => Some([pixel[2], pixel[1], pixel[0]]),
+            "rgba" | "rgb0" => Some([pixel[0], pixel[1], pixel[2]]),
+            _ => None,
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct EngineError(pub String);
 
@@ -567,6 +596,26 @@ impl Engine {
     #[must_use]
     pub fn get_json(&self, name: &str) -> Option<serde_json::Value> {
         serde_json::from_str(&self.get_text(name)?).ok()
+    }
+
+    /// The frame as `screenshot-raw` gives it: `flags` is `video` (the
+    /// source frame after the filters), `subtitles` or `window` (as the
+    /// screen shows it).
+    ///
+    /// # Errors
+    /// Fails without a frame, or when libmpv refuses.
+    pub fn screenshot_raw(&self, flags: &str) -> Result<Image, EngineError> {
+        let raw = self
+            .mpv
+            .screenshot_raw(flags)
+            .map_err(|e| error("screenshot-raw", &e))?;
+        Ok(Image {
+            width: raw.width,
+            height: raw.height,
+            stride: raw.stride,
+            format: raw.format,
+            data: raw.data,
+        })
     }
 
     /// Sets the volume in percent (100 is unchanged).

@@ -20,7 +20,7 @@ use rvp_engine::{
 };
 
 use crate::action::{Action, ListAction};
-use crate::action::{AfterPlayback, Delay, Repeat};
+use crate::action::{AfterPlayback, Delay, Fit, Repeat};
 use crate::commands::Session;
 use crate::dpl::{self, DriveMap};
 use crate::input::{Bindings, KeyChord};
@@ -35,8 +35,18 @@ use crate::storage::{self, Dirs};
 #[derive(Debug, Clone, PartialEq)]
 pub enum UiRequest {
     OpenFileDialog,
+    /// Fullscreen on or off; `fit` is the aspect ratio mode this kind of
+    /// fullscreen brings (stretched, or filled by keeping the aspect).
     ToggleFullscreen {
-        stretch: bool,
+        fit: Option<Fit>,
+    },
+    /// A window size or move, or a window dialog (M12).
+    Window(crate::window::WindowRequest),
+    /// A picture dialog (`custom-aspect`, `extend-size`) with the value it
+    /// starts from; the answer goes to [`App::picture_dialog_answer`].
+    PictureDialog {
+        kind: &'static str,
+        value: String,
     },
     Minimize,
     MaximizeRestore,
@@ -315,6 +325,10 @@ pub struct App {
     pub(crate) file_jobs: crate::albums::FileJobs,
     /// A yt-dlp resolution under way.
     pub(crate) resolver: crate::ytdl::Resolver,
+    /// The picture's state for this run (M12).
+    pub(crate) picture: crate::picture::PictureState,
+    /// The 3D input found and the 360° view (M12).
+    pub(crate) stereo: crate::stereo::StereoState,
 }
 
 impl App {
@@ -352,7 +366,7 @@ impl App {
         if settings.playback.finished.remember {
             session.after = settings.playback.finished.after;
         }
-        Ok(Self {
+        let mut app = Self {
             settings,
             bindings,
             model: PlayerModel::new(),
@@ -386,7 +400,11 @@ impl App {
             power: crate::power::Power::default(),
             file_jobs: crate::albums::FileJobs::default(),
             resolver: crate::ytdl::Resolver::default(),
-        })
+            picture: crate::picture::PictureState::default(),
+            stereo: crate::stereo::StereoState::default(),
+        };
+        app.start_picture();
+        Ok(app)
     }
 
     /// Picture and playback state of this session (A-B points and more).
@@ -795,6 +813,8 @@ impl App {
             Action::SetAfterPlayback(after) => Some(self.session.after == after),
             Action::SetAspect(aspect) => Some(self.session.aspect == aspect),
             Action::VideoFit(fit) => Some(self.session.fit == fit),
+            Action::Picture(command) => self.picture_checked(command),
+            Action::Stereo(command) => self.stereo_checked(command),
             Action::SetImageFormat(format) => Some(self.settings.image_format == format),
             Action::PlaybackInfo => Some(self.session.info),
             Action::ToggleEqualizer => Some(self.settings.equalizer.enabled),
@@ -863,6 +883,10 @@ impl App {
                 "5 Sec.",
                 &format!("{} Sec.", self.settings.playback.ab.behind),
             ),
+            Action::SetAspect(crate::action::Aspect::Custom) => {
+                text.replace("%s", &self.settings.picture.custom_aspect)
+            }
+            Action::Picture(command) => self.picture_label(command, text),
             _ => text.to_owned(),
         }
         .trim()
@@ -903,10 +927,17 @@ impl App {
             Action::OpenFiles => return Some(UiRequest::OpenFileDialog),
             Action::Exit => return Some(UiRequest::Exit),
             Action::ToggleFullscreen => {
-                return Some(UiRequest::ToggleFullscreen { stretch: false });
+                return Some(UiRequest::ToggleFullscreen { fit: None });
             }
             Action::ToggleFullscreenStretch => {
-                return Some(UiRequest::ToggleFullscreen { stretch: true });
+                return Some(UiRequest::ToggleFullscreen {
+                    fit: Some(Fit::Stretch),
+                });
+            }
+            Action::ToggleFullscreenCrop => {
+                return Some(UiRequest::ToggleFullscreen {
+                    fit: Some(Fit::Crop),
+                });
             }
             Action::Minimize => return Some(UiRequest::Minimize),
             Action::MaximizeRestore => return Some(UiRequest::MaximizeRestore),
@@ -1659,6 +1690,11 @@ impl App {
         if changes.contains(PropertyId::Chapters) {
             self.read_chapters(engine);
         }
+        self.picture_changed(engine, changes);
+        // The file's stereo metadata comes with its first frame.
+        if changes.contains(PropertyId::VideoWidth) && self.model.media_loaded() {
+            self.stereo_file_loaded(engine);
+        }
         if changes.any(&[PropertyId::SubStart, PropertyId::SubEnd]) {
             requests.extend(self.subtitle_section_arrived(engine));
         }
@@ -1724,6 +1760,8 @@ impl App {
             drop(engine.set_pause(false));
         }
         self.audio_file_loaded(engine);
+        self.picture_file_loaded(engine);
+        self.stereo_file_loaded(engine);
         self.apply_pending_chain(engine, false);
         self.apply_ab(engine);
         self.svp

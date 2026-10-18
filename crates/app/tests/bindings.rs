@@ -4,12 +4,14 @@
 use std::time::{Duration, Instant};
 
 use rvp_app::audio::commands::AudioCommand;
+use rvp_app::picture::PictureCommand;
 use rvp_app::playlist::local_path;
 use rvp_app::video::{ColorChange, ColorKind, Rotation, ShaderChange, VideoEffect};
 use rvp_app::volume::mpv_volume;
+use rvp_app::window::{WindowCommand, WindowRequest};
 use rvp_app::{
-    AbRepeat, Action, App, Bindings, BookmarkCommand, Delay, Jump, Key, KeyChord, MouseGesture,
-    Scenes, SeekStep, Settings, Skip, Source, Speed, SubtitleStyle, UiRequest, Zoom,
+    AbRepeat, Action, App, Bindings, BookmarkCommand, Delay, Fit, Jump, Key, KeyChord,
+    MouseGesture, Scenes, SeekStep, Settings, Skip, Source, Speed, SubtitleStyle, UiRequest, Zoom,
 };
 use rvp_engine::{Engine, EngineOptions, PlayerModel, PropertyId};
 
@@ -249,13 +251,15 @@ impl Harness {
             Action::ToggleFullscreen => {
                 assert_eq!(
                     self.dispatch(action),
-                    Some(UiRequest::ToggleFullscreen { stretch: false })
+                    Some(UiRequest::ToggleFullscreen { fit: None })
                 );
             }
             Action::ToggleFullscreenStretch => {
                 assert_eq!(
                     self.dispatch(action),
-                    Some(UiRequest::ToggleFullscreen { stretch: true })
+                    Some(UiRequest::ToggleFullscreen {
+                        fit: Some(Fit::Stretch)
+                    })
                 );
             }
             Action::ContextMenu => assert_eq!(self.dispatch(action), Some(UiRequest::ContextMenu)),
@@ -442,10 +446,13 @@ impl Harness {
             Action::OnTopCycle => {
                 self.osd(action, "Stay on top: always");
                 self.osd(action, "Stay on top: while playing");
+                self.osd(action, "Stay on top: while playing in fullscreen");
                 self.osd(action, "Stay on top: never");
             }
             Action::AspectCycle => {
-                for text in ["4:3", "16:9", "16:10", "1.85:1", "2.35:1", "Default"] {
+                for text in [
+                    "4:3", "16:9", "16:10", "1.85:1", "2.35:1", "21:9", "Default",
+                ] {
                     self.osd(action, &format!("Aspect ratio: {text}"));
                 }
             }
@@ -846,7 +853,94 @@ impl Harness {
             },
             Action::AddFavoriteItem => self.osd(action, "Added to favorites: fixture-60s.mkv"),
             Action::AddFavoriteFolder => self.osd(action, "Added to favorites: media"),
-            _ => unreachable!("{action:?} is checked in check()"),
+            _ => self.check_m12(action),
+        }
+    }
+
+    /// M12's commands that keys start.
+    fn check_m12(&mut self, action: Action) {
+        let vf = |h: &Self| h.engine.get_text("vf").unwrap_or_default();
+        match action {
+            Action::ToggleFullscreenCrop => {
+                assert_eq!(
+                    self.dispatch(action),
+                    Some(UiRequest::ToggleFullscreen {
+                        fit: Some(Fit::Crop)
+                    })
+                );
+            }
+            Action::Picture(PictureCommand::BottomMarginCycle) => {
+                self.osd(action, "Bottom margin: 5 %");
+                assert!(vf(self).contains("@rvpmargin:"), "{}", vf(self));
+                for percent in [10, 15, 20, 25, 30] {
+                    self.osd(action, &format!("Bottom margin: {percent} %"));
+                }
+                self.osd(action, "Bottom margin: off");
+                assert!(!vf(self).contains("@rvpmargin:"), "{}", vf(self));
+            }
+            Action::Picture(PictureCommand::ModeCycle) => {
+                for text in [
+                    "Stretch by keeping aspect ratio",
+                    "Stretch",
+                    "Video frame at 0.5x",
+                    "Video frame at 1.0x",
+                    "Video frame at 1.5x",
+                    "Video frame at 2.0x",
+                    "Keep aspect ratio",
+                ] {
+                    self.osd(action, text);
+                }
+                assert_eq!(
+                    self.engine.get_text("video-unscaled").as_deref(),
+                    Some("no")
+                );
+            }
+            Action::Picture(PictureCommand::PresetCycle) => {
+                for name in [
+                    "Zoom 1",
+                    "Zoom 2",
+                    "Zoom 3",
+                    "Increasing width 1",
+                    "Increasing width 2",
+                    "Increasing width 3",
+                    "Increasing Height 1",
+                    "Increasing Height 2",
+                    "Increasing Height 3",
+                    "(Default)",
+                ] {
+                    self.osd(action, &format!("Frame size: {name}"));
+                }
+                assert_eq!(self.engine.get_double("video-scale-x"), Some(1.0));
+            }
+            // The window carries these out (Main.qml's windowRequest).
+            Action::Window(command) => {
+                let expected = match command {
+                    WindowCommand::Minimum => WindowRequest::Minimum,
+                    WindowCommand::Maximum => WindowRequest::Maximum,
+                    WindowCommand::Custom => WindowRequest::Size {
+                        width: 960,
+                        height: 600,
+                    },
+                    WindowCommand::CustomDialog => WindowRequest::SizeDialog {
+                        width: 960,
+                        height: 600,
+                    },
+                    WindowCommand::Desktop(index) => WindowRequest::Desktop {
+                        percent: [30.0, 45.0, 60.0, 75.0][index],
+                    },
+                    WindowCommand::Grow(larger) => WindowRequest::Grow {
+                        factor: if larger { 1.1 } else { 1.0 / 1.1 },
+                    },
+                    WindowCommand::Move(placement) => WindowRequest::Move {
+                        placement,
+                        step: 20,
+                    },
+                    WindowCommand::ControlDialog => WindowRequest::ControlDialog,
+                    WindowCommand::FullscreenOtherDisplay => WindowRequest::FullscreenOtherDisplay,
+                };
+                assert_eq!(self.dispatch(action), Some(UiRequest::Window(expected)));
+            }
+            _ => panic!("{action:?} has no check"),
         }
     }
 }

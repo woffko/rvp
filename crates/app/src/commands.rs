@@ -13,7 +13,7 @@
 use std::fmt::Write as _;
 use std::path::{Path, PathBuf};
 
-use rvp_engine::{Engine, EngineError, PropertyId, Seek, Track, TrackKind};
+use rvp_engine::{Engine, PropertyId, Seek, Track, TrackKind};
 
 use crate::action::{
     AbRepeat, Action, AfterPlayback, Aspect, Delay, Fit, ImageFormat, Jump, OnTop, Repeat, Speed,
@@ -54,6 +54,9 @@ pub struct Session {
     pub audio_stretching: i32,
     /// The audio recording under way.
     pub recording: Option<std::path::PathBuf>,
+    /// How many videos of this run got their window size (M12's "only
+    /// the first playback").
+    pub sized_videos: u32,
     /// When a volume key last changed the volume, and how fast it goes
     /// ("Accelerate control speed").
     pub last_volume_key: Option<std::time::Instant>,
@@ -82,6 +85,7 @@ impl Default for Session {
             stereo_channel: crate::audio::StereoChannel::Both,
             audio_stretching: 0,
             recording: None,
+            sized_videos: 0,
             last_volume_key: None,
             volume_acceleration: 1.0,
         }
@@ -117,19 +121,6 @@ pub fn track_label(track: &Track) -> String {
     label
 }
 
-fn aspect_override(aspect: Aspect) -> (&'static str, &'static str) {
-    // (video-aspect-override, video-aspect-method)
-    match aspect {
-        Aspect::Default => ("-1", "container"),
-        Aspect::Original => ("-1", "bitstream"),
-        Aspect::R4x3 => ("4:3", "container"),
-        Aspect::R16x9 => ("16:9", "container"),
-        Aspect::R16x10 => ("16:10", "container"),
-        Aspect::R185x1 => ("1.85:1", "container"),
-        Aspect::R235x1 => ("2.35:1", "container"),
-    }
-}
-
 /// The text after "Aspect ratio:".
 #[must_use]
 pub fn aspect_text(aspect: Aspect) -> &'static str {
@@ -141,6 +132,7 @@ pub fn aspect_text(aspect: Aspect) -> &'static str {
         Aspect::R16x10 => "16:10",
         Aspect::R185x1 => "1.85:1",
         Aspect::R235x1 => "2.35:1",
+        Aspect::Custom => "Custom",
     }
 }
 
@@ -348,24 +340,21 @@ impl App {
                     Aspect::R16x9 => Aspect::R16x10,
                     Aspect::R16x10 => Aspect::R185x1,
                     Aspect::R185x1 => Aspect::R235x1,
-                    Aspect::R235x1 => Aspect::Default,
+                    Aspect::R235x1 => Aspect::Custom,
+                    Aspect::Custom => Aspect::Default,
                 };
                 Some(self.set_aspect(engine, next))
             }
             Action::SetAspect(aspect) => Some(self.set_aspect(engine, aspect)),
             Action::VideoFit(fit) => {
                 self.session.fit = fit;
-                drop(self.apply_picture(engine, false));
-                Some(UiRequest::Osd(
-                    match fit {
-                        Fit::KeepAspect => "Keep aspect ratio",
-                        Fit::Crop => "Stretch by keeping aspect ratio",
-                        Fit::Stretch => "Stretch",
-                    }
-                    .to_owned(),
-                ))
+                drop(self.apply_picture(engine));
+                Some(UiRequest::Osd(crate::picture::fit_text(fit).to_owned()))
             }
             Action::Zoom(zoom) => Some(self.zoom(engine, zoom)),
+            Action::Picture(command) => self.picture_command(engine, command),
+            Action::Stereo(command) => Some(self.stereo_command(engine, command)),
+            Action::Window(command) => Some(self.window_command(command)),
             Action::SaveFrame => self.save_frame(false),
             Action::SaveScreen => self.save_frame(true),
             Action::SetImageFormat(format) => {
@@ -389,7 +378,8 @@ impl App {
                 let next = match self.settings.on_top {
                     OnTop::Never => OnTop::Always,
                     OnTop::Always => OnTop::WhilePlaying,
-                    OnTop::WhilePlaying => OnTop::Never,
+                    OnTop::WhilePlaying => OnTop::FullscreenPlaying,
+                    OnTop::FullscreenPlaying => OnTop::Never,
                 };
                 Some(self.set_on_top(next))
             }
@@ -690,30 +680,13 @@ impl App {
 
     fn set_aspect(&mut self, engine: &Engine, aspect: Aspect) -> UiRequest {
         self.session.aspect = aspect;
-        drop(self.apply_picture(engine, false));
-        UiRequest::Osd(format!("Aspect ratio: {}", aspect_text(aspect)))
-    }
-
-    /// Sets the aspect ratio, fit, zoom and position on mpv. `stretch` is
-    /// fullscreen (stretch), which overrides the fit while it lasts.
-    ///
-    /// # Errors
-    /// Fails when libmpv rejects a value.
-    pub fn apply_picture(&self, engine: &Engine, stretch: bool) -> Result<(), EngineError> {
-        let session = &self.session;
-        let (aspect, method) = aspect_override(session.aspect);
-        engine.set_text("video-aspect-override", aspect)?;
-        engine.set_text("video-aspect-method", method)?;
-        let keep = !stretch && session.fit != Fit::Stretch;
-        engine.set_flag("keepaspect", keep)?;
-        let panscan = if session.fit == Fit::Crop { 1.0 } else { 0.0 };
-        engine.set_double("panscan", panscan)?;
-        engine.set_double("video-zoom", session.zoom)?;
-        // Older libmpv builds (Ubuntu 24.04's 0.37) have no video-scale-x/y.
-        drop(engine.set_double("video-scale-x", session.scale_x));
-        drop(engine.set_double("video-scale-y", session.scale_y));
-        engine.set_double("video-pan-x", session.pan_x)?;
-        engine.set_double("video-pan-y", session.pan_y)
+        drop(self.apply_picture(engine));
+        let text = if aspect == Aspect::Custom {
+            self.settings.picture.custom_aspect.clone()
+        } else {
+            aspect_text(aspect).to_owned()
+        };
+        UiRequest::Osd(format!("Aspect ratio: {text}"))
     }
 
     fn zoom(&mut self, engine: &Engine, zoom: Zoom) -> UiRequest {
@@ -754,7 +727,9 @@ impl App {
         session.scale_y = session.scale_y.clamp(0.25, 4.0);
         session.pan_x = session.pan_x.clamp(-3.0, 3.0);
         session.pan_y = session.pan_y.clamp(-3.0, 3.0);
-        drop(self.apply_picture(engine, false));
+        self.picture.preset = None;
+        drop(self.apply_picture(engine));
+        self.remember_frame();
         let session = &self.session;
         UiRequest::Osd(format!(
             "Zoom: {:.0} % ({:.0} x {:.0} %), position {:+.0} %, {:+.0} %",
@@ -831,6 +806,7 @@ impl App {
             OnTop::Never => "Stay on top: never",
             OnTop::Always => "Stay on top: always",
             OnTop::WhilePlaying => "Stay on top: while playing",
+            OnTop::FullscreenPlaying => "Stay on top: while playing in fullscreen",
         };
         // The window applies the state with the next update.
         UiRequest::Osd(text.to_owned())
@@ -843,6 +819,7 @@ impl App {
             OnTop::Never => false,
             OnTop::Always => true,
             OnTop::WhilePlaying => self.model.playing(),
+            OnTop::FullscreenPlaying => self.model.playing() && self.picture.fullscreen,
         };
         if self.session.on_top == Some(wanted) {
             return None;

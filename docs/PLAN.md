@@ -224,6 +224,7 @@ playback state between the two systems possible (open question 2).
 | D13 | The normalizer is TomSteady, the method PotPlayer names: the gain control of Tom St Denis's freeware Winamp plugin (version 1.4), reconstructed from the plugin and run over blocks of 2048 samples, as PotPlayer runs it, by a thread of RVP's that reads each block's peak from mpv's log and sets the gain of a `volume` filter. It replaces S5's `dynaudnorm`. | It follows S5's recordings of PotPlayer within 0.1 dB (Level 75 %, Release time 10, `docs/spikes/s5-normalizer.md`); `dynaudnorm` differed by 2.2 LU and the owner heard it (quieter, voices raised less). The author gave the plugin and its source away freely; the owner allowed the reconstruction. | Owner, 2026-10-15 |
 | D14 | PotPlayer parity, Windows first. RVP takes over every PotPlayer command, hotkey and setting that libmpv, FFmpeg, Qt and the platform allow (M10-M14) and lists the rest with the reason it cannot. Each part is built and accepted on Windows first; Linux keeps building and passing its headless tests, and its own parts and checks follow in M17. | The audio audit found 495 of PotPlayer's 672 menu commands missing; the owner: "we will do everything possible", Windows first, then Linux. | Owner, 2026-10-16 |
 | D15 | Remote control through a local HTTP API of RVP's (off by default, 127.0.0.1, a token on every request). The Unified Remote remote is a Lua remote that calls it with Unified Remote's `http` library. | One API serves Unified Remote on both systems and other clients. A remote that sends key presses needs RVP's window in front, and window messages exist only on Windows. | M15 (planned) |
+| D16 | RVP has its own motion smoothing for users without SVP (M18, goal T): mpv's frame blending and the motion-compensated engines that M18's study picks, never at the same time as SVP. | The owner asked for smooth motion like SVP's without SVP, "maybe not complete, but something substantial". | Owner, 2026-10-18 |
 
 ## 4. Usability requirements
 
@@ -818,6 +819,11 @@ differences are listed.
   - A shader that does not translate is listed with the reason.
     glslang's HLSL front end with SPIRV-Cross is the fallback for harder
     ones.
+  - RVP ships a default set of mpv GLSL shaders (scalers, sharpeners,
+    chroma upscaling) that work without PotPlayer, in the shader lists
+    from the first start. Each is under a GPL-compatible license and is
+    listed with its origin and license in a sources file (owner request,
+    2026-10-18).
 - **AviSynth.** The user installs AviSynth+. Then:
   - RVP opens `.avs` scripts like files (the Windows libmpv's FFmpeg
     reads them);
@@ -862,6 +868,11 @@ differences are listed.
   - FFmpeg's visualizations (`showcqt`, `showspectrum`, `avectorscope`,
     `showwaves`, through `lavfi-complex`), chosen in a menu;
   - a slideshow of the folder's images, with previous and next slide.
+- **Settings window.** PotPlayer's tree, moved here from M14 at the
+  owner's request (2026-10-18): groups (General, Playback, Subtitles,
+  Device, Video, Audio and the rest) open into their pages, and the
+  selected group's pages show as tabs over the page, as in PotPlayer.
+  M12's new pages go into it.
 - **Not possible.**
   - DirectShow renderers and transform filters (non-goals; their
     counterparts are above).
@@ -950,9 +961,9 @@ differences are listed.
 
 - **Preferences.** Every R2 option outside M10-M13's areas becomes a
   setting or keeps a reason: general, startup, window, OSD and messages,
-  the playlist, and the rest. The settings window grows into PotPlayer's
-  tree where that helps. It gets a search and a reset per page, and keeps
-  RVP's look and its sliders.
+  the playlist, and the rest. The settings window (PotPlayer's tree with
+  tabs since M12) gets a search and a reset per page, and keeps RVP's
+  look and its sliders.
 - **Presets.** Manage Presets: named settings profiles to save, switch
   and delete (PotPlayer's Configuration page), with import and export as
   today.
@@ -1153,6 +1164,52 @@ installed.
 Exit: the kit passes on the Ubuntu VM, and the owner's Ubuntu boot run
 passes.
 
+### M18. Motion smoothing without SVP (M-L)
+
+Added on 2026-10-18 at the owner's request (D16): smooth motion like
+SVP's for users without SVP. It need not match SVP in full, but it must
+be a substantial part of it. It runs after M12 (goal T), Windows first.
+
+- **Study.** Each candidate is measured on the Windows VM and, with
+  permission, on the host's RTX 30-series card: the rate reached at 720p, 1080p
+  and 4K, CPU and GPU load, dropped frames, and artefacts on synthetic
+  clips and on clips the owner names (kept local).
+  - mpv's own interpolation (`video-sync=display-resample`,
+    `interpolation`, `tscale`): it blends neighbouring frames at the
+    display's rate without motion estimation. It is cheap and keeps
+    hardware decoding.
+  - FFmpeg's `minterpolate`: motion-compensated, on the CPU, in one
+    thread; probably for small videos only.
+  - MVTools in VapourSynth (`mv.Super`, `mv.Analyse`, `mv.FlowFPS` or
+    `mv.BlockFPS`), the method SVP grew out of, through RVP's VapourSynth
+    slot with a script RVP writes.
+  - RIFE in VapourSynth (ncnn-Vulkan, or TensorRT on NVIDIA): optical
+    flow from a neural network on the GPU.
+  - NVIDIA's Optical Flow FRUC library, if its license lets RVP ship it.
+
+  The study writes `docs/spikes/m18-smoothing.md`: what each engine
+  reaches, how RVP gets it onto the user's machine (files bundled in the
+  packages under GPL-compatible licenses, or the user's own install), and
+  a recommendation. The owner picks the engines and the defaults.
+- **Modes.** Off, Blend (mpv's interpolation, always there), and the
+  motion-compensated modes the owner picks, with quality presets (block
+  size, search, artefact masking, scene changes) and a target rate (the
+  display's, twice the source, 60 fps or a number).
+- **Rules.** The smoothing is RVP's own labelled filter (`@rvpsmooth`)
+  after RVP's other filters, or mpv's interpolation options. It never
+  touches `@svp` and turns off while SVP is attached. It needs copy-back
+  decoding, as SVP does. It stays off above a size or rate the user sets.
+- **Interface.** Video menu entries for the modes, with a hotkey; a page
+  in the settings window's Video group; the rate reached in the status.
+- **Tests.** Frame counts and timestamps of a smoothed synthetic clip of
+  a moving square; pixel checks of an interpolated frame (the square
+  halfway); toggles during playback; `@svp` untouched; the self-test and
+  `m18-all.ps1` on the Windows VM; one host session with permission for
+  the GPU modes.
+
+Exit: on Windows, video plays smoothed at the target rate without SVP in
+the modes the owner picked, within the limits the study measured.
+
 ## 7. Testing strategy
 
 - Unit tests for the tokenizer and preprocessor, using the BlackSpace quirks
@@ -1236,7 +1293,7 @@ Deferred items (owner decisions, picked up when they become relevant):
 
 ## 10. Goals for `/goal`
 
-The milestones are grouped into nineteen goals, A to S. Each goal is one
+The milestones are grouped into twenty goals, A to T. Each goal is one
 `/goal` run, writes `docs/goals/goal-<letter>-status.md` and ends with a
 commit pushed to the private `origin`. Goals run in the order of the table
 below; C and D can swap. Goal I follows H so that the default skin can
@@ -1244,7 +1301,9 @@ include M6's control panel. Goals I to K were added on 2026-10-13 at the
 owner's request, and packaging became M8 and goal J. Goals L to S were
 added on 2026-10-16 (D14): on Windows, PotPlayer parity area by area, the
 remote control and the disc menus (L to R); then goal K; then Linux (S)
-and one Ubuntu boot run for M6 to M17.
+and one Ubuntu boot run for M6 to M17. Goal T (M18, motion smoothing
+without SVP) was added on 2026-10-18 at the owner's request and runs
+after goal N.
 
 | Stage | Goal | Covers | Where it runs | Needs the owner |
 |-------|------|--------|---------------|-----------------|
@@ -1261,6 +1320,7 @@ and one Ubuntu boot run for M6 to M17.
 | 7 | L | R2 (PotPlayer's Preferences), M10 audio parity; Windows keeps the display on during video | WSL, Windows VM, host | Permission for the host comparison |
 | 7 | M | M11 playback, playlist and opening | WSL, Windows VM | Tries each goal's build on Windows |
 | 7 | N | M12 video, picture and window | WSL, Windows VM, host | Permission for one host check |
+| 7 | T | M18 motion smoothing without SVP | WSL, Windows VM, host | Picks the engines after the study; permission for the host sessions |
 | 7 | O | M13 subtitles (by hand and generated; online deferred) | WSL, Windows VM | Tries each goal's build on Windows |
 | 7 | P | M14 preferences, skins and the rest | WSL, Windows VM, host | Permission for one host check |
 | 7 | Q | M15 remote control: RVP's API and a Unified Remote remote | WSL, Windows VM, host | Tries the remote from a phone (permission for the host session) |
@@ -1364,6 +1424,11 @@ Goal M:
 Goal N:
 ```
 /goal Execute goal N of docs/PLAN.md (milestone M12, PotPlayer parity: video, picture and window) in ~/rvp, only if docs/goals/goal-m-status.md records goal M as done; otherwise stop and report. Follow AGENTS.md (video filters: only RVP's own, by label; SVP's @svp is never touched), the rules M2-M11 inherited (the goal status files) and D14. Windows first: build and check each part on Windows (the Windows VM <windows-vm> with a new tools/windows-vm/m12-all.ps1; the host only with advance notice and the owner's explicit permission for each run); keep Linux building with its headless tests and CI green, and list Linux-only parts for goal S instead of doing them. If the owner reported findings from goal M's build, fix what blocks daily use first. Deliver M12 as PLAN.md section 6 lists it: frame, aspect and crop (custom ratios, frame sizes, the output's aspect correction, Extend/Crop with moves, bottom and screen margins, rotation by aspect ratio); the window (sizes and presets, moves, the size dialog, on top in fullscreen; Desktop Mode as a study); the remaining video effects as labelled filters; 3D video through FFmpeg's stereo3d (3D subtitles and H.264 MVC as studies); 360° video (v360); PotPlayer's HLSL pixel shaders translated into mpv's GLSL hooks, with the pre- and post-resize lists; AviSynth with the user's AviSynth+ (opening .avs scripts, PotPlayer's AviSynth processing through a VapourSynth bridge a study picks, AviSynth plugins in VapourSynth scripts); a decoders page in place of DirectShow's filter priorities; rendering choices (gpu-next or gpu, scalers and when to resize, HDR tone mapping, the display's ICC profile) and, after a study against S3's measurements and SVP's copy-back rule, D4's child-window Direct3D 11 path on Windows as a renderer choice; capture (the clipboard, Save As, BMP, file names, consecutive images, thumbnail images from M11's thumbnail core); Record Stream (stream-record), and Record Video only if a study shows that libmpv can encode in a second core; visualizations and the slideshow for audio files. Coverage: every Video, Frame Size, Aspect Ratio, Window Size and Visualization item of R1's menus and hotkeys and R2's matching pages either works (an ACTIONS row with PotPlayer's IDs and default keys; a setting with its check in Settings::validate, a page in shell/qml/Settings.qml and apply_settings when mpv takes it at run time) or keeps a reason in crates/app/src/coverage.rs that says why it cannot; rewrite docs/coverage/ (RVP_BLESS=1). Tests: headless property and filter tests (labels, order, @svp untouched, toggles during playback), the 3D modes on a synthetic side-by-side clip (pixel checks), capture formats and names, the contact sheet's geometry, window commands in rvp --selftest; m12-all.ps1 on the Windows VM; one host session, with advance notice and permission, for the renderer choice, HDR and SVP with the new filters. Done when: tests and CI are green, the Windows build is in a new portable folder C:\Users\<user>\rvp-test\rvp-n on the host (file copies only), docs/goals/goal-n-status.md lists results, differences from PotPlayer, the Linux items for goal S and what the owner should try, and everything is committed and pushed. Do not: run anything on the Windows host desktop, including GUI programs from WSL, without advance notice and explicit permission; change PotPlayer's, SVP's or the system's settings on the host; commit PotPlayer or SVP files or captures; make the repository public, tag or release. Stop on blockers or when an owner decision is needed.
+```
+
+Goal T (after goal N; added 2026-10-18):
+```
+/goal Execute goal T of docs/PLAN.md (milestone M18, motion smoothing without SVP) in ~/rvp, only if docs/goals/goal-n-status.md records goal N as done; otherwise stop and report. Follow AGENTS.md (video filters: only RVP's own, by label; SVP's @svp is never touched), the rules M2-M12 inherited (the goal status files), D14 and D16. Windows first: build and check on the Windows VM <windows-vm> with a new tools/windows-vm/m18-all.ps1, and on the host only with advance notice and the owner's explicit permission for each run; keep Linux building with its headless tests and CI green, and list Linux-only parts for goal S. Start with M18's study: mpv's interpolation (display-resample, tscale), FFmpeg's minterpolate, MVTools in VapourSynth, RIFE in VapourSynth (ncnn-Vulkan or TensorRT) and NVIDIA's Optical Flow FRUC if its license allows shipping it. Measure each on the Windows VM and, in one host session with permission, on the RTX 30-series card at 720p, 1080p and 4K: the rate reached, CPU and GPU load, drops, artefacts on synthetic clips and on clips the owner names (kept local). Write docs/spikes/m18-smoothing.md with the results, how RVP gets each engine onto the user's machine (files bundled in the packages under GPL-compatible licenses, or the user's own install) and a recommendation; show it to the owner and wait for the choice of engines and defaults. Then deliver M18: the modes Off, Blend and the chosen motion-compensated modes with quality presets and a target rate, as RVP's labelled filter after its other filters or mpv's interpolation options, off while SVP is attached, with copy-back decoding and the user's size and rate limits; Video menu entries with a hotkey, a page in the settings window's Video group, the rate reached in the status. Tests: frame counts and timestamps of a smoothed synthetic clip of a moving square, pixel checks of an interpolated frame, toggles during playback, @svp untouched; rvp --selftest additions; m18-all.ps1 on the Windows VM; one host session with permission for the GPU modes. Done when: tests and CI are green, the Windows build is in a new portable folder C:\Users\<user>\rvp-test\rvp-t on the host (file copies only), docs/goals/goal-t-status.md lists results, differences from SVP, the Linux items for goal S and what the owner should try, and everything is committed and pushed. Do not: use SVP's files or libraries; run anything on the Windows host desktop, including GUI programs from WSL, without advance notice and explicit permission; change PotPlayer's, SVP's or the system's settings on the host; commit PotPlayer or SVP files, third-party binaries or captures; make the repository public, tag or release. Stop on blockers or when an owner decision is needed.
 ```
 
 Goal O:

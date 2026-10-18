@@ -94,6 +94,8 @@ properties! {
     Aid = "aid", Int;
     SubStart = "sub-start", Double;
     SubEnd = "sub-end", Double;
+    Sid = "sid", Int;
+    VideoRotation = "video-params/rotate", Int;
 }
 
 impl PropertyId {

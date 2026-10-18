@@ -54,6 +54,8 @@ Window {
     readonly property int requestReadClipboard: 31
     readonly property int requestShowFile: 32
     readonly property int requestScenes: 33
+    readonly property int requestVideoDialog: 34
+    readonly property int requestWindow: 35
 
     property bool wasMaximized: false
     // The window state RVP last asked for and when (see applyVisibility).
@@ -91,6 +93,7 @@ Window {
         else
             show()
         player.resized(width, height)
+        player.set_screen(Tools.screen_json(root))
         logPointer = player.has_option("log-pointer")
         logGeometry = player.has_option("log-geometry")
         keys.forceActiveFocus()
@@ -265,6 +268,9 @@ Window {
         case requestFullscreen:
             if (argument) {
                 root.wasMaximized = root.visibility === Window.Maximized
+                // Fullscreen Mode's "Display: primary" (M12).
+                if (player.fullscreen_primary)
+                    root.placeOnScreen(Qt.application.screens[0])
                 root.requestVisibility(Window.FullScreen)
             } else {
                 root.requestVisibility(root.wasMaximized ? Window.Maximized : Window.Windowed)
@@ -307,7 +313,156 @@ Window {
             sceneLoader.active = true
             sceneLoader.item.show(player.dialog)
             break
+        case requestVideoDialog:
+            videoDialogLoader.active = true
+            videoDialogLoader.item.show(player.dialog)
+            break
+        case requestWindow:
+            root.windowRequest(JSON.parse(player.dialog))
+            break
         }
+    }
+
+    // The free area of the window's screen (without task bars), in the
+    // window's coordinates.
+    function screenArea() {
+        const area = JSON.parse(Tools.screen_json(root))
+        if (!(area.available_width > 0))
+            return { x: root.x, y: root.y, width: root.width, height: root.height }
+        return { x: area.x, y: area.y, width: area.available_width, height: area.available_height }
+    }
+
+    // M12's Window Size commands (crates/app/src/window.rs). Sizes keep
+    // the video's shape and stay inside the screen's free area, moves stop
+    // at its edges, and a maximized window is restored first. Wayland does
+    // not let a program place its windows: moves do nothing there.
+    function windowRequest(r) {
+        if (r.kind === "fullscreen-other-display") {
+            root.fullscreenElsewhere()
+            return
+        }
+        if (root.visibility === Window.FullScreen)
+            return
+        if (root.visibility !== Window.Windowed)
+            root.requestVisibility(Window.Windowed)
+        const area = root.screenArea()
+        switch (r.kind) {
+        case "minimum":
+            root.resizeWindow(root.minimumWidth, root.minimumHeight, area, "corner")
+            break
+        case "maximum":
+            root.boxWindow(area.width, area.height, area, "screen")
+            break
+        case "desktop":
+            root.boxWindow(area.width * r.percent / 100, area.height * r.percent / 100, area, "screen")
+            break
+        case "grow":
+            root.boxWindow(root.width * r.factor, root.height * r.factor, area, "center")
+            break
+        case "size":
+            root.resizeWindow(r.width, r.height, area, "corner")
+            break
+        case "move":
+            root.moveWindow(r.placement, r.step, area)
+            break
+        }
+    }
+
+    // The largest window inside the box whose video keeps its shape (idle
+    // windows keep the video area's shape).
+    function boxWindow(boxWidth, boxHeight, area, anchor) {
+        const chromeWidth = root.width - player.video_rect.width
+        const chromeHeight = root.height - player.video_rect.height
+        const aspect = player.video_aspect > 0 ? player.video_aspect
+            : Math.max(1, player.video_rect.width) / Math.max(1, player.video_rect.height)
+        const videoWidth = Math.max(1, Math.min(boxWidth - chromeWidth, (boxHeight - chromeHeight) * aspect))
+        root.resizeWindow(videoWidth + chromeWidth, videoWidth / aspect + chromeHeight, area, anchor)
+    }
+
+    // Sets the window's size within the screen's free area. `anchor`:
+    // "corner" keeps the top left corner, "center" the window's centre,
+    // "screen" centres it on the screen.
+    function resizeWindow(width, height, area, anchor) {
+        const middleX = root.x + root.width / 2
+        const middleY = root.y + root.height / 2
+        root.width = Math.round(Math.max(root.minimumWidth, Math.min(width, area.width)))
+        root.height = Math.round(Math.max(root.minimumHeight, Math.min(height, area.height)))
+        if (Qt.platform.pluginName === "wayland")
+            return
+        if (anchor === "center") {
+            root.x = Math.round(middleX - root.width / 2)
+            root.y = Math.round(middleY - root.height / 2)
+        }
+        root.moveWindow(anchor === "screen" ? "center" : "keep", 0, area)
+    }
+
+    function moveWindow(placement, step, area) {
+        if (Qt.platform.pluginName === "wayland")
+            return
+        let x = root.x
+        let y = root.y
+        const right = area.x + area.width - root.width
+        const bottom = area.y + area.height - root.height
+        switch (placement) {
+        case "left": x -= step; break
+        case "right": x += step; break
+        case "up": y -= step; break
+        case "down": y += step; break
+        case "center":
+            x = area.x + Math.round((area.width - root.width) / 2)
+            y = area.y + Math.round((area.height - root.height) / 2)
+            break
+        case "top-left": x = area.x; y = area.y; break
+        case "top-right": x = right; y = area.y; break
+        case "bottom-left": x = area.x; y = bottom; break
+        case "bottom-right": x = right; y = bottom; break
+        }
+        root.x = Math.max(area.x, Math.min(x, right))
+        root.y = Math.max(area.y, Math.min(y, bottom))
+    }
+
+    // The Window Size Control dialog's numbers.
+    function placeWindow(width, height, x, y) {
+        if (root.visibility === Window.FullScreen)
+            return
+        if (root.visibility !== Window.Windowed)
+            root.requestVisibility(Window.Windowed)
+        root.width = Math.max(root.minimumWidth, width)
+        root.height = Math.max(root.minimumHeight, height)
+        if (Qt.platform.pluginName !== "wayland" && root.onScreen(x, y)) {
+            root.x = x
+            root.y = y
+        }
+    }
+
+    // Moves the window (not fullscreen) onto `screen`, centred.
+    function placeOnScreen(screen) {
+        if (!screen || Qt.platform.pluginName === "wayland" || root.screen.name === screen.name)
+            return
+        if (root.visibility !== Window.Windowed)
+            root.showNormal()
+        root.x = screen.virtualX + Math.max(0, Math.round((screen.width - root.width) / 2))
+        root.y = screen.virtualY + Math.max(0, Math.round((screen.height - root.height) / 2))
+    }
+
+    // "Fullscreen (on Another Display)": fullscreen on the next screen, or
+    // back to the window from fullscreen.
+    function fullscreenElsewhere() {
+        if (root.visibility === Window.FullScreen) {
+            player.window_fullscreen(false)
+            root.requestVisibility(root.wasMaximized ? Window.Maximized : Window.Windowed)
+            return
+        }
+        const screens = Qt.application.screens
+        let index = 0
+        for (let i = 0; i < screens.length; ++i) {
+            if (screens[i].name === root.screen.name)
+                index = i
+        }
+        root.wasMaximized = root.visibility === Window.Maximized
+        root.placeOnScreen(screens[(index + 1) % screens.length])
+        player.window_fullscreen(true)
+        root.requestVisibility(Window.FullScreen)
     }
 
     // Window states RVP asks for. On Wayland a state request made before
@@ -616,6 +771,29 @@ Window {
         z: 30
         active: false
         Component.onCompleted: setSource("PlaybackDialogs.qml", { player: player })
+    }
+    Loader {
+        id: videoDialogLoader
+        anchors.fill: parent
+        z: 30
+        active: false
+        Component.onCompleted: setSource("VideoDialogs.qml", { player: player, window: root })
+    }
+    // Fullscreen Mode's "Fill other monitors black in fullscreen" (M12):
+    // a black window on each other screen while RVP is fullscreen.
+    Instantiator {
+        model: root.isFullscreen && player.black_other_displays ? Qt.application.screens : []
+        delegate: Window {
+            required property var modelData
+            flags: Qt.FramelessWindowHint | Qt.WindowDoesNotAcceptFocus
+            color: "black"
+            title: "RVP"
+            x: modelData.virtualX
+            y: modelData.virtualY
+            width: modelData.width
+            height: modelData.height
+            visibility: modelData.name !== root.screen.name ? Window.FullScreen : Window.Hidden
+        }
     }
     // The scene browser lies over the video (M11).
     Loader {
@@ -985,6 +1163,10 @@ Window {
     }
     // M11's dialogs and scene browser, for the self-test.
     function playbackDialogs() { return playbackLoader.item }
+    function videoDialogs() { return videoDialogLoader.item }
+    // The output device's aspect and the rotation by aspect ratio follow
+    // the screen the window is on.
+    onScreenChanged: player.set_screen(Tools.screen_json(root))
     function sceneBrowser() { return sceneLoader.item }
 
     function resumeTick() {

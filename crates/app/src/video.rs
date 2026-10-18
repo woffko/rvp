@@ -74,15 +74,41 @@ pub enum VideoEffect {
     Sharpen,
     FlipVertical,
     FlipHorizontal,
+    // M12.
+    /// Rotation by any angle (PotPlayer's "Rotation (Horizontal/Vertical)").
+    Rotate,
+    /// Contrast stretched to the frame's own darkest and brightest.
+    AutoLevel,
+    /// Input and output levels and a gamma.
+    Levels,
+    /// A denoiser of chosen strength.
+    GradualDenoise,
+    /// A temporal denoiser ("Temporary Denoise").
+    TemporalDenoise,
+    /// The luma and chroma planes moved by some pixels.
+    Offset,
+    MotionBlur,
+    /// PotPlayer's `WarpSharp`, approximated by FFmpeg's contrast adaptive
+    /// sharpening (`cas`): it sharpens without `WarpSharp`'s edge warping.
+    WarpSharp,
 }
 
 impl VideoEffect {
-    /// Every effect, in the order the filters run.
-    pub const ALL: [VideoEffect; 6] = [
+    /// Every effect, in the order the filters run: cleaning first, then
+    /// levels, then sharpness, then the geometry.
+    pub const ALL: [VideoEffect; 14] = [
         VideoEffect::Deblock,
         VideoEffect::Denoise,
+        VideoEffect::GradualDenoise,
+        VideoEffect::TemporalDenoise,
+        VideoEffect::AutoLevel,
+        VideoEffect::Levels,
+        VideoEffect::Offset,
         VideoEffect::Soften,
         VideoEffect::Sharpen,
+        VideoEffect::WarpSharp,
+        VideoEffect::MotionBlur,
+        VideoEffect::Rotate,
         VideoEffect::FlipVertical,
         VideoEffect::FlipHorizontal,
     ];
@@ -97,19 +123,14 @@ impl VideoEffect {
             VideoEffect::Sharpen => "rvpsharpen",
             VideoEffect::FlipVertical => "rvpvflip",
             VideoEffect::FlipHorizontal => "rvphflip",
-        }
-    }
-
-    /// The FFmpeg filter graph.
-    #[must_use]
-    pub fn graph(self) -> &'static str {
-        match self {
-            VideoEffect::Deblock => "deblock",
-            VideoEffect::Denoise => "hqdn3d",
-            VideoEffect::Soften => "gblur=sigma=1.0",
-            VideoEffect::Sharpen => "unsharp=5:5:0.8:5:5:0.0",
-            VideoEffect::FlipVertical => "vflip",
-            VideoEffect::FlipHorizontal => "hflip",
+            VideoEffect::Rotate => "rvprotate",
+            VideoEffect::AutoLevel => "rvpautolevel",
+            VideoEffect::Levels => "rvplevels",
+            VideoEffect::GradualDenoise => "rvpgradual",
+            VideoEffect::TemporalDenoise => "rvptemporal",
+            VideoEffect::Offset => "rvpoffset",
+            VideoEffect::MotionBlur => "rvpmotionblur",
+            VideoEffect::WarpSharp => "rvpwarpsharp",
         }
     }
 
@@ -122,7 +143,363 @@ impl VideoEffect {
             VideoEffect::Sharpen => "Sharpen",
             VideoEffect::FlipVertical => "Flip vertical",
             VideoEffect::FlipHorizontal => "Flip horizontal",
+            VideoEffect::Rotate => "Rotation",
+            VideoEffect::AutoLevel => "Auto level control",
+            VideoEffect::Levels => "Level control",
+            VideoEffect::GradualDenoise => "Gradual denoise",
+            VideoEffect::TemporalDenoise => "Temporary denoise",
+            VideoEffect::Offset => "Luma and chroma offset",
+            VideoEffect::MotionBlur => "Motion blur",
+            VideoEffect::WarpSharp => "WarpSharp",
         }
+    }
+}
+
+/// Level control's options (Preferences: Video > Levels/Offset).
+// Independent options as PotPlayer's page lists them.
+#[allow(clippy::struct_excessive_bools)]
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+#[serde(default, rename_all = "kebab-case")]
+pub struct Levels {
+    /// Auto level control stretches to 0-255 instead of 16-235.
+    pub auto_full_range: bool,
+    /// Level control's output may use 0-255 (else 16-235).
+    pub full_range: bool,
+    /// Only the luma changes; the colours keep their levels.
+    pub luma_only: bool,
+    /// The input range (0-255); with `auto_input` the frame's own.
+    pub input: [f64; 2],
+    pub auto_input: bool,
+    pub output: [f64; 2],
+    /// Gamma correction (0.1 to 10; 1 leaves the middle tones).
+    pub gamma: f64,
+    /// The luma and chroma planes' offsets in pixels (x, y).
+    pub luma_offset: [i32; 2],
+    pub chroma_offset: [i32; 2],
+}
+
+impl Default for Levels {
+    fn default() -> Self {
+        Self {
+            auto_full_range: false,
+            full_range: false,
+            luma_only: true,
+            input: [16.0, 235.0],
+            auto_input: false,
+            output: [16.0, 235.0],
+            gamma: 1.0,
+            luma_offset: [0, 0],
+            chroma_offset: [0, 0],
+        }
+    }
+}
+
+/// The effects' strengths (Preferences: Video > Effects).
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+#[serde(default, rename_all = "kebab-case")]
+pub struct EffectOptions {
+    /// Rotation in degrees, clockwise (PotPlayer's 90, or 270 with its
+    /// "270 degrees").
+    pub rotate_angle: f64,
+    /// Soften's radius (0.1 to 5), luma and chroma strength (0 to 1).
+    pub soften: [f64; 3],
+    /// Sharpen's luma and chroma amount (0 to 2).
+    pub sharpen: [f64; 2],
+    /// Deblock's strength (1 to 10).
+    pub deblock: f64,
+    /// Gradual denoise's strength (1 to 10).
+    pub gradual: f64,
+    /// Denoise 3D's luma, chroma and temporal strength (0 to 20).
+    pub denoise: [f64; 3],
+    /// Denoise 3D with non-local means (slower, finer).
+    pub denoise_quality: bool,
+    /// The temporal noise reducer's thresholds A and B (0.001 to 0.3) and
+    /// the frames it averages (3 to 29, odd).
+    pub temporal: [f64; 3],
+    /// `WarpSharp`'s depth (0 to 1, `cas` strength).
+    pub warpsharp: f64,
+    /// Motion blur's frames (2 to 10).
+    pub motion_blur: u32,
+    /// mpv's deband: threshold (1 to 200) and range (1 to 64).
+    pub deband: [f64; 2],
+    pub levels: Levels,
+}
+
+impl Default for EffectOptions {
+    fn default() -> Self {
+        Self {
+            rotate_angle: 90.0,
+            soften: [1.0, 0.5, 0.5],
+            sharpen: [0.8, 0.0],
+            deblock: 3.0,
+            gradual: 3.0,
+            denoise: [4.0, 3.0, 6.0],
+            denoise_quality: false,
+            temporal: [0.02, 0.04, 9.0],
+            warpsharp: 0.5,
+            motion_blur: 3,
+            deband: [48.0, 16.0],
+            levels: Levels::default(),
+        }
+    }
+}
+
+/// A number for FFmpeg's options, without needless digits.
+fn number(value: f64) -> String {
+    let text = format!("{value:.4}");
+    text.trim_end_matches('0').trim_end_matches('.').to_owned()
+}
+
+impl EffectOptions {
+    /// Brings the strengths into their ranges, with a note per repair.
+    pub(crate) fn validate(&mut self, notes: &mut Vec<String>) {
+        let clamp = crate::playback::clamp_number;
+        clamp(
+            &mut self.rotate_angle,
+            -360.0,
+            360.0,
+            "video-effects.rotate-angle",
+            notes,
+        );
+        clamp(&mut self.soften[0], 0.1, 5.0, "video-effects.soften", notes);
+        for value in &mut self.soften[1..] {
+            clamp(value, 0.0, 1.0, "video-effects.soften", notes);
+        }
+        for value in &mut self.sharpen {
+            clamp(value, 0.0, 2.0, "video-effects.sharpen", notes);
+        }
+        clamp(&mut self.deblock, 1.0, 10.0, "video-effects.deblock", notes);
+        clamp(&mut self.gradual, 1.0, 10.0, "video-effects.gradual", notes);
+        for value in &mut self.denoise {
+            clamp(value, 0.0, 20.0, "video-effects.denoise", notes);
+        }
+        for value in &mut self.temporal[..2] {
+            clamp(value, 0.001, 0.3, "video-effects.temporal", notes);
+        }
+        clamp(
+            &mut self.temporal[2],
+            3.0,
+            29.0,
+            "video-effects.temporal",
+            notes,
+        );
+        clamp(
+            &mut self.warpsharp,
+            0.0,
+            1.0,
+            "video-effects.warpsharp",
+            notes,
+        );
+        if !(2..=10).contains(&self.motion_blur) {
+            notes.push("video-effects.motion-blur must be 2 to 10 frames: 3 used".to_owned());
+            self.motion_blur = 3;
+        }
+        clamp(
+            &mut self.deband[0],
+            1.0,
+            200.0,
+            "video-effects.deband",
+            notes,
+        );
+        clamp(
+            &mut self.deband[1],
+            1.0,
+            64.0,
+            "video-effects.deband",
+            notes,
+        );
+        let levels = &mut self.levels;
+        for value in levels.input.iter_mut().chain(levels.output.iter_mut()) {
+            clamp(value, 0.0, 255.0, "video-effects.levels", notes);
+        }
+        if levels.input[1] <= levels.input[0] || levels.output[1] <= levels.output[0] {
+            notes.push("video-effects.levels: a range must rise: 16 to 235 used".to_owned());
+            levels.input = [16.0, 235.0];
+            levels.output = [16.0, 235.0];
+        }
+        clamp(
+            &mut levels.gamma,
+            0.1,
+            10.0,
+            "video-effects.levels.gamma",
+            notes,
+        );
+        for value in levels
+            .luma_offset
+            .iter_mut()
+            .chain(levels.chroma_offset.iter_mut())
+        {
+            if value.abs() > 64 {
+                notes.push("video-effects.levels: offsets must be -64 to 64 pixels".to_owned());
+                *value = (*value).clamp(-64, 64);
+            }
+        }
+    }
+
+    /// The FFmpeg filter graph of an effect at these strengths.
+    #[must_use]
+    pub fn graph(&self, effect: VideoEffect) -> String {
+        match effect {
+            VideoEffect::Deblock => {
+                let s = self.deblock;
+                format!(
+                    "deblock=filter=strong:block=8:alpha={}:beta={}:gamma={}:delta={}",
+                    number(0.033 * s),
+                    number(0.017 * s),
+                    number(0.017 * s),
+                    number(0.017 * s)
+                )
+            }
+            VideoEffect::Denoise => {
+                let [luma, chroma, time] = self.denoise;
+                if self.denoise_quality {
+                    format!(
+                        "nlmeans=s={}:p=7:r=15",
+                        number((luma / 2.0).clamp(1.0, 30.0))
+                    )
+                } else {
+                    let chroma_time = if luma > 0.0 {
+                        time * chroma / luma
+                    } else {
+                        time
+                    };
+                    format!(
+                        "hqdn3d={}:{}:{}:{}",
+                        number(luma),
+                        number(chroma),
+                        number(time),
+                        number(chroma_time)
+                    )
+                }
+            }
+            VideoEffect::GradualDenoise => {
+                let s = self.gradual;
+                format!(
+                    "hqdn3d={}:{}:{}:{}",
+                    number(s),
+                    number(s * 0.75),
+                    number(s * 1.5),
+                    number(s * 1.125)
+                )
+            }
+            VideoEffect::TemporalDenoise => {
+                let [a, b, frames] = self.temporal;
+                // An odd count of frames, as atadenoise wants.
+                // The count is 3 to 29 after `validate`.
+                #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+                let frames = (frames.round() as u32) | 1;
+                let (a, b) = (number(a), number(b));
+                format!("atadenoise=0a={a}:1a={a}:2a={a}:0b={b}:1b={b}:2b={b}:s={frames}")
+            }
+            VideoEffect::AutoLevel => {
+                let (black, white) = if self.levels.auto_full_range {
+                    ("black", "white")
+                } else {
+                    ("0x101010", "0xebebeb")
+                };
+                format!("normalize=blackpt={black}:whitept={white}:smoothing=24:independence=0")
+            }
+            VideoEffect::Levels => self.levels_graph(),
+            VideoEffect::Offset => self.offset_graph(),
+            VideoEffect::Soften => {
+                let [radius, luma, chroma] = self.soften;
+                format!(
+                    "smartblur=lr={r}:ls={}:lt=0:cr={r}:cs={}:ct=0",
+                    number(luma),
+                    number(chroma),
+                    r = number(radius)
+                )
+            }
+            VideoEffect::Sharpen => {
+                let [luma, chroma] = self.sharpen;
+                format!("unsharp=5:5:{}:5:5:{}", number(luma), number(chroma))
+            }
+            VideoEffect::WarpSharp => format!("cas=strength={}", number(self.warpsharp)),
+            VideoEffect::MotionBlur => format!("tmix=frames={}", self.motion_blur),
+            VideoEffect::Rotate => rotate_graph(self.rotate_angle),
+            VideoEffect::FlipVertical => "vflip".to_owned(),
+            VideoEffect::FlipHorizontal => "hflip".to_owned(),
+        }
+    }
+
+    fn levels_graph(&self) -> String {
+        let levels = &self.levels;
+        let [mut out_low, mut out_high] = levels.output;
+        if !levels.full_range {
+            out_low = out_low.max(16.0);
+            out_high = out_high.min(235.0);
+        }
+        let gamma = number(1.0 / levels.gamma);
+        if levels.auto_input {
+            // The frame's own range, stretched to the output's.
+            let gray = |level: f64| {
+                // The level is 0 to 255 after validation.
+                #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+                let byte = level.round() as u8;
+                format!("0x{byte:02x}{byte:02x}{byte:02x}")
+            };
+            return format!(
+                "normalize=blackpt={}:whitept={}:smoothing=24:independence=0,lutyuv=y='pow(val/maxval,{gamma})*maxval'",
+                gray(out_low),
+                gray(out_high)
+            );
+        }
+        let [low, high] = levels.input;
+        let curve = format!(
+            "pow(clip((val/maxval*255-{})/{},0,1),{gamma})",
+            number(low),
+            number(high - low)
+        );
+        let scale = format!(
+            "({}+{}*{curve})/255*maxval",
+            number(out_low),
+            number(out_high - out_low)
+        );
+        if levels.luma_only {
+            format!("lutyuv=y='{scale}'")
+        } else {
+            format!("lutrgb=r='{scale}':g='{scale}':b='{scale}'")
+        }
+    }
+
+    fn offset_graph(&self) -> String {
+        let [lx, ly] = self.levels.luma_offset;
+        let [cx, cy] = self.levels.chroma_offset;
+        // The chroma moves against the luma; then the whole picture moves
+        // by the luma's offset, black where it leaves the frame.
+        let (h, v) = (cx - lx, cy - ly);
+        let mut graph = format!("chromashift=cbh={h}:cbv={v}:crh={h}:crv={v}");
+        if lx != 0 || ly != 0 {
+            let (ax, ay) = (lx.abs(), ly.abs());
+            let _ = write!(
+                graph,
+                ",crop=w=iw-{ax}:h=ih-{ay}:x={}:y={},pad=w=iw+{ax}:h=ih+{ay}:x={}:y={}:color=black",
+                (-lx).max(0),
+                (-ly).max(0),
+                lx.max(0),
+                ly.max(0)
+            );
+        }
+        graph
+    }
+}
+
+/// Rotation by `degrees`: the lossless filters for quarter turns, else
+/// `rotate` with a frame large enough for the turned picture.
+#[must_use]
+pub fn rotate_graph(degrees: f64) -> String {
+    let turned = degrees.rem_euclid(360.0);
+    if (turned - 90.0).abs() < 0.01 {
+        "transpose=clock".to_owned()
+    } else if (turned - 180.0).abs() < 0.01 {
+        "hflip,vflip".to_owned()
+    } else if (turned - 270.0).abs() < 0.01 {
+        "transpose=cclock".to_owned()
+    } else if turned < 0.01 || turned > 359.99 {
+        "null".to_owned()
+    } else {
+        let a = format!("{}*PI/180", number(turned));
+        format!("rotate={a}:ow='rotw({a})':oh='roth({a})':c=black")
     }
 }
 
@@ -355,16 +732,25 @@ impl App {
     /// RVP's video filters, in the order they run.
     #[must_use]
     pub fn video_filters(&self) -> Vec<(String, String)> {
-        let mut filters: Vec<(String, String)> = VideoEffect::ALL
-            .iter()
-            .filter(|effect| self.settings.effects.contains(effect))
-            .map(|effect| {
-                (
-                    effect.label().to_owned(),
-                    format!("@{}:lavfi=[{}]", effect.label(), effect.graph()),
-                )
-            })
-            .collect();
+        // 3D and 360° first, then the picture's geometry, the effects and
+        // the script.
+        let mut filters = self.stereo_filters();
+        filters.extend(self.picture_filters());
+        filters.extend(
+            VideoEffect::ALL
+                .iter()
+                .filter(|effect| self.settings.effects.contains(effect))
+                .map(|effect| {
+                    (
+                        effect.label().to_owned(),
+                        format!(
+                            "@{}:lavfi=[{}]",
+                            effect.label(),
+                            self.settings.video_effects.graph(*effect)
+                        ),
+                    )
+                }),
+        );
         let vs = &self.settings.vapoursynth;
         if vs.enabled && vs.script.is_some() {
             let wrapper = self.state_dir().join("vapoursynth").join("rvp-script.vpy");
@@ -399,10 +785,16 @@ impl App {
         }
         // Only labels in the chain: mpv logs a warning for the others.
         let chain = engine.get_text("vf").unwrap_or_default();
-        let labels = VideoEffect::ALL
-            .iter()
-            .map(|effect| effect.label())
-            .chain([SCRIPT_LABEL]);
+        let labels = [
+            crate::stereo::STEREO_LABEL,
+            crate::stereo::VR_LABEL,
+            crate::picture::RESIZE_LABEL,
+            crate::picture::CROP_LABEL,
+            crate::picture::MARGIN_LABEL,
+        ]
+        .into_iter()
+        .chain(VideoEffect::ALL.iter().map(|effect| effect.label()))
+        .chain([SCRIPT_LABEL]);
         for label in labels {
             if chain.contains(&format!("@{label}:")) {
                 drop(engine.remove_video_filter(label));
@@ -432,6 +824,9 @@ impl App {
         }
         // Only the gpu renderers have deband; the headless output has not.
         drop(engine.set_flag("deband", self.settings.deband));
+        let [threshold, range] = self.settings.video_effects.deband;
+        drop(engine.set_double("deband-threshold", threshold));
+        drop(engine.set_double("deband-range", range));
         self.apply_shaders(engine)
     }
 
@@ -661,6 +1056,45 @@ mod tests {
             entry,
             "@rvpvs:vapoursynth=file=%23%C:/state/rvp-script.vpy:buffered-frames=4"
         );
+    }
+
+    #[test]
+    fn effect_graphs_follow_their_strengths() {
+        assert_eq!(rotate_graph(90.0), "transpose=clock");
+        assert_eq!(rotate_graph(-90.0), "transpose=cclock");
+        assert_eq!(rotate_graph(180.0), "hflip,vflip");
+        assert_eq!(rotate_graph(0.0), "null");
+        assert!(rotate_graph(30.0).starts_with("rotate=30*PI/180:ow='rotw(30*PI/180)'"));
+        let mut options = EffectOptions::default();
+        assert_eq!(options.graph(VideoEffect::Denoise), "hqdn3d=4:3:6:4.5");
+        options.denoise_quality = true;
+        assert_eq!(options.graph(VideoEffect::Denoise), "nlmeans=s=2:p=7:r=15");
+        assert_eq!(
+            options.graph(VideoEffect::TemporalDenoise),
+            "atadenoise=0a=0.02:1a=0.02:2a=0.02:0b=0.04:1b=0.04:2b=0.04:s=9"
+        );
+        assert_eq!(options.graph(VideoEffect::MotionBlur), "tmix=frames=3");
+        assert!(
+            options
+                .graph(VideoEffect::Levels)
+                .starts_with("lutyuv=y='(16+219*pow(")
+        );
+        options.levels.luma_only = false;
+        assert!(options.graph(VideoEffect::Levels).starts_with("lutrgb=r="));
+        options.levels.luma_offset = [2, -1];
+        options.levels.chroma_offset = [3, 0];
+        assert_eq!(
+            options.graph(VideoEffect::Offset),
+            "chromashift=cbh=1:cbv=1:crh=1:crv=1,crop=w=iw-2:h=ih-1:x=0:y=1,pad=w=iw+2:h=ih+1:x=2:y=0:color=black"
+        );
+        let mut notes = Vec::new();
+        options.motion_blur = 40;
+        options.levels.input = [200.0, 100.0];
+        options.validate(&mut notes);
+        assert_eq!(options.motion_blur, 3);
+        assert!((options.levels.input[0] - 16.0).abs() < f64::EPSILON);
+        assert!((options.levels.input[1] - 235.0).abs() < f64::EPSILON);
+        assert_eq!(notes.len(), 2, "{notes:?}");
     }
 
     #[test]

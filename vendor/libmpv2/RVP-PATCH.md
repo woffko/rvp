@@ -23,3 +23,8 @@ RVP through `[patch.crates-io]` in the workspace manifest. Changes:
   pointer checked before mpv sees them; `BLOCK_FOR_TARGET_TIME` off), the
   update callback and `update`. Its `Drop` frees the context before the
   callback, so mpv cannot call a freed callback.
+- `Mpv::screenshot_raw` (`mpv_command_ret` with `screenshot-raw`), for
+  M12's captures and pixel checks (2026-10-18): the reply's map is read
+  into a `RawImage` (size, stride, format, a copy of the pixels, the
+  stride checked against the data's length) and freed with
+  `mpv_free_node_contents`.

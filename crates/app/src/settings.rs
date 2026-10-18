@@ -126,6 +126,16 @@ pub struct Settings {
     pub open: crate::sources::OpenSettings,
     /// Capture devices and discs (M11).
     pub devices: crate::sources::Devices,
+    /// The picture's geometry (M12).
+    pub picture: crate::picture::Picture,
+    /// The video effects' strengths (M12).
+    pub video_effects: crate::video::EffectOptions,
+    /// 3D video (M12).
+    pub stereo: crate::stereo::Stereo,
+    /// 360° video (M12).
+    pub vr: crate::stereo::Vr,
+    /// The window's sizes and moves (M12).
+    pub window: crate::window::WindowSettings,
 }
 
 impl Default for Settings {
@@ -176,6 +186,11 @@ impl Default for Settings {
             scenes: crate::scenes::SceneSettings::default(),
             open: crate::sources::OpenSettings::default(),
             devices: crate::sources::Devices::default(),
+            picture: crate::picture::Picture::default(),
+            video_effects: crate::video::EffectOptions::default(),
+            stereo: crate::stereo::Stereo::default(),
+            vr: crate::stereo::Vr::default(),
+            window: crate::window::WindowSettings::default(),
         }
     }
 }

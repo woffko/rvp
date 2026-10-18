@@ -117,6 +117,11 @@ pub enum Effect {
     /// The pointer is over the seek bar (or holds it) at this place, or
     /// left it (`None`): the time tooltip and preview (M11).
     SeekHover(Option<crate::playback::SeekHover>),
+    /// A drag on 360° video turns the view by these pixels (M12).
+    TurnView {
+        dx: i32,
+        dy: i32,
+    },
 }
 
 /// What the playlist panel does.
@@ -151,6 +156,8 @@ pub enum Focus {
 
 /// The window's state as far as the pointer is concerned.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+// Independent facts of the window's state, as the pointer needs them.
+#[allow(clippy::struct_excessive_bools)]
 pub struct Context {
     pub width: i32,
     pub height: i32,
@@ -160,6 +167,8 @@ pub struct Context {
     pub chrome_shown: bool,
     /// The control panel's window: a fixed size and no mouse gestures.
     pub panel: bool,
+    /// 360° video plays: a drag on the video turns the view (M12).
+    pub turn_view: bool,
     /// Modifiers held with the button (playlist selection).
     pub modifiers: Modifiers,
 }
@@ -190,6 +199,11 @@ enum Drag {
         x: i32,
         y: i32,
         click: bool,
+    },
+    /// A drag over 360° video, last at this place.
+    Turn {
+        x: i32,
+        y: i32,
     },
     /// A press on a playlist row: a drag moves the selection; without one,
     /// the release selects only this row (`select_on_release`).
@@ -625,14 +639,33 @@ impl Pointer {
                 chrome.state.pressed = over.then_some(element);
                 return Vec::new();
             }
-            Drag::Press { x: x0, y: y0, .. } => {
+            Drag::Press {
+                x: x0,
+                y: y0,
+                click,
+            } => {
                 if (x - x0).abs() + (y - y0).abs() >= DRAG_DISTANCE {
+                    // A drag on 360° video turns the view instead.
+                    if click && ctx.turn_view {
+                        self.drag = Drag::Turn { x, y };
+                        return vec![Effect::TurnView {
+                            dx: x - x0,
+                            dy: y - y0,
+                        }];
+                    }
                     self.drag = Drag::Idle;
                     if ctx.movable {
                         return vec![Effect::StartMove];
                     }
                 }
                 return Vec::new();
+            }
+            Drag::Turn { x: x0, y: y0 } => {
+                self.drag = Drag::Turn { x, y };
+                return vec![Effect::TurnView {
+                    dx: x - x0,
+                    dy: y - y0,
+                }];
             }
             Drag::Rows { .. } | Drag::Thumb { .. } => return self.move_list(chrome, y),
             Drag::Idle => {}
@@ -740,7 +773,10 @@ impl Pointer {
                     self.undo = action.filter(|action| action.is_toggle());
                     action.map(Effect::Action).into_iter().collect()
                 }
-                Drag::Press { click: false, .. } | Drag::Thumb { .. } | Drag::Idle => Vec::new(),
+                Drag::Press { click: false, .. }
+                | Drag::Turn { .. }
+                | Drag::Thumb { .. }
+                | Drag::Idle => Vec::new(),
             },
             Button::Right => match target(chrome, ctx, x, y) {
                 Target::Control(Hit::Control {

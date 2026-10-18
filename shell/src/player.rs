@@ -34,6 +34,7 @@ use crate::player_qobject::qobject;
 use crate::video::ENGINE;
 
 mod m11;
+mod m12;
 
 /// `ui_request` kinds.
 pub mod request {
@@ -95,6 +96,11 @@ pub mod request {
     pub const SHOW_FILE: i32 = 32;
     /// The scene browser of `dialog` (JSON, `rvp_app::scenes::Browser`).
     pub const SCENES: i32 = 33;
+    /// An M12 dialog (`VideoDialogs.qml`) described by `dialog` (JSON).
+    pub const VIDEO_DIALOG: i32 = 34;
+    /// A window size or move (`dialog`: `rvp_app::window::WindowRequest`
+    /// as JSON).
+    pub const WINDOW: i32 = 35;
 }
 
 /// The skin, loaded once for the process (the painters read it on the
@@ -149,7 +155,6 @@ struct Core {
     width: i32,
     height: i32,
     maximized: bool,
-    stretch: bool,
     /// Resizing the window to the next file's video (`fit-window-to-video`).
     fit: Fit,
     /// True while a drain is queued (coalesces wakeups).
@@ -265,6 +270,9 @@ pub struct PlayerRust {
     pub(crate) preview_height: i32,
     pub(crate) hide_pointer: bool,
     pub(crate) center_window: bool,
+    pub(crate) video_aspect: f64,
+    pub(crate) black_other_displays: bool,
+    pub(crate) fullscreen_primary: bool,
     pub(crate) power_notice: QString,
     pub(crate) power_seconds: i32,
     pub(crate) dialog: QString,
@@ -636,7 +644,6 @@ impl qobject::Player {
             width: 0,
             height: 0,
             maximized: false,
-            stretch: false,
             fit: Fit::No,
             drain_queued,
             throttle: Throttle::default(),
@@ -736,6 +743,7 @@ impl qobject::Player {
             }
         }
         let new_aspect = drained.changes.contains(PropertyId::VideoAspect) && core.fit == Fit::No;
+        // The size the settings give a newly opened video (M12).
         let fit = if core.fit == Fit::Loaded
             && !core.maximized
             && let (Some(width), Some(height)) = (
@@ -743,10 +751,9 @@ impl qobject::Player {
                 core.app.model.int(PropertyId::VideoHeight),
             ) {
             core.fit = Fit::No;
-            let (chrome_width, chrome_height) =
-                core.chrome.as_ref().map_or((0, 0), Chrome::chrome_size);
+            let chrome = core.chrome.as_ref().map_or((0, 0), Chrome::chrome_size);
             match (i32::try_from(width), i32::try_from(height)) {
-                (Ok(width), Ok(height)) => Some((width + chrome_width, height + chrome_height)),
+                (Ok(width), Ok(height)) => core.app.open_window_size((width, height), chrome),
                 _ => None,
             }
         } else {
@@ -777,6 +784,7 @@ impl qobject::Player {
         self.as_mut().set_has_video(has_video);
         self.as_mut().set_hide_pointer(hides_pointer);
         self.as_mut().set_center_window(center);
+        self.as_mut().sync_window_settings();
         self.as_mut()
             .set_window_title(QString::from(if title.is_empty() {
                 "RVP"
@@ -786,10 +794,15 @@ impl qobject::Player {
         for request in requests {
             self.as_mut().handle_request(request);
         }
-        if let Some((width, height)) = fit
+        if let Some(request) = fit
             && !*self.fullscreen()
         {
-            self.as_mut().fit_window(width, height);
+            match request {
+                rvp_app::window::WindowRequest::Size { width, height } => {
+                    self.as_mut().fit_window(width, height);
+                }
+                other => self.as_mut().window_request(&other),
+            }
         } else if new_aspect {
             self.as_mut().fit_aspect();
         }
@@ -952,6 +965,7 @@ impl qobject::Player {
             movable: true,
             chrome_shown: true,
             panel: true,
+            turn_view: false,
             modifiers: Modifiers::default(),
         }
     }
@@ -1146,12 +1160,14 @@ impl qobject::Player {
         if *self.fullscreen() == fullscreen {
             return;
         }
-        if let Some(core) = self.as_mut().core_mut()
-            && !fullscreen
-            && core.stretch
-        {
-            core.stretch = false;
-            let _ = core.app.apply_picture(core.engine, false);
+        if let Some(core) = self.as_mut().core_mut() {
+            // RVP's own requests chose the kind of fullscreen already.
+            let fit = if fullscreen {
+                core.app.fullscreen_fit()
+            } else {
+                None
+            };
+            core.app.set_fullscreen(core.engine, fullscreen, fit);
         }
         self.as_mut().set_chrome_shown(false);
         self.as_mut().set_fullscreen(fullscreen);
@@ -1200,6 +1216,7 @@ impl qobject::Player {
             movable: !fullscreen && !core.maximized,
             chrome_shown: core.chrome.is_some() && (!fullscreen || *self.chrome_shown()),
             panel: false,
+            turn_view: core.app.vr_active(),
             modifiers,
         })
     }
@@ -1330,6 +1347,11 @@ impl qobject::Player {
                     self.as_mut().ui_request(request::SKIN_MENU, 0);
                 }
                 Effect::SeekHover(hover) => self.as_mut().seek_hover(hover),
+                Effect::TurnView { dx, dy } => {
+                    if let Some(core) = self.as_mut().core_mut() {
+                        core.app.turn_vr(core.engine, f64::from(dx), f64::from(dy));
+                    }
+                }
             }
         }
     }
@@ -1571,10 +1593,9 @@ impl qobject::Player {
         };
         match request {
             UiRequest::OpenFileDialog => self.ui_request(request::OPEN_FILES, 0),
-            UiRequest::ToggleFullscreen { stretch } => {
+            UiRequest::ToggleFullscreen { fit } => {
                 let enter = !fullscreen;
-                core.stretch = enter && stretch;
-                let _ = core.app.apply_picture(core.engine, core.stretch);
+                core.app.set_fullscreen(core.engine, enter, fit);
                 self.as_mut().set_chrome_shown(false);
                 self.as_mut().set_fullscreen(enter);
                 self.as_mut()
@@ -1982,7 +2003,26 @@ impl qobject::Player {
         if let Some(on_top) = on_top {
             self.as_mut().set_on_top(on_top);
         }
+        self.as_mut().sync_window_settings();
         self.sync_chrome();
+    }
+
+    /// The video's shape and M12's fullscreen settings for `Main.qml`.
+    fn sync_window_settings(mut self: Pin<&mut Self>) {
+        let Some(core) = self.core() else {
+            return;
+        };
+        let window = &core.app.settings.window;
+        let aspect = core
+            .app
+            .model
+            .double(PropertyId::VideoAspect)
+            .unwrap_or(0.0);
+        let black = window.black_other_displays;
+        let primary = window.fullscreen_display == rvp_app::window::FullscreenDisplay::Primary;
+        self.as_mut().set_video_aspect(aspect);
+        self.as_mut().set_black_other_displays(black);
+        self.as_mut().set_fullscreen_primary(primary);
     }
 
     pub(crate) fn open_folder(mut self: Pin<&mut Self>, path: &QString) {
@@ -2436,7 +2476,10 @@ impl qobject::Player {
             ("vf", text(model.text(PropertyId::VideoFilters))),
             ("fullscreen", self.fullscreen().to_string()),
             ("maximized", core.maximized.to_string()),
-            ("stretch", core.stretch.to_string()),
+            (
+                "stretch",
+                (core.app.fullscreen_fit() == Some(rvp_app::Fit::Stretch)).to_string(),
+            ),
             (
                 "playlist_attached",
                 core.chrome

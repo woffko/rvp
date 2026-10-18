@@ -18,6 +18,11 @@ const SHORT: &str = concat!(
     env!("CARGO_MANIFEST_DIR"),
     "/../../testdata/media/fixture-3s.mkv"
 );
+/// 160x90: four coloured quadrants and a white mark at the top left.
+const MARKER: &str = concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/../../testdata/media/fixture-marker.mkv"
+);
 
 struct Player {
     engine: Engine,
@@ -338,4 +343,31 @@ fn per_file_options_reach_mpv_with_commas_intact() {
     let protocols = player.engine.protocols();
     assert!(protocols.iter().any(|p| p == "file"), "{protocols:?}");
     println!("status protocols={}", protocols.join(","));
+}
+
+#[test]
+fn screenshot_raw_gives_the_frames_pixels() {
+    let mut player = Player::new();
+    player.load(MARKER);
+    player.wait("a frame shown", |model, _| {
+        model
+            .double(PropertyId::TimePos)
+            .is_some_and(|time| time > 0.2)
+    });
+    let image = player.engine.screenshot_raw("video").expect("a frame");
+    assert_eq!((image.width, image.height), (160, 90));
+    assert!(image.stride >= 640, "{}", image.stride);
+    let close = |at: (usize, usize), want: [u8; 3]| {
+        let got = image.rgb(at.0, at.1).expect("inside");
+        assert!(
+            got.iter().zip(want).all(|(a, b)| a.abs_diff(b) < 40),
+            "{at:?}: {got:?} for {want:?}"
+        );
+    };
+    close((15, 12), [255, 255, 255]);
+    close((60, 30), [0xDC, 0x28, 0x28]);
+    close((120, 30), [0x28, 0xC8, 0x3C]);
+    close((40, 70), [0x28, 0x46, 0xDC]);
+    close((120, 70), [0xE6, 0xD2, 0x28]);
+    assert_eq!(image.rgb(160, 0), None);
 }

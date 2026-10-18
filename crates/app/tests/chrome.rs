@@ -143,6 +143,7 @@ fn window() -> Context {
         movable: true,
         chrome_shown: true,
         panel: false,
+        turn_view: false,
         modifiers: Modifiers::default(),
     }
 }
@@ -434,6 +435,32 @@ fn sliders_follow_the_pointer() {
 }
 
 #[test]
+fn a_drag_on_360_video_turns_the_view() {
+    let mut chrome = chrome();
+    let bindings = Bindings::potplayer_defaults();
+    let mut pointer = Pointer::default();
+    let vr = Context {
+        turn_view: true,
+        ..window()
+    };
+    pointer.press(&mut chrome, vr, 100, 50, Button::Left);
+    assert_eq!(
+        pointer.moved(&mut chrome, vr, 110, 47),
+        vec![Effect::TurnView { dx: 10, dy: -3 }]
+    );
+    assert_eq!(
+        pointer.moved(&mut chrome, vr, 115, 47),
+        vec![Effect::TurnView { dx: 5, dy: 0 }]
+    );
+    // Not a click when it ends.
+    assert!(
+        pointer
+            .release(&mut chrome, &bindings, vr, 115, 47, Button::Left)
+            .is_empty()
+    );
+}
+
+#[test]
 fn title_bar_and_video_drag_move_the_window() {
     let mut chrome = chrome();
     let bindings = Bindings::potplayer_defaults();
@@ -590,6 +617,7 @@ fn the_control_panel_has_its_own_window_pages_and_sliders() {
         width: 60,
         height: 40,
         panel: true,
+        turn_view: false,
         ..window()
     };
     let mut pointer = Pointer::default();

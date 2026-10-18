@@ -27,6 +27,7 @@ pub mod media;
 pub mod menu;
 pub mod normalizer;
 pub mod panel;
+pub mod picture;
 pub mod playback;
 pub mod playlist;
 pub mod playlist_files;
@@ -38,6 +39,7 @@ pub mod scenes;
 mod settings;
 pub mod sources;
 pub mod speakers;
+pub mod stereo;
 mod storage;
 pub mod svp;
 pub mod thumbs;
@@ -45,6 +47,7 @@ pub mod tomsteady;
 pub mod video;
 pub mod view;
 pub mod volume;
+pub mod window;
 pub mod ytdl;
 
 pub use action::{

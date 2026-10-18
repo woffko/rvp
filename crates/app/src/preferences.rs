@@ -125,6 +125,11 @@ impl Settings {
         self.scenes.validate(&mut notes);
         self.open.validate(&mut notes);
         self.devices.validate(&mut notes);
+        self.picture.validate(&mut notes);
+        self.video_effects.validate(&mut notes);
+        self.stereo.validate(&mut notes);
+        self.vr.validate(&mut notes);
+        self.window.validate(&mut notes);
         notes
     }
 
@@ -536,7 +541,9 @@ impl App {
     /// renderer's picture settings and the equalizer.
     fn apply_m6_settings(&mut self, engine: &Engine, old: &Settings, applied: &mut Applied) {
         let new = &self.settings;
-        let filters = old.effects != new.effects || old.vapoursynth != new.vapoursynth;
+        let filters = old.effects != new.effects
+            || old.vapoursynth != new.vapoursynth
+            || old.video_effects != new.video_effects;
         if filters || old.hwdec != new.hwdec || old.ipc_server != new.ipc_server {
             self.apply_decoding(engine);
         }
@@ -547,11 +554,18 @@ impl App {
         if (old.color != new.color
             || old.deinterlace != new.deinterlace
             || old.deband != new.deband
+            || old
+                .video_effects
+                .deband
+                .iter()
+                .zip(new.video_effects.deband)
+                .any(|(a, b)| (a - b).abs() > 1e-9)
             || old.shaders != new.shaders)
             && let Err(error) = self.apply_picture_settings(engine)
         {
             applied.notes.push(format!("picture settings: {error}"));
         }
+        self.apply_m12_settings(engine, old);
         let new = &self.settings;
         if old.equalizer.enabled != new.equalizer.enabled {
             self.audio_chain_changed(engine);
@@ -589,6 +603,7 @@ impl App {
                 "video-sync": VIDEO_SYNC,
                 "subtitle-auto": SUBTITLE_AUTO,
                 "scaler": SCALERS,
+                "resize-method": crate::picture::RESIZE_METHODS,
                 "audio-device": devices,
                 "skin": skins,
                 "output-speakers": crate::speakers::CHOICES

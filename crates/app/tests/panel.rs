@@ -108,6 +108,7 @@ fn blackspace_control_panel() {
         movable: true,
         chrome_shown: true,
         panel: true,
+        turn_view: false,
         modifiers: Modifiers::default(),
     };
     let mut pointer = Pointer::default();

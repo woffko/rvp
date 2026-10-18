@@ -8,6 +8,10 @@
 // plain Qt value types and safe methods; nothing here is called unsafely by
 // hand.
 #![allow(unsafe_code)]
+// The generated setters compare a property's old and new value with `==`
+// to skip unchanged updates; for `video_aspect` an exact comparison is
+// what is wanted.
+#![allow(clippy::float_cmp)]
 
 pub use crate::player::PlayerRust;
 
@@ -65,6 +69,13 @@ pub mod qobject {
         #[qproperty(i32, preview_height)]
         #[qproperty(bool, hide_pointer)]
         #[qproperty(bool, center_window)]
+        /// The video's display aspect ratio (0 without video), for the
+        /// window's sizes (M12).
+        #[qproperty(f64, video_aspect)]
+        /// Fullscreen Mode's "Fill other monitors black" (M12).
+        #[qproperty(bool, black_other_displays)]
+        /// Fullscreen goes to the primary display (M12).
+        #[qproperty(bool, fullscreen_primary)]
         #[qproperty(QString, power_notice)]
         #[qproperty(i32, power_seconds)]
         #[qproperty(QString, dialog)]
@@ -462,6 +473,16 @@ pub mod qobject {
         /// The thumbnail core finished pictures (queued from its thread).
         #[qinvokable]
         fn thumbnails_ready(self: Pin<&mut Self>);
+
+        /// The screen the window is on, as `Tools.screen_json` gives it
+        /// (M12: the output device's aspect, rotation by aspect ratio).
+        #[qinvokable]
+        fn set_screen(self: Pin<&mut Self>, json: &QString);
+
+        /// An M12 dialog's answer (`VideoDialogs.qml`): the purpose it was
+        /// opened for and the text entered.
+        #[qinvokable]
+        fn video_dialog_answer(self: Pin<&mut Self>, purpose: &QString, text: &QString);
 
         /// Something only the window can do; see [`super::request`].
         #[qsignal]

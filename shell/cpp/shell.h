@@ -19,6 +19,7 @@
 #include <QtCore/QString>
 #include <QtCore/QStringList>
 #include <QtCore/QUrl>
+#include <QtGui/QWindow>
 #include <QtGui/QPainter>
 #include <QtQuick/QQuickFramebufferObject>
 
@@ -80,6 +81,9 @@ public:
     // The clipboard's text, and putting text on it (M11).
     Q_INVOKABLE QString clipboard_text() const;
     Q_INVOKABLE void set_clipboard_text(const QString &text) const;
+    // The screen `window` is on: its size in device pixels and in
+    // millimetres (QScreen's physical size, which QML does not show).
+    Q_INVOKABLE QString screen_json(QWindow *window) const;
     // Shows a file in the system's file manager: selected in Explorer on
     // Windows, its folder elsewhere.
     Q_INVOKABLE bool show_file(const QString &path) const;

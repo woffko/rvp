@@ -242,7 +242,13 @@ impl Default for Playback {
     }
 }
 
-fn clamp_number(value: &mut f64, low: f64, high: f64, name: &str, notes: &mut Vec<String>) {
+pub(crate) fn clamp_number(
+    value: &mut f64,
+    low: f64,
+    high: f64,
+    name: &str,
+    notes: &mut Vec<String>,
+) {
     let repaired = if value.is_finite() {
         value.clamp(low, high)
     } else {

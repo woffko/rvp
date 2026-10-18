@@ -229,7 +229,7 @@ impl qobject::Player {
                 rvp_atlas_remove_prefix("thumb/entry/");
                 self.relayout();
             }
-            other => eprintln!("rvp: unhandled request {other:?}"),
+            other => self.m12_request(other),
         }
     }
 
