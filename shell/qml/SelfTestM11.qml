@@ -70,8 +70,7 @@ Item {
             // applies a new size later: wait for the skin's layout at that
             // size (a seek bar of some 800 pixels).
             if (host.width < 900) {
-                host.width = 1000
-                host.height = 700
+                host.setGeometry(host.x, host.y, 1000, 700)
             }
             const r = seekBar()
             if (r.width < 400 && Date.now() - t.stepStarted < 5000)

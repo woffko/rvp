@@ -44,6 +44,10 @@
 #include "rvp-shell/src/ffi.cxxqt.h"
 
 #ifdef Q_OS_WIN
+// Without Windows' min and max macros (std::max is used here).
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
 #include <windows.h>
 // ClipCursor and the monitor calls.
 #pragma comment(lib, "user32.lib")

@@ -733,6 +733,9 @@ fn streams_and_videos_are_recorded() {
     assert!(job.end > job.start + 2.0);
     assert!(!job.vf.contains("@svp"));
     rvp_engine::encode::encode(&job, Duration::from_secs(60)).expect("encode");
+    let size = std::fs::metadata(&video).map_or(0, |meta| meta.len());
+    println!("metric recorded_video_bytes={size}");
+    assert!(size > 1000, "the recording is {size} bytes");
     let length = job.end - job.start;
     let check = Engine::new(&EngineOptions::headless()).expect("engine");
     check
@@ -744,7 +747,13 @@ fn streams_and_videos_are_recorded() {
             assert!((duration - length).abs() < 0.5, "{duration} for {length}");
             break;
         }
-        assert!(Instant::now() < deadline, "the recording has no duration");
+        assert!(
+            Instant::now() < deadline,
+            "the recording has no duration: format {:?}, idle {:?}, path {:?}",
+            check.get_text("file-format"),
+            check.get_text("idle-active"),
+            check.get_text("path")
+        );
         std::thread::sleep(Duration::from_millis(20));
     }
 }

@@ -24,6 +24,21 @@ Item {
     property int shaderIndex: 0
     property int logOffset: 0
     property int shaderFailures: 0
+    property int shaderSkips: 0
+    // The OpenGL mpv renders with, from its log ("3.0 Mesa 11.2.2").
+    property string glVersion: ""
+    // When the window's geometry last changed: size checks wait until it
+    // settles (the window takes the video's shape 300 ms after a resize,
+    // later on a busy software renderer).
+    property real geometryChanged: 0
+
+    Connections {
+        target: m12.host
+        function onWidthChanged() { m12.geometryChanged = Date.now() }
+        function onHeightChanged() { m12.geometryChanged = Date.now() }
+        function onXChanged() { m12.geometryChanged = Date.now() }
+        function onYChanged() { m12.geometryChanged = Date.now() }
+    }
 
     function setSetting(path, value) {
         return JSON.parse(player.set_setting(path, JSON.stringify(value)))
@@ -33,6 +48,14 @@ Item {
     function files() { return JSON.parse(Tools.list_files(images)) }
     function dialogs() { return host.videoDialogs() }
     function moves() { return Qt.platform.pluginName !== "wayland" }
+    function steady() { return Date.now() - geometryChanged > 1200 }
+    // At its minimum width or height (and nowhere below): a window that
+    // keeps the video's shape can be held there by the other side.
+    function atMinimum() {
+        return host.width >= host.minimumWidth && host.height >= host.minimumHeight
+            && (host.width === host.minimumWidth || host.height === host.minimumHeight)
+    }
+    function size() { return host.width + "x" + host.height }
     // The file the last "Saved NAME" notice named.
     function saved(s) {
         const osd = s.osd || ""
@@ -58,12 +81,16 @@ Item {
             break
         }
         case 1:
-            t.waitFor("shader_file_plays", () => s.loaded && s.time > 0.3, 20000)
+            if (t.waitFor("shader_file_plays", () => s.loaded && s.time > 0.3, 20000)) {
+                const found = /GL_VERSION='([^']*)'/.exec(Tools.read_file(log, 0))
+                glVersion = found ? found[1] : ""
+            }
             break
         case 2:
             if (shaderIndex >= hlsl.length) {
                 t.check("shaders_compile", shaderFailures === 0,
-                        (hlsl.length - shaderFailures) + " of " + hlsl.length + " compiled")
+                        (hlsl.length - shaderFailures - shaderSkips) + " of " + hlsl.length + " compiled"
+                        + (shaderSkips > 0 ? ", " + shaderSkips + " skipped (OpenGL " + glVersion + ")" : ""))
                 t.finish()
                 break
             }
@@ -86,6 +113,17 @@ Item {
             logOffset += text.length
             const errors = text.split("\n").filter(line => line.indexOf("][e][") >= 0)
             const name = hlsl[shaderIndex].name
+            // An OpenGL older than 3.3 (the VM's software Mesa, 3.0) can
+            // neither create the textures mpv's hooks render into nor
+            // compile their GLSL: its errors say nothing about the shader.
+            if (/^([0-2]\.|3\.[0-2])/.test(glVersion) && errors.length > 0) {
+                t.check("shader " + name, true, "SKIPPED OpenGL " + glVersion + " is older than 3.3 ("
+                        + errors.length + " errors)")
+                shaderSkips += 1
+                shaderIndex += 1
+                t.step = 2
+                break
+            }
             t.check("shader " + name, errors.length === 0, errors.slice(0, 3).join(" | "))
             // The picture with the shader, for a look (a grab costs frames).
             if (player.has_option("shader-grabs"))
@@ -107,8 +145,7 @@ Item {
             setSetting("fit-window-to-video", false)
             images = t.outDir + "/m12-images"
             setSetting("image-folder", images)
-            host.width = 1000
-            host.height = 700
+            host.setGeometry(host.x, host.y, 1000, 700)
             t.next()
             break
         case 1:
@@ -119,35 +156,41 @@ Item {
             break
         // The window's sizes (R1's Window Size menu).
         case 2:
-            if (t.waitFor("window_custom_size", () => near(host.width, 960, 2), 3000,
-                          () => "width " + host.width))
+            if (t.waitFor("window_custom_size", () => steady() && (near(host.width, 960, 2)
+                                                                   || near(host.height, 600, 2)), 5000,
+                          () => "size " + size()))
                 player.run_action("window-minimum")
             break
         case 3:
-            if (t.waitFor("window_minimum", () => host.width === host.minimumWidth, 3000,
-                          () => "width " + host.width + " minimum " + host.minimumWidth))
+            if (t.waitFor("window_minimum", () => steady() && atMinimum(), 5000,
+                          () => size() + " minimum " + host.minimumWidth + "x" + host.minimumHeight))
                 player.run_action("window-maximum")
             break
         case 4: {
             const a = area()
-            if (t.waitFor("window_maximum_fills", () => host.width >= a.width - 2 || host.height >= a.height - 2,
-                          3000, () => host.width + "x" + host.height + " area " + a.width + "x" + a.height))
+            if (t.waitFor("window_maximum_fills", () => steady() && (host.width >= a.width - 2
+                                                                     || host.height >= a.height - 2),
+                          5000, () => size() + " area " + a.width + "x" + a.height))
                 player.run_action("window-desktop-1")
             break
         }
         case 5: {
             const a = area()
             const box = (v, whole) => v <= whole * 0.3 + 2
-            if (t.waitFor("window_desktop_size", () => box(host.width, a.width) && box(host.height, a.height)
-                              && (host.width >= a.width * 0.3 - 2 || host.height >= a.height * 0.3 - 2),
-                          3000, () => host.width + "x" + host.height + " area " + a.width + "x" + a.height)) {
+            // 30 % of the desktop, or the smallest window of the video's
+            // shape when that box is smaller (a 1024x768 desktop with the
+            // playlist docked).
+            if (t.waitFor("window_desktop_size", () => steady() && (atMinimum()
+                              || box(host.width, a.width) && box(host.height, a.height)
+                                 && (host.width >= a.width * 0.3 - 2 || host.height >= a.height * 0.3 - 2)),
+                          5000, () => size() + " area " + a.width + "x" + a.height)) {
                 before = { width: host.width }
                 player.run_action("window-larger")
             }
             break
         }
         case 6:
-            if (t.waitFor("window_grows", () => host.width > before.width, 3000,
+            if (t.waitFor("window_grows", () => steady() && host.width > before.width, 5000,
                           () => before.width + " -> " + host.width)) {
                 before = { x: host.x }
                 player.run_action("window-move-left")
@@ -183,8 +226,9 @@ Item {
             }
             break
         case 10:
-            if (t.waitFor("window_size_dialog_applies", () => near(host.width, 800, 2), 3000,
-                          () => "width " + host.width))
+            if (t.waitFor("window_size_dialog_applies", () => steady() && (near(host.width, 800, 2)
+                                                                           || near(host.height, 500, 2)), 5000,
+                          () => "size " + size()))
                 player.run_action("window-control")
             break
         case 11:
@@ -196,9 +240,11 @@ Item {
             }
             break
         case 12:
-            if (t.waitFor("window_control_places", () => near(host.width, 720, 2)
-                              && (!moves() || host.x === area().x + 10), 3000,
-                          () => host.width + " at " + host.x)) {
+            // The window then takes the video's shape: one side stays.
+            if (t.waitFor("window_control_places", () => steady()
+                              && (near(host.width, 720, 2) || near(host.height, 480, 2))
+                              && (!moves() || host.x === area().x + 10), 5000,
+                          () => size() + " at " + host.x)) {
                 setSetting("on-top", "fullscreen-playing")
                 player.run_action("fullscreen-other-display")
             }
@@ -259,8 +305,8 @@ Item {
             }
             break
         case 19:
-            t.waitFor("capture_consecutive", () => files().length === filesBefore + 3
-                          && s.osd === "Consecutive capture done (3 images)", 8000,
+            // The images, not the notice: a later one may replace it.
+            t.waitFor("capture_consecutive", () => files().length === filesBefore + 3, 8000,
                       () => (files().length - filesBefore) + " images, osd " + s.osd)
             break
         case 20:

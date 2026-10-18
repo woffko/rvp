@@ -6,6 +6,7 @@
 //! The core must be created after the player's (libmpv gives FFmpeg's log
 //! to the first core of a process; the normalizer reads it there). It runs
 //! on the caller's thread until the file is written: never the window's.
+//! The file is complete once the core has quit (its `Shutdown` event).
 
 use std::path::PathBuf;
 use std::time::{Duration, Instant};
@@ -79,19 +80,39 @@ pub fn encode(job: &EncodeJob, timeout: Duration) -> Result<(), EngineError> {
         Ok(())
     })
     .map_err(|error| fail("encode core", &error))?;
+    // mpv's errors say why an encoding ended early.
+    drop(mpv.request_log_messages("error"));
     mpv.command("loadfile", &[job.source.as_str()])
         .map_err(|error| fail("loadfile", &error))?;
     let deadline = Instant::now() + timeout;
+    let mut errors: Vec<String> = Vec::new();
     loop {
         match mpv.wait_event(0.1) {
             Some(Ok(Event::EndFile(reason))) => {
-                // The file is finished when the core goes away.
+                // mpv finishes the file when its core quits. Dropping the
+                // handle is not enough: with a script's client still alive
+                // (Windows' libmpv) the core quits after `mpv_destroy`
+                // returns, and the file is empty until then.
+                drop(mpv.command("quit", &[]));
+                while Instant::now() < deadline {
+                    if let Some(Ok(Event::Shutdown)) = mpv.wait_event(0.1) {
+                        break;
+                    }
+                }
                 drop(mpv);
-                return if reason == mpv_end_file_reason::Error {
-                    Err(EngineError("the file could not be encoded".to_owned()))
-                } else {
+                return if reason == mpv_end_file_reason::Eof {
                     Ok(())
+                } else {
+                    Err(EngineError(format!(
+                        "the file could not be encoded (end {reason}): {}",
+                        errors.join("; ")
+                    )))
                 };
+            }
+            Some(Ok(Event::LogMessage { prefix, text, .. })) => {
+                if errors.len() < 8 {
+                    errors.push(format!("[{prefix}] {}", text.trim()));
+                }
             }
             Some(Ok(Event::Shutdown)) => return Ok(()),
             Some(Err(error)) => return Err(fail("encoding", &error)),

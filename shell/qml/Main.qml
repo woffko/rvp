@@ -148,8 +148,16 @@ Window {
         player.confine_cursor(root.isFullscreen && root.active)
     }
     onIsFullscreenChanged: player.confine_cursor(root.isFullscreen && root.active)
-    onXChanged: geometryTimer.restart()
-    onYChanged: geometryTimer.restart()
+    onXChanged: {
+        geometryTimer.restart()
+        if (logGeometry)
+            Tools.log("window_place=" + x + "," + y)
+    }
+    onYChanged: {
+        geometryTimer.restart()
+        if (logGeometry)
+            Tools.log("window_place=" + x + "," + y)
+    }
 
     // Saves the normal geometry shortly after it settles.
     Timer {
@@ -392,17 +400,18 @@ Window {
     // "corner" keeps the top left corner, "center" the window's centre,
     // "screen" centres it on the screen.
     function resizeWindow(width, height, area, anchor) {
-        const middleX = root.x + root.width / 2
-        const middleY = root.y + root.height / 2
-        root.width = Math.round(Math.max(root.minimumWidth, Math.min(width, area.width)))
-        root.height = Math.round(Math.max(root.minimumHeight, Math.min(height, area.height)))
-        if (Qt.platform.pluginName === "wayland")
-            return
+        const w = Math.round(Math.max(root.minimumWidth, Math.min(width, area.width)))
+        const h = Math.round(Math.max(root.minimumHeight, Math.min(height, area.height)))
+        let x = root.x
+        let y = root.y
         if (anchor === "center") {
-            root.x = Math.round(middleX - root.width / 2)
-            root.y = Math.round(middleY - root.height / 2)
+            x = Math.round(root.x + root.width / 2 - w / 2)
+            y = Math.round(root.y + root.height / 2 - h / 2)
+        } else if (anchor === "screen") {
+            x = area.x + Math.round((area.width - w) / 2)
+            y = area.y + Math.round((area.height - h) / 2)
         }
-        root.moveWindow(anchor === "screen" ? "center" : "keep", 0, area)
+        root.placeInArea(x, y, w, h, area)
     }
 
     function moveWindow(placement, step, area) {
@@ -426,8 +435,29 @@ Window {
         case "bottom-left": x = area.x; y = bottom; break
         case "bottom-right": x = right; y = bottom; break
         }
-        root.x = Math.max(area.x, Math.min(x, right))
-        root.y = Math.max(area.y, Math.min(y, bottom))
+        root.placeInArea(x, y, root.width, root.height, area)
+    }
+
+    // The window at x, y (kept inside `area`) with this size.
+    function placeInArea(x, y, width, height, area) {
+        root.setWindowGeometry(Math.max(area.x, Math.min(x, area.x + area.width - width)),
+                               Math.max(area.y, Math.min(y, area.y + area.height - height)), width, height,
+                               "command")
+    }
+
+    // One geometry change for the window's place and size: Windows reports
+    // a change after the call returns, so `x` set after `width` put back
+    // the old width. Wayland places windows itself: the size only. A fit
+    // to the video's shape still waiting for the previous size would undo
+    // this one: the new size starts its own.
+    function setWindowGeometry(x, y, width, height, why) {
+        if (logGeometry)
+            Tools.log("window_set=" + x + "," + y + " " + width + "x" + height + " " + why)
+        aspectTimer.stop()
+        if (Qt.platform.pluginName === "wayland")
+            root.setGeometry(root.x, root.y, width, height)
+        else
+            root.setGeometry(x, y, width, height)
     }
 
     // The Window Size Control dialog's numbers.
@@ -436,12 +466,9 @@ Window {
             return
         if (root.visibility !== Window.Windowed)
             root.requestVisibility(Window.Windowed)
-        root.width = Math.max(root.minimumWidth, width)
-        root.height = Math.max(root.minimumHeight, height)
-        if (Qt.platform.pluginName !== "wayland" && root.onScreen(x, y)) {
-            root.x = x
-            root.y = y
-        }
+        const there = root.onScreen(x, y)
+        root.setWindowGeometry(there ? x : root.x, there ? y : root.y, Math.max(root.minimumWidth, width),
+                               Math.max(root.minimumHeight, height), "dialog")
     }
 
     // Moves the window (not fullscreen) onto `screen`, centred.
@@ -450,8 +477,9 @@ Window {
             return
         if (root.visibility !== Window.Windowed)
             root.showNormal()
-        root.x = screen.virtualX + Math.max(0, Math.round((screen.width - root.width) / 2))
-        root.y = screen.virtualY + Math.max(0, Math.round((screen.height - root.height) / 2))
+        root.setWindowGeometry(screen.virtualX + Math.max(0, Math.round((screen.width - root.width) / 2)),
+                               screen.virtualY + Math.max(0, Math.round((screen.height - root.height) / 2)),
+                               root.width, root.height, "screen")
     }
 
     // "Fullscreen (on Another Display)": fullscreen on the next screen, or
@@ -532,19 +560,29 @@ Window {
         const chromeHeight = root.height - player.video_rect.height
         let videoWidth = targetWidth - chromeWidth
         let videoHeight = targetHeight - chromeHeight
-        const scale = Math.min(1, (maxWidth - chromeWidth) / videoWidth,
+        if (videoWidth <= 0 || videoHeight <= 0)
+            return
+        // Never below the window's minimum: the video grows, keeping its
+        // shape (with the playlist docked, a small video leaves the window
+        // under its minimum height).
+        const grow = Math.max(1, (root.minimumWidth - chromeWidth) / videoWidth,
+                              (root.minimumHeight - chromeHeight) / videoHeight)
+        const scale = Math.min(grow, (maxWidth - chromeWidth) / videoWidth,
                                (maxHeight - chromeHeight) / videoHeight)
-        root.width = Math.round(videoWidth * scale + chromeWidth)
-        root.height = Math.round(videoHeight * scale + chromeHeight)
-        if (screen && Qt.platform.pluginName !== "wayland") {
+        const width = Math.round(videoWidth * scale + chromeWidth)
+        const height = Math.round(videoHeight * scale + chromeHeight)
+        let x = root.x
+        let y = root.y
+        if (screen) {
             // "Start playback in centered window" (M11).
             if (player.center_window) {
-                root.x = screen.virtualX + Math.round((maxWidth - root.width) / 2)
-                root.y = screen.virtualY + Math.round((maxHeight - root.height) / 2)
+                x = screen.virtualX + Math.round((maxWidth - width) / 2)
+                y = screen.virtualY + Math.round((maxHeight - height) / 2)
             }
-            root.x = Math.max(screen.virtualX, Math.min(root.x, screen.virtualX + maxWidth - root.width))
-            root.y = Math.max(screen.virtualY, Math.min(root.y, screen.virtualY + maxHeight - root.height))
+            x = Math.max(screen.virtualX, Math.min(x, screen.virtualX + maxWidth - width))
+            y = Math.max(screen.virtualY, Math.min(y, screen.virtualY + maxHeight - height))
         }
+        root.setWindowGeometry(x, y, width, height, "fit")
     }
 
     // The skin's static layer: under the video in the window, over it in
@@ -1723,8 +1761,7 @@ Window {
         case 23:
             // The compositor restores the old size first; resize after it.
             if (root.visibility === Window.Windowed && Date.now() - t.stepStarted > 500) {
-                root.width = 900
-                root.height = 500
+                root.setGeometry(root.x, root.y, 900, 500)
                 t.next()
             } else if (Date.now() - t.stepStarted > 3000) {
                 t.check("restored_window", false, "visibility " + root.visibility)
@@ -2471,8 +2508,7 @@ Window {
                 t.step = 130
                 break
             }
-            root.width = 900
-            root.height = 760
+            root.setGeometry(root.x, root.y, 900, 760)
             t.next()
             break
         case 129:

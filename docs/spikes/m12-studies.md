@@ -20,7 +20,12 @@ created after the player's core, with `o`, `start`, `end`, `vf`
 (`lavfi=[hflip]`), `ovc=libx264` and `oac=aac`, loading the 60 s
 fixture, wrote a valid Matroska file of the stretch asked for (H.264
 96x72 and AAC, 3.03 s for 2 s to 5 s) in about half a second. The file
-is complete only when the core is destroyed; until then it can be empty.
+is complete only once the core has quit; until then it can be empty. On
+Windows (the VM, shinchiro's libmpv) dropping the handle at the end of
+the file left it empty: a script's client kept the core alive after
+`mpv_destroy` returned. RVP sends `quit` and waits for the core's
+`Shutdown` event, after which the file is written (62 KB for the test's
+stretch on the VM).
 
 What RVP does (`crates/engine/src/encode.rs`, `crates/app/src/record.rs`):
 

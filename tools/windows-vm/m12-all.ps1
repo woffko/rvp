@@ -2,7 +2,8 @@
 # no sound device). Copy this file and run.ps1 to C:\rvp-test with the
 # bundle in C:\rvp-test\rvp-bundle and M12's fixtures next to rvp.exe
 # (testdata/media: fixture-60s.mkv, fixture-3s.mkv, fixture-marker.mkv,
-# fixture-marker.png, fixture-sbs.mkv, fixture-360.mkv, fixture-tone.ogg),
+# fixture-marker.png, fixture-sbs.mkv, fixture-360.mkv, fixture-tone.ogg,
+# fixture-chapters.mkv and fixture-chapters.srt),
 # and the headless tests built for Windows next to the bundle's
 # libmpv-2.dll:
 #   cargo xwin test --no-run --release --target x86_64-pc-windows-msvc \
@@ -17,7 +18,11 @@
 #    thumbnail image) and the settings window's tree.
 # 2. The shader check (`--selftest=shaders`): RVP's own shaders, and
 #    PotPlayer's when -PotPlayerShaders names a folder of them (read in
-#    place), compiled by mpv; mpv's log goes to the out folder.
+#    place), compiled by mpv; mpv's log goes to the out folder. The VM's
+#    software OpenGL (Mesa 11, OpenGL 3.0) can neither create the textures
+#    mpv's hooks render into nor compile their GLSL: there each shader
+#    reports SKIPPED, and the shaders are checked under Linux's Mesa and
+#    on the host.
 # 3. M12's headless tests on Windows' FFmpeg (3D and 360° pixel checks,
 #    effects, capture formats, recordings and the second core's encoding,
 #    visualizations, rendering and decoder options), with RVP_TESTDATA
@@ -70,7 +75,11 @@ foreach ($test in @('m12', 'headless')) {
     $lines = & $binary --test-threads=1 --nocapture 2>&1 | ForEach-Object { "$_" }
     $code = $LASTEXITCODE
     Pop-Location
-    $lines | Select-String -Pattern '^test |test result|panicked|assert|^metric|^note' |
-        ForEach-Object { Write-Host $_.Line }
+    # A panic's message is on the line after "panicked".
+    $lines | Select-String -Pattern '^test |test result|panicked|assert|^metric|^note' -Context 0, 1 |
+        ForEach-Object {
+            Write-Host $_.Line
+            if ($_.Line -match 'panicked') { $_.Context.PostContext | ForEach-Object { Write-Host "  $_" } }
+        }
     Write-Host "check headless_$test=$(if ($code -eq 0) { 'PASS' } else { 'FAIL' })"
 }
