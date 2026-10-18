@@ -796,6 +796,12 @@ impl App {
             && !self.needs_copy_back()
     }
 
+    /// True when the Direct3D 11 video processor's entry would change (a
+    /// new video or display size).
+    pub(crate) fn processor_changed(&self) -> bool {
+        self.processor_filter().map(|(_, entry)| entry) != *self.processor_entry.borrow()
+    }
+
     /// The Direct3D 11 video processor's filter, scaled from the video's
     /// height to the display's.
     fn processor_filter(&self) -> Option<(String, String)> {
@@ -870,11 +876,13 @@ impl App {
                 .map_err(|error| error.to_string())?;
         }
         // First: it takes the decoder's Direct3D 11 frames.
-        if let Some((_, entry)) = self.processor_filter() {
+        let processor = self.processor_filter().map(|(_, entry)| entry);
+        if let Some(entry) = &processor {
             engine
-                .prepend_video_filter(&entry)
+                .prepend_video_filter(entry)
                 .map_err(|error| error.to_string())?;
         }
+        *self.processor_entry.borrow_mut() = processor;
         Ok(())
     }
 

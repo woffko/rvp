@@ -1616,20 +1616,20 @@ Window {
             }
             break
         case 13: {
-            if (Date.now() - t.stepStarted < 5000)
-                break
+            // The chain starts again with SVP's filter in it: mpv's estimate
+            // needs its frames first.
             const svp = s.vf.indexOf("@svp")
             const before = ["@rvpcrop:", "@rvpautolevel:", "@rvpwarpsharp:"].every(label => {
                 const at = s.vf.indexOf(label)
                 return at >= 0 && at < svp
             })
-            t.check("svp_after_m12_filters", before && s.vf.substring(svp) === t.before.svp
-                        && s.estimated_vf_fps >= s.container_fps * factor,
-                    "vf " + s.vf + ", " + s.estimated_vf_fps + " fps")
-            player.run_action("extend-off")
-            player.run_action("auto-level")
-            player.run_action("warpsharp")
-            t.next()
+            if (t.waitFor("svp_after_m12_filters", () => before && s.vf.substring(svp) === t.before.svp
+                              && s.estimated_vf_fps >= s.container_fps * factor, 15000,
+                          () => "vf " + s.vf + ", " + s.estimated_vf_fps + " fps")) {
+                player.run_action("extend-off")
+                player.run_action("auto-level")
+                player.run_action("warpsharp")
+            }
             break
         }
         case 14:

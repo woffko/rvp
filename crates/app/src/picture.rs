@@ -1021,7 +1021,7 @@ impl App {
         self.picture.screen = screen;
         self.update_auto_rotation();
         drop(self.apply_picture(engine));
-        if resize_changes || self.settings.render.wants_processor() {
+        if resize_changes || self.processor_changed() {
             drop(self.apply_video_filters(engine));
         }
     }
@@ -1080,7 +1080,7 @@ impl App {
             self.apply_rotation(engine);
         }
         // Super resolution's scale follows the video's height.
-        if changes.contains(PropertyId::VideoHeight) && self.settings.render.wants_processor() {
+        if changes.contains(PropertyId::VideoHeight) && self.processor_changed() {
             drop(self.apply_video_filters(engine));
         }
         if changes.contains(PropertyId::Sid) {

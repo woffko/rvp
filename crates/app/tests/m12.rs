@@ -786,7 +786,7 @@ fn the_direct3d_video_processor_runs_without_copy_back() {
     );
     assert_eq!(h.app.effective_hwdec(), "d3d11va");
     // mpv checks a filter's options when the chain is set.
-    let entry = "@rvpvpp:d3d11vpp=scaling-mode=nvidia:scale=4.000:nvidia-true-hdr=yes";
+    let entry = "@rvpvpp:d3d11vpp=scaling-mode=nvidia:scale=4.0000:nvidia-true-hdr=yes";
     h.engine
         .set_text("vf", entry)
         .expect("mpv takes d3d11vpp's options");

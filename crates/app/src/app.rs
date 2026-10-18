@@ -365,6 +365,9 @@ pub struct App {
     /// mpv draws into the Direct3D 11 renderer's window (set by the shell
     /// before the engine starts; `render.renderer` is the wish).
     pub(crate) native_video: bool,
+    /// The Direct3D 11 video processor's entry last put in the chain: a
+    /// new video or display size changes the chain only when it changes.
+    pub(crate) processor_entry: std::cell::RefCell<Option<String>>,
 }
 
 impl App {
@@ -445,6 +448,7 @@ impl App {
             clock: None,
             render_defaults: None,
             native_video: false,
+            processor_entry: std::cell::RefCell::new(None),
         };
         app.start_picture();
         Ok(app)

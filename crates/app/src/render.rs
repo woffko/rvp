@@ -279,8 +279,11 @@ impl RenderSettings {
     pub fn processor_filter(&self, scale: f64) -> Option<(String, String)> {
         let mut options = Vec::new();
         if self.super_resolution != "off" && scale > 1.01 {
+            // Rounded up: mpv truncates the scaled size (1440 / 1080 as
+            // 1.333 gave 2559 pixels for 2560).
+            let scale = (scale.min(4.0) * 10_000.0).ceil() / 10_000.0;
             options.push(format!("scaling-mode={}", self.super_resolution));
-            options.push(format!("scale={:.3}", scale.min(4.0)));
+            options.push(format!("scale={scale:.4}"));
         }
         if self.rtx_hdr {
             options.push("nvidia-true-hdr=yes".to_owned());
@@ -501,8 +504,13 @@ mod tests {
             settings.processor_filter(2.0),
             Some((
                 "rvpvpp".to_owned(),
-                "@rvpvpp:d3d11vpp=scaling-mode=nvidia:scale=2.000".to_owned()
+                "@rvpvpp:d3d11vpp=scaling-mode=nvidia:scale=2.0000".to_owned()
             ))
+        );
+        assert!(
+            settings
+                .processor_filter(1440.0 / 1080.0)
+                .is_some_and(|(_, entry)| entry.contains("scale=1.3334"))
         );
         // Nothing to upscale: only RTX Video HDR is left.
         assert_eq!(settings.processor_filter(1.0), None);
