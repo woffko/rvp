@@ -90,8 +90,15 @@ libmpv. The final runs pass: self-test failures 0; the shaders SKIPPED
 Direct3D 11 window placed, disabled and cut as expected, its picture
 SKIPPED (session 0 makes no swapchain); `tests/m12.rs` and
 `tests/headless.rs` pass, the recording 62,159 bytes. `m7-all.ps1` passes
-(one timing failure of goal L's Shift+J check in one of two runs).
-Details: `docs/test-runs/2026-10-18-m12-runs.md`.
+(after finding 13). The final build, a0680ac (`rvp.exe` SHA-256
+cef1b021...), passed `m12-all.ps1` once and `m7-all.ps1` twice on the VM;
+`C:\Users\<user>\rvp-test\rvp-n` holds its portable build (file copies
+only; its 1,677 files checked against the ZIP). Details:
+`docs/test-runs/2026-10-18-m12-runs.md`.
+
+GitHub CI passes on a0680ac (run 39139520476): the checks on Ubuntu
+24.04 and Windows 2025, cargo deny, and both package jobs (the Linux
+package check runs the functional and M11 self-tests on Ubuntu 26.10).
 
 ## The host session
 
@@ -149,6 +156,10 @@ With the owner's permission (eight runs, then two reruns), on the RTX 30-series 
 12. **mpv's frame rate estimate needs time after the chain starts again
     with SVP's filter** (more than 5 s with Direct3D 11): the SVP
     self-test waits up to 15 s.
+13. **The functional self-test's Audio Stretching keys sometimes came near
+    the short fixture's end** on the slow VM, where RVP lets audio chain
+    changes wait for the next file (goal L's rule), and one check timed
+    out in two of four runs; the step now makes room first.
 
 ## Differences from PotPlayer
 
