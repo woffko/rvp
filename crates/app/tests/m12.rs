@@ -748,3 +748,76 @@ fn streams_and_videos_are_recorded() {
         std::thread::sleep(Duration::from_millis(20));
     }
 }
+
+#[test]
+fn rendering_and_decoder_choices_reach_mpv() {
+    use rvp_app::Action;
+    use rvp_app::render::RenderToggle;
+
+    let mut h = Harness::new("render", |_| {});
+    h.open(&[media("fixture-60s.mkv")]);
+    // mpv's defaults first (the harness's core has mpv's own options).
+    assert_eq!(h.text("tone-mapping"), "auto");
+    assert_eq!(h.text("hdr-compute-peak"), "auto");
+    assert!(h.text("hwdec-codecs").contains("hevc"));
+    let dscale = h.text("dscale");
+    let mut settings = h.app.settings.clone();
+    settings.render.dscale = "mitchell".to_owned();
+    settings.render.cscale = "spline36".to_owned();
+    settings.render.tone_mapping = "bt.2390".to_owned();
+    settings.decoders.hardware = vec!["hevc".to_owned(), "av1".to_owned()];
+    settings.decoders.av1 = rvp_app::decoders::Av1Decoder::Ffmpeg;
+    h.app.apply_settings(&h.engine, settings);
+    assert_eq!(h.text("dscale"), "mitchell");
+    assert_eq!(h.text("cscale"), "spline36");
+    assert_eq!(h.text("tone-mapping"), "bt.2390");
+    assert_eq!(h.text("hwdec-codecs"), "av1,hevc");
+    assert_eq!(h.text("vd"), "av1,");
+    // The Pixel Shaders menu's colour items.
+    h.app
+        .dispatch(&h.engine, Action::Render(RenderToggle::ToneMapping));
+    assert_eq!(h.text("tone-mapping"), "clip");
+    h.app
+        .dispatch(&h.engine, Action::Render(RenderToggle::Metadata));
+    assert_eq!(h.text("hdr-compute-peak"), "no");
+    h.app.dispatch(&h.engine, Action::Render(RenderToggle::Icc));
+    assert_eq!(h.text("icc-profile-auto"), "yes");
+    // Back to the default downscaler: mpv's own.
+    let mut settings = h.app.settings.clone();
+    settings.render.dscale.clear();
+    h.app.apply_settings(&h.engine, settings);
+    assert_eq!(h.text("dscale"), dscale);
+}
+
+/// What libmpv's FFmpeg offers M12 (printed for the record; the Windows
+/// VM's run shows the Windows build's): the AviSynth and VapourSynth
+/// demuxers that open `.avs` and `.vpy` files, and Record Video's encoders.
+#[test]
+fn ffmpeg_offers_what_m12_reads_and_writes() {
+    let engine = Engine::new(&EngineOptions::headless()).expect("engine");
+    let demuxers = engine.get_text("demuxer-lavf-list").unwrap_or_default();
+    let has = |name: &str| demuxers.split(',').any(|demuxer| demuxer == name);
+    println!("metric demuxer_avisynth={}", has("avisynth"));
+    println!("metric demuxer_vapoursynth={}", has("vapoursynth"));
+    assert!(has("matroska"), "{demuxers}");
+    let encoders = engine
+        .get_json("encoder-list")
+        .and_then(|list| list.as_array().cloned())
+        .unwrap_or_default();
+    let encoder = |name: &str| {
+        encoders
+            .iter()
+            .any(|entry| entry["driver"].as_str() == Some(name))
+    };
+    println!(
+        "metric encoder_libx264={} encoder_aac={} encoder_libvpx_vp9={} encoder_libopus={}",
+        encoder("libx264"),
+        encoder("aac"),
+        encoder("libvpx-vp9"),
+        encoder("libopus")
+    );
+    assert!(
+        encoder("libx264") && encoder("aac"),
+        "Record Video's encoders"
+    );
+}

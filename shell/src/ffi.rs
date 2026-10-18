@@ -38,6 +38,9 @@ pub mod bridge {
         /// The main window's native handle (`QWindow::winId`), 0 before it
         /// exists; Windows' media controls belong to it.
         fn rvp_main_window_id() -> usize;
+        /// Keeps the mouse pointer on the main window's display (`true`) or
+        /// lets it go (Windows' ClipCursor; nothing elsewhere).
+        fn rvp_confine_cursor(on: bool);
         /// Crashes on purpose (`--crash-test=native`): a write through a
         /// null pointer, which the native crash handler reports.
         fn rvp_crash_test();

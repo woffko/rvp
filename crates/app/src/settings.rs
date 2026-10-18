@@ -143,6 +143,10 @@ pub struct Settings {
     pub record: crate::record::RecordSettings,
     /// M12's visualizations for audio files.
     pub visual: crate::visual::VisualSettings,
+    /// M12's rendering choices (scalers, HDR, the ICC profile).
+    pub render: crate::render::RenderSettings,
+    /// M12's decoders page.
+    pub decoders: crate::decoders::DecoderSettings,
 }
 
 impl Default for Settings {
@@ -201,6 +205,8 @@ impl Default for Settings {
             capture: crate::capture::CaptureSettings::default(),
             record: crate::record::RecordSettings::default(),
             visual: crate::visual::VisualSettings::default(),
+            render: crate::render::RenderSettings::default(),
+            decoders: crate::decoders::DecoderSettings::default(),
         }
     }
 }

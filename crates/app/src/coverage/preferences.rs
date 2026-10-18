@@ -40,11 +40,30 @@ const SEAMLESS: &str = "seamless playback is not in RVP (docs/spikes/m11-studies
                         preloads and joins files only inside its own playlist";
 const SKIN_LIST: &str = "RVP's playlist is the skin's attached panel: it numbers its rows and \
                          takes its font and colours from the skin";
-const WINDOW_SIZES: &str = "planned in M12 (goal N) with the window sizes";
 const CAPTURE_DEVICE: &str = "FFmpeg's dshow and gdigrab choose the format and size; RVP opens \
                               the device or screen as it is";
 const WINAMP_DSP: &str = "mpv's audio chain runs FFmpeg's filters only: native Winamp DSP \
                           plugins cannot run in it";
+const RENDERER: &str = "DirectShow's video renderers do not apply to libmpv: RVP renders with \
+                        mpv's renderer inside its window (D4)";
+const D3D11_OUTPUT: &str = "needs mpv's own Direct3D 11 output (D4's child window); RVP's video \
+                            is drawn into Qt's window through libmpv's render API";
+const DIRECTSHOW: &str = "DirectShow filters do not apply to libmpv: FFmpeg decodes and splits \
+                          (the Decoders page chooses hardware decoding per codec)";
+const COLOR_CONVERSION: &str = "PotPlayer's own colour conversion (DirectShow); mpv's renderer \
+                                converts YCbCr to RGB on the GPU from the file's tags";
+const AVISYNTH: &str = "PotPlayer's AviSynth processing needs a bridge RVP does not have \
+                        (docs/spikes/m12-studies.md: avsw runs a 32-bit AviSynth in a second \
+                        process, 8-bit video only); RVP opens .avs files, runs VapourSynth \
+                        scripts and loads AviSynth plugins in them";
+const MVC: &str = "FFmpeg decodes only H.264 MVC's base view (docs/spikes/m12-studies.md); 3D \
+                   files side by side or top and bottom play through stereo3d";
+const SUBTITLES_3D: &str = "mpv draws subtitles once over the finished picture \
+                            (docs/spikes/m12-studies.md)";
+const WMP: &str = "Windows Media Player's visualization plugins run in WMP's own COM host; RVP \
+                   shows FFmpeg's visualizations (visual.mode)";
+const DEFAULT_ASPECT: &str = "RVP's idle and audio windows keep the size the user gives them; \
+                              with a video the window takes the video's shape (R1 finding 1)";
 
 /// The options RVP has, and the reasons for single ones it lacks, by
 /// dialog and control.
@@ -67,8 +86,8 @@ const ITEMS: &[(u32, u32, Status)] = &[
         356,
         3358,
         Missing(
-            "PotPlayer's own decoders (DirectShow); RVP decodes with mpv, and M12 adds a \
-             decoders page",
+            "PotPlayer's own decoders (DirectShow); RVP decodes with mpv's FFmpeg (the \
+             Decoders page chooses hardware decoding per codec)",
         ),
     ),
     (356, 3089, Setting("audio.mixer.normalize")),
@@ -200,16 +219,12 @@ const ITEMS: &[(u32, u32, Status)] = &[
     ),
     (443, 3079, Missing("RVP has no web view")),
     (443, 3070, Setting("image-folder")),
-    (
-        443,
-        3034,
-        Missing("saved frames go to the image folder; M12 (goal N) takes the frame options"),
-    ),
-    (443, 3073, Missing("video recording is not planned")),
-    (443, 3035, Missing("video recording is not planned")),
+    (443, 3034, Setting("capture.next-to-media")),
+    (443, 3073, Setting("record.video-folder")),
+    (443, 3035, Setting("record.next-to-media")),
     (443, 3071, Setting("audio.recording.folder")),
     (443, 3036, Setting("audio.recording.in-media-folder")),
-    (443, 3072, Missing("RVP does not save streams")),
+    (443, 3072, Setting("record.stream-folder")),
     (443, 3074, Missing(DAUM)),
     // General > Playlist (373).
     (373, 3012, Setting("playlist.thumbnail-rows")),
@@ -267,13 +282,13 @@ const ITEMS: &[(u32, u32, Status)] = &[
     // General > Playlist > Color/View (389): the navigator's look.
     (389, 3072, Setting("playlist.wide-thumbnails")),
     // Playback (358).
-    (358, 3005, Missing(WINDOW_SIZES)),
-    (358, 3273, Missing(WINDOW_SIZES)),
-    (358, 3275, Missing(WINDOW_SIZES)),
-    (358, 3095, Missing(WINDOW_SIZES)),
-    (358, 3007, Missing(WINDOW_SIZES)),
-    (358, 3274, Missing(WINDOW_SIZES)),
-    (358, 3276, Missing(WINDOW_SIZES)),
+    (358, 3005, Setting("window.open-size")),
+    (358, 3273, Setting("window.open-scale")),
+    (358, 3275, Setting("window.custom-size")),
+    (358, 3095, Setting("window.open-first-only")),
+    (358, 3007, Missing(DEFAULT_ASPECT)),
+    (358, 3274, Missing(DEFAULT_ASPECT)),
+    (358, 3276, Missing(DEFAULT_ASPECT)),
     (358, 3014, Setting("audio.stretch")),
     (358, 3277, Setting("playback.speed-step")),
     (358, 3017, Setting("playback.on-failure")),
@@ -526,6 +541,353 @@ const ITEMS: &[(u32, u32, Status)] = &[
     (365, 3003, Missing(WINAMP_DSP)),
     (365, 3024, Missing(WINAMP_DSP)),
     (365, 3315, Missing(WINAMP_DSP)),
+    // M12: Video (355).
+    (355, 3036, Missing(RENDERER)),
+    (355, 3081, Missing(RENDERER)),
+    (355, 3076, Missing(RENDERER)),
+    (355, 3075, Missing(RENDERER)),
+    (355, 3073, Setting("scaler")),
+    (355, 3074, Missing(RENDERER)),
+    (355, 3077, Missing(RENDERER)),
+    (355, 3062, Missing(D3D11_OUTPUT)),
+    (355, 3341, Missing(D3D11_OUTPUT)),
+    (355, 3061, Setting("window.restrict-cursor")),
+    (355, 3040, Missing(RENDERER)),
+    (355, 3052, Setting("render.limited-range")),
+    (355, 3055, Missing(D3D11_OUTPUT)),
+    (355, 3056, Missing(D3D11_OUTPUT)),
+    (355, 3054, Missing(D3D11_OUTPUT)),
+    (355, 3048, Setting("video-sync")),
+    (
+        355,
+        3049,
+        Missing("Qt's scene graph presents RVP's window in step with the display (vsync)"),
+    ),
+    (355, 3047, Setting("video-sync")),
+    (355, 3344, Missing(RENDERER)),
+    (355, 3053, Missing(SUBTITLES_3D)),
+    (355, 3343, Missing(RENDERER)),
+    (355, 3066, Missing(RENDERER)),
+    // Video > Aspect Ratio (432).
+    (432, 3012, Setting("picture.fit")),
+    (432, 3013, Setting("picture.aspect")),
+    (432, 3021, Setting("picture.custom-aspect")),
+    (432, 3014, Setting("picture.output-device")),
+    (432, 3040, Setting("picture.adjust-to-window")),
+    (432, 3043, Setting("picture.fullscreen-mode-limited")),
+    (432, 3273, Setting("picture.fullscreen-margin")),
+    (432, 3016, Setting("picture.fullscreen-margin")),
+    (432, 3041, Setting("picture.subtitle-margin")),
+    (432, 3044, Setting("picture.subtitle-margin-resize")),
+    (
+        432,
+        3042,
+        Setting("picture.subtitle-margin-fullscreen-only"),
+    ),
+    (432, 3015, Setting("picture.subtitle-room")),
+    // Video > Colorspaces (384).
+    (384, 3100, Missing(COLOR_CONVERSION)),
+    (384, 3101, Missing(COLOR_CONVERSION)),
+    (384, 3139, Missing(COLOR_CONVERSION)),
+    (384, 3138, Missing(COLOR_CONVERSION)),
+    (384, 3168, Setting("render.matrix")),
+    (384, 3176, Missing(COLOR_CONVERSION)),
+    (384, 3180, Missing(COLOR_CONVERSION)),
+    (384, 3045, Setting("color.brightness")),
+    (384, 3322, Setting("color.brightness")),
+    (384, 3043, Setting("color.contrast")),
+    (384, 3346, Setting("color.contrast")),
+    (384, 3058, Setting("color.saturation")),
+    (384, 3347, Setting("color.saturation")),
+    (384, 3053, Setting("color.hue")),
+    (384, 3348, Setting("color.hue")),
+    (
+        384,
+        3083,
+        Missing(
+            "mpv's renderer applies the colour controls on the GPU: there are no separate hardware controls",
+        ),
+    ),
+    // Video > Resize (369).
+    (369, 3003, Setting("picture.resize.when")),
+    (369, 3029, Setting("picture.resize")),
+    (369, 3005, Setting("picture.resize.method")),
+    (369, 3234, Setting("picture.resize.param")),
+    (369, 3016, Setting("picture.resize.keep-aspect")),
+    (
+        369,
+        3344,
+        Missing(
+            "PotPlayer's resizer has a level of its own; FFmpeg's scale filter has its method's parameter (picture.resize.param)",
+        ),
+    ),
+    (369, 3179, Setting("picture.resize.condition-display")),
+    (369, 3184, Setting("picture.resize.condition-display")),
+    (369, 3267, Setting("picture.resize.condition-size")),
+    (369, 3271, Setting("picture.resize.condition-size")),
+    (369, 3021, Setting("picture.resize.condition-size")),
+    (369, 3004, Setting("picture.resize.condition-size")),
+    (369, 3268, Setting("picture.resize.condition-display")),
+    (369, 3178, Setting("picture.resize.target")),
+    (369, 3183, Setting("picture.resize.target")),
+    (369, 3186, Setting("picture.resize.target")),
+    (369, 3272, Setting("picture.resize.factor")),
+    (369, 3273, Setting("picture.resize.width")),
+    (369, 3275, Setting("picture.resize.height")),
+    (369, 3024, Setting("picture.resize.width")),
+    (369, 3269, Setting("picture.resize.target")),
+    (369, 3097, Setting("picture.resize.auto-height")),
+    (369, 3013, Setting("picture.resize.interlaced")),
+    // Video > Extend/Crop (374).
+    (374, 3073, Setting("picture.extend")),
+    (374, 3162, Setting("picture.extend")),
+    (374, 3104, Setting("picture.extend-first")),
+    (374, 3105, Setting("picture.extend-scale-height")),
+    (374, 3276, Setting("picture.extend-size")),
+    (374, 3277, Setting("picture.extend-size")),
+    (374, 3278, Setting("picture.extend-ratio")),
+    (374, 3279, Setting("picture.extend-ratio")),
+    (374, 3079, Setting("picture.position")),
+    (374, 3088, Setting("picture.position")),
+    (374, 3084, Setting("picture.position")),
+    (374, 3095, Setting("picture.position")),
+    (374, 3110, Setting("picture.bottom-margin-subtitles-only")),
+    (374, 3100, Setting("picture.bottom-margin")),
+    (
+        374,
+        3111,
+        Missing(
+            "PotPlayer's DirectShow transform filter; RVP's bottom margin is FFmpeg's pad filter, which has no such failure",
+        ),
+    ),
+    // Video > Deinterlacing (385).
+    (385, 3349, Setting("deinterlace")),
+    (385, 3176, Setting("render.field-order")),
+    (385, 3177, Setting("render.field-order")),
+    (385, 3350, Setting("deinterlace")),
+    (385, 3180, Setting("deinterlace")),
+    (385, 3351, Setting("render.deinterlacer")),
+    (385, 3352, Setting("render.field-order")),
+    (
+        385,
+        3107,
+        Missing(
+            "mpv uses the hardware's own deinterlacer (d3d11vpp, VA-API) with hardware decoding; its method is the driver's",
+        ),
+    ),
+    (385, 3172, Setting("render.field-order")),
+    // Video > Levels/Offset (371).
+    (371, 3057, Setting("effects")),
+    (371, 3061, Setting("video-effects.levels.auto-full-range")),
+    (371, 3066, Setting("effects")),
+    (371, 3072, Setting("video-effects.levels.full-range")),
+    (371, 3083, Setting("video-effects.levels.luma-only")),
+    (371, 3276, Setting("video-effects.levels.input")),
+    (371, 3277, Setting("video-effects.levels.input")),
+    (371, 3078, Setting("video-effects.levels.auto-input")),
+    (371, 3279, Setting("video-effects.levels.output")),
+    (371, 3282, Setting("video-effects.levels.output")),
+    (371, 3239, Setting("video-effects.levels.gamma")),
+    (371, 3321, Setting("video-effects.levels.gamma")),
+    (371, 3110, Setting("effects")),
+    (371, 3354, Setting("video-effects.levels.luma-offset")),
+    (371, 3088, Setting("video-effects.levels.luma-offset")),
+    (371, 3355, Setting("video-effects.levels.luma-offset")),
+    (371, 3095, Setting("video-effects.levels.luma-offset")),
+    (371, 3356, Setting("video-effects.levels.chroma-offset")),
+    (371, 3254, Setting("video-effects.levels.chroma-offset")),
+    (371, 3357, Setting("video-effects.levels.chroma-offset")),
+    (371, 3147, Setting("video-effects.levels.chroma-offset")),
+    // Video > Effects (386).
+    (386, 3061, Setting("effects")),
+    (386, 3372, Setting("video-effects.rotate-angle")),
+    (
+        386,
+        3374,
+        Missing("FFmpeg's filters thread themselves where they can; there is no switch"),
+    ),
+    (386, 3149, Setting("effects")),
+    (386, 3373, Setting("effects")),
+    (386, 3110, Setting("effects")),
+    (386, 3359, Setting("video-effects.soften")),
+    (386, 3360, Setting("video-effects.soften")),
+    (386, 3361, Setting("video-effects.soften")),
+    (386, 3115, Setting("effects")),
+    (386, 3084, Setting("video-effects.sharpen")),
+    (386, 3353, Setting("video-effects.sharpen")),
+    (386, 3124, Setting("effects")),
+    (386, 3231, Setting("video-effects.deblock")),
+    (386, 3138, Setting("effects")),
+    (386, 3223, Setting("video-effects.gradual")),
+    (386, 3133, Setting("effects")),
+    (386, 3332, Setting("video-effects.denoise-quality")),
+    (386, 3098, Setting("video-effects.denoise")),
+    (386, 3103, Setting("video-effects.denoise")),
+    (386, 3362, Setting("video-effects.denoise")),
+    (386, 3363, Setting("effects")),
+    (386, 3364, Setting("video-effects.temporal")),
+    (386, 3227, Setting("video-effects.temporal")),
+    (386, 3365, Setting("video-effects.temporal")),
+    (386, 3366, Setting("effects")),
+    (386, 3367, Setting("video-effects.warpsharp")),
+    (
+        386,
+        3368,
+        Missing(
+            "WarpSharp is approximated by FFmpeg's cas filter, which has one strength (video-effects.warpsharp)",
+        ),
+    ),
+    (386, 3370, Setting("deband")),
+    (386, 3375, Setting("video-effects.deband")),
+    (386, 3376, Setting("video-effects.deband")),
+    // Video > Pixel Shaders (505).
+    (505, 3040, Setting("render.icc")),
+    (
+        505,
+        3041,
+        Missing("mpv converts YCgCo video from the file's tags itself"),
+    ),
+    (505, 3042, Setting("render.tone-mapping-on")),
+    (505, 3239, Setting("render.target-peak")),
+    (505, 3100, Setting("render.tone-mapping")),
+    (505, 3043, Setting("render.hdr-metadata")),
+    (505, 3044, Setting("shaders.enabled")),
+    (505, 3243, Setting("shaders.files")),
+    (505, 3045, Setting("shaders.post-enabled")),
+    (
+        505,
+        3046,
+        Missing("mpv's shaders always run on the video image only"),
+    ),
+    (505, 3244, Setting("shaders.post-files")),
+    (505, 3109, Setting("shaders.files")),
+    (505, 3110, Setting("shaders.post-files")),
+    // Video > AviSynth (452).
+    (452, 3036, Missing(AVISYNTH)),
+    (452, 3041, Missing(AVISYNTH)),
+    (452, 3037, Missing(AVISYNTH)),
+    (452, 3038, Missing(AVISYNTH)),
+    (452, 3039, Missing(AVISYNTH)),
+    (452, 3090, Missing(AVISYNTH)),
+    (452, 3034, Missing(AVISYNTH)),
+    (452, 3035, Missing(AVISYNTH)),
+    (452, 3088, Missing(AVISYNTH)),
+    (452, 3089, Missing(AVISYNTH)),
+    (452, 3040, Missing(AVISYNTH)),
+    (452, 3360, Missing(AVISYNTH)),
+    (452, 3069, Missing(AVISYNTH)),
+    // Video > VapourSynth (487).
+    (487, 3036, Setting("vapoursynth.enabled")),
+    (
+        487,
+        3041,
+        Missing("mpv's vapoursynth filter gets every frame and cannot let interlaced ones by"),
+    ),
+    (
+        487,
+        3039,
+        Missing(
+            "mpv's vapoursynth filter starts with the video; how far it reads ahead is vapoursynth.buffered-frames",
+        ),
+    ),
+    (
+        487,
+        3090,
+        Missing(
+            "mpv's vapoursynth filter starts with the video; how far it reads ahead is vapoursynth.buffered-frames",
+        ),
+    ),
+    (487, 3034, Setting("vapoursynth.buffered-frames")),
+    (487, 3040, Setting("vapoursynth.script")),
+    (
+        487,
+        3360,
+        Missing(
+            "RVP runs scripts from their files and edits none: the script is the user's own file",
+        ),
+    ),
+    (487, 3069, Setting("vapoursynth.slots")),
+    // Video > H.264 MVC 3D (448).
+    (448, 3142, Missing(MVC)),
+    (448, 3352, Missing(MVC)),
+    (448, 3350, Setting("stereo.mode")),
+    (448, 3349, Setting("stereo.input")),
+    (448, 3088, Setting("stereo.offset")),
+    (448, 3089, Setting("stereo.offset")),
+    (448, 3138, Setting("stereo.full-resolution")),
+    (448, 3139, Setting("stereo.swap")),
+    (448, 3351, Setting("stereo.output")),
+    (448, 3141, Setting("stereo.auto-detect")),
+    // Playback > Fullscreen Mode (456).
+    (456, 3008, Setting("window.fullscreen-display")),
+    (
+        456,
+        3009,
+        Missing(
+            "a fullscreen window covers one display (Qt's and the platform's fullscreen); the others can turn black (window.black-other-displays)",
+        ),
+    ),
+    (
+        456,
+        3101,
+        Missing("a fullscreen window covers one display (Qt's and the platform's fullscreen)"),
+    ),
+    (
+        456,
+        3010,
+        Missing(
+            "RVP leaves the display's mode as it is; video-sync=display-resample matches the video to the display instead",
+        ),
+    ),
+    (
+        456,
+        3102,
+        Missing(
+            "the skin lays out its fullscreen chrome; RVP shows the panes the skin shows there",
+        ),
+    ),
+    (456, 3103, Setting("window.black-other-displays")),
+    // Playback > Window Size (490).
+    (490, 3267, Setting("window.desktop-sizes")),
+    (490, 3268, Setting("window.desktop-sizes")),
+    (490, 3269, Setting("window.desktop-sizes")),
+    (490, 3270, Setting("window.desktop-sizes")),
+    (490, 3102, Setting("window.double-below")),
+    (490, 3089, Setting("window.double-below")),
+    (
+        490,
+        3103,
+        Missing("RVP keeps the window inside the screen's free area at every size it sets"),
+    ),
+    (
+        490,
+        3090,
+        Missing("RVP keeps the window inside the screen's free area at every size it sets"),
+    ),
+    (490, 3091, Setting("window.double-below")),
+    // General > Skins > Visualization (372).
+    (372, 3040, Setting("visual.enabled")),
+    (372, 3041, Setting("visual.album-art")),
+    (372, 3337, Setting("visual.size")),
+    (372, 3338, Setting("visual.rate")),
+    (372, 3012, Setting("visual.mode")),
+    (372, 3018, Missing(WMP)),
+    (372, 3339, Missing(WMP)),
+    (372, 3027, Missing(WMP)),
+    (372, 3042, Setting("visual.change-every")),
+    (372, 3089, Setting("visual.change-every")),
+    (372, 3021, Setting("visual.folders")),
+    (372, 3024, Setting("visual.folders")),
+    (372, 3242, Setting("visual.folders")),
+    (372, 3088, Setting("visual.slide-seconds")),
+    (372, 3095, Setting("visual.fade-seconds")),
+    (372, 3015, Setting("visual.fade-seconds")),
+    (372, 3016, Setting("visual.fill")),
+    (372, 3034, Setting("visual.random")),
+    (372, 3035, Setting("visual.show-name")),
+    // Filter Control > Video and Audio Decoder (360, 361).
+    (360, 3110, Setting("decoders")),
+    (361, 3110, Setting("audio.passthrough-device")),
 ];
 
 /// The milestone or reason for whole pages, by the start of their place;
@@ -544,8 +906,6 @@ const PAGES: &[(&str, &str)] = &[
     ("General > Playlist > Color/View", NAVIGATOR),
     ("General > Navigation", "not in RVP"),
     ("Playback", "not in RVP"),
-    ("Playback > Fullscreen Mode", "planned in M12 (goal N)"),
-    ("Playback > Window Size", "planned in M12 (goal N)"),
     ("Subtitles", "planned in M13 (goal O)"),
     (
         "Subtitles > Online Subtitle Database",
@@ -569,11 +929,8 @@ const PAGES: &[(&str, &str)] = &[
         "TV tuners are not planned (non-goals)",
     ),
     ("Device > EPG", "TV tuners are not planned (non-goals)"),
-    (
-        "Filter Control",
-        "DirectShow filters do not apply to libmpv; M12 (goal N) adds a decoders page",
-    ),
-    ("Video", "planned in M12 (goal N)"),
+    ("Filter Control", DIRECTSHOW),
+    ("Video", RENDERER),
     (
         "Extensions",
         "PotPlayer's AngelScript extensions: with the deferred online subtitles (M13)",

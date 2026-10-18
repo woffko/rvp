@@ -106,6 +106,7 @@ bool rvp_instance_listen(rust::Str name);
 void rvp_set_c_numeric_locale();
 void rvp_set_window_icon();
 std::size_t rvp_main_window_id();
+void rvp_confine_cursor(bool on);
 void rvp_crash_test();
 void rvp_set_env(rust::Str name, rust::Str value);
 std::size_t rvp_gl_get_proc_address(rust::Str name);

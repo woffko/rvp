@@ -681,6 +681,26 @@ impl App {
             self.visual.cycled = None;
             self.apply_visual(engine);
         }
+        if self.settings.render != old.render {
+            self.apply_render(engine);
+            let filters_changed = self.settings.render.matrix != old.render.matrix
+                || self.settings.render.deinterlacer != old.render.deinterlacer;
+            if filters_changed {
+                drop(self.apply_picture_settings(engine));
+                drop(self.apply_video_filters(engine));
+            }
+        }
+        if self.settings.deinterlace != old.deinterlace
+            && !self.settings.render.deinterlacer.is_empty()
+        {
+            drop(self.apply_video_filters(engine));
+        }
+        if self.settings.decoders != old.decoders {
+            // mpv takes them for the next decoder it opens.
+            for (name, value) in self.settings.decoders.mpv_options() {
+                drop(engine.set_text(name, &value));
+            }
+        }
     }
 }
 

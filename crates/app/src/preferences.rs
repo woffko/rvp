@@ -132,6 +132,8 @@ impl Settings {
         self.window.validate(&mut notes);
         self.capture.validate(&mut notes);
         self.visual.validate(&mut notes);
+        self.render.validate(&mut notes);
+        self.decoders.validate(&mut notes);
         notes
     }
 
@@ -288,7 +290,13 @@ impl Settings {
             }
         }
         let vs = &self.vapoursynth;
-        for file in vs.slots.iter().chain(&vs.plugins).chain(&vs.script) {
+        for file in vs
+            .slots
+            .iter()
+            .chain(&vs.plugins)
+            .chain(&vs.avs_plugins)
+            .chain(&vs.script)
+        {
             if !file.is_file() {
                 notes.push(format!("VapourSynth file {} is not there", file.display()));
             }
@@ -606,6 +614,15 @@ impl App {
                 "subtitle-auto": SUBTITLE_AUTO,
                 "scaler": SCALERS,
                 "resize-method": crate::picture::RESIZE_METHODS,
+                "render-scaler": crate::render::RENDER_SCALERS,
+                "matrix": crate::render::MATRICES,
+                "deinterlacer": crate::render::DEINTERLACERS,
+                "field-order": crate::render::FIELD_ORDERS,
+                "tone-mapping": crate::render::TONE_MAPPINGS,
+                "hardware-codecs": crate::decoders::HARDWARE_CODECS
+                    .iter()
+                    .map(|(codec, text)| serde_json::json!({ "codec": codec, "text": text }))
+                    .collect::<Vec<_>>(),
                 "shader-choices": self
                     .shader_catalogue()
                     .iter()

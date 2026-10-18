@@ -33,7 +33,10 @@ const CONTEXT_REASONS: &[(&str, &str)] = &[
         "101_0_2",
         "Daum's broadcast and chat services (discontinued) and PotPlayer's screen capture are not planned",
     ),
-    ("101_0_6", "visualizations are not planned"),
+    (
+        "101_0_6",
+        "Windows Media Player's visualization plugins and PotPlayer's floating ball are their programs' own; RVP shows FFmpeg's visualizations",
+    ),
     ("101_0_7", "TV devices are not planned"),
     (
         "101_0_8",
@@ -55,15 +58,28 @@ const CONTEXT_REASONS: &[(&str, &str)] = &[
         "frame rate conversion and keeping sync changes are not in RVP yet",
     ),
     ("101_0_10_11", "saving subtitles is not planned"),
-    ("101_0_10_12", "3D subtitles are not planned"),
+    (
+        "101_0_10_12",
+        "mpv draws subtitles once over the finished picture, not once for each eye (docs/spikes/m12-studies.md)",
+    ),
     ("101_0_10_13", "subtitle search is not planned"),
     ("101_0_11", "not in RVP yet"),
-    ("101_0_11_1", "RVP renders through libmpv (D4)"),
+    (
+        "101_0_11_1",
+        "DirectShow's video renderers do not apply to libmpv: RVP renders with mpv's renderer inside its window (D4)",
+    ),
     (
         "101_0_11_2",
-        "mpv's GLSL shaders choose their own stage, so RVP has one shader list",
+        "mpv's shaders always run on the video image only",
     ),
-    ("101_0_11_3", "3D video is not planned"),
+    (
+        "101_0_11_3",
+        "frame-sequential 3D (shutter glasses, NVIDIA 3D Vision, Windows' stereoscopic 3D) needs a stereo swap chain and the GPU's 3D driver; libmpv's render API draws one picture into Qt's window",
+    ),
+    (
+        "101_0_11_3_13",
+        "mpv draws subtitles once over the finished picture, not once for each eye (docs/spikes/m12-studies.md)",
+    ),
     (
         "101_0_11_4",
         "DirectShow transform filters do not apply to libmpv",
@@ -73,42 +89,20 @@ const CONTEXT_REASONS: &[(&str, &str)] = &[
         "mpv scales the video (the scaler is a setting)",
     ),
     (
-        "101_0_11_8",
-        "extending and cropping the picture is not in RVP yet",
+        "101_0_11_9",
+        "PotPlayer's DirectShow transform filter; RVP's bottom margin is FFmpeg's pad filter, which has no such failure",
     ),
-    ("101_0_11_9", "bottom margins are not in RVP yet"),
-    (
-        "101_0_11_10",
-        "this effect is not in RVP yet (RVP has deblock, denoise 3D, soften, sharpen, the flips and deband)",
-    ),
-    (
-        "101_0_11_11",
-        "rotating by the aspect ratio is not in RVP yet",
-    ),
-    (
-        "101_0_11_12",
-        "consecutive images, thumbnails, the clipboard, BMP and file name options are not in RVP yet",
-    ),
-    ("101_0_11_13", "video recording is not planned"),
     (
         "101_0_11_14",
-        "AviSynth is not planned; RVP runs VapourSynth scripts (settings, SVP and VapourSynth page)",
+        "PotPlayer's AviSynth processing needs a bridge RVP does not have (docs/spikes/m12-studies.md: avsw runs a 32-bit AviSynth in a second process, 8-bit video only); RVP opens .avs files, runs VapourSynth scripts and loads AviSynth plugins in them",
     ),
     ("101_0_13", "DirectShow filters do not apply to libmpv"),
     ("101_0_14", "RVP loads one skin, chosen in the settings"),
     ("101_0_15", "not in RVP yet"),
     ("101_0_15_2", "RVP's interface is English"),
     (
-        "101_0_17",
-        "frame size presets and screen margins are not in RVP yet",
-    ),
-    (
-        "101_0_18",
-        "custom ratios, output device correction and margins are not in RVP yet",
-    ),
-    (
         "101_0_19",
-        "other window sizes and window moves are not in RVP yet",
+        "Desktop Mode puts the window into Explorer's desktop layer through an undocumented message, which Windows 11 24H2 changed, and leaves it no keyboard or mouse (docs/spikes/m12-studies.md)",
     ),
 ];
 
@@ -120,7 +114,7 @@ const ITEM_REASONS: &[(u32, &str)] = &[
     (10187, "Daum's login, discontinued"),
     (
         10800,
-        "thumbnail images are M12's (goal N); the thumbnail core that makes them is in RVP",
+        "thumbnail images of the playlist's entries are M14's (goal P); RVP makes the playing file's (Video Capture > Create Thumbnail Image, Alt+N)",
     ),
     (10940, "combined subtitles are M13's (goal O)"),
     (10228, "subtitle editing is not planned"),
@@ -139,23 +133,10 @@ const ITEM_REASONS: &[(u32, &str)] = &[
         "DirectShow filters do not apply to libmpv (its functions are FFmpeg's filters in RVP's chain)",
     ),
     (
-        10917,
-        "mpv manages colours and HDR itself (target colour space, tone mapping)",
-    ),
-    (
         11025,
-        "mpv manages colours and HDR itself (target colour space, tone mapping)",
-    ),
-    (
-        11026,
-        "mpv manages colours and HDR itself (target colour space, tone mapping)",
-    ),
-    (
-        11027,
-        "mpv manages colours and HDR itself (target colour space, tone mapping)",
+        "mpv converts YCgCo video from the file's tags itself",
     ),
     (10644, "presets are not in RVP yet"),
-    (10968, "stay on top while in fullscreen is not in RVP yet"),
     (10339, "RVP's keys are all editable (Keys and Mouse)"),
     (10809, "touch input is not planned"),
     (10442, "other on-screen information is not in RVP yet"),
@@ -325,6 +306,16 @@ const RUNTIME_LISTS: &[(&str, &str)] = &[
     ),
     ("Audio > Equalizer Presets", "PotPlayer's nineteen presets"),
     ("Album/Favorites", "RVP's albums"),
+    (
+        "Video > Pixel Shaders > Pre-Resize Pixel Shaders",
+        "RVP's shaders: its own set, PotPlayer's translated and the user's",
+    ),
+    (
+        "Video > Pixel Shaders > Post-Resize Pixel Shaders",
+        "RVP's shaders: its own set, PotPlayer's translated and the user's",
+    ),
+    ("Video > VapourSynth", "RVP's VapourSynth script slots"),
+    ("Frame Size > Presets", "RVP's frame size presets"),
 ];
 
 /// Why run-time commands are not in RVP, by place; the longest wins.
@@ -350,10 +341,26 @@ const RUNTIME_REASONS: &[(&str, &str)] = &[
         "Subtitles > Subtitle Font Renderer",
         "mpv (libass) renders every subtitle",
     ),
-    ("Video", "planned in M12 (goal N)"),
-    ("Frame Size", "planned in M12 (goal N)"),
-    ("Aspect Ratio", "planned in M12 (goal N)"),
-    ("Window Size", "planned in M12 (goal N)"),
+    (
+        "Filters",
+        "DirectShow filters do not apply to libmpv: FFmpeg decodes and splits (the Decoders page chooses hardware decoding per codec)",
+    ),
+    (
+        "Video > Video Renderer",
+        "DirectShow's video renderers do not apply to libmpv: RVP renders with mpv's renderer inside its window (D4)",
+    ),
+    (
+        "Video > Pixel Shaders",
+        "mpv's shaders always run on the video image only",
+    ),
+    (
+        "Video > 3D Video Mode",
+        "FFmpeg decodes only H.264 MVC's base view (docs/spikes/m12-studies.md); 3D files side by side or top and bottom play through stereo3d",
+    ),
+    (
+        "Video > AviSynth",
+        "PotPlayer's AviSynth processing needs a bridge RVP does not have (docs/spikes/m12-studies.md): its presets do not run; RVP opens .avs files and runs VapourSynth scripts",
+    ),
     ("Misc", "planned in M14 (goal P)"),
     ("Skins", "planned in M14 (goal P)"),
 ];
@@ -743,6 +750,7 @@ pub fn skin_status(command: &str) -> String {
     if let Some(source) = popup_source(command) {
         return match source {
             PopupSource::Context(path) => format!("menu: PotPlayer's `{path}`"),
+            PopupSource::Live(titles) => format!("menu: PotPlayer's live {}", titles.join(" > ")),
             PopupSource::Playlist(path) => format!("menu: PotPlayer's playlist `{path}`"),
             PopupSource::Tracks(_) => "menu: the file's tracks".to_owned(),
             PopupSource::Chapters => "menu: the file's chapters".to_owned(),

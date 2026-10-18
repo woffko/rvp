@@ -64,6 +64,9 @@ const LIVE_FRAME_PRESETS: u32 = 1_383_396;
 /// its shaders there, in place of PotPlayer's (37502 and 39802 on).
 const LIVE_PRE_SHADERS: u32 = 204_269;
 const LIVE_POST_SHADERS: u32 = 269_761;
+/// The live Video > VapourSynth submenu: RVP's script slots in place of
+/// PotPlayer's presets (38400 on).
+const LIVE_VAPOURSYNTH: u32 = 531_020;
 
 /// One item of a PotPlayer menu as R1 recorded it.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -203,6 +206,8 @@ pub fn walk(tree: &[Recorded], visit: &mut impl FnMut(&Recorded)) {
 pub enum PopupSource {
     /// A submenu of PotPlayer's context menu, by path.
     Context(&'static str),
+    /// A submenu of PotPlayer's live menu, by the titles leading to it.
+    Live(&'static [&'static str]),
     /// A submenu of PotPlayer's playlist menu, by path.
     Playlist(&'static str),
     Tracks(TrackKind),
@@ -217,6 +222,10 @@ pub enum PopupSource {
 pub fn popup_source(command: &str) -> Option<PopupSource> {
     Some(match command {
         "CMD_POPUPMENU_ETC" => PopupSource::Context("101_0_15"),
+        // PotPlayer's keys J, K and S (M12): RVP's names.
+        MenuPopup::THREE_D => PopupSource::Live(&["Video", "3D Video Mode"]),
+        MenuPopup::CAPTURE => PopupSource::Live(&["Video", "Video Capture"]),
+        MenuPopup::SHADERS => PopupSource::Live(&["Video", "Pixel Shaders"]),
         "CMD_POPUPMENU_PLAY_GOTO" => PopupSource::Context("101_0_9_6"),
         "CMD_POPUPMENU_PLAY_REPEAT" => PopupSource::Context("101_0_9_11"),
         "CMD_POPUPMENU_SIZE" => PopupSource::Context("101_0_19"),
@@ -240,6 +249,33 @@ pub fn popup_source(command: &str) -> Option<PopupSource> {
         }
         _ => return None,
     })
+}
+
+/// A submenu a key of PotPlayer's shows at the pointer (M12).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub enum MenuPopup {
+    /// J: 3D Video Mode.
+    ThreeD,
+    /// K: Video Capture.
+    Capture,
+    /// S: Pixel Shaders.
+    Shaders,
+}
+
+impl MenuPopup {
+    const THREE_D: &'static str = "RVP_POPUP_3D";
+    const CAPTURE: &'static str = "RVP_POPUP_CAPTURE";
+    const SHADERS: &'static str = "RVP_POPUP_SHADERS";
+
+    /// The popup command the window asks the menu for.
+    #[must_use]
+    pub fn command(self) -> &'static str {
+        match self {
+            MenuPopup::ThreeD => Self::THREE_D,
+            MenuPopup::Capture => Self::CAPTURE,
+            MenuPopup::Shaders => Self::SHADERS,
+        }
+    }
 }
 
 /// What a menu item does.
@@ -268,6 +304,8 @@ pub enum Command {
     /// A shader of the pre-resize (`false`) or post-resize list's choices
     /// in or out of the list (index into `App::shader_choices`).
     Shader(bool, usize),
+    /// A VapourSynth script slot to run (index).
+    Script(usize),
     /// Play a disc's title (DVD Control > Move), by its index.
     DiscTitle(usize),
     /// Show a DVD angle (DVD Control > Angle Option).
@@ -397,6 +435,7 @@ impl Command {
             Command::Shader(post, index) => {
                 format!("h:{}{index}", if post { "post" } else { "pre" })
             }
+            Command::Script(index) => format!("y:{index}"),
             Command::DiscTitle(title) => format!("t:{title}"),
             Command::DiscAngle(angle) => format!("g:{angle}"),
         }
@@ -429,6 +468,7 @@ impl Command {
             "k" => value.parse().ok().map(Command::Bookmark),
             "f" => value.parse().ok().map(Command::Favorite),
             "r" => value.parse().ok().map(Command::Recent),
+            "y" => value.parse().ok().map(Command::Script),
             "h" => {
                 if let Some(index) = value.strip_prefix("post") {
                     index.parse().ok().map(|index| Command::Shader(true, index))
@@ -641,6 +681,11 @@ impl App {
                 let items = self.convert(node, live)?.children;
                 (node.text.clone(), items)
             }
+            PopupSource::Live(titles) => {
+                let node = find_live(titles)?;
+                let items = self.convert(node, live)?.children;
+                (node.text.clone(), items)
+            }
             PopupSource::Tracks(kind) => ("Tracks".to_owned(), self.tracks(live, kind)),
             PopupSource::Chapters => ("Chapter/Bookmark".to_owned(), self.chapter_menu(live)),
             PopupSource::Albums => ("Albums".to_owned(), self.albums()),
@@ -687,6 +732,7 @@ impl App {
                 let path = self.marks().marks().recent.get(index)?.clone();
                 self.open_item(engine, &path, false)
             }
+            Command::Script(index) => self.pick_script(engine, index),
             Command::Shader(post, index) => {
                 let stage = if post {
                     crate::hlsl::Stage::Post
@@ -710,6 +756,9 @@ impl App {
         if node.submenu {
             if node.id == LIVE_FRAME_PRESETS {
                 return MenuItem::submenu(&node.text, self.frame_preset_menu(node, live));
+            }
+            if node.id == LIVE_VAPOURSYNTH {
+                return MenuItem::submenu(&node.text, self.script_menu(node, live));
             }
             if node.id == LIVE_PRE_SHADERS || node.id == LIVE_POST_SHADERS {
                 let post = node.id == LIVE_POST_SHADERS;
@@ -817,6 +866,27 @@ impl App {
                 continue;
             }
             items.extend(self.convert(child, live));
+        }
+        items
+    }
+
+    /// Video > VapourSynth: its commands, then RVP's script slots (the one
+    /// that runs checked).
+    fn script_menu(&self, node: &Recorded, live: &Live) -> Vec<MenuItem> {
+        let mut items: Vec<MenuItem> = node
+            .children
+            .iter()
+            .filter(|child| !(38_400..38_500).contains(&child.id))
+            .filter_map(|child| self.convert(child, live))
+            .collect();
+        let vs = &self.settings.vapoursynth;
+        for (index, slot) in vs.slots.iter().enumerate() {
+            items.push(MenuItem {
+                label: crate::view::file_name(&slot.to_string_lossy()).to_owned(),
+                command: Some(Command::Script(index)),
+                checked: Some(vs.enabled && vs.script.as_ref() == Some(slot)),
+                ..MenuItem::default()
+            });
         }
         items
     }

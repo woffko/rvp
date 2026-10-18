@@ -486,6 +486,11 @@ pub mod qobject {
         #[qinvokable]
         fn video_dialog_answer(self: Pin<&mut Self>, purpose: &QString, text: &QString);
 
+        /// Keeps the mouse pointer on the window's display while `wanted`
+        /// (fullscreen and active) and the setting asks for it (M12).
+        #[qinvokable]
+        fn confine_cursor(self: Pin<&mut Self>, wanted: bool);
+
         /// Something only the window can do; see [`super::request`].
         #[qsignal]
         #[cxx_name = "uiRequest"]

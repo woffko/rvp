@@ -1084,9 +1084,9 @@ impl qobject::Player {
             return;
         };
         if !path.is_empty() {
-            let job = core
-                .app
-                .capture_job(core.save_as, Some(PathBuf::from(path)));
+            let path = PathBuf::from(path);
+            core.app.frame_saved_as(&path);
+            let job = core.app.capture_job(core.save_as, Some(path));
             self.capture(job);
         }
     }

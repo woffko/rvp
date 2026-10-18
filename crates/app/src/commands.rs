@@ -347,6 +347,7 @@ impl App {
             Action::SetAspect(aspect) => Some(self.set_aspect(engine, aspect)),
             Action::VideoFit(fit) => {
                 self.session.fit = fit;
+                self.remember_aspect();
                 drop(self.apply_picture(engine));
                 Some(UiRequest::Osd(crate::picture::fit_text(fit).to_owned()))
             }
@@ -360,6 +361,8 @@ impl App {
             Action::Capture(command) => self.capture_command(command),
             Action::Record(command) => self.recording_command(engine, command),
             Action::Visual(command) => self.visual_command(engine, command),
+            Action::Render(toggle) => Some(self.render_toggle(engine, toggle)),
+            Action::Popup(popup) => Some(UiRequest::PopupMenu(popup.command())),
             Action::SetImageFormat(format) => {
                 self.settings.image_format = format;
                 self.save_settings();
@@ -685,6 +688,7 @@ impl App {
 
     fn set_aspect(&mut self, engine: &Engine, aspect: Aspect) -> UiRequest {
         self.session.aspect = aspect;
+        self.remember_aspect();
         drop(self.apply_picture(engine));
         let text = if aspect == Aspect::Custom {
             self.settings.picture.custom_aspect.clone()

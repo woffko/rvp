@@ -143,7 +143,11 @@ Window {
                  && root.visibility !== Window.Hidden)
             player.window_fullscreen(root.isFullscreen)
     }
-    onActiveChanged: player.window_state(root.visibility === Window.Maximized, root.active)
+    onActiveChanged: {
+        player.window_state(root.visibility === Window.Maximized, root.active)
+        player.confine_cursor(root.isFullscreen && root.active)
+    }
+    onIsFullscreenChanged: player.confine_cursor(root.isFullscreen && root.active)
     onXChanged: geometryTimer.restart()
     onYChanged: geometryTimer.restart()
 

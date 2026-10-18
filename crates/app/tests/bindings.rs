@@ -138,11 +138,15 @@ impl Harness {
         let dir =
             std::env::temp_dir().join(format!("rvp-bindings-{}-{}", std::process::id(), line!()));
         let _ = std::fs::remove_dir_all(&dir);
-        let settings = Settings {
+        let mut settings = Settings {
             reopen_last_file: false,
             remember_positions: false,
             ..Settings::default()
         };
+        // Recordings and saved frames stay in the test's folder.
+        settings.record.stream_folder = Some(dir.join("streams"));
+        settings.record.video_folder = Some(dir.join("videos"));
+        settings.image_folder = Some(dir.join("images"));
         Self {
             app: App::new(settings, &dir).expect("app"),
             engine: Engine::new(&EngineOptions::headless()).expect("engine"),
@@ -999,6 +1003,29 @@ impl Harness {
                     }
                     other => panic!("{action:?}: {other:?}"),
                 }
+            }
+            Action::Record(RecordCommand::StreamToggle) => {
+                match self.dispatch(action) {
+                    Some(UiRequest::Osd(text)) => {
+                        assert!(
+                            text.starts_with("Recording the stream: fixture-60s"),
+                            "{text}"
+                        );
+                    }
+                    other => panic!("{action:?}: {other:?}"),
+                }
+                match self.dispatch(action) {
+                    Some(UiRequest::Osd(text)) => {
+                        assert!(text.starts_with("Recorded the stream"), "{text}");
+                    }
+                    other => panic!("{action:?}: {other:?}"),
+                }
+            }
+            Action::Popup(popup) => {
+                assert_eq!(
+                    self.dispatch(action),
+                    Some(UiRequest::PopupMenu(popup.command()))
+                );
             }
             Action::Capture(CaptureCommand::SheetDialog) => {
                 assert_eq!(

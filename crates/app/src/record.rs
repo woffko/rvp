@@ -32,6 +32,8 @@ pub struct RecordSettings {
 pub enum RecordCommand {
     /// Record Stream...: asks for the file, or stops the recording.
     Stream,
+    /// Start/Stop Stream Recording: into the stream folder at once.
+    StreamToggle,
     /// Record Video...: asks for the file, or stops the recording.
     Video,
     /// Start/Stop Video Recording: into the video folder at once.
@@ -103,7 +105,7 @@ impl App {
         command: RecordCommand,
     ) -> Option<UiRequest> {
         match command {
-            RecordCommand::Stream => {
+            RecordCommand::Stream | RecordCommand::StreamToggle => {
                 if self.record.stream.is_some() {
                     return Some(UiRequest::Osd(self.stop_stream_record(engine)));
                 }
@@ -114,7 +116,11 @@ impl App {
                     .clone()
                     .unwrap_or_else(default_folder);
                 let path = self.record_path(&folder, "mkv")?;
-                Some(UiRequest::RecordStreamDialog(path))
+                if command == RecordCommand::Stream {
+                    Some(UiRequest::RecordStreamDialog(path))
+                } else {
+                    Some(self.start_stream_record(engine, &path))
+                }
             }
             RecordCommand::Video | RecordCommand::VideoToggle => {
                 if self.record.video.is_some() {
@@ -149,7 +155,9 @@ impl App {
     /// The check mark of a recording command.
     pub(crate) fn recording_checked(&self, command: RecordCommand) -> Option<bool> {
         match command {
-            RecordCommand::Stream => Some(self.record.stream.is_some()),
+            RecordCommand::Stream | RecordCommand::StreamToggle => {
+                Some(self.record.stream.is_some())
+            }
             RecordCommand::Video | RecordCommand::VideoToggle => Some(self.record.video.is_some()),
             RecordCommand::ToggleNextToMedia => Some(self.settings.record.next_to_media),
             _ => None,

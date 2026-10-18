@@ -122,6 +122,9 @@ pub struct WindowSettings {
     pub fullscreen_display: FullscreenDisplay,
     /// The other displays turn black while the window is fullscreen.
     pub black_other_displays: bool,
+    /// "Restrict mouse cursor to current display" while fullscreen
+    /// (Windows).
+    pub restrict_cursor: bool,
 }
 
 impl Default for WindowSettings {
@@ -137,6 +140,7 @@ impl Default for WindowSettings {
             double_below: 0,
             fullscreen_display: FullscreenDisplay::Current,
             black_other_displays: false,
+            restrict_cursor: false,
         }
     }
 }

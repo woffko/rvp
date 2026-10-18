@@ -98,6 +98,58 @@ multi-view codec), but mpv takes one view of it. PotPlayer's H.264 MVC 3D
 items keep this reason; Matroska files with both views side by side or
 top and bottom play in 3D through `stereo3d`.
 
-## Desktop Mode, the AviSynth bridge, Direct3D 11
+## Desktop Mode
 
-Written when those studies are done.
+PotPlayer's Desktop Mode (Shift+Enter) plays the video behind the desktop
+icons, as a wallpaper. On Windows that means moving the window into
+Explorer's desktop layer: an undocumented message (0x052C) to the
+`Progman` window makes Explorer create a `WorkerW` window behind the icons,
+and the player's window becomes its child (`SetParent`). Wallpaper
+programs do this, with three problems for RVP:
+
+- the message and the window tree are Explorer's internals, and Windows
+  11 24H2 changed them (the `WorkerW` became a child of `Progman`), so the
+  same code has to find the layer in two ways and may break again;
+- the window then gets no keyboard or mouse input (the icons are in
+  front), so RVP would need a second way to leave the mode (the tray, a
+  global hotkey) and would show no skin;
+- RVP's whole Qt window would move, with its OpenGL context, into a
+  window of another process; a crash leaves the wallpaper black until
+  Explorer redraws it.
+
+Desktop Mode is not in RVP; its menu item and key keep this reason. On
+Linux each desktop has its own wallpaper mechanism (none on GNOME Wayland
+for a client window), so goal S lists it as not possible there.
+
+## AviSynth
+
+Three parts, three answers:
+
+- **Opening `.avs` scripts like files.** FFmpeg reads them through its
+  `avisynth` demuxer, which loads the user's AviSynth+ at run time, when
+  FFmpeg is built with it. RVP lists `.avs` as a media file; whether the
+  Windows libmpv's FFmpeg has the demuxer is printed by
+  `tests/m12.rs` (`ffmpeg_offers_what_m12_reads_and_writes`) on the
+  Windows VM. Ubuntu's FFmpeg 6.1 has neither the AviSynth nor the
+  VapourSynth demuxer (Linux: goal S).
+- **AviSynth plugins in VapourSynth scripts.** VapourSynth's AviSynth
+  compatibility (`core.avs.LoadPlugin`, Windows) loads them; RVP's script
+  wrapper loads the plugins the settings list (`vapoursynth.avs-plugins`)
+  before the script.
+- **PotPlayer's AviSynth processing of the playing video.** PotPlayer
+  feeds the playing video into an AviSynth script (`potplayer_source()`).
+  mpv has no AviSynth filter; the only way is RVP's VapourSynth slot with
+  a bridge that runs AviSynth inside VapourSynth. The bridge that exists,
+  avsw (`avsw.Eval`, the VapourSynth clip injected under a name), runs a
+  32-bit AviSynth in a second process through avsproxy, takes 8-bit video
+  only and copies every frame between the processes. That is a third-party
+  binary RVP would have to ship or ask for, for 8-bit video at a cost per
+  frame, to run PotPlayer's presets, which are mostly MVTools motion
+  interpolation (the TrueMotion scripts) that goal T brings natively. RVP
+  does not use it: the AviSynth processing items and options keep this
+  reason, and VapourSynth scripts (with AviSynth plugins in them) take
+  their place.
+
+## Direct3D 11 output (D4)
+
+Written when the study's host session is done.

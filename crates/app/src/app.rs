@@ -265,9 +265,9 @@ enum Tracking {
 
 /// File extensions "Add folder" picks up.
 const MEDIA_EXTENSIONS: &[&str] = &[
-    "3gp", "aac", "ac3", "aiff", "ape", "asf", "avi", "dts", "flac", "flv", "m2ts", "m4a", "m4v",
-    "mka", "mkv", "mov", "mp3", "mp4", "mpeg", "mpg", "mts", "ogg", "ogm", "ogv", "opus", "rm",
-    "rmvb", "ts", "vob", "wav", "webm", "wma", "wmv", "wv",
+    "3gp", "aac", "ac3", "aiff", "ape", "asf", "avi", "avs", "dts", "flac", "flv", "m2ts", "m4a",
+    "m4v", "mka", "mkv", "mov", "mp3", "mp4", "mpeg", "mpg", "mts", "ogg", "ogm", "ogv", "opus",
+    "rm", "rmvb", "ts", "vob", "wav", "webm", "wma", "wmv", "wv",
 ];
 
 /// The application core.
@@ -359,6 +359,9 @@ pub struct App {
     /// The local date and time for file names (the window's clock; UTC
     /// without one).
     pub(crate) clock: Option<fn() -> String>,
+    /// mpv's own downscaler and chroma scaler, read before RVP sets its
+    /// (`App::apply_render`).
+    pub(crate) render_defaults: Option<[String; 2]>,
 }
 
 impl App {
@@ -437,6 +440,7 @@ impl App {
             record: crate::record::RecordState::default(),
             visual: crate::visual::VisualState::default(),
             clock: None,
+            render_defaults: None,
         };
         app.start_picture();
         Ok(app)
@@ -474,6 +478,13 @@ impl App {
             .extra
             .push(("audio-channels".to_owned(), self.audio_channels()));
         options.extra.extend(self.audio_options());
+        options.extra.extend(
+            self.settings
+                .decoders
+                .mpv_options()
+                .into_iter()
+                .map(|(name, value)| (name.to_owned(), value)),
+        );
         let settings = &self.settings;
         for (name, value) in [
             ("audio-device", settings.audio_device.as_str()),
@@ -573,6 +584,7 @@ impl App {
         if let Err(error) = self.apply_picture_settings(engine) {
             self.warnings.push(format!("Picture settings: {error}"));
         }
+        self.apply_render(engine);
         if let Err(error) = self.apply_video_filters(engine) {
             self.warnings.push(format!("Video filters: {error}"));
         }
@@ -858,6 +870,7 @@ impl App {
             Action::Capture(command) => self.capture_checked(command),
             Action::Record(command) => self.recording_checked(command),
             Action::Visual(command) => self.visual_checked(command),
+            Action::Render(toggle) => Some(self.render_checked(toggle)),
             Action::PlaybackInfo => Some(self.session.info),
             Action::ToggleEqualizer => Some(self.settings.equalizer.enabled),
             Action::Color(crate::video::ColorChange::Toggle) => Some(self.settings.color.enabled),

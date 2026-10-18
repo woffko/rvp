@@ -238,6 +238,80 @@ fn every_playback_and_playlist_hotkey_works_or_says_why_not() {
     assert!(list_keys >= 40, "PotPlayer's playlist keys: {list_keys}");
 }
 
+/// M12: the keys of PotPlayer's Video, Frame Size, Aspect Ratio, Window
+/// Size and Visualization items work by default or say why not; the
+/// submenu keys J, K and S open their submenus.
+#[test]
+fn every_video_and_window_hotkey_works_or_says_why_not() {
+    const AREAS: [&str; 5] = [
+        "Video > ",
+        "Frame Size > ",
+        "Aspect Ratio > ",
+        "Window Size > ",
+        "Visualization > ",
+    ];
+    let mut items: BTreeMap<u32, (String, ItemStatus)> = BTreeMap::new();
+    for (place, item) in commands(context_tree()) {
+        if AREAS.iter().any(|area| place.starts_with(area)) {
+            items.insert(item.id, (place, item_status(item)));
+        }
+    }
+    for command in runtime_commands() {
+        if AREAS.iter().any(|area| command.place.starts_with(area)) {
+            let status = runtime_status(&command);
+            items.insert(command.id, (command.place, status));
+        }
+    }
+    let bindings = Bindings::potplayer_defaults();
+    let mut keys = 0;
+    let mut seen = std::collections::BTreeSet::new();
+    for line in include_str!("../../../docs/r1/hotkeys.tsv").lines().skip(1) {
+        let cells: Vec<&str> = line.split('\t').collect();
+        let (Some(&"157"), Some(key), Some(Ok(id))) = (
+            cells.first(),
+            cells.get(1),
+            cells.get(2).map(|id| id.parse::<u32>()),
+        ) else {
+            continue;
+        };
+        let first = seen.insert(*key);
+        let Some(chord) = KeyChord::parse(key) else {
+            continue;
+        };
+        // The submenu keys.
+        if [10765, 10365, 10367].contains(&id) {
+            assert_eq!(bindings.key(&chord), Action::from_potplayer_id(id), "{key}");
+            keys += 1;
+            continue;
+        }
+        let Some((place, status)) = items.get(&id) else {
+            continue;
+        };
+        keys += 1;
+        match status {
+            ItemStatus::Window(action) if first => {
+                assert_eq!(bindings.key(&chord), Some(*action), "{key}: {place}");
+            }
+            ItemStatus::Window(_) => {}
+            ItemStatus::Runtime(_) => {
+                assert_eq!(
+                    bindings.key(&chord),
+                    Action::from_potplayer_id(id),
+                    "{key}: {place}"
+                );
+            }
+            ItemStatus::Missing(why) => {
+                assert!(
+                    !why.is_empty() && *why != "not in RVP yet",
+                    "{key}: {place} ({id}) needs its reason"
+                );
+            }
+            other @ ItemStatus::List(_) => panic!("{key}: {place} ({id}) is {other:?}"),
+        }
+    }
+    assert!(keys >= 60, "PotPlayer's video and window keys: {keys}");
+}
+
 #[test]
 fn every_command_line_switch_is_sorted_out() {
     let switches = rvp_app::coverage::command_line_switches();

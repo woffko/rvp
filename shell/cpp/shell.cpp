@@ -43,6 +43,12 @@
 
 #include "rvp-shell/src/ffi.cxxqt.h"
 
+#ifdef Q_OS_WIN
+#include <windows.h>
+// ClipCursor and the monitor calls.
+#pragma comment(lib, "user32.lib")
+#endif
+
 namespace {
 
 void writeLine(const QString &line)
@@ -565,6 +571,25 @@ std::size_t rvp_main_window_id()
         if (window->objectName() == QLatin1String("rvpMain"))
             return static_cast<std::size_t>(window->winId());
     return 0;
+}
+
+void rvp_confine_cursor(bool on)
+{
+#ifdef Q_OS_WIN
+    if (!on) {
+        ClipCursor(nullptr);
+        return;
+    }
+    const auto window = reinterpret_cast<HWND>(rvp_main_window_id());
+    if (window == nullptr)
+        return;
+    MONITORINFO info{};
+    info.cbSize = sizeof(info);
+    if (GetMonitorInfoW(MonitorFromWindow(window, MONITOR_DEFAULTTONEAREST), &info))
+        ClipCursor(&info.rcMonitor);
+#else
+    (void)on;
+#endif
 }
 
 void rvp_crash_test()

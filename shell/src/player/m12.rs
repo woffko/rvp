@@ -276,6 +276,14 @@ impl qobject::Player {
         core.app.set_screen(core.engine, screen);
     }
 
+    pub(crate) fn confine_cursor(self: Pin<&mut Self>, wanted: bool) {
+        let on = wanted
+            && self
+                .core()
+                .is_some_and(|core| core.app.settings.window.restrict_cursor);
+        crate::ffi::bridge::rvp_confine_cursor(on);
+    }
+
     pub(crate) fn video_dialog_answer(mut self: Pin<&mut Self>, purpose: &QString, text: &QString) {
         let Some(core) = self.as_mut().core_mut() else {
             return;

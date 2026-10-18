@@ -56,6 +56,8 @@ pub enum CaptureCommand {
     ConsecutiveToggle,
     /// Create Thumbnail Image...
     SheetDialog,
+    /// Delete the last saved frame (to the Recycle Bin, after asking).
+    DeleteLast,
 }
 
 /// The contact sheet's settings (Create Thumbnail Image).
@@ -511,6 +513,8 @@ pub(crate) struct SheetJob {
 pub(crate) struct CaptureState {
     pub(crate) consecutive: Option<Consecutive>,
     pub(crate) sheet: Option<SheetJob>,
+    /// The file the last capture went to (Delete the last saved frame).
+    pub(crate) last_saved: Option<PathBuf>,
 }
 
 impl App {
@@ -603,9 +607,15 @@ impl App {
     }
 
     /// Saves the current frame (Ctrl+E, Ctrl+Alt+E).
-    pub(crate) fn save_shot(&self, shot: Shot) -> Option<UiRequest> {
+    pub(crate) fn save_shot(&mut self, shot: Shot) -> Option<UiRequest> {
         let path = self.frame_path()?;
+        self.capture.last_saved = Some(path.clone());
         Some(UiRequest::Capture(self.capture_job(shot, Some(path))))
+    }
+
+    /// A frame saved through the Save As dialog.
+    pub fn frame_saved_as(&mut self, path: &Path) {
+        self.capture.last_saved = Some(path.to_path_buf());
     }
 
     /// The Video Capture menu's M12 commands.
@@ -650,6 +660,15 @@ impl App {
             CaptureCommand::SheetDialog => {
                 self.model.loaded_path()?;
                 return Some(UiRequest::CaptureDialog("sheet"));
+            }
+            CaptureCommand::DeleteLast => {
+                return Some(match self.capture.last_saved.take() {
+                    Some(path) if path.is_file() => UiRequest::ConfirmRecycle {
+                        files: vec![path],
+                        entries: Vec::new(),
+                    },
+                    _ => UiRequest::Osd("No saved frame to delete".to_owned()),
+                });
             }
         };
         self.save_settings();

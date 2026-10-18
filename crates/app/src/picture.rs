@@ -206,6 +206,8 @@ impl Default for Frame {
 /// Video > Resize's options (Preferences: Video > Resize).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(default, rename_all = "kebab-case")]
+// PotPlayer's Resize page: independent options, a check box each.
+#[allow(clippy::struct_excessive_bools)]
 pub struct Resize {
     pub when: ResizeWhen,
     pub target: ResizeTarget,
@@ -218,6 +220,18 @@ pub struct Resize {
     pub auto_height: bool,
     /// FFmpeg's scaler (`bicubic`, `bilinear`, `lanczos`...).
     pub method: String,
+    /// The scaler's parameter (`param0`: bicubic's B, lanczos' width;
+    /// 0: FFmpeg's default).
+    pub param: f64,
+    /// "Aspect ratio": the frame keeps its shape inside the size, or
+    /// takes the size.
+    pub keep_aspect: bool,
+    /// What Smaller and Larger compare with: the display's resolution, or
+    /// `condition_size` ("Match size").
+    pub condition_display: bool,
+    pub condition_size: [u32; 2],
+    /// "Interlaced mode": the fields are scaled apart.
+    pub interlaced: bool,
 }
 
 impl Default for Resize {
@@ -230,6 +244,11 @@ impl Default for Resize {
             height: 1080,
             auto_height: true,
             method: "bicubic".to_owned(),
+            param: 0.0,
+            keep_aspect: true,
+            condition_display: true,
+            condition_size: [1280, 720],
+            interlaced: false,
         }
     }
 }
@@ -267,6 +286,12 @@ pub struct Picture {
     pub extend_ratio: String,
     /// The size "Extend/Crop by pixel" gives the frame.
     pub extend_size: [u32; 2],
+    /// "Use video extension before resizing": Extend/Crop before Video >
+    /// Resize (after it otherwise).
+    pub extend_first: bool,
+    /// "Scale only frame height": Extend/Crop by ratio scales the height
+    /// to the ratio instead of adding bars or cutting.
+    pub extend_scale_height: bool,
     /// Where the picture sits in an extended or cropped frame: the
     /// horizontal and vertical position in percent.
     pub position: [f64; 2],
@@ -292,6 +317,10 @@ pub struct Picture {
     pub frame: Frame,
     pub auto_rotate: AutoRotate,
     pub resize: Resize,
+    /// The Aspect Ratio page's "AR Mode" and "Override AR": the mode and
+    /// the ratio of the last run, which the next starts with.
+    pub fit: crate::action::Fit,
+    pub aspect: crate::action::Aspect,
 }
 
 /// Frame Size's presets as RVP ships them: zooms and stretches of 10, 20
@@ -326,6 +355,8 @@ impl Default for Picture {
             fullscreen_margin: 10.0,
             extend: ExtendMethod::None,
             extend_ratio: "4:3".to_owned(),
+            extend_first: false,
+            extend_scale_height: false,
             extend_size: [1920, 1080],
             position: [50.0, 50.0],
             bottom_margin: 0,
@@ -342,6 +373,8 @@ impl Default for Picture {
             frame: Frame::default(),
             auto_rotate: AutoRotate::Off,
             resize: Resize::default(),
+            fit: crate::action::Fit::KeepAspect,
+            aspect: crate::action::Aspect::Default,
         }
     }
 }
@@ -385,12 +418,17 @@ pub fn crop_graph(
     ratio: f64,
     size: [u32; 2],
     position: [f64; 2],
+    scale_height: bool,
 ) -> Option<String> {
     let x = number((position[0] / 100.0).clamp(0.0, 1.0));
     let y = number((position[1] / 100.0).clamp(0.0, 1.0));
     let r = number(ratio);
     match method {
         ExtendMethod::None => None,
+        // "Scale only frame height": the height becomes the ratio's.
+        ExtendMethod::Crop | ExtendMethod::Extend if scale_height => {
+            Some(format!("scale=w=iw:h='round(iw*sar/{r}/2)*2'"))
+        }
         // Even sizes (the 4:2:0 formats need them), rounded: the ratio's
         // digits must not cost a row.
         ExtendMethod::Crop => Some(format!(
@@ -426,6 +464,16 @@ pub fn resize_graph(resize: &Resize, screen: Option<(u32, u32)>) -> Option<Strin
     if resize.when == ResizeWhen::Never {
         return None;
     }
+    // What Smaller and Larger compare with.
+    let limit = || -> Option<(String, String)> {
+        if resize.condition_display {
+            let (width, height) = screen?;
+            Some((number(f64::from(width)), number(f64::from(height))))
+        } else {
+            let [width, height] = resize.condition_size;
+            Some((width.to_string(), height.to_string()))
+        }
+    };
     let (width, height) = match resize.target {
         ResizeTarget::Display => {
             let (width, height) = screen?;
@@ -444,21 +492,38 @@ pub fn resize_graph(resize: &Resize, screen: Option<(u32, u32)>) -> Option<Strin
             },
         ),
     };
-    // The frame keeps its shape inside the size; the condition leaves
-    // frames that should stay as they are at their own size.
+    // The condition leaves frames that should stay as they are at their
+    // own size.
     let condition = match resize.when {
         ResizeWhen::Never => return None,
         ResizeWhen::Always => "1".to_owned(),
-        ResizeWhen::Smaller => format!("lt(iw,{width})*lt(ih,{height})"),
-        ResizeWhen::Larger => format!("gt(iw,{width})+gt(ih,{height})"),
+        ResizeWhen::Smaller => {
+            let (limit_width, limit_height) = limit()?;
+            format!("lt(iw,{limit_width})*lt(ih,{limit_height})")
+        }
+        ResizeWhen::Larger => {
+            let (limit_width, limit_height) = limit()?;
+            format!("gt(iw,{limit_width})+gt(ih,{limit_height})")
+        }
     };
     let method = if RESIZE_METHODS.contains(&resize.method.as_str()) {
         resize.method.as_str()
     } else {
         "bicubic"
     };
+    let shape = if resize.keep_aspect {
+        ":force_original_aspect_ratio=decrease:force_divisible_by=2"
+    } else {
+        ""
+    };
+    let param = if resize.param > 0.0 {
+        format!(":param0={}", number(resize.param))
+    } else {
+        String::new()
+    };
+    let interlaced = if resize.interlaced { ":interl=1" } else { "" };
     Some(format!(
-        "scale=w='if({condition},{width},iw)':h='if({condition},{height},ih)':force_original_aspect_ratio=decrease:force_divisible_by=2:flags={method}"
+        "scale=w='if({condition},{width},iw)':h='if({condition},{height},ih)'{shape}:flags={method}{param}{interlaced}"
     ))
 }
 
@@ -912,10 +977,20 @@ impl App {
             filters.push((RESIZE_LABEL, graph));
         }
         let ratio = parse_ratio(&picture.extend_ratio).unwrap_or(4.0 / 3.0);
-        if let Some(graph) =
-            crop_graph(picture.extend, ratio, picture.extend_size, picture.position)
-        {
-            filters.push((CROP_LABEL, graph));
+        if let Some(graph) = crop_graph(
+            picture.extend,
+            ratio,
+            picture.extend_size,
+            picture.position,
+            picture.extend_scale_height,
+        ) {
+            // "Use video extension before resizing".
+            let at = if picture.extend_first {
+                0
+            } else {
+                filters.len()
+            };
+            filters.insert(at, (CROP_LABEL, graph));
         }
         let margin_wanted = !picture.bottom_margin_subtitles_only || self.has_subtitles();
         if margin_wanted && let Some(graph) = margin_graph(picture.bottom_margin) {
@@ -1057,6 +1132,7 @@ impl App {
                     .position(|fit| *fit == self.session.fit)
                     .map_or(0, |index| (index + 1) % FIT_CYCLE.len());
                 self.session.fit = FIT_CYCLE[index];
+                self.remember_aspect();
                 drop(self.apply_picture(engine));
                 return Some(UiRequest::Osd(fit_text(self.session.fit).to_owned()));
             }
@@ -1289,6 +1365,7 @@ impl App {
                     .clone_into(&mut self.settings.picture.custom_aspect);
                 self.session.aspect = Aspect::Custom;
                 self.save_settings();
+                self.remember_aspect();
                 drop(self.apply_picture(engine));
                 Some(UiRequest::Osd(format!("Aspect ratio: {}", text.trim())))
             }
@@ -1382,6 +1459,18 @@ impl App {
     pub(crate) fn start_picture(&mut self) {
         if self.settings.picture.remember_margins {
             self.picture.margins = self.settings.picture.margins;
+        }
+        self.session.fit = self.settings.picture.fit;
+        self.session.aspect = self.settings.picture.aspect;
+    }
+
+    /// Keeps the aspect ratio mode and ratio for the next run.
+    pub(crate) fn remember_aspect(&mut self) {
+        let picture = &mut self.settings.picture;
+        if picture.fit != self.session.fit || picture.aspect != self.session.aspect {
+            picture.fit = self.session.fit;
+            picture.aspect = self.session.aspect;
+            self.save_settings();
         }
     }
 
@@ -1494,22 +1583,28 @@ mod tests {
     #[test]
     fn crop_and_extend_graphs_read_the_files_shape() {
         assert_eq!(
-            crop_graph(ExtendMethod::None, 1.0, [1, 1], [50.0, 50.0]),
+            crop_graph(ExtendMethod::None, 1.0, [1, 1], [50.0, 50.0], false),
             None
         );
-        let crop =
-            crop_graph(ExtendMethod::Crop, 4.0 / 3.0, [0, 0], [50.0, 50.0]).unwrap_or_default();
+        let crop = crop_graph(ExtendMethod::Crop, 4.0 / 3.0, [0, 0], [50.0, 50.0], false)
+            .unwrap_or_default();
         assert!(crop.starts_with("crop=w='if(gt(dar,1.333333)"), "{crop}");
         assert!(crop.contains(":x='(iw-ow)*0.5'"), "{crop}");
-        let pad = crop_graph(ExtendMethod::Extend, 2.35, [0, 0], [0.0, 100.0]).unwrap_or_default();
+        let pad =
+            crop_graph(ExtendMethod::Extend, 2.35, [0, 0], [0.0, 100.0], false).unwrap_or_default();
         assert!(pad.starts_with("pad=w='if(lt(dar,2.35)"), "{pad}");
         assert!(
             pad.contains(":x='(ow-iw)*0':y='(oh-ih)*1':color=black"),
             "{pad}"
         );
-        let pixels =
-            crop_graph(ExtendMethod::Pixels, 1.0, [640, 480], [50.0, 50.0]).unwrap_or_default();
+        let pixels = crop_graph(ExtendMethod::Pixels, 1.0, [640, 480], [50.0, 50.0], false)
+            .unwrap_or_default();
         assert!(pixels.contains("crop=w='min(iw,640)'") && pixels.contains("pad=w='max(iw,640)'"));
+        // "Scale only frame height".
+        assert_eq!(
+            crop_graph(ExtendMethod::Extend, 4.0 / 3.0, [0, 0], [50.0, 50.0], true).as_deref(),
+            Some("scale=w=iw:h='round(iw*sar/1.333333/2)*2'")
+        );
         assert_eq!(margin_graph(0), None);
         assert_eq!(
             margin_graph(10).as_deref(),
@@ -1543,6 +1638,23 @@ mod tests {
         resize.method = "lanczos".to_owned();
         let graph = resize_graph(&resize, None).unwrap_or_default();
         assert!(graph.contains("h='if(1,1280*ih/iw,ih)'") && graph.ends_with("flags=lanczos"));
+        // A size of its own to compare with, the scaler's parameter, the
+        // fields apart, and the frame taking the size.
+        resize.when = ResizeWhen::Larger;
+        resize.condition_display = false;
+        resize.condition_size = [1280, 720];
+        resize.param = 3.0;
+        resize.interlaced = true;
+        resize.keep_aspect = false;
+        let graph = resize_graph(&resize, None).unwrap_or_default();
+        assert!(
+            graph.starts_with("scale=w='if(gt(iw,1280)+gt(ih,720),1280,iw)'"),
+            "{graph}"
+        );
+        assert!(
+            graph.ends_with("':flags=lanczos:param0=3:interl=1"),
+            "{graph}"
+        );
     }
 
     #[test]

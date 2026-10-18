@@ -237,7 +237,8 @@ pub enum SubtitleStyle {
 }
 
 /// The video's aspect ratio.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Default, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
 pub enum Aspect {
     /// As the container says (PotPlayer's "Default Display AR").
     #[default]
@@ -254,7 +255,8 @@ pub enum Aspect {
 }
 
 /// How the video fills the video area.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Default, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
 pub enum Fit {
     /// Inside the area, keeping the aspect ratio.
     #[default]
@@ -383,10 +385,11 @@ pub enum SettingsPage {
     FullscreenMode,
     Capture,
     Visualization,
+    Decoders,
 }
 
 impl SettingsPage {
-    pub const ALL: [SettingsPage; 28] = [
+    pub const ALL: [SettingsPage; 29] = [
         SettingsPage::Playback,
         SettingsPage::TimeJump,
         SettingsPage::Skip,
@@ -415,6 +418,7 @@ impl SettingsPage {
         SettingsPage::FullscreenMode,
         SettingsPage::Capture,
         SettingsPage::Visualization,
+        SettingsPage::Decoders,
     ];
 
     /// The page's key in the settings window (`shell/qml/Settings.qml`).
@@ -449,6 +453,7 @@ impl SettingsPage {
             SettingsPage::FullscreenMode => "fullscreen-mode",
             SettingsPage::Capture => "capture",
             SettingsPage::Visualization => "visualization",
+            SettingsPage::Decoders => "decoders",
         }
     }
 }
@@ -564,6 +569,8 @@ pub enum Action {
     Shaders(ShaderCommand),
     /// The active VapourSynth script slot on or off.
     ToggleVapourSynth,
+    /// The folder of the VapourSynth scripts (M12).
+    OpenScriptFolder,
     /// Save the current frame under a chosen name.
     SaveFrameAs,
     /// M12's Video Capture commands.
@@ -572,6 +579,10 @@ pub enum Action {
     Record(crate::record::RecordCommand),
     /// M12's visualizations for audio files.
     Visual(crate::visual::VisualCommand),
+    /// M12's colour items of the Pixel Shaders menu (rendering).
+    Render(crate::render::RenderToggle),
+    /// A submenu at the pointer (PotPlayer's J, K and S).
+    Popup(crate::menu::MenuPopup),
     /// The Audio menu's processing commands (M10).
     Audio(AudioCommand),
     // M11.
@@ -2693,6 +2704,22 @@ pub const ACTIONS: &[ActionInfo] = &[
         &[],
     ),
     info(
+        Action::Record(crate::record::RecordCommand::StreamToggle),
+        "record-stream-toggle",
+        "Start/Stop Stream Recording",
+        None,
+        &[10502],
+        &[],
+    ),
+    info(
+        Action::Capture(crate::capture::CaptureCommand::DeleteLast),
+        "delete-last-frame",
+        "Delete the last saved frame",
+        None,
+        &[11046],
+        &[],
+    ),
+    info(
         Action::Record(crate::record::RecordCommand::Video),
         "record-video",
         "Record Video...",
@@ -3875,6 +3902,54 @@ pub const ACTIONS: &[ActionInfo] = &[
         &[],
     ),
     info(
+        Action::Popup(crate::menu::MenuPopup::ThreeD),
+        "menu-3d",
+        "3D Video Mode (menu)",
+        Some("J"),
+        &[10765],
+        &[],
+    ),
+    info(
+        Action::Popup(crate::menu::MenuPopup::Capture),
+        "menu-video-capture",
+        "Video Capture (menu)",
+        Some("K"),
+        &[10365],
+        &[],
+    ),
+    info(
+        Action::Popup(crate::menu::MenuPopup::Shaders),
+        "menu-pixel-shaders",
+        "Pixel Shaders (menu)",
+        Some("S"),
+        &[10367],
+        &[],
+    ),
+    info(
+        Action::Render(crate::render::RenderToggle::Icc),
+        "icc-correction",
+        "Enable Display ICC Color Gamut Correction",
+        None,
+        &[10917],
+        &[],
+    ),
+    info(
+        Action::Render(crate::render::RenderToggle::ToneMapping),
+        "hdr-tone-mapping",
+        "Enable SMPTE ST 2084 HDR Correction",
+        None,
+        &[11027],
+        &[],
+    ),
+    info(
+        Action::Render(crate::render::RenderToggle::Metadata),
+        "hdr-metadata",
+        "Enable SMPTE ST 2086 HDR Correction",
+        None,
+        &[11026],
+        &[],
+    ),
+    info(
         Action::Shaders(ShaderCommand::Reload),
         "shaders-reload",
         "Reload Pixel Shader list",
@@ -3893,9 +3968,25 @@ pub const ACTIONS: &[ActionInfo] = &[
     info(
         Action::ToggleVapourSynth,
         "toggle-vapoursynth",
-        "VapourSynth Script",
+        "Enable VapourSynth processing",
         None,
+        &[10995],
         &[],
+    ),
+    info(
+        Action::OpenScriptFolder,
+        "vapoursynth-folder",
+        "Open VapourSynth preset folder",
+        None,
+        &[10996],
+        &[],
+    ),
+    info(
+        Action::Settings(SettingsPage::Svp),
+        "vapoursynth-settings",
+        "VapourSynth Settings...",
+        None,
+        &[10997],
         &[],
     ),
     info(

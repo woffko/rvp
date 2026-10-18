@@ -48,7 +48,8 @@ ApplicationWindow {
         { key: "window-size", title: "Window Size" },
         { key: "fullscreen-mode", title: "Fullscreen Mode" },
         { key: "capture", title: "Video Capture" },
-        { key: "visualization", title: "Visualization" }
+        { key: "visualization", title: "Visualization" },
+        { key: "decoders", title: "Decoders" }
     ]
     // PotPlayer's tree: each group opens into its pages, and the selected
     // group's pages show as tabs over the page. `page` is the group's own
@@ -59,6 +60,7 @@ ApplicationWindow {
           pages: ["time-jump", "skip", "section-repeat", "scene-browser", "window-size", "fullscreen-mode"] },
         { title: "Subtitles", page: "subtitles", pages: [] },
         { title: "Device", page: "devices", pages: [] },
+        { title: "Filter Control", page: "decoders", pages: [] },
         { title: "Video", page: "video",
           pages: ["aspect-ratio", "resize", "extend-crop", "frame-size", "stereo", "shaders", "svp", "capture"] },
         { title: "Audio", page: "audio",
@@ -408,6 +410,29 @@ ApplicationWindow {
             text: "Add"
             enabled: shaderChoice.currentIndex >= 0
             onClicked: win.listAdd(picker.target, [picker.choices[shaderChoice.currentIndex].path])
+        }
+    }
+
+    // Common sizes for a `[width, height]` setting (`target.0`/`.1`), or
+    // for one with `width` and `height` fields.
+    component SizePresets: RowLayout {
+        id: sizes
+        property string target
+        Label { text: "Sizes:" }
+        Repeater {
+            model: [[1280, 720], [1920, 1080], [2560, 1440], [3840, 2160]]
+            delegate: Button {
+                required property var modelData
+                text: modelData[0] + "×" + modelData[1]
+                onClicked: {
+                    if (Array.isArray(win.value(sizes.target))) {
+                        win.set(sizes.target, modelData)
+                    } else {
+                        win.set(sizes.target + ".width", modelData[0])
+                        win.set(sizes.target + ".height", modelData[1])
+                    }
+                }
+            }
         }
     }
 
@@ -1147,10 +1172,40 @@ ApplicationWindow {
                                       "display-resample": "display-resample (smooth, resamples audio)" })
                         }
                         Choice {
-                            label: "Scaler"
+                            label: "Upscaler"
                             path: "scaler"
                             values: win.withCurrent(win.view.choices.scaler, win.s.scaler)
                             texts: ({ "": "mpv's default" })
+                        }
+                        Choice {
+                            label: "Downscaler"
+                            path: "render.dscale"
+                            values: win.view.choices["render-scaler"] || []
+                            texts: ({ "": "mpv's default" })
+                        }
+                        Choice {
+                            label: "Chroma scaler"
+                            path: "render.cscale"
+                            values: win.view.choices["render-scaler"] || []
+                            texts: ({ "": "mpv's default" })
+                        }
+                        Heading { text: "HDR and colour" }
+                        Check { path: "render.tone-mapping-on"; text: "Map HDR to the display (SMPTE ST 2084 correction)" }
+                        Choice {
+                            label: "Tone mapping"
+                            path: "render.tone-mapping"
+                            values: win.view.choices["tone-mapping"] || []
+                            texts: ({ "auto": "auto (mpv's choice)" })
+                        }
+                        Check { path: "render.hdr-metadata"; text: "Use the file's mastering metadata (SMPTE ST 2086) instead of measured peaks" }
+                        Check { path: "render.icc"; text: "Use the display's ICC profile (colour gamut correction)" }
+                        Amount { label: "SDR monitor luminance"; path: "render.target-peak"; values: [0, 100, 120, 160, 200, 203, 250, 300, 400, 500, 600, 800, 1000]; format: v => v === 0 ? "mpv's choice" : v + " nits" }
+                        Check { path: "render.limited-range"; text: "Use limited (16-235) colour range" }
+                        Choice {
+                            label: "YCbCr to RGB matrix"
+                            path: "render.matrix"
+                            values: win.view.choices["matrix"] || []
+                            texts: ({ "auto": "From the file (auto)" })
                         }
                         Heading { text: "Deinterlacing" }
                         Choice {
@@ -1158,6 +1213,18 @@ ApplicationWindow {
                             path: "deinterlace"
                             values: ["auto", "on", "off"]
                             texts: ({ "auto": "Auto (interlaced frames only)", "on": "Always", "off": "Off" })
+                        }
+                        Choice {
+                            label: "Software deinterlacer"
+                            path: "render.deinterlacer"
+                            values: win.view.choices["deinterlacer"] || []
+                            texts: ({ "": "mpv's choice", "bwdif": "bwdif (Bob Weaver)", "yadif": "yadif", "w3fdif": "w3fdif" })
+                        }
+                        Choice {
+                            label: "Field order"
+                            path: "render.field-order"
+                            values: win.view.choices["field-order"] || []
+                            texts: ({ "auto": "From the file", "top": "Top field first", "bottom": "Bottom field first" })
                         }
                         Heading { text: "Colour" }
                         Check { path: "color.enabled"; text: "Use the colour adjustments (Q switches them off and back)" }
@@ -1262,6 +1329,8 @@ ApplicationWindow {
                         Amount { label: "Height"; path: "picture.extend-size.1"; from: 120; to: 4320; step: 8; unit: "px" }
                         Amount { label: "Horizontal position"; path: "picture.position.0"; from: 0; to: 100; unit: "%"; live: true }
                         Amount { label: "Vertical position"; path: "picture.position.1"; from: 0; to: 100; unit: "%"; live: true }
+                        Check { path: "picture.extend-first"; text: "Use video extension before resizing" }
+                        Check { path: "picture.extend-scale-height"; text: "Scale only the frame's height (no bars, no cutting)" }
                         Heading { text: "Bottom margin" }
                         Amount { label: "Black below the picture"; path: "picture.bottom-margin"; values: [0, 5, 10, 15, 20, 25, 30]; unit: "%" }
                         Check { path: "picture.bottom-margin-subtitles-only"; text: "Only when subtitles exist" }
@@ -1274,9 +1343,13 @@ ApplicationWindow {
                             label: "Resize video"
                             path: "picture.resize.when"
                             values: ["never", "smaller", "larger", "always"]
-                            texts: ({ "never": "Do nothing", "smaller": "When the input is smaller than the size",
-                                      "larger": "When the input is larger than the size", "always": "Always" })
+                            texts: ({ "never": "Do nothing", "smaller": "When the input is smaller than",
+                                      "larger": "When the input is larger than", "always": "Always" })
                         }
+                        Check { path: "picture.resize.condition-display"; text: "Compare with the display's resolution" }
+                        Amount { label: "Or with: width"; path: "picture.resize.condition-size.0"; from: 160; to: 7680; step: 16; unit: "px" }
+                        Amount { label: "Or with: height"; path: "picture.resize.condition-size.1"; from: 120; to: 4320; step: 8; unit: "px" }
+                        SizePresets { target: "picture.resize.condition-size" }
                         Choice {
                             label: "Size"
                             path: "picture.resize.target"
@@ -1286,12 +1359,16 @@ ApplicationWindow {
                         Amount { label: "Multiply by"; path: "picture.resize.factor"; from: 0.25; to: 4; step: 0.25 }
                         Amount { label: "Width"; path: "picture.resize.width"; from: 320; to: 7680; step: 16; unit: "px" }
                         Amount { label: "Height"; path: "picture.resize.height"; from: 240; to: 4320; step: 8; unit: "px" }
+                        SizePresets { target: "picture.resize" }
                         Check { path: "picture.resize.auto-height"; text: "Calculate the height from the width" }
+                        Check { path: "picture.resize.keep-aspect"; text: "Keep the video's aspect ratio inside the size" }
                         Choice {
                             label: "Method"
                             path: "picture.resize.method"
                             values: win.view.choices["resize-method"] || []
                         }
+                        Amount { label: "Method's parameter"; path: "picture.resize.param"; from: 0; to: 10; step: 0.1; format: v => v === 0 ? "FFmpeg's default" : String(v) }
+                        Check { path: "picture.resize.interlaced"; text: "Interlaced mode (scale the fields apart)" }
                         Note { text: "Resizing changes the frame before RVP's effects and SVP (FFmpeg's scale filter, keeping the video's shape); mpv's renderer still fits the picture to the window with its own scalers (Video page)." }
                     }
 
@@ -1471,6 +1548,17 @@ ApplicationWindow {
                             onClicked: win.chooseFiles("vapoursynth.plugins", "VapourSynth plugins",
                                                        [win.view.windows ? "Plugins (*.dll)" : "Plugins (*.so)", "All files (*)"])
                         }
+                        Label {
+                            visible: win.view.windows === true
+                            text: "AviSynth plugins loaded first (VapourSynth's avs.LoadPlugin, with AviSynth+ installed)"
+                        }
+                        FileList { visible: win.view.windows === true; path: "vapoursynth.avs-plugins" }
+                        Button {
+                            visible: win.view.windows === true
+                            text: "Add AviSynth Plugins…"
+                            onClicked: win.chooseFiles("vapoursynth.avs-plugins", "AviSynth plugins",
+                                                       ["AviSynth plugins (*.dll)", "All files (*)"])
+                        }
                         Amount { label: "Buffered frames"; path: "vapoursynth.buffered-frames"; from: 1; to: 64 }
                         Field {
                             label: "VSScript library"
@@ -1581,6 +1669,11 @@ ApplicationWindow {
                             texts: ({ "current": "The window's display", "primary": "The primary display" })
                         }
                         Check { path: "window.black-other-displays"; text: "Fill other monitors black in fullscreen" }
+                        Check {
+                            visible: win.view.windows === true
+                            path: "window.restrict-cursor"
+                            text: "Restrict mouse cursor to current display"
+                        }
                         Choice {
                             label: "Stay on top"
                             path: "on-top"
@@ -1696,6 +1789,34 @@ ApplicationWindow {
                         }
                         Check { path: "visual.random"; text: "Random slideshow" }
                         Check { path: "visual.show-name"; text: "Show filename" }
+                    }
+
+                    Page {
+                        Heading { text: "Hardware decoding" }
+                        Note { text: "The codecs mpv decodes in hardware when Hardware decoding (Video) is on; the others are decoded in software. mpv takes a change with the next file." }
+                        Repeater {
+                            model: win.view.choices["hardware-codecs"] || []
+                            delegate: CheckBox {
+                                required property var modelData
+                                text: modelData.text
+                                checked: (win.s.decoders && win.s.decoders.hardware || []).indexOf(modelData.codec) >= 0
+                                onClicked: {
+                                    const list = (win.s.decoders.hardware || []).filter(c => c !== modelData.codec)
+                                    if (checked)
+                                        list.push(modelData.codec)
+                                    win.set("decoders.hardware", list)
+                                }
+                            }
+                        }
+                        Heading { text: "Software decoding" }
+                        Choice {
+                            label: "AV1 decoder"
+                            path: "decoders.av1"
+                            values: ["dav1d", "ffmpeg"]
+                            texts: ({ "dav1d": "dav1d (faster)", "ffmpeg": "FFmpeg's own" })
+                        }
+                        Amount { label: "Decoder threads"; path: "decoders.threads"; from: 0; to: 32; format: v => v === 0 ? "automatic" : String(v) }
+                        Note { text: "PotPlayer's DirectShow filters, splitters and their priorities have no place in RVP: libmpv decodes and splits with FFmpeg." }
                     }
                 }
             }
