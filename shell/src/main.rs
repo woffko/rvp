@@ -71,10 +71,18 @@ fn main() {
         std::process::exit(2);
     }
     let code = app.as_mut().map_or(1, |app| app.exec());
-    // Destroys the window; the video item's renderer frees the render
-    // context on the render thread.
-    drop(engine);
-    finish();
+    if video::in_window() {
+        // mpv's window is a child of RVP's video window: mpv lets it go
+        // before the windows close.
+        finish();
+        ffi::bridge::rvp_video_window_close();
+        drop(engine);
+    } else {
+        // Destroys the window; the video item's renderer frees the render
+        // context on the render thread.
+        drop(engine);
+        finish();
+    }
     drop(app);
     std::process::exit(code);
 }

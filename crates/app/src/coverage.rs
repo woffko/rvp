@@ -66,7 +66,7 @@ const CONTEXT_REASONS: &[(&str, &str)] = &[
     ("101_0_11", "not in RVP yet"),
     (
         "101_0_11_1",
-        "DirectShow's video renderers do not apply to libmpv: RVP renders with mpv's renderer inside its window (D4)",
+        "DirectShow's video renderers do not apply to libmpv: RVP's renderer (OpenGL in its window or Direct3D 11 in a window of its own, D4) is chosen in Preferences > Video and taken when RVP starts",
     ),
     (
         "101_0_11_2",
@@ -347,7 +347,7 @@ const RUNTIME_REASONS: &[(&str, &str)] = &[
     ),
     (
         "Video > Video Renderer",
-        "DirectShow's video renderers do not apply to libmpv: RVP renders with mpv's renderer inside its window (D4)",
+        "DirectShow's video renderers do not apply to libmpv: RVP's renderer (OpenGL in its window or Direct3D 11 in a window of its own, D4) is chosen in Preferences > Video and taken when RVP starts",
     ),
     (
         "Video > Pixel Shaders",

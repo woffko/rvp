@@ -184,6 +184,8 @@ struct Core {
     save_as: rvp_app::capture::Shot,
     /// The slideshow state last given to the window (M12).
     slideshow: bool,
+    /// The file the Direct3D 11 renderer's failure was told for (M12).
+    native_failed: Option<String>,
 }
 
 /// Fitting the window to a video the user opened: requested, then the new
@@ -276,6 +278,8 @@ pub struct PlayerRust {
     pub(crate) preview_height: i32,
     pub(crate) hide_pointer: bool,
     pub(crate) center_window: bool,
+    pub(crate) native_video: bool,
+    pub(crate) chrome_bars: QString,
     pub(crate) video_aspect: f64,
     pub(crate) black_other_displays: bool,
     pub(crate) fullscreen_primary: bool,
@@ -542,6 +546,41 @@ fn json_string(value: &str) -> String {
 }
 
 /// `--mpv-options=name=value,name=value` for experiments and test runs.
+/// The player core's options: the settings', D4's renderer and the command
+/// line's mpv options last. The renderer is taken here, at start: the
+/// Direct3D 11 window when the settings ask for it and it can be made
+/// (Windows), the render API otherwise.
+fn engine_options(
+    app: &mut App,
+    cli: &Cli,
+    messages: &mut Vec<String>,
+) -> rvp_engine::EngineOptions {
+    let mut window = None;
+    if app.settings.render.renderer == rvp_app::render::Renderer::Direct3d11 {
+        let wid = crate::ffi::bridge::rvp_video_window_create();
+        window = i64::try_from(wid).ok().filter(|wid| *wid != 0);
+        if window.is_none() {
+            messages
+                .push("The Direct3D 11 video window could not be made: OpenGL is used".to_owned());
+        }
+    }
+    app.set_native_video(window.is_some());
+    let mut options = app.engine_options();
+    if let Some(wid) = window {
+        crate::video::use_window();
+        options.video = rvp_engine::VideoOutput::Window(wid);
+        options.extra.extend(
+            app.settings
+                .render
+                .window_options()
+                .into_iter()
+                .map(|(name, value)| (name.to_owned(), value)),
+        );
+    }
+    options.extra.extend(extra_mpv_options(cli));
+    options
+}
+
 fn extra_mpv_options(cli: &Cli) -> Vec<(String, String)> {
     cli.value("mpv-options")
         .unwrap_or("")
@@ -608,8 +647,7 @@ impl qobject::Player {
 
         crate::ffi::bridge::rvp_set_c_numeric_locale();
         app.prepare_svp(VSSCRIPT.get().cloned().flatten());
-        let mut options = app.engine_options();
-        options.extra.extend(extra_mpv_options(&cli));
+        let options = engine_options(&mut app, &cli, &mut messages);
         app.second_mpv_options = extra_mpv_options(&cli);
         let mut engine = match Engine::new(&options) {
             Ok(engine) => engine,
@@ -644,6 +682,7 @@ impl qobject::Player {
 
         self.as_mut().restore_places(&app);
         self.as_mut().set_has_skin(chrome.is_some());
+        self.as_mut().set_native_video(crate::video::in_window());
         self.as_mut().set_window_title(QString::from("RVP"));
         let request = Request::from_cli(&cli, &std::env::current_dir().unwrap_or_default());
         let power_dry_run = m11::power_dry_run(&cli, app.state_dir());
@@ -672,6 +711,7 @@ impl qobject::Player {
             power_dry_run,
             save_as: rvp_app::capture::Shot::Source,
             slideshow: false,
+            native_failed: None,
         });
         if let Some(message) = messages.first() {
             self.as_mut().show_message(message);
@@ -1105,11 +1145,19 @@ impl qobject::Player {
         let count = i32::try_from(frame.regions.len()).unwrap_or(i32::MAX);
         let video = chrome.video_rect();
         publish(frame);
+        let bars = chrome
+            .bars()
+            .iter()
+            .map(|bar| format!("[{},{},{},{}]", bar.x, bar.y, bar.w, bar.h))
+            .collect::<Vec<_>>()
+            .join(",");
         if damage.regions_changed {
             let serial = self.layout_serial().wrapping_add(1);
             self.as_mut().set_layout_serial(serial);
             self.as_mut().set_region_count(count);
         }
+        self.as_mut()
+            .set_chrome_bars(QString::from(&format!("[{bars}]")));
         self.as_mut().set_video_rect(to_rectf(video));
         let regions = damage
             .regions
@@ -2079,6 +2127,16 @@ impl qobject::Player {
         ))
     }
 
+    pub(crate) fn mpv_osd(&self, text: &QString, milliseconds: i32) {
+        if let Some(core) = self.core() {
+            let text = text.to_string();
+            drop(
+                core.engine
+                    .command("show-text", &[text.as_str(), &milliseconds.to_string()]),
+            );
+        }
+    }
+
     pub(crate) fn info_text(&self) -> QString {
         self.core().map_or_else(QString::default, |core| {
             QString::from(&view::info_text(&core.app.model))
@@ -2414,7 +2472,42 @@ impl qobject::Player {
             let text = format!("cannot save the playback state: {error}");
             self.as_mut().show_message(&text);
         }
-        self.tick_m11();
+        self.as_mut().tick_m11();
+        self.check_native_video();
+    }
+
+    /// The Direct3D 11 renderer's window shows nothing when mpv cannot make
+    /// its output (an old GPU, no swapchain): a playing file with a video
+    /// track but no video says so, once per file.
+    fn check_native_video(mut self: Pin<&mut Self>) {
+        if !crate::video::in_window() {
+            return;
+        }
+        let Some(core) = self.as_mut().core_mut() else {
+            return;
+        };
+        let model = &core.app.model;
+        let path = model.loaded_path().map(str::to_owned);
+        if path.is_none()
+            || path == core.native_failed
+            || model.int(PropertyId::VideoWidth).is_some()
+            || model
+                .double(PropertyId::TimePos)
+                .is_none_or(|time| time < 2.0)
+        {
+            return;
+        }
+        let video = core
+            .engine
+            .tracks()
+            .iter()
+            .any(|track| track.kind == rvp_engine::TrackKind::Video && !track.album_art);
+        if video {
+            core.native_failed = path;
+            self.show_message(
+                "mpv's Direct3D 11 output could not start: choose OpenGL in Preferences > Video",
+            );
+        }
     }
 
     pub(crate) fn shutdown(mut self: Pin<&mut Self>) {

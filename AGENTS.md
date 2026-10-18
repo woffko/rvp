@@ -188,6 +188,16 @@ smoothing for users without SVP, after a study of the engines.
 - The VapourSynth runtime is chosen before any thread starts
   (`point_at_vapoursynth` sets `VSSCRIPT_PATH` through `rvp_set_env`); do
   not set environment variables later or from Rust (`set_var` is unsafe).
+- The Direct3D 11 renderer (M12, D4, `render.renderer`, taken at start):
+  mpv's `gpu-next` draws into a disabled native child window that its own
+  thread owns (`shell/cpp/video_window.cpp`; the GUI thread waits on mpv,
+  mpv's threads message their window's parent). QML places it from
+  `videoWindowPlace` and cuts holes for layers over the video; dialogs
+  over it need `popupType: Tools.native_video ? Popup.Window : Popup.Item`.
+  Window geometry goes through `setWindowGeometry` (one `setGeometry`:
+  Windows reports changes late, so separate x/width writes undo each
+  other). The VM's session 0 makes no swapchain: the picture is checked
+  on the host.
 - The control panel (F7) is a second window (`shell/qml/ControlPanel.qml`)
   with its own `Chrome` in `Mode::ControlBox`, painted whole
   (`SkinView.surface` 1, `panelDamaged`).

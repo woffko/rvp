@@ -1165,6 +1165,40 @@ ApplicationWindow {
                         }
                         Heading { text: "Output" }
                         Choice {
+                            label: "Video renderer (when RVP starts)"
+                            path: "render.renderer"
+                            values: win.view.choices.renderer || []
+                            texts: ({ "opengl": "OpenGL in the window (mpv's gpu renderer)",
+                                      "direct3d11": "Direct3D 11 window (mpv's gpu-next, HDR output)" })
+                        }
+                        Check {
+                            visible: Qt.platform.os === "windows"
+                            path: "render.hdr-output"
+                            text: "Send HDR video to an HDR display as HDR (Direct3D 11)"
+                        }
+                        Check {
+                            visible: Qt.platform.os === "windows"
+                            path: "render.ten-bit"
+                            text: "10-bit output (Direct3D 11, when RVP starts)"
+                        }
+                        Choice {
+                            visible: Qt.platform.os === "windows"
+                            label: "GPU Super Resolution (Direct3D 11)"
+                            path: "render.super-resolution"
+                            values: win.view.choices["super-resolution"] || []
+                            texts: ({ "off": "Off", "nvidia": "NVIDIA RTX Video Super Resolution",
+                                      "intel": "Intel Video Super Resolution" })
+                        }
+                        Check {
+                            visible: Qt.platform.os === "windows"
+                            path: "render.rtx-hdr"
+                            text: "NVIDIA RTX Video HDR (Direct3D 11)"
+                        }
+                        Note {
+                            visible: Qt.platform.os === "windows"
+                            text: "Both run in the GPU's video processor on Direct3D 11 frames: hardware decoding without copy-back, so not with SVP or RVP's own video filters."
+                        }
+                        Choice {
                             label: "Video sync"
                             path: "video-sync"
                             values: win.withCurrent(win.view.choices["video-sync"], win.s["video-sync"])

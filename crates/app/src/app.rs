@@ -362,6 +362,9 @@ pub struct App {
     /// mpv's own downscaler and chroma scaler, read before RVP sets its
     /// (`App::apply_render`).
     pub(crate) render_defaults: Option<[String; 2]>,
+    /// mpv draws into the Direct3D 11 renderer's window (set by the shell
+    /// before the engine starts; `render.renderer` is the wish).
+    pub(crate) native_video: bool,
 }
 
 impl App {
@@ -441,6 +444,7 @@ impl App {
             visual: crate::visual::VisualState::default(),
             clock: None,
             render_defaults: None,
+            native_video: false,
         };
         app.start_picture();
         Ok(app)

@@ -606,6 +606,30 @@ Window {
         z: 1
     }
 
+    // D4's Direct3D 11 renderer (M12): mpv draws into a native window over
+    // the video item (cpp/video_window.cpp). It follows the video's place,
+    // hides while no video shows, and leaves holes where RVP's own layers
+    // cover the video, since nothing in the scene draws over a native
+    // window. Dialogs open as windows of their own then.
+    function videoHole(item) {
+        if (!item || !item.visible || item.width <= 0 || item.height <= 0)
+            return null
+        const corner = item.mapToItem(null, 0, 0)
+        return [corner.x, corner.y, item.width, item.height]
+    }
+    readonly property string videoWindowPlace: !player.native_video ? "" : JSON.stringify({
+        x: player.video_rect.x,
+        y: player.video_rect.y,
+        width: player.video_rect.width,
+        height: player.video_rect.height,
+        visible: player.has_video && root.visibility !== Window.Minimized && root.visibility !== Window.Hidden,
+        holes: [videoHole(seekTip), videoHole(powerBox), videoHole(infoBox),
+                videoHole(messageBox), videoHole(sceneLoader.item), videoHole(slideshowLoader.item)]
+            .filter(hole => hole !== null)
+            .concat(player.fullscreen && staticSkin.visible ? JSON.parse(player.chrome_bars || "[]") : [])
+    })
+    onVideoWindowPlaceChanged: Tools.place_video_window(videoWindowPlace)
+
     // RVP's logo on the idle screen (D10): while no video picture shows,
     // after a moment so that it does not flash between files.
     Image {
@@ -893,7 +917,8 @@ Window {
     // PotPlayer shows them at the top left.
     Text {
         id: osdText
-        visible: player.osd !== ""
+        // mpv shows it over the Direct3D 11 renderer's window.
+        visible: player.osd !== "" && !player.native_video
         z: 20
         x: player.video_rect.x + 16
         y: player.video_rect.y + 12
@@ -902,7 +927,13 @@ Window {
         style: Text.Outline
         styleColor: "#000000"
         font.pixelSize: 20
-        onTextChanged: if (text !== "") osdTimer.restart()
+        onTextChanged: {
+            if (text === "")
+                return
+            osdTimer.restart()
+            if (player.native_video)
+                player.mpv_osd(text, osdTimer.interval)
+        }
         Timer {
             id: osdTimer
             interval: 2000
@@ -954,6 +985,7 @@ Window {
     // The notice before shutting down, sleeping or hibernating (M11):
     // it counts down, and Cancel stops it.
     Rectangle {
+        id: powerBox
         visible: player.power_seconds > 0
         z: 28
         anchors.centerIn: parent
@@ -997,6 +1029,7 @@ Window {
 
     // Playback information (Tab), refreshed every second while shown.
     Rectangle {
+        id: infoBox
         visible: player.info_shown
         z: 20
         x: player.video_rect.x + 12
@@ -1024,6 +1057,7 @@ Window {
 
     // Non-blocking messages (section 4: no modal interruptions).
     Rectangle {
+        id: messageBox
         visible: player.message !== ""
         z: 20
         anchors.horizontalCenter: parent.horizontalCenter
@@ -1072,7 +1106,8 @@ Window {
     //                         sharpen filter and deinterlacing go on and
     //                         off while SVP works: RVP's filter runs before
     //                         @svp, SVP keeps interpolating and its entry
-    //                         is unchanged
+    //                         is unchanged; the same for M12's crop and
+    //                         two of its effects
     //   --selftest=vpy        a VapourSynth script slot (M6): RVP writes a
     //                         PotPlayer-style script (vs.get_core()) that
     //                         doubles the frame rate, or runs --vpy=SCRIPT
@@ -1109,6 +1144,9 @@ Window {
     //                         at a time in the post-resize list; needs
     //                         --mpv-log=FILE and --mpv-options=log-file=FILE
     //                         (mpv's errors say whether each compiled)
+    //   --selftest=direct3d11 D4's renderer (render.renderer "direct3d11"
+    //                         in the settings, Windows): mpv's native video
+    //                         window, its place, holes and fullscreen
     //   --selftest=resume     expects the last file reopened paused within
     //                         --expect-tolerance (default 2.5) seconds of
     //                         --expect-time=SECONDS; with --expect-entry=I
@@ -1217,8 +1255,8 @@ Window {
             return m11Tick()
         if (selftest.mode === "m12")
             return m12Tick()
-        if (selftest.mode === "shaders")
-            return m12Tick(true)
+        if (selftest.mode === "shaders" || selftest.mode === "direct3d11")
+            return m12Tick(selftest.mode)
         functionalTick()
     }
 
@@ -1241,13 +1279,15 @@ Window {
         active: false
         Component.onCompleted: setSource("SelfTestM12.qml", { player: player, t: selftest, host: root })
     }
-    function m12Tick(shaders) {
+    function m12Tick(kind) {
         if (!m12Loader.item) {
             m12Loader.active = true
             return
         }
-        if (shaders === true)
+        if (kind === "shaders")
             m12Loader.item.shaderTick()
+        else if (kind === "direct3d11")
+            m12Loader.item.rendererTick()
         else
             m12Loader.item.tick()
     }
@@ -1565,12 +1605,41 @@ Window {
             break
         }
         case 12:
-            t.waitFor("svp_entry_untouched", () => s.vf.indexOf("@rvpsharpen") < 0
+            if (t.waitFor("svp_entry_untouched", () => s.vf.indexOf("@rvpsharpen") < 0
+                              && s.vf.substring(s.vf.indexOf("@svp")) === t.before.svp
+                              && s.estimated_vf_fps >= s.container_fps * factor, 10000,
+                          () => "vf " + s.vf + ", " + s.estimated_vf_fps + " fps")) {
+                // M12's filters with SVP: a crop to 16:9 and two effects.
+                player.run_action("crop-16-9")
+                player.run_action("auto-level")
+                player.run_action("warpsharp")
+            }
+            break
+        case 13: {
+            if (Date.now() - t.stepStarted < 5000)
+                break
+            const svp = s.vf.indexOf("@svp")
+            const before = ["@rvpcrop:", "@rvpautolevel:", "@rvpwarpsharp:"].every(label => {
+                const at = s.vf.indexOf(label)
+                return at >= 0 && at < svp
+            })
+            t.check("svp_after_m12_filters", before && s.vf.substring(svp) === t.before.svp
+                        && s.estimated_vf_fps >= s.container_fps * factor,
+                    "vf " + s.vf + ", " + s.estimated_vf_fps + " fps")
+            player.run_action("extend-off")
+            player.run_action("auto-level")
+            player.run_action("warpsharp")
+            t.next()
+            break
+        }
+        case 14:
+            t.waitFor("svp_m12_filters_off", () => s.vf.indexOf("@rvpcrop:") < 0
+                          && s.vf.indexOf("@rvpautolevel:") < 0 && s.vf.indexOf("@rvpwarpsharp:") < 0
                           && s.vf.substring(s.vf.indexOf("@svp")) === t.before.svp
                           && s.estimated_vf_fps >= s.container_fps * factor, 10000,
                       () => "vf " + s.vf + ", " + s.estimated_vf_fps + " fps")
             break
-        case 13:
+        case 15:
             Tools.log("diagnostics_end=" + player.diagnostics())
             t.finish()
             break

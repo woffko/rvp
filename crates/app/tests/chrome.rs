@@ -710,3 +710,14 @@ fn the_control_panel_has_its_own_window_pages_and_sliders() {
             .is_empty()
     );
 }
+
+#[test]
+fn fullscreen_bars_leave_the_video_slot_out() {
+    let mut chrome = chrome();
+    assert!(chrome.bars().is_empty(), "the window has a video slot");
+    chrome
+        .resize(Mode::Fullscreen, WIDTH, HEIGHT)
+        .expect("layout");
+    // The control bar, not the client part that holds the video.
+    assert_eq!(chrome.bars(), vec![Rect::new(0, HEIGHT - 20, WIDTH, 20)]);
+}

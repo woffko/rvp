@@ -69,6 +69,12 @@ pub mod qobject {
         #[qproperty(i32, preview_height)]
         #[qproperty(bool, hide_pointer)]
         #[qproperty(bool, center_window)]
+        /// mpv draws into the Direct3D 11 renderer's native window (D4,
+        /// M12); QML places it and cuts holes for its own layers.
+        #[qproperty(bool, native_video)]
+        /// The skin's bars over the video in fullscreen, as JSON
+        /// `[[x, y, w, h]...]` (`Chrome::bars`).
+        #[qproperty(QString, chrome_bars)]
         /// The video's display aspect ratio (0 without video), for the
         /// window's sizes (M12).
         #[qproperty(f64, video_aspect)]
@@ -235,6 +241,11 @@ pub mod qobject {
         /// Playback information over the video (Tab), from the model.
         #[qinvokable]
         fn info_text(self: &Self) -> QString;
+
+        /// Shows a message with mpv's own OSD for `milliseconds` (over the
+        /// Direct3D 11 renderer's window, where RVP's cannot draw).
+        #[qinvokable]
+        fn mpv_osd(self: &Self, text: &QString, milliseconds: i32);
 
         /// The local time for the skin's clock (`HH:MM:SS`).
         #[qinvokable]

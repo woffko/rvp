@@ -23,11 +23,17 @@
 #    mpv's hooks render into nor compile their GLSL: there each shader
 #    reports SKIPPED, and the shaders are checked under Linux's Mesa and
 #    on the host.
-# 3. M12's headless tests on Windows' FFmpeg (3D and 360° pixel checks,
+# 3. D4's Direct3D 11 renderer (`--selftest=direct3d11` with
+#    render.renderer "direct3d11"): the native video window follows the
+#    video, stays disabled, gets holes for RVP's layers and covers the
+#    screen in fullscreen. Session 0 has no swapchain for mpv's output:
+#    those checks report SKIPPED (mpv's log says why) and the host session
+#    checks the picture.
+# 4. M12's headless tests on Windows' FFmpeg (3D and 360° pixel checks,
 #    effects, capture formats, recordings and the second core's encoding,
 #    visualizations, rendering and decoder options), with RVP_TESTDATA
 #    pointing at the bundle's fixtures.
-# 4. What Windows' libmpv offers: its FFmpeg's AviSynth and VapourSynth
+# 5. What Windows' libmpv offers: its FFmpeg's AviSynth and VapourSynth
 #    demuxers (opening .avs and .vpy files) and its encoders.
 param(
     [string]$Exe = 'C:\rvp-test\rvp-bundle\rvp.exe',
@@ -59,6 +65,16 @@ Set-Content -Path C:\rvp-test\config\settings.json `
     -Value "{ `"ipc-server`": `"`", `"shaders`": { `"folders`": [$folders] } }" -Encoding ascii
 $log = "$out\mpv-shaders.log"
 $extra = @('--selftest=shaders', "--out=$out", "--mpv-log=$log",
+    "--mpv-options=ao=null,log-file=$log", "$bundle\fixture-60s.mkv")
+& "$PSScriptRoot\run.ps1" -Exe $Exe -Extra $extra | Select-String -NotMatch $filter |
+    ForEach-Object { Write-Host $_.Line }
+
+Write-Host '== Direct3D 11 renderer'
+Reset-State
+Set-Content -Path C:\rvp-test\config\settings.json `
+    -Value '{ "ipc-server": "", "render": { "renderer": "direct3d11" } }' -Encoding ascii
+$log = "$out\mpv-direct3d11.log"
+$extra = @('--selftest=direct3d11', "--out=$out", "--mpv-log=$log",
     "--mpv-options=ao=null,log-file=$log", "$bundle\fixture-60s.mkv")
 & "$PSScriptRoot\run.ps1" -Exe $Exe -Extra $extra | Select-String -NotMatch $filter |
     ForEach-Object { Write-Host $_.Line }

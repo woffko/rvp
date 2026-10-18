@@ -49,8 +49,12 @@ public:
 class Tools : public QObject
 {
     Q_OBJECT
+    // True when mpv draws into the Direct3D 11 renderer's native window
+    // (set at start, before any dialog loads).
+    Q_PROPERTY(bool native_video READ native_video CONSTANT)
 public:
     using QObject::QObject;
+    bool native_video() const;
     // Repaints `item` now, or with the next video frame when `synced`.
     Q_INVOKABLE void repaint(QQuickItem *item, bool synced) const;
     // A local path for a file URL; other URLs as text.
@@ -95,6 +99,13 @@ public:
     // Shows a file in the system's file manager: selected in Explorer on
     // Windows, its folder elsewhere.
     Q_INVOKABLE bool show_file(const QString &path) const;
+    // D4's Direct3D 11 renderer (cpp/video_window.cpp): places mpv's
+    // window. `place` is JSON in the main window's coordinates:
+    // {"x", "y", "width", "height", "visible", "holes": [[x, y, w, h]...]}.
+    Q_INVOKABLE void place_video_window(const QString &place) const;
+    // The video window as Windows has it (JSON; `exists` false without
+    // one), for the self-test.
+    Q_INVOKABLE QString video_window_json() const;
 };
 
 // Called from Rust (declared in src/ffi.rs).
@@ -106,6 +117,8 @@ bool rvp_instance_listen(rust::Str name);
 void rvp_set_c_numeric_locale();
 void rvp_set_window_icon();
 std::size_t rvp_main_window_id();
+std::size_t rvp_video_window_create();
+void rvp_video_window_close();
 void rvp_confine_cursor(bool on);
 void rvp_crash_test();
 void rvp_set_env(rust::Str name, rust::Str value);

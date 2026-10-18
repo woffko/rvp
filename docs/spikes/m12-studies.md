@@ -157,4 +157,68 @@ Three parts, three answers:
 
 ## Direct3D 11 output (D4)
 
-Written when the study's host session is done.
+D4 made mpv's render API inside Qt Quick (OpenGL) RVP's video path on
+both systems and kept mpv in a child window with its own Direct3D 11
+output as an option for Windows. M12 weighed that option against S3's
+measurements and SVP's copy-back rule:
+
+- S3 (goal C, the owner's RTX 30-series card, 4K60 HEVC on a 59.95 Hz display):
+  the child window (`vo=gpu-next`, Direct3D 11, d3d11va) dropped no frame
+  while the whole skin repainted out of step with the video, because DWM
+  composes its swapchain on its own. The OpenGL item drops frames unless
+  chrome updates go with the next video frame, which RVP has done since
+  M2 (0 drops in S3 with copy-back decoding).
+- SVP's copy-back rule: SVP's filter needs the frames in memory, so with
+  SVP, and with RVP's own filters, decoding stays copy-back in both
+  renderers (`App::effective_hwdec`). Without them the Direct3D 11
+  renderer can keep Direct3D 11 frames on the GPU, which its video
+  processor needs (below).
+- What only the child window gives: HDR output to an HDR display (Qt's
+  OpenGL window is 8-bit SDR), libplacebo's `gpu-next` renderer (the
+  render API runs mpv's `gpu`), a 10-bit swapchain, and the GPU's video
+  processor (NVIDIA's RTX Video Super Resolution and RTX Video HDR,
+  Intel's Video Super Resolution), the counterparts of PotPlayer's D3D11
+  options.
+
+So RVP offers both renderers (Preferences > Video, Output: Video renderer,
+taken when RVP starts); OpenGL stays the default. The Direct3D 11 renderer
+(`shell/cpp/video_window.cpp`, `shell/qml/Main.qml`):
+
+- mpv draws into a native window (`wid`) over the skin's video area. That
+  window is a child of RVP's window but belongs to a thread of its own:
+  mpv's threads may send messages to their window's parent, and the GUI
+  thread, which calls mpv and waits for it, never receives them (S3's
+  finding 10).
+- The window is disabled. Windows gives the pointer's messages over a
+  disabled child window to its parent, so RVP's window keeps the mouse
+  and the keyboard; mpv takes no pointer input (`input-cursor=no`).
+- Nothing in Qt's scene draws over a native window. RVP's layers over the
+  video (the seek preview, the playback information, notices, the power
+  countdown, the scene browser, the slideshow, and the skin's bars in
+  fullscreen, `Chrome::bars`) are cut out of the window's region and show
+  over black there; messages go to mpv's own OSD instead; dialogs open as
+  windows of their own (Qt's `Popup.Window`), as menus and tooltips
+  already did.
+- HDR output (`target-colorspace-hint`) and the 10-bit swapchain
+  (`d3d11-output-format`) are settings; so are GPU Super Resolution and
+  RTX Video HDR, mpv's `d3d11vpp` filter (`@rvpvpp`, first in RVP's chain,
+  `scaling-mode` with `scale` from the display's height to the video's,
+  at most 4, and `nvidia-true-hdr`). The filter needs d3d11va decoding
+  without copy-back, so RVP decodes that way while it runs and leaves it
+  out with SVP or RVP's own filters.
+- When mpv's output cannot start, the window stays empty and RVP says so
+  once per file; OpenGL is the way back.
+
+What it cannot do: exclusive fullscreen (the swapchain's window is a child,
+not a top-level window), and RVP's layers show over black rather than over
+the picture. On Linux a foreign child window works on X11 only, not on
+Wayland; goal S lists it.
+
+Checks: on the Windows VM (`m12-all.ps1`, `--selftest=direct3d11`) the
+window follows the video area through resizes and fullscreen, stays
+disabled and gets its holes; mpv creates its Direct3D 11 device there
+(WARP, feature level 12_1) but no swapchain, since session 0 has no
+desktop composition (`DXGI_ERROR_NOT_CURRENTLY_AVAILABLE`), so those
+checks report SKIPPED. Windows' mpv 0.41 takes `d3d11vpp`'s options
+(`tests/m12.rs`). The picture, HDR output and the video processor are
+for the host session.

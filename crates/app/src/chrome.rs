@@ -333,6 +333,45 @@ impl Chrome {
         }
     }
 
+    /// The skin's bars over the video in fullscreen: the top-level parts of
+    /// `MainSkinAreaOscInside` (title and control bar), going into a part
+    /// that holds the video slot. None in the window, where the video has a
+    /// slot of its own. D4's Direct3D 11 window leaves these to the skin.
+    #[must_use]
+    pub fn bars(&self) -> Vec<Rect> {
+        let (Mode::Fullscreen, Some(placed)) = (self.mode, &self.layout) else {
+            return Vec::new();
+        };
+        let nodes = &placed.nodes;
+        // The video slot and the parts around it.
+        let mut holders = Vec::new();
+        let mut next = nodes
+            .iter()
+            .position(|node| node.slot() == Some("CMD_VIDEO_WINDOW"));
+        while let Some(index) = next {
+            holders.push(index);
+            next = nodes[index].parent;
+        }
+        let mut bars = Vec::new();
+        let mut parents = vec![None];
+        while let Some(parent) = parents.pop() {
+            for (index, node) in nodes.iter().enumerate() {
+                if node.parent != parent || node.clip.is_empty() {
+                    continue;
+                }
+                if holders.first() == Some(&index) {
+                    continue;
+                }
+                if holders.contains(&index) {
+                    parents.push(Some(index));
+                } else {
+                    bars.push(node.clip);
+                }
+            }
+        }
+        bars
+    }
+
     /// The size of the chrome around the video slot: window size minus
     /// video size (310x108 for BlackSpace with the playlist).
     #[must_use]

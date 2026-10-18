@@ -87,6 +87,7 @@ fn main() {
         ])
         .cpp_file("cpp/shell.h")
         .cpp_file("cpp/shell.cpp")
+        .cpp_file("cpp/video_window.cpp")
         .qrc(&look_qrc)
         .build();
 

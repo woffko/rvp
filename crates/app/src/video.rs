@@ -28,7 +28,7 @@
 use std::fmt::Write as _;
 use std::path::{Path, PathBuf};
 
-use rvp_engine::{Engine, EngineError};
+use rvp_engine::{Engine, EngineError, PropertyId};
 use serde::{Deserialize, Serialize};
 
 use crate::app::{App, UiRequest};
@@ -779,6 +779,44 @@ impl App {
         !self.video_filters().is_empty() || crate::svp::svp_mode(&self.settings)
     }
 
+    /// mpv draws into the Direct3D 11 renderer's window: the shell says so
+    /// before the engine starts.
+    pub fn set_native_video(&mut self, on: bool) {
+        self.native_video = on;
+    }
+
+    /// True when the Direct3D 11 video processor runs (GPU Super Resolution,
+    /// RTX Video HDR): only on Direct3D 11 frames, so with the Direct3D 11
+    /// renderer, hardware decoding and nothing that needs the frames in
+    /// memory (RVP's filters, SVP).
+    fn processor_runs(&self) -> bool {
+        self.native_video
+            && self.settings.render.wants_processor()
+            && self.settings.hwdec.trim() != "no"
+            && !self.needs_copy_back()
+    }
+
+    /// The Direct3D 11 video processor's filter, scaled from the video's
+    /// height to the display's.
+    fn processor_filter(&self) -> Option<(String, String)> {
+        if !self.processor_runs() {
+            return None;
+        }
+        let scale = match (
+            self.picture.screen.height,
+            self.model.int(PropertyId::VideoHeight),
+        ) {
+            (screen, Some(video)) if screen > 0 && video > 0 => {
+                // Pixel counts are far inside f64's exact range.
+                #[allow(clippy::cast_precision_loss)]
+                let video = video as f64;
+                f64::from(screen) / video
+            }
+            _ => 1.0,
+        };
+        self.settings.render.processor_filter(scale)
+    }
+
     /// Puts RVP's video filters in front of mpv's chain, in their order,
     /// leaving every other filter where it is. In the last moments of a
     /// file they wait for the next one or for playback to leave the end:
@@ -816,6 +854,7 @@ impl App {
             crate::picture::RESIZE_LABEL,
             crate::picture::CROP_LABEL,
             crate::picture::MARGIN_LABEL,
+            crate::render::VPP_LABEL,
         ]
         .into_iter()
         .chain(VideoEffect::ALL.iter().map(|effect| effect.label()))
@@ -828,6 +867,12 @@ impl App {
         for (_, entry) in self.video_filters().iter().rev() {
             engine
                 .prepend_video_filter(entry)
+                .map_err(|error| error.to_string())?;
+        }
+        // First: it takes the decoder's Direct3D 11 frames.
+        if let Some((_, entry)) = self.processor_filter() {
+            engine
+                .prepend_video_filter(&entry)
                 .map_err(|error| error.to_string())?;
         }
         Ok(())
@@ -1050,6 +1095,9 @@ impl App {
     pub fn effective_hwdec(&self) -> String {
         if self.needs_copy_back() {
             crate::svp::copy_back(&self.settings.hwdec)
+        } else if self.processor_runs() {
+            // The video processor needs Direct3D 11 frames.
+            "d3d11va".to_owned()
         } else {
             self.settings.hwdec.clone()
         }

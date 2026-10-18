@@ -683,9 +683,14 @@ impl App {
         }
         if self.settings.render != old.render {
             self.apply_render(engine);
-            let filters_changed = self.settings.render.matrix != old.render.matrix
-                || self.settings.render.deinterlacer != old.render.deinterlacer;
+            let render = &self.settings.render;
+            let filters_changed = render.matrix != old.render.matrix
+                || render.deinterlacer != old.render.deinterlacer
+                || render.super_resolution != old.render.super_resolution
+                || render.rtx_hdr != old.render.rtx_hdr;
             if filters_changed {
+                // Copy-back or Direct3D 11 frames follow the filters.
+                self.apply_decoding(engine);
                 drop(self.apply_picture_settings(engine));
                 drop(self.apply_video_filters(engine));
             }

@@ -758,6 +758,47 @@ fn streams_and_videos_are_recorded() {
     }
 }
 
+/// D4's Direct3D 11 video processor (GPU Super Resolution, RTX Video
+/// HDR): Windows' mpv takes its filter's options, RVP decodes to Direct3D
+/// 11 frames for it, and it gives way to copy-back for RVP's own filters.
+#[test]
+fn the_direct3d_video_processor_runs_without_copy_back() {
+    use rvp_app::render::Renderer;
+
+    if !cfg!(windows) {
+        println!("note: the Direct3D 11 renderer is Windows'");
+        return;
+    }
+    let mut h = Harness::new("vpp", |settings| {
+        settings.render.renderer = Renderer::Direct3d11;
+        settings.render.super_resolution = "nvidia".to_owned();
+        settings.render.rtx_hdr = true;
+    });
+    h.app.set_native_video(true);
+    h.app.set_screen(
+        &h.engine,
+        Screen {
+            width: 1920,
+            height: 1080,
+            width_mm: 0.0,
+            height_mm: 0.0,
+        },
+    );
+    assert_eq!(h.app.effective_hwdec(), "d3d11va");
+    // mpv checks a filter's options when the chain is set.
+    let entry = "@rvpvpp:d3d11vpp=scaling-mode=nvidia:scale=4.000:nvidia-true-hdr=yes";
+    h.engine
+        .set_text("vf", entry)
+        .expect("mpv takes d3d11vpp's options");
+    h.engine.set_text("vf", "").expect("vf");
+    // RVP's own filters need the frames in memory: copy-back, no processor.
+    h.app.settings.effects.insert(VideoEffect::Sharpen);
+    assert!(h.app.effective_hwdec().ends_with("-copy"));
+    h.app.apply_video_filters(&h.engine).expect("filters");
+    let chain = h.text("vf");
+    assert!(!chain.contains("rvpvpp"), "{chain}");
+}
+
 #[test]
 fn rendering_and_decoder_choices_reach_mpv() {
     use rvp_app::Action;

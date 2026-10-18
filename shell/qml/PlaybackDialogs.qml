@@ -100,6 +100,9 @@ Item {
 
     // Jump to Specified Time/Frame (G).
     Dialog {
+        // Over the Direct3D 11 renderer's native video window only a
+        // window of its own shows (D4).
+        popupType: Tools.native_video ? Popup.Window : Popup.Item
         id: jumpDialog
         objectName: "jumpDialog"
         title: "Jump to Specified Time/Frame"
@@ -149,6 +152,7 @@ Item {
 
     // A new bookmark's title (Prompt before adding a bookmark).
     Dialog {
+        popupType: Tools.native_video ? Popup.Window : Popup.Item
         id: titleDialog
         title: "Add Bookmark"
         modal: true
@@ -203,6 +207,7 @@ Item {
         bookmarkList.items = JSON.parse(player.bookmarks_json())
     }
     Dialog {
+        popupType: Tools.native_video ? Popup.Window : Popup.Item
         id: bookmarksDialog
         objectName: "bookmarksDialog"
         title: "Bookmarks"
@@ -248,6 +253,7 @@ Item {
         sectionList.items = JSON.parse(player.sections_json())
     }
     Dialog {
+        popupType: Tools.native_video ? Popup.Window : Popup.Item
         id: sectionsDialog
         objectName: "sectionsDialog"
         title: "A-B Repeat List"
@@ -295,6 +301,7 @@ Item {
     // The shutdown timer (Misc > Shutdown at/in, Add a task to turn off PC
     // or exit RVP). The local time is QML's.
     Dialog {
+        popupType: Tools.native_video ? Popup.Window : Popup.Item
         id: timerDialog
         objectName: "timerDialog"
         title: "Shutdown Timer"
@@ -350,6 +357,7 @@ Item {
 
     // The Recycle Bin's confirmation.
     Dialog {
+        popupType: Tools.native_video ? Popup.Window : Popup.Item
         id: recycleDialog
         objectName: "recycleDialog"
         title: "Send to the Recycle Bin"
@@ -408,6 +416,7 @@ Item {
         listText.forceActiveFocus()
     }
     Dialog {
+        popupType: Tools.native_video ? Popup.Window : Popup.Item
         id: listDialog
         objectName: "listDialog"
         title: holder.listTitles[holder.data.list] || ""
@@ -459,6 +468,7 @@ Item {
 
     // Webcams and other capture devices.
     Dialog {
+        popupType: Tools.native_video ? Popup.Window : Popup.Item
         id: deviceDialog
         objectName: "deviceDialog"
         title: "Open Webcam/Other Device"
@@ -508,6 +518,7 @@ Item {
 
     // Edit Favorites.
     Dialog {
+        popupType: Tools.native_video ? Popup.Window : Popup.Item
         id: favoritesDialog
         objectName: "favoritesDialog"
         title: "Edit Favorites"

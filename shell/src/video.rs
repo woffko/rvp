@@ -8,6 +8,10 @@
 //!
 //! Goal D rule 7: mpv's default `video-timing-offset` is kept and Qt's swap
 //! times are not reported to mpv (`report_swap` is never called).
+//!
+//! With the Direct3D 11 renderer (M12, `render.renderer`) mpv draws into a
+//! native window of its own (`cpp/video_window.cpp`): no render context
+//! then, and the video item stays empty under that window.
 
 use std::cell::RefCell;
 use std::ffi::c_void;
@@ -22,8 +26,12 @@ use crate::ffi::bridge::{rvp_gl_get_proc_address, rvp_video_request_update};
 /// The player engine; never dropped (see the module comment and
 /// `main::finish` for the shutdown order).
 pub static ENGINE: OnceLock<Engine> = OnceLock::new();
-/// Set once the render context exists.
+/// Set once the render context exists, or at once when mpv draws into the
+/// Direct3D 11 renderer's window.
 pub static READY: AtomicBool = AtomicBool::new(false);
+/// Set when mpv draws into the Direct3D 11 renderer's window (D4): the
+/// video item then makes no render context and draws nothing.
+static WINDOW: AtomicBool = AtomicBool::new(false);
 /// Set when the window closes: only then may the video item's renderer
 /// free the render context.
 pub static CLOSING: AtomicBool = AtomicBool::new(false);
@@ -69,6 +77,18 @@ fn create(engine: &'static Engine) -> Option<RenderContext<'static>> {
     }
 }
 
+/// mpv draws into its own window from the start (before the engine
+/// exists): files may load at once.
+pub fn use_window() {
+    WINDOW.store(true, Ordering::Release);
+    READY.store(true, Ordering::Release);
+}
+
+/// True when mpv draws into the Direct3D 11 renderer's window.
+pub fn in_window() -> bool {
+    WINDOW.load(Ordering::Acquire)
+}
+
 /// The window presented a frame (render thread).
 pub fn presented() {
     PRESENTED.store(true, Ordering::Release);
@@ -82,7 +102,7 @@ pub fn presented() {
 /// never presented (grabbed while hidden, Windows session 0) get it on the
 /// third attempt.
 pub fn render(fbo: i32, width: i32, height: i32) -> bool {
-    let Some(engine) = ENGINE.get() else {
+    let Some(engine) = ENGINE.get().filter(|_| !in_window()) else {
         return false;
     };
     CONTEXT.with(|slot| {

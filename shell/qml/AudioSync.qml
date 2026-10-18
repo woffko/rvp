@@ -4,6 +4,7 @@ import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
 import Rvp
+import RvpNative
 
 Item {
     id: holder
@@ -27,6 +28,9 @@ Item {
     }
 
     Dialog {
+        // Over the Direct3D 11 renderer's native video window only a
+        // window of its own shows (D4).
+        popupType: Tools.native_video ? Popup.Window : Popup.Item
         id: syncDialog
         objectName: "audioSyncDialog"
         title: "Adjust Audio Sync"

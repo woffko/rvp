@@ -9,6 +9,8 @@
 # Clips:
 #   video-2160p60-hevc.mkv      S3 performance: 3840x2160, 60 fps, HEVC, 30 s
 #   video-1080p23976-h264.mkv   S1 (SVP) and R1 "playing": 1920x1080, 24000/1001 fps, 60 s
+#   video-2160p24-hdr10.mkv     M12's HDR checks: HEVC 10-bit HDR10 (PQ, BT.2020,
+#                               1000-nit mastering metadata), 3840x2160, 24 fps, 20 s
 #   audio-dialogue-action.flac  S5: quiet speech-like passages and loud bursts, 90 s
 #   audio-music.flac            S5: music-like chord with pp, crescendo and ff, 90 s
 #   audio-steps.flac            S5: level steps and tone bursts for attack and release, 70 s
@@ -31,6 +33,18 @@ ff -f lavfi -i "testsrc2=size=3840x2160:rate=60" -f lavfi -i "$tone" -t 30 \
 
 ff -f lavfi -i "testsrc2=size=1920x1080:rate=24000/1001" -f lavfi -i "$tone" -t 60 \
     -c:v libx264 -preset medium -crf 18 -pix_fmt yuv420p -c:a flac "$OUT/video-1080p23976-h264.mkv"
+
+# HDR10: the test pattern at 203-nit diffuse white over a grey ramp of PQ
+# values from 0 to 1000 nits (PQ 0.7518), drawn once and repeated.
+ff -f lavfi -i "testsrc2=size=3840x1620:rate=24" -f lavfi -i "color=c=black:size=3840x540:rate=24" \
+    -f lavfi -i "$tone" -t 20 -filter_complex "
+[0:v]zscale=tin=bt709:min=bt709:pin=bt709:rin=tv:t=smpte2084:m=bt2020nc:p=bt2020:r=tv:npl=203,format=yuv420p10le[top];
+[1:v]format=yuv420p10le,trim=end_frame=1,geq=lum='64+876*0.7518*X/W':cb=512:cr=512,loop=loop=-1:size=1[ramp];
+[top][ramp]vstack=inputs=2,setparams=range=tv:color_primaries=bt2020:color_trc=smpte2084:colorspace=bt2020nc[v]" -map "[v]" -map 2:a \
+    -c:v libx265 -preset fast -b:v 30M -pix_fmt yuv420p10le \
+    -x265-params "log-level=error:hdr10=1:repeat-headers=1:colorprim=bt2020:transfer=smpte2084:colormatrix=bt2020nc:master-display=G(13250,34500)B(7500,3000)R(34000,16000)WP(15635,16450)L(10000000,1):max-cll=1000,400" \
+    -color_primaries bt2020 -color_trc smpte2084 -colorspace bt2020nc \
+    -c:a flac "$OUT/video-2160p24-hdr10.mkv"
 
 # Dialogue and action, 30 s cycle: 20 s of band-limited noise with a
 # syllable-like envelope at a low level, then 10 s of loud broadband noise

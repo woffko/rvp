@@ -45,9 +45,10 @@ const CAPTURE_DEVICE: &str = "FFmpeg's dshow and gdigrab choose the format and s
 const WINAMP_DSP: &str = "mpv's audio chain runs FFmpeg's filters only: native Winamp DSP \
                           plugins cannot run in it";
 const RENDERER: &str = "DirectShow's video renderers do not apply to libmpv: RVP renders with \
-                        mpv's renderer inside its window (D4)";
-const D3D11_OUTPUT: &str = "needs mpv's own Direct3D 11 output (D4's child window); RVP's video \
-                            is drawn into Qt's window through libmpv's render API";
+                        mpv's renderer, OpenGL in its window or Direct3D 11 in a window of \
+                        its own (D4)";
+const EXCLUSIVE: &str = "exclusive fullscreen needs a top-level swapchain window; mpv's Direct3D \
+                         11 output is a child of RVP's window (D4)";
 const DIRECTSHOW: &str = "DirectShow filters do not apply to libmpv: FFmpeg decodes and splits \
                           (the Decoders page chooses hardware decoding per codec)";
 const COLOR_CONVERSION: &str = "PotPlayer's own colour conversion (DirectShow); mpv's renderer \
@@ -542,21 +543,21 @@ const ITEMS: &[(u32, u32, Status)] = &[
     (365, 3024, Missing(WINAMP_DSP)),
     (365, 3315, Missing(WINAMP_DSP)),
     // M12: Video (355).
-    (355, 3036, Missing(RENDERER)),
+    (355, 3036, Setting("render.renderer")),
     (355, 3081, Missing(RENDERER)),
     (355, 3076, Missing(RENDERER)),
     (355, 3075, Missing(RENDERER)),
     (355, 3073, Setting("scaler")),
     (355, 3074, Missing(RENDERER)),
     (355, 3077, Missing(RENDERER)),
-    (355, 3062, Missing(D3D11_OUTPUT)),
-    (355, 3341, Missing(D3D11_OUTPUT)),
+    (355, 3062, Setting("render.ten-bit")),
+    (355, 3341, Missing(EXCLUSIVE)),
     (355, 3061, Setting("window.restrict-cursor")),
     (355, 3040, Missing(RENDERER)),
     (355, 3052, Setting("render.limited-range")),
-    (355, 3055, Missing(D3D11_OUTPUT)),
-    (355, 3056, Missing(D3D11_OUTPUT)),
-    (355, 3054, Missing(D3D11_OUTPUT)),
+    (355, 3055, Setting("render.super-resolution")),
+    (355, 3056, Setting("render.rtx-hdr")),
+    (355, 3054, Setting("render.hdr-output")),
     (355, 3048, Setting("video-sync")),
     (
         355,

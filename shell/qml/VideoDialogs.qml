@@ -76,6 +76,9 @@ Item {
     }
 
     Dialog {
+        // Over the Direct3D 11 renderer's native video window only a
+        // window of its own shows (D4).
+        popupType: Tools.native_video ? Popup.Window : Popup.Item
         id: inputDialog
         objectName: "inputDialog"
         modal: true
@@ -109,6 +112,7 @@ Item {
     // Capture Consecutive Images: every so many seconds of playback, a
     // number of images.
     Dialog {
+        popupType: Tools.native_video ? Popup.Window : Popup.Item
         id: consecutiveDialog
         objectName: "consecutiveDialog"
         title: "Capture Consecutive Images"
@@ -132,6 +136,7 @@ Item {
 
     // Create Thumbnail Image: a contact sheet of the playing file.
     Dialog {
+        popupType: Tools.native_video ? Popup.Window : Popup.Item
         id: sheetDialog
         objectName: "sheetDialog"
         title: "Create Thumbnail Image"
@@ -157,6 +162,7 @@ Item {
 
     // Window Size Control: the window's size and place in pixels.
     Dialog {
+        popupType: Tools.native_video ? Popup.Window : Popup.Item
         id: windowDialog
         objectName: "windowDialog"
         title: "Window Size Control"

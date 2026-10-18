@@ -38,6 +38,13 @@ pub mod bridge {
         /// The main window's native handle (`QWindow::winId`), 0 before it
         /// exists; Windows' media controls belong to it.
         fn rvp_main_window_id() -> usize;
+        /// D4's Direct3D 11 renderer: makes the native video window (a
+        /// disabled child of the main window, on a thread of its own) and
+        /// returns its handle for mpv's `wid`; 0 when it cannot (or outside
+        /// Windows). `Tools.place_video_window` places it.
+        fn rvp_video_window_create() -> usize;
+        /// Closes the video window and ends its thread (after mpv quit).
+        fn rvp_video_window_close();
         /// Keeps the mouse pointer on the main window's display (`true`) or
         /// lets it go (Windows' ClipCursor; nothing elsewhere).
         fn rvp_confine_cursor(on: bool);

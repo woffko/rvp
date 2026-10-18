@@ -137,6 +137,120 @@ Item {
         }
     }
 
+    // `rvp --selftest=direct3d11` with `render.renderer` "direct3d11" in
+    // the settings (Windows): D4's renderer. mpv's gpu-next draws into the
+    // native video window, which follows the video's place, stays disabled
+    // (the pointer goes to RVP's window), gets holes for RVP's layers and
+    // covers the screen in fullscreen.
+    property var videoWindow: ({})
+    // mpv could not make its swapchain (Windows session 0, the VM): the
+    // window is then placed but hidden, as without video.
+    property bool noSwapchain: false
+    function windowMatches() {
+        const r = player.video_rect
+        const ratio = host.screen ? host.screen.devicePixelRatio : 1
+        videoWindow = JSON.parse(Tools.video_window_json())
+        return videoWindow.exists && (videoWindow.visible || noSwapchain) && !videoWindow.enabled
+            && near(videoWindow.x, r.x * ratio, 2) && near(videoWindow.y, r.y * ratio, 2)
+            && near(videoWindow.width, r.width * ratio, 2) && near(videoWindow.height, r.height * ratio, 2)
+    }
+    function rendererTick() {
+        const t = m12.t
+        const s = t.status()
+        switch (t.step) {
+        case 0:
+            if (Qt.platform.os !== "windows") {
+                t.check("renderer_window", true, "SKIPPED Direct3D 11 is Windows' renderer")
+                t.finish()
+                break
+            }
+            t.check("renderer_window", player.native_video && Tools.native_video,
+                    "native " + player.native_video + " " + Tools.video_window_json())
+            t.next()
+            break
+        case 1:
+            t.waitFor("renderer_file_plays", () => s.loaded && s.time > 1, 20000,
+                      () => "path " + s.path + " time " + s.time)
+            break
+        case 2: {
+            const d = JSON.parse(player.diagnostics())
+            const log = player.option("mpv-log")
+            if (d.current_vo === null && Date.now() - t.stepStarted > 2000 && log !== ""
+                    && Tools.read_file(log, 0).indexOf("Failed to create swapchain") >= 0) {
+                noSwapchain = true
+                t.check("renderer_mpv_window", windowMatches() && !videoWindow.visible,
+                        "SKIPPED no Direct3D 11 swapchain in this session (Windows session 0); placed "
+                        + JSON.stringify(videoWindow))
+                t.check("renderer_gpu_next", true, "SKIPPED no swapchain")
+                before = { time: s.time, at: Date.now() }
+                t.next()
+                break
+            }
+            if (t.waitFor("renderer_mpv_window", () => windowMatches() && videoWindow.child === "mpv", 5000,
+                          () => JSON.stringify(videoWindow) + " video " + JSON.stringify(player.video_rect))) {
+                t.check("renderer_gpu_next", d.current_vo === "gpu-next",
+                        "vo " + d.current_vo + " hwdec " + d.hwdec_current + " display_fps " + d.display_fps)
+                before = { time: s.time, at: Date.now() }
+            }
+            break
+        }
+        case 3:
+            if (Date.now() - t.stepStarted < 2000)
+                break
+            t.check("renderer_plays_on", s.time > before.time + 1, before.time + " -> " + s.time)
+            // RVP's playback information over the video: a hole.
+            player.run_action("playback-info")
+            t.next()
+            break
+        case 4:
+            if (t.waitFor("renderer_hole", () => player.info_shown && windowMatches()
+                              && videoWindow.region_pieces > 1, 3000,
+                          () => "pieces " + videoWindow.region_pieces)) {
+                player.run_action("playback-info")
+            }
+            break
+        case 5:
+            if (t.waitFor("renderer_hole_closes", () => !player.info_shown && windowMatches()
+                              && videoWindow.region_pieces === 0, 3000,
+                          () => "pieces " + videoWindow.region_pieces)) {
+                player.run_action("volume-up")
+            }
+            break
+        case 6:
+            // Messages go to mpv's OSD there (Main.qml's osdText hides).
+            if (t.waitFor("renderer_osd", () => s.osd !== "", 3000, () => "osd " + s.osd))
+                setSetting("fit-window-to-video", false)
+            break
+        case 7:
+            host.setGeometry(host.x, host.y, 900, 560)
+            t.next()
+            break
+        case 8:
+            t.waitFor("renderer_follows_resize", () => steady() && host.width === 900 && windowMatches(), 5000,
+                      () => size() + " " + JSON.stringify(videoWindow))
+            if (t.step === 9)
+                player.run_action("toggle-fullscreen")
+            break
+        case 9: {
+            const ratio = host.screen ? host.screen.devicePixelRatio : 1
+            if (t.waitFor("renderer_fullscreen", () => s.fullscreen && windowMatches()
+                              && near(videoWindow.width, host.screen.width * ratio, 2), 5000,
+                          () => JSON.stringify(videoWindow)))
+                player.run_action("toggle-fullscreen")
+            break
+        }
+        case 10:
+            if (t.waitFor("renderer_fullscreen_back", () => !s.fullscreen && steady() && windowMatches(), 5000,
+                          () => JSON.stringify(videoWindow))) {
+                const d = JSON.parse(player.diagnostics())
+                Tools.log("metric renderer_frame_drops=" + d.frame_drop_count + " vo_delayed="
+                          + d.vo_delayed_frame_count + " hwdec=" + d.hwdec_current)
+                t.finish()
+            }
+            break
+        }
+    }
+
     function tick() {
         const t = m12.t
         const s = t.status()

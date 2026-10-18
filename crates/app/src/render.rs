@@ -8,6 +8,13 @@
 //! ICC Color Gamut Correction" is the ICC profile, "SMPTE ST 2084 HDR
 //! Correction" the tone mapping, and "SMPTE ST 2086 HDR Correction" the
 //! file's mastering metadata in place of measured peaks.
+//!
+//! The renderer itself (PotPlayer's Video Renderer) is D4's choice, taken
+//! when RVP starts: mpv's `gpu` renderer through the render API, drawn by
+//! Qt Quick (both systems), or on Windows mpv's `gpu-next` with Direct3D
+//! 11 in a native window of its own over the video area, which can send
+//! HDR to an HDR display (`docs/spikes/m12-studies.md`, "Direct3D 11
+//! output").
 
 use rvp_engine::Engine;
 use serde::{Deserialize, Serialize};
@@ -60,6 +67,29 @@ pub const DEINTERLACERS: &[&str] = &["", "bwdif", "yadif", "w3fdif"];
 /// The field order (mpv's `field-dominance`).
 pub const FIELD_ORDERS: &[&str] = &["auto", "top", "bottom"];
 
+/// The video renderer (`render.renderer`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+pub enum Renderer {
+    /// mpv's `gpu` renderer through the render API, drawn by Qt Quick.
+    #[default]
+    #[serde(rename = "opengl")]
+    OpenGl,
+    /// mpv's `gpu-next` with Direct3D 11 in a native window (Windows).
+    #[serde(rename = "direct3d11")]
+    Direct3d11,
+}
+
+/// The renderers' settings names, the first the default.
+pub const RENDERERS: &[&str] = &["opengl", "direct3d11"];
+
+/// GPU Super Resolution: off, NVIDIA's RTX Video Super Resolution or
+/// Intel's, as mpv's Direct3D 11 video processor runs them (`d3d11vpp`'s
+/// `scaling-mode`).
+pub const SUPER_RESOLUTIONS: &[&str] = &["off", "nvidia", "intel"];
+
+/// The label of the Direct3D 11 video processor's filter.
+pub const VPP_LABEL: &str = "rvpvpp";
+
 /// The label of RVP's matrix filter.
 pub const MATRIX_LABEL: &str = "rvpmatrix";
 /// The label of RVP's own deinterlacer.
@@ -93,6 +123,18 @@ pub struct RenderSettings {
     /// The software deinterlacer and the field order (Deinterlacing).
     pub deinterlacer: String,
     pub field_order: String,
+    /// Taken when RVP starts.
+    pub renderer: Renderer,
+    /// Direct3D 11 only: HDR video goes to an HDR display as HDR
+    /// (`target-colorspace-hint`).
+    pub hdr_output: bool,
+    /// Direct3D 11 only, taken at start: a 10-bit swapchain
+    /// (`d3d11-output-format`).
+    pub ten_bit: bool,
+    /// Direct3D 11 only: GPU Super Resolution (`SUPER_RESOLUTIONS`) and
+    /// NVIDIA's RTX Video HDR, in mpv's `d3d11vpp` filter.
+    pub super_resolution: String,
+    pub rtx_hdr: bool,
 }
 
 impl Default for RenderSettings {
@@ -109,6 +151,11 @@ impl Default for RenderSettings {
             target_peak: 0,
             deinterlacer: String::new(),
             field_order: "auto".to_owned(),
+            renderer: Renderer::OpenGl,
+            hdr_output: true,
+            ten_bit: false,
+            super_resolution: "off".to_owned(),
+            rtx_hdr: false,
         }
     }
 }
@@ -124,6 +171,12 @@ impl RenderSettings {
             }
         }
         for (name, value, choices, default) in [
+            (
+                "super-resolution",
+                &mut self.super_resolution,
+                SUPER_RESOLUTIONS,
+                "off",
+            ),
             ("matrix", &mut self.matrix, MATRICES, "auto"),
             ("deinterlacer", &mut self.deinterlacer, DEINTERLACERS, ""),
             ("field-order", &mut self.field_order, FIELD_ORDERS, "auto"),
@@ -138,6 +191,10 @@ impl RenderSettings {
         if self.target_peak != 0 && !(10..=10_000).contains(&self.target_peak) {
             notes.push("render.target-peak must be 0 or 10 to 10000 nits: 0 used".to_owned());
             self.target_peak = 0;
+        }
+        if self.renderer == Renderer::Direct3d11 && !cfg!(windows) {
+            notes.push("render.renderer \"direct3d11\" is for Windows: \"opengl\" used".to_owned());
+            self.renderer = Renderer::OpenGl;
         }
         if !TONE_MAPPINGS.contains(&self.tone_mapping.as_str()) {
             notes.push(format!(
@@ -194,6 +251,55 @@ impl RenderSettings {
         options
     }
 
+    /// mpv's options for the Direct3D 11 renderer's window (with
+    /// `rvp_engine::VideoOutput::Window`).
+    #[must_use]
+    pub fn window_options(&self) -> Vec<(&'static str, String)> {
+        vec![
+            ("gpu-context", "d3d11".to_owned()),
+            ("target-colorspace-hint", self.colorspace_hint().to_owned()),
+            (
+                "d3d11-output-format",
+                if self.ten_bit { "rgb10_a2" } else { "auto" }.to_owned(),
+            ),
+        ]
+    }
+
+    /// True when the Direct3D 11 video processor has work: GPU Super
+    /// Resolution or RTX Video HDR.
+    #[must_use]
+    pub fn wants_processor(&self) -> bool {
+        self.renderer == Renderer::Direct3d11 && (self.super_resolution != "off" || self.rtx_hdr)
+    }
+
+    /// The Direct3D 11 video processor's filter for a video that the
+    /// display shows `scale` times larger (super resolution only upscales);
+    /// `None` when it has nothing to do.
+    #[must_use]
+    pub fn processor_filter(&self, scale: f64) -> Option<(String, String)> {
+        let mut options = Vec::new();
+        if self.super_resolution != "off" && scale > 1.01 {
+            options.push(format!("scaling-mode={}", self.super_resolution));
+            options.push(format!("scale={:.3}", scale.min(4.0)));
+        }
+        if self.rtx_hdr {
+            options.push("nvidia-true-hdr=yes".to_owned());
+        }
+        if !self.wants_processor() || options.is_empty() {
+            return None;
+        }
+        Some((
+            VPP_LABEL.to_owned(),
+            format!("@{VPP_LABEL}:d3d11vpp={}", options.join(":")),
+        ))
+    }
+
+    /// mpv `target-colorspace-hint`: HDR output on an HDR display.
+    #[must_use]
+    pub fn colorspace_hint(&self) -> &'static str {
+        if self.hdr_output { "yes" } else { "no" }
+    }
+
     /// RVP's filters for the forced matrix and its own deinterlacer
     /// (`deinterlace`: mpv's setting decides when it runs).
     #[must_use]
@@ -248,6 +354,13 @@ impl App {
         }
         for (name, value) in self.settings.render.mpv_options() {
             drop(engine.set_text(name, &value));
+        }
+        // The HDR output changes while playing; the context only at start.
+        if self.settings.render.renderer == Renderer::Direct3d11 {
+            drop(engine.set_text(
+                "target-colorspace-hint",
+                self.settings.render.colorspace_hint(),
+            ));
         }
         let render = &self.settings.render;
         if let Some([dscale, cscale]) = &self.render_defaults {
@@ -345,5 +458,65 @@ mod tests {
         settings.validate(&mut notes);
         assert_eq!(settings.cscale, "");
         assert_eq!(notes.len(), 1);
+    }
+
+    #[test]
+    fn the_direct3d_renderer_is_for_windows() {
+        let mut settings: RenderSettings =
+            serde_json::from_str(r#"{ "renderer": "direct3d11", "hdr-output": false }"#)
+                .expect("settings");
+        let mut notes = Vec::new();
+        settings.validate(&mut notes);
+        if cfg!(windows) {
+            assert_eq!(settings.renderer, Renderer::Direct3d11);
+            assert!(notes.is_empty());
+        } else {
+            assert_eq!(settings.renderer, Renderer::OpenGl);
+            assert_eq!(notes.len(), 1);
+        }
+        assert_eq!(
+            settings.window_options(),
+            vec![
+                ("gpu-context", "d3d11".to_owned()),
+                ("target-colorspace-hint", "no".to_owned()),
+                ("d3d11-output-format", "auto".to_owned()),
+            ]
+        );
+        assert_eq!(
+            serde_json::to_value(RenderSettings::default()).expect("json")["renderer"],
+            "opengl"
+        );
+    }
+
+    #[test]
+    fn the_video_processor_upscales_and_maps_to_hdr() {
+        let mut settings = RenderSettings {
+            renderer: Renderer::Direct3d11,
+            ..RenderSettings::default()
+        };
+        assert!(!settings.wants_processor());
+        assert_eq!(settings.processor_filter(2.0), None);
+        settings.super_resolution = "nvidia".to_owned();
+        assert_eq!(
+            settings.processor_filter(2.0),
+            Some((
+                "rvpvpp".to_owned(),
+                "@rvpvpp:d3d11vpp=scaling-mode=nvidia:scale=2.000".to_owned()
+            ))
+        );
+        // Nothing to upscale: only RTX Video HDR is left.
+        assert_eq!(settings.processor_filter(1.0), None);
+        settings.rtx_hdr = true;
+        assert_eq!(
+            settings.processor_filter(0.5).map(|(_, entry)| entry),
+            Some("@rvpvpp:d3d11vpp=nvidia-true-hdr=yes".to_owned())
+        );
+        // OpenGL has no Direct3D 11 frames.
+        settings.renderer = Renderer::OpenGl;
+        assert_eq!(settings.processor_filter(2.0), None);
+        let mut notes = Vec::new();
+        settings.super_resolution = "amd".to_owned();
+        settings.validate(&mut notes);
+        assert_eq!(settings.super_resolution, "off");
     }
 }

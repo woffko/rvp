@@ -537,12 +537,7 @@ impl App {
         self.apply_audio_settings(engine, &old, &mut applied.notes);
         self.apply_m6_settings(engine, &old, &mut applied);
         self.apply_playback_settings(engine, &old);
-        if old.skin != new.skin
-            || old.vapoursynth.library != new.vapoursynth.library
-            || old.playback.priority != new.playback.priority
-        {
-            applied.restart = true;
-        }
+        applied.restart = taken_at_start(&old, &new);
         self.save_settings();
         applied
     }
@@ -619,6 +614,13 @@ impl App {
                 "deinterlacer": crate::render::DEINTERLACERS,
                 "field-order": crate::render::FIELD_ORDERS,
                 "tone-mapping": crate::render::TONE_MAPPINGS,
+                // Direct3D 11 is Windows' only.
+                "super-resolution": crate::render::SUPER_RESOLUTIONS,
+                "renderer": if cfg!(windows) {
+                    crate::render::RENDERERS
+                } else {
+                    &crate::render::RENDERERS[..1]
+                },
                 "hardware-codecs": crate::decoders::HARDWARE_CODECS
                     .iter()
                     .map(|(codec, text)| serde_json::json!({ "codec": codec, "text": text }))
@@ -688,6 +690,16 @@ impl App {
         }
         skins.into_iter().collect()
     }
+}
+
+/// True when a change waits for RVP's next start: the skin, VapourSynth's
+/// library, the process priority, the renderer and its swapchain format.
+fn taken_at_start(old: &Settings, new: &Settings) -> bool {
+    old.skin != new.skin
+        || old.vapoursynth.library != new.vapoursynth.library
+        || old.playback.priority != new.playback.priority
+        || old.render.renderer != new.render.renderer
+        || old.render.ten_bit != new.render.ten_bit
 }
 
 #[cfg(test)]

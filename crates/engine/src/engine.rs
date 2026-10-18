@@ -20,6 +20,9 @@ pub enum VideoOutput {
     RenderApi,
     /// No video output (`vo=null`), for headless tests.
     Null,
+    /// mpv's own video output (`vo=gpu-next`) in the native window `wid`
+    /// (D4's child window); mpv takes no pointer input there.
+    Window(i64),
 }
 
 /// Where audio goes.
@@ -223,13 +226,18 @@ impl Engine {
     /// Fails when libmpv cannot be created or rejects an option.
     pub fn new(options: &EngineOptions) -> Result<Self, EngineError> {
         let mpv = Mpv::with_initializer(|init| {
-            init.set_option(
-                "vo",
-                match options.video {
-                    VideoOutput::RenderApi => "libmpv",
-                    VideoOutput::Null => "null",
-                },
-            )?;
+            match options.video {
+                VideoOutput::RenderApi => init.set_option("vo", "libmpv")?,
+                VideoOutput::Null => init.set_option("vo", "null")?,
+                VideoOutput::Window(wid) => {
+                    init.set_option("vo", "gpu-next")?;
+                    init.set_option("wid", wid)?;
+                    // The pointer belongs to RVP's window (the shell keeps
+                    // it from mpv's) and RVP hides it itself.
+                    init.set_option("input-cursor", "no")?;
+                    init.set_option("cursor-autohide", "no")?;
+                }
+            }
             if options.audio == AudioOutput::Null {
                 init.set_option("ao", "null")?;
             }
