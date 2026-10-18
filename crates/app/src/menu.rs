@@ -39,6 +39,31 @@ use crate::commands::track_label;
 
 const CONTEXT_TSV: &str = include_str!("../../../docs/r1/menu-static.tsv");
 const PLAYLIST_TSV: &str = include_str!("../../../docs/r1/menu-playlist.tsv");
+const LIVE_TSV: &str = include_str!("../../../docs/r1/menu-runtime.tsv");
+
+/// Submenus RVP builds from PotPlayer's live menu (`menu-runtime.tsv`),
+/// which adds items at run time (M12: WEBP, the desktop sizes, the frame
+/// presets, 360° Video Mode and more): the static submenu's path and the
+/// titles that lead to the live one.
+const LIVE_SUBMENUS: &[(&str, &[&str])] = &[
+    ("101_0_11", &["Video"]),
+    ("101_0_17", &["Frame Size"]),
+    ("101_0_18", &["Aspect Ratio"]),
+    ("101_0_19", &["Window Size"]),
+];
+
+/// Static items the live menu lacks, kept in front of a live submenu's
+/// items: Select Video Stream (R1's live menu was recorded without a
+/// file).
+const KEPT_STATIC: &[&str] = &["101_0_11_0"];
+
+/// The live Frame Size > Presets submenu: RVP lists its own presets there.
+const LIVE_FRAME_PRESETS: u32 = 1_383_396;
+
+/// The live Pixel Shaders > Pre-Resize and Post-Resize submenus: RVP lists
+/// its shaders there, in place of PotPlayer's (37502 and 39802 on).
+const LIVE_PRE_SHADERS: u32 = 204_269;
+const LIVE_POST_SHADERS: u32 = 269_761;
 
 /// One item of a PotPlayer menu as R1 recorded it.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -102,6 +127,53 @@ pub fn context_tree() -> &'static [Recorded] {
 pub fn playlist_tree() -> &'static [Recorded] {
     static TREE: OnceLock<Vec<Recorded>> = OnceLock::new();
     TREE.get_or_init(|| parse(PLAYLIST_TSV))
+}
+
+/// PotPlayer's live context menu (R1's `menu-runtime.tsv`): its items have
+/// no resource paths, so each gets `live_` and its line; a submenu's ID is
+/// PotPlayer's run-time handle.
+#[must_use]
+pub fn live_tree() -> &'static [Recorded] {
+    static TREE: OnceLock<Vec<Recorded>> = OnceLock::new();
+    TREE.get_or_init(|| {
+        let mut root: Vec<Recorded> = Vec::new();
+        for (line, text) in LIVE_TSV.lines().enumerate().skip(1) {
+            let cells: Vec<&str> = text.split('\t').collect();
+            let (Some(depth), Some(id), Some(title)) = (
+                cells.first().and_then(|d| d.parse::<usize>().ok()),
+                cells.get(1).and_then(|i| i.parse::<u32>().ok()),
+                cells.get(2),
+            ) else {
+                continue;
+            };
+            let title = title.trim();
+            let item = Recorded {
+                path: format!("live_{line}"),
+                id,
+                text: title.replace("&&", "&"),
+                shortcut: cells.get(3).map_or("", |s| s.trim()).to_owned(),
+                separator: title == "---",
+                submenu: cells.get(4).is_some_and(|flags| flags.contains("submenu")),
+                children: Vec::new(),
+            };
+            insert(&mut root, depth, item);
+        }
+        root
+    })
+}
+
+/// The live submenu that `titles` lead to.
+fn find_live(titles: &[&str]) -> Option<&'static Recorded> {
+    let mut level = live_tree();
+    let mut found = None;
+    for title in titles {
+        let node = level
+            .iter()
+            .find(|node| node.submenu && node.text == *title)?;
+        level = &node.children;
+        found = Some(node);
+    }
+    found
 }
 
 /// The recorded item at a path.
@@ -193,6 +265,9 @@ pub enum Command {
     Favorite(usize),
     /// Open a recent item (index).
     Recent(usize),
+    /// A shader of the pre-resize (`false`) or post-resize list's choices
+    /// in or out of the list (index into `App::shader_choices`).
+    Shader(bool, usize),
     /// Play a disc's title (DVD Control > Move), by its index.
     DiscTitle(usize),
     /// Show a DVD angle (DVD Control > Angle Option).
@@ -319,6 +394,9 @@ impl Command {
             Command::Bookmark(index) => format!("k:{index}"),
             Command::Favorite(index) => format!("f:{index}"),
             Command::Recent(index) => format!("r:{index}"),
+            Command::Shader(post, index) => {
+                format!("h:{}{index}", if post { "post" } else { "pre" })
+            }
             Command::DiscTitle(title) => format!("t:{title}"),
             Command::DiscAngle(angle) => format!("g:{angle}"),
         }
@@ -351,6 +429,17 @@ impl Command {
             "k" => value.parse().ok().map(Command::Bookmark),
             "f" => value.parse().ok().map(Command::Favorite),
             "r" => value.parse().ok().map(Command::Recent),
+            "h" => {
+                if let Some(index) = value.strip_prefix("post") {
+                    index.parse().ok().map(|index| Command::Shader(true, index))
+                } else {
+                    let index = value.strip_prefix("pre")?;
+                    index
+                        .parse()
+                        .ok()
+                        .map(|index| Command::Shader(false, index))
+                }
+            }
             "t" => value.parse().ok().map(Command::DiscTitle),
             "g" => value.parse().ok().map(Command::DiscAngle),
             _ => None,
@@ -598,6 +687,14 @@ impl App {
                 let path = self.marks().marks().recent.get(index)?.clone();
                 self.open_item(engine, &path, false)
             }
+            Command::Shader(post, index) => {
+                let stage = if post {
+                    crate::hlsl::Stage::Post
+                } else {
+                    crate::hlsl::Stage::Pre
+                };
+                self.pick_shader(engine, stage, index)
+            }
             Command::DiscTitle(index) => self.play_disc_title(engine, index),
             Command::DiscAngle(angle) => self.set_disc_angle(engine, angle),
             Command::EqualizerPreset(index) => self.set_equalizer_preset(engine, index),
@@ -611,9 +708,28 @@ impl App {
             return Some(MenuItem::separator());
         }
         if node.submenu {
-            let mut children: Vec<MenuItem> = node
-                .children
+            if node.id == LIVE_FRAME_PRESETS {
+                return MenuItem::submenu(&node.text, self.frame_preset_menu(node, live));
+            }
+            if node.id == LIVE_PRE_SHADERS || node.id == LIVE_POST_SHADERS {
+                let post = node.id == LIVE_POST_SHADERS;
+                return MenuItem::submenu(&node.text, self.shader_menu(node, live, post));
+            }
+            let live_children = LIVE_SUBMENUS
                 .iter()
+                .find(|(path, _)| *path == node.path)
+                .and_then(|(_, titles)| find_live(titles));
+            let sources: Vec<&Recorded> = match live_children {
+                Some(live_node) => node
+                    .children
+                    .iter()
+                    .filter(|child| KEPT_STATIC.contains(&child.path.as_str()))
+                    .chain(&live_node.children)
+                    .collect(),
+                None => node.children.iter().collect(),
+            };
+            let mut children: Vec<MenuItem> = sources
+                .into_iter()
                 .filter_map(|child| self.convert(child, live))
                 .collect();
             // RVP's run-time lists where PotPlayer has its own.
@@ -671,6 +787,56 @@ impl App {
             return MenuItem::submenu(&node.text, self.mode_choices());
         }
         None
+    }
+
+    /// A Pixel Shaders list: "Do not use", "Enable Shader Stacker" and
+    /// "Stack..." as PotPlayer has them, with RVP's shaders between them;
+    /// a shader's check mark says it is in the list.
+    fn shader_menu(&self, node: &Recorded, live: &Live, post: bool) -> Vec<MenuItem> {
+        let stage = if post {
+            crate::hlsl::Stage::Post
+        } else {
+            crate::hlsl::Stage::Pre
+        };
+        let list = if post { 39_802..39_900 } else { 37_502..37_600 };
+        let mut items = Vec::new();
+        let mut listed = false;
+        for child in &node.children {
+            if list.contains(&child.id) {
+                if !listed {
+                    listed = true;
+                    for (index, entry) in self.shader_choices(stage).into_iter().enumerate() {
+                        items.push(MenuItem {
+                            label: entry.name.clone(),
+                            command: Some(Command::Shader(post, index)),
+                            checked: Some(self.shader_picked(stage, &entry.path)),
+                            ..MenuItem::default()
+                        });
+                    }
+                }
+                continue;
+            }
+            items.extend(self.convert(child, live));
+        }
+        items
+    }
+
+    /// Frame Size > Presets: Add/Edit and the cycle as PotPlayer has them,
+    /// then RVP's presets.
+    fn frame_preset_menu(&self, node: &Recorded, live: &Live) -> Vec<MenuItem> {
+        let mut items: Vec<MenuItem> = node
+            .children
+            .iter()
+            .filter(|child| !(37_400..37_499).contains(&child.id))
+            .filter_map(|child| self.convert(child, live))
+            .collect();
+        for index in 0..self.settings.picture.presets.len() {
+            let action = Action::Picture(crate::picture::PictureCommand::Preset(index));
+            if Action::from_name(action.name()) == Some(action) {
+                items.push(self.window_item(action, Some("")));
+            }
+        }
+        items
     }
 
     fn window_item(&self, action: Action, text: Option<&str>) -> MenuItem {

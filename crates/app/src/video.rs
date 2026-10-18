@@ -621,23 +621,20 @@ pub enum Rotation {
     To(u16),
 }
 
-/// GLSL shaders (mpv's `glsl-shaders`), applied in the listed order.
+/// The pixel shaders (mpv's `glsl-shaders`): PotPlayer's pre-resize and
+/// post-resize lists, each on or off with its files in order
+/// (`crate::shaders`).
 #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
 #[serde(default, rename_all = "kebab-case")]
 pub struct Shaders {
+    /// The pre-resize list (M6's one list).
     pub enabled: bool,
     pub files: Vec<PathBuf>,
-}
-
-/// Shader commands (PotPlayer's "Pixel Shaders" menu).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-pub enum ShaderChange {
-    Toggle,
-    On,
-    Off,
-    /// Applies the list again (files changed on disk).
-    Reload,
-    OpenFolder,
+    /// The post-resize list.
+    pub post_enabled: bool,
+    pub post_files: Vec<PathBuf>,
+    /// Further folders of shaders for the lists.
+    pub folders: Vec<PathBuf>,
 }
 
 /// VapourSynth script slots.
@@ -769,12 +766,21 @@ impl App {
     }
 
     /// Puts RVP's video filters in front of mpv's chain, in their order,
-    /// leaving every other filter where it is.
+    /// leaving every other filter where it is. In the last moments of a
+    /// file they wait for the next one or for playback to leave the end:
+    /// a `vf` change there can leave mpv stuck before the end (seen with
+    /// libmpv 0.37: the time stops, `eof-reached` never comes), as an audio
+    /// chain change can (`App::defer_chain_change`).
     ///
     /// # Errors
     /// Fails when the VapourSynth wrapper cannot be written or libmpv
     /// rejects a filter.
     pub fn apply_video_filters(&self, engine: &Engine) -> Result<(), String> {
+        if self.near_end() {
+            self.video_pending.set(true);
+            return Ok(());
+        }
+        self.video_pending.set(false);
         let vs = &self.settings.vapoursynth;
         if vs.enabled
             && let Some(script) = &vs.script
@@ -827,24 +833,26 @@ impl App {
         let [threshold, range] = self.settings.video_effects.deband;
         drop(engine.set_double("deband-threshold", threshold));
         drop(engine.set_double("deband-range", range));
-        self.apply_shaders(engine)
+        // Shaders that cannot run are named when a list changes
+        // (`App::shader_command`).
+        self.apply_shaders(engine).map(drop)
     }
 
-    /// Sets mpv's shader list from the settings.
+    /// Sets mpv's shader list from the settings' two lists; returns the
+    /// shaders left out, with why (`App::shader_files`).
     ///
     /// # Errors
     /// Fails when libmpv rejects the list.
-    pub fn apply_shaders(&self, engine: &Engine) -> Result<(), EngineError> {
+    pub fn apply_shaders(&self, engine: &Engine) -> Result<Vec<String>, EngineError> {
+        let (files, refused) = self.shader_files();
         engine.command("change-list", &["glsl-shaders", "clr", ""])?;
-        if self.settings.shaders.enabled {
-            for file in &self.settings.shaders.files {
-                engine.command(
-                    "change-list",
-                    &["glsl-shaders", "append", &file.to_string_lossy()],
-                )?;
-            }
+        for file in &files {
+            engine.command(
+                "change-list",
+                &["glsl-shaders", "append", &file.to_string_lossy()],
+            )?;
         }
-        Ok(())
+        Ok(refused)
     }
 
     /// Where RVP keeps shader files by default: `shaders` next to the
@@ -883,7 +891,7 @@ impl App {
                 Some(on_off("Deband", self.settings.deband))
             }
             Action::Rotate(rotation) => Some(self.rotate(engine, rotation)),
-            Action::Shaders(change) => Some(self.shaders(engine, change)),
+            Action::Shaders(command) => Some(self.shader_command(engine, command)),
             Action::ToggleVapourSynth => Some(self.toggle_script(engine)),
             _ => None,
         }
@@ -968,28 +976,6 @@ impl App {
         // An integer choice: mpv takes it as text, not as a double.
         drop(engine.set_text("video-rotate", &next.to_string()));
         UiRequest::Osd(format!("Rotation: {next}°"))
-    }
-
-    fn shaders(&mut self, engine: &Engine, change: ShaderChange) -> UiRequest {
-        let shaders = &mut self.settings.shaders;
-        match change {
-            ShaderChange::Toggle => shaders.enabled = !shaders.enabled,
-            ShaderChange::On => shaders.enabled = true,
-            ShaderChange::Off => shaders.enabled = false,
-            ShaderChange::Reload => {}
-            ShaderChange::OpenFolder => {
-                let folder = self.shader_folder();
-                drop(std::fs::create_dir_all(&folder));
-                return UiRequest::OpenExternal(folder);
-            }
-        }
-        self.save_settings();
-        let count = self.settings.shaders.files.len();
-        match self.apply_shaders(engine) {
-            Ok(()) if !self.settings.shaders.enabled => UiRequest::Osd("Shaders: off".to_owned()),
-            Ok(()) => UiRequest::Osd(format!("Shaders: on ({count})")),
-            Err(error) => UiRequest::Message(format!("Shaders: {error}")),
-        }
     }
 
     fn toggle_script(&mut self, engine: &Engine) -> UiRequest {

@@ -130,6 +130,8 @@ impl Settings {
         self.stereo.validate(&mut notes);
         self.vr.validate(&mut notes);
         self.window.validate(&mut notes);
+        self.capture.validate(&mut notes);
+        self.visual.validate(&mut notes);
         notes
     }
 
@@ -280,7 +282,7 @@ impl Settings {
         {
             notes.push(format!("skin {} is not there", skin.display()));
         }
-        for file in &self.shaders.files {
+        for file in self.shaders.files.iter().chain(&self.shaders.post_files) {
             if !file.is_file() {
                 notes.push(format!("shader {} is not there", file.display()));
             }
@@ -604,6 +606,20 @@ impl App {
                 "subtitle-auto": SUBTITLE_AUTO,
                 "scaler": SCALERS,
                 "resize-method": crate::picture::RESIZE_METHODS,
+                "shader-choices": self
+                    .shader_catalogue()
+                    .iter()
+                    .map(|entry| serde_json::json!({
+                        "name": entry.name,
+                        "path": entry.path,
+                        "stage": match entry.stage {
+                            Some(crate::hlsl::Stage::Pre) => "pre",
+                            Some(crate::hlsl::Stage::Post) => "post",
+                            None => "any",
+                        },
+                    }))
+                    .collect::<Vec<_>>(),
+                "potplayer-shaders": self.potplayer_shader_folder(),
                 "audio-device": devices,
                 "skin": skins,
                 "output-speakers": crate::speakers::CHOICES

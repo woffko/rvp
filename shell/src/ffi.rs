@@ -57,6 +57,21 @@ pub mod bridge {
         fn rvp_atlas_remove_prefix(prefix: &str);
         /// Caches an RGBA atlas image (straight alpha, rows without padding).
         fn rvp_atlas_insert(name: &str, rgba: &[u8], width: i32, height: i32);
+        /// Writes an RGBA picture to `path` (the format from the extension;
+        /// `quality` for JPEG), with `texts` (JSON, `rvp_app::capture::SheetText`)
+        /// drawn over it; any thread. False when it could not.
+        fn rvp_save_image(
+            rgba: &[u8],
+            width: i32,
+            height: i32,
+            path: &str,
+            quality: i32,
+            texts: &str,
+        ) -> bool;
+        /// Puts an RGBA picture on the clipboard (the window's thread).
+        fn rvp_copy_image(rgba: &[u8], width: i32, height: i32) -> bool;
+        /// The local date and time as `YYYY-MM-DD HH.MM.SS` (file names).
+        fn rvp_local_time() -> String;
         /// Tiles `src` of an atlas over `dst`, clipped to `clip` (each
         /// rectangle as x, y, width, height).
         fn rvp_paint_atlas(

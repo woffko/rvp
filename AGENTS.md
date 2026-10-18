@@ -129,7 +129,12 @@ smoothing for users without SVP, after a study of the engines.
   `tests/thumbnails.rs` and `tests/m11.rs` run with `RVP_TESTDATA` at
   the bundle).
 - Video filters: RVP adds and removes only its own, by label (`@rvp*`,
-  `vf pre`), and never touches SVP's `@svp` (goal H's rule 4).
+  `vf pre`), and never touches SVP's `@svp` (goal H's rule 4). Like the
+  audio chain's, a `vf` change in the last `NEAR_END` of a file can leave
+  mpv stuck before the end (libmpv 0.37: the time stops, `eof-reached`
+  never comes), so `App::apply_video_filters` lets it wait for the next
+  file or for playback to leave the end; test clips for filters need
+  room (M12's fixtures are 12 s).
 - Audio filters: RVP's part of mpv's `af` is built at once by
   `crates/app/src/audio/chain.rs` in one order (downmix, channel, preamp,
   equalizer, effects, the user's own filters, normalizer, channel gains,

@@ -68,12 +68,26 @@ pub enum UiRequest {
     ImageFolderDialog,
     /// Show a folder in the system's file manager.
     OpenExternal(PathBuf),
-    /// Save the playing frame to this file (mpv `screenshot-to-file`, off
-    /// the GUI thread); `subtitles` as shown on screen.
-    SaveFrame {
-        path: PathBuf,
-        subtitles: bool,
-    },
+    /// Capture the playing frame into a file or onto the clipboard (off
+    /// the GUI thread, M12's `crate::capture`).
+    Capture(crate::capture::CaptureJob),
+    /// A save dialog for a stream recording, suggesting this file (then
+    /// [`App::start_stream_record`]).
+    RecordStreamDialog(PathBuf),
+    /// A save dialog for a video recording (then
+    /// [`App::start_video_record`]).
+    RecordVideoDialog(PathBuf),
+    /// Ask for the folder recorded videos go to.
+    VideoFolderDialog,
+    /// Encode a stretch of the file with a core of its own (Record Video,
+    /// off the GUI thread).
+    Encode(rvp_engine::encode::EncodeJob),
+    /// The slideshow moves by this many slides.
+    Slide(i32),
+    /// The consecutive images (`consecutive`) or thumbnail image (`sheet`)
+    /// dialog, from the capture settings; the answers go to
+    /// [`App::consecutive_answer`] and [`App::sheet_answer`].
+    CaptureDialog(&'static str),
     /// Resize the window to the video at this scale.
     ScaleWindow(f64),
     /// The window takes the video's shape.
@@ -84,9 +98,12 @@ pub enum UiRequest {
     ShowInfo(bool),
     /// Show (`true`) or hide the control panel window (F7).
     ControlPanel(bool),
-    /// A save dialog for the current frame, suggesting this file (then
-    /// `Player.save_frame_to`).
-    SaveFrameDialog(PathBuf),
+    /// A save dialog for the current source or screen frame, suggesting
+    /// this file (then `Player.save_frame_to`).
+    SaveFrameDialog {
+        path: PathBuf,
+        shot: crate::capture::Shot,
+    },
     /// A font dialog for the subtitles, showing this family (empty: mpv's
     /// default; then `Player.apply_subtitle_font`).
     SubtitleFontDialog(String),
@@ -274,6 +291,10 @@ pub struct App {
     /// and wait for the next file or for playback to leave the end
     /// (`App::defer_chain_change`).
     pub(crate) chain_pending: bool,
+    /// RVP's video filters wait the same way (`App::apply_video_filters`):
+    /// a `vf` change in the last moments of a file can leave mpv stuck
+    /// before its end (M12).
+    pub(crate) video_pending: std::cell::Cell<bool>,
     /// The entry being loaded is to play: mpv may still carry the pause
     /// keep-open set at the end of the one before (seen on the Windows VM),
     /// so it is unpaused again once loaded.
@@ -329,6 +350,15 @@ pub struct App {
     pub(crate) picture: crate::picture::PictureState,
     /// The 3D input found and the 360° view (M12).
     pub(crate) stereo: crate::stereo::StereoState,
+    /// Consecutive images and the thumbnail image under way (M12).
+    pub(crate) capture: crate::capture::CaptureState,
+    /// The stream and video recordings under way (M12).
+    pub(crate) record: crate::record::RecordState,
+    /// What audio files show (M12).
+    pub(crate) visual: crate::visual::VisualState,
+    /// The local date and time for file names (the window's clock; UTC
+    /// without one).
+    pub(crate) clock: Option<fn() -> String>,
 }
 
 impl App {
@@ -377,6 +407,7 @@ impl App {
             started: false,
             play_on_load: false,
             chain_pending: false,
+            video_pending: std::cell::Cell::new(false),
             settings_path: None,
             writer: storage::Writer::new()?,
             first_start,
@@ -402,6 +433,10 @@ impl App {
             resolver: crate::ytdl::Resolver::default(),
             picture: crate::picture::PictureState::default(),
             stereo: crate::stereo::StereoState::default(),
+            capture: crate::capture::CaptureState::default(),
+            record: crate::record::RecordState::default(),
+            visual: crate::visual::VisualState::default(),
+            clock: None,
         };
         app.start_picture();
         Ok(app)
@@ -753,6 +788,10 @@ impl App {
             return Ok(());
         }
         let options = std::mem::take(&mut self.play.next_options);
+        // The visualization's graph names this file's track, and a stream
+        // recording ends with its file (M12).
+        self.clear_visual(engine);
+        drop(self.record_file_ended(engine));
         engine.load_with_options(&path, &options)
     }
 
@@ -816,6 +855,9 @@ impl App {
             Action::Picture(command) => self.picture_checked(command),
             Action::Stereo(command) => self.stereo_checked(command),
             Action::SetImageFormat(format) => Some(self.settings.image_format == format),
+            Action::Capture(command) => self.capture_checked(command),
+            Action::Record(command) => self.recording_checked(command),
+            Action::Visual(command) => self.visual_checked(command),
             Action::PlaybackInfo => Some(self.session.info),
             Action::ToggleEqualizer => Some(self.settings.equalizer.enabled),
             Action::Color(crate::video::ColorChange::Toggle) => Some(self.settings.color.enabled),
@@ -825,12 +867,7 @@ impl App {
             Action::Rotate(crate::video::Rotation::To(degrees)) => {
                 Some(self.session.rotation == degrees % 360)
             }
-            Action::Shaders(
-                crate::video::ShaderChange::Toggle | crate::video::ShaderChange::On,
-            ) => Some(self.settings.shaders.enabled),
-            Action::Shaders(crate::video::ShaderChange::Off) => {
-                Some(!self.settings.shaders.enabled)
-            }
+            Action::Shaders(command) => self.shader_checked(command),
             Action::ToggleVapourSynth => Some(self.settings.vapoursynth.enabled),
             Action::ControlPanel => Some(self.session.control_panel),
             Action::Audio(command) => self.audio_checked(command),
@@ -1378,7 +1415,7 @@ impl App {
 
     /// True in the last [`NEAR_END`] seconds of the loaded file or at its
     /// end.
-    fn near_end(&self) -> bool {
+    pub(crate) fn near_end(&self) -> bool {
         if !self.model.media_loaded() {
             return false;
         }
@@ -1711,6 +1748,12 @@ impl App {
 
         self.follow_second(engine, &events, now);
         self.track_position(engine, now, &mut requests);
+        if changes.contains(PropertyId::TimePos) {
+            self.capture_tick(&mut requests);
+            if let Some(time) = self.model.double(PropertyId::TimePos) {
+                self.visual_tick(engine, time);
+            }
+        }
         self.settle_seek_bar(now);
         if let Some(top) = self.on_top_change() {
             requests.push(UiRequest::OnTop(top));
@@ -1762,7 +1805,12 @@ impl App {
         self.audio_file_loaded(engine);
         self.picture_file_loaded(engine);
         self.stereo_file_loaded(engine);
+        self.capture_file_loaded();
+        self.apply_visual(engine);
         self.apply_pending_chain(engine, false);
+        if self.video_pending.get() {
+            drop(self.apply_video_filters(engine));
+        }
         self.apply_ab(engine);
         self.svp
             .file_started(crate::svp::svp_mode(&self.settings), now);
@@ -1830,6 +1878,9 @@ impl App {
         }
         if self.chain_pending && !self.near_end() {
             self.apply_pending_chain(engine, true);
+        }
+        if self.video_pending.get() && !self.near_end() {
+            drop(self.apply_video_filters(engine));
         }
         if self.tracking == Tracking::On
             && let (Some(path), Some(time)) = (self.model.loaded_path(), time)

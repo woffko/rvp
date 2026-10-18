@@ -80,6 +80,14 @@ public:
     Q_INVOKABLE bool run_self(const QStringList &arguments) const;
     // The clipboard's text, and putting text on it (M11).
     Q_INVOKABLE QString clipboard_text() const;
+    // The self-test's view of captured images: an image file's format and
+    // size, the clipboard's picture size, a folder's files (JSON).
+    Q_INVOKABLE QString image_info(const QString &path) const;
+    Q_INVOKABLE QString clipboard_image_info() const;
+    Q_INVOKABLE QString list_files(const QString &folder) const;
+    // A text file's contents from `from` bytes on (the self-test reads
+    // mpv's log); empty when it cannot be read.
+    Q_INVOKABLE QString read_file(const QString &path, qint64 from) const;
     Q_INVOKABLE void set_clipboard_text(const QString &text) const;
     // The screen `window` is on: its size in device pixels and in
     // millimetres (QScreen's physical size, which QML does not show).
@@ -106,6 +114,10 @@ bool rvp_atlas_contains(rust::Str name);
 void rvp_atlas_remove_prefix(rust::Str prefix);
 void rvp_atlas_insert(rust::Str name, rust::Slice<const std::uint8_t> rgba, std::int32_t width,
                       std::int32_t height);
+bool rvp_save_image(rust::Slice<const std::uint8_t> rgba, std::int32_t width, std::int32_t height,
+                    rust::Str path, std::int32_t quality, rust::Str texts);
+bool rvp_copy_image(rust::Slice<const std::uint8_t> rgba, std::int32_t width, std::int32_t height);
+rust::String rvp_local_time();
 void rvp_paint_atlas(QPainter &painter, rust::Str name, std::array<std::int32_t, 4> src,
                      std::array<std::int32_t, 4> dst, std::array<std::int32_t, 4> clip);
 void rvp_paint_translate(QPainter &painter, std::int32_t dx, std::int32_t dy);

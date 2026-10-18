@@ -28,6 +28,8 @@ pub enum ThumbEvent {
     Entry { path: String, picture: Arc<Picture> },
     /// The core cannot start: there are no pictures.
     Unavailable(String),
+    /// A contact sheet with all its pictures, to be written (M12).
+    Sheet(crate::capture::SheetImage),
 }
 
 /// The requests under way.
@@ -56,6 +58,13 @@ impl std::fmt::Debug for Thumbs {
             .field("scenes", &self.scenes.len())
             .field("entries", &self.entries.len())
             .finish_non_exhaustive()
+    }
+}
+
+impl Thumbs {
+    /// The core, when it runs.
+    pub(crate) fn core(&self) -> Option<&Thumbnailer> {
+        self.core.as_ref()
     }
 }
 
@@ -293,6 +302,10 @@ impl App {
                         if self.thumbs.preview.is_some() {
                             events.push(ThumbEvent::Preview(picture));
                         }
+                    } else if group == Group::Sheet {
+                        if let Some(sheet) = self.sheet_picture(ticket, Some(picture)) {
+                            events.push(ThumbEvent::Sheet(sheet));
+                        }
                     } else if let Some(index) = self.thumbs.scenes.remove(&ticket) {
                         events.push(ThumbEvent::Scene { index, picture });
                     } else if let Some(path) = self.thumbs.entries.remove(&ticket) {
@@ -300,7 +313,12 @@ impl App {
                         events.push(ThumbEvent::Entry { path, picture });
                     }
                 }
-                Outcome::Failed { ticket, .. } => {
+                Outcome::Failed { ticket, group, .. } => {
+                    if group == Group::Sheet
+                        && let Some(sheet) = self.sheet_picture(ticket, None)
+                    {
+                        events.push(ThumbEvent::Sheet(sheet));
+                    }
                     self.thumbs.scenes.remove(&ticket);
                     if let Some(path) = self.thumbs.entries.remove(&ticket) {
                         self.thumbs.without.insert(path);

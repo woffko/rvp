@@ -15,8 +15,8 @@
 //!   the time (fast) or exactly;
 //! - the seek bar's preview keeps one waiting request: a newer one replaces
 //!   it, and the one being rendered finishes;
-//! - other requests wait in order of their group (scenes, then the list)
-//!   and their arrival; [`Thumbnailer::cancel`] drops a group's waiting
+//! - other requests wait in order of their group (scenes, a contact sheet,
+//!   then the list) and their arrival; [`Thumbnailer::cancel`] drops a group's waiting
 //!   requests and abandons its request under way;
 //! - durations wait behind every frame.
 //!
@@ -55,6 +55,8 @@ pub enum Group {
     Preview,
     /// A scene browser's pictures.
     Scenes,
+    /// A contact sheet's pictures (M12's thumbnail image).
+    Sheet,
     /// The playlist's thumbnail views.
     List,
 }

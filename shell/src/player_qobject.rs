@@ -76,6 +76,8 @@ pub mod qobject {
         #[qproperty(bool, black_other_displays)]
         /// Fullscreen goes to the primary display (M12).
         #[qproperty(bool, fullscreen_primary)]
+        /// The slideshow for audio files (JSON, `App::slideshow_json`).
+        #[qproperty(QString, slideshow)]
         #[qproperty(QString, power_notice)]
         #[qproperty(i32, power_seconds)]
         #[qproperty(QString, dialog)]

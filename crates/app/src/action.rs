@@ -13,7 +13,9 @@ use serde::{Deserialize, Serialize};
 
 use crate::audio::commands::AudioCommand;
 use crate::audio::{StereoChannel, Stretch, SyncKeep, VolumeMethod};
-use crate::video::{ColorChange, ColorKind, Deinterlace, Rotation, ShaderChange, VideoEffect};
+use crate::hlsl::Stage;
+use crate::shaders::ShaderCommand;
+use crate::video::{ColorChange, ColorKind, Deinterlace, Rotation, VideoEffect};
 
 /// One of PotPlayer's four seek steps (Left/Right, with Ctrl, with Shift,
 /// with Ctrl+Alt). Their lengths are settings.
@@ -344,6 +346,9 @@ pub enum ImageFormat {
     #[default]
     Png,
     Jpeg,
+    /// RVP writes it (M12); mpv has no BMP writer.
+    Bmp,
+    Webp,
 }
 
 /// A page of the settings window.
@@ -376,10 +381,12 @@ pub enum SettingsPage {
     Stereo,
     WindowSize,
     FullscreenMode,
+    Capture,
+    Visualization,
 }
 
 impl SettingsPage {
-    pub const ALL: [SettingsPage; 26] = [
+    pub const ALL: [SettingsPage; 28] = [
         SettingsPage::Playback,
         SettingsPage::TimeJump,
         SettingsPage::Skip,
@@ -406,6 +413,8 @@ impl SettingsPage {
         SettingsPage::Shaders,
         SettingsPage::WindowSize,
         SettingsPage::FullscreenMode,
+        SettingsPage::Capture,
+        SettingsPage::Visualization,
     ];
 
     /// The page's key in the settings window (`shell/qml/Settings.qml`).
@@ -438,6 +447,8 @@ impl SettingsPage {
             SettingsPage::Stereo => "stereo",
             SettingsPage::WindowSize => "window-size",
             SettingsPage::FullscreenMode => "fullscreen-mode",
+            SettingsPage::Capture => "capture",
+            SettingsPage::Visualization => "visualization",
         }
     }
 }
@@ -550,11 +561,17 @@ pub enum Action {
     VideoEffect(VideoEffect),
     ToggleDeband,
     Rotate(Rotation),
-    Shaders(ShaderChange),
+    Shaders(ShaderCommand),
     /// The active VapourSynth script slot on or off.
     ToggleVapourSynth,
     /// Save the current frame under a chosen name.
     SaveFrameAs,
+    /// M12's Video Capture commands.
+    Capture(crate::capture::CaptureCommand),
+    /// M12's stream and video recording.
+    Record(crate::record::RecordCommand),
+    /// M12's visualizations for audio files.
+    Visual(crate::visual::VisualCommand),
     /// The Audio menu's processing commands (M10).
     Audio(AudioCommand),
     // M11.
@@ -1879,6 +1896,87 @@ pub const ACTIONS: &[ActionInfo] = &[
         &[37409],
         &[],
     ),
+    // Presets the user added (Add/Edit allows 20).
+    info(
+        Action::Picture(crate::picture::PictureCommand::Preset(10)),
+        "frame-preset-10",
+        "Frame size preset 11",
+        None,
+        &[37410],
+        &[],
+    ),
+    info(
+        Action::Picture(crate::picture::PictureCommand::Preset(11)),
+        "frame-preset-11",
+        "Frame size preset 12",
+        None,
+        &[37411],
+        &[],
+    ),
+    info(
+        Action::Picture(crate::picture::PictureCommand::Preset(12)),
+        "frame-preset-12",
+        "Frame size preset 13",
+        None,
+        &[37412],
+        &[],
+    ),
+    info(
+        Action::Picture(crate::picture::PictureCommand::Preset(13)),
+        "frame-preset-13",
+        "Frame size preset 14",
+        None,
+        &[37413],
+        &[],
+    ),
+    info(
+        Action::Picture(crate::picture::PictureCommand::Preset(14)),
+        "frame-preset-14",
+        "Frame size preset 15",
+        None,
+        &[37414],
+        &[],
+    ),
+    info(
+        Action::Picture(crate::picture::PictureCommand::Preset(15)),
+        "frame-preset-15",
+        "Frame size preset 16",
+        None,
+        &[37415],
+        &[],
+    ),
+    info(
+        Action::Picture(crate::picture::PictureCommand::Preset(16)),
+        "frame-preset-16",
+        "Frame size preset 17",
+        None,
+        &[37416],
+        &[],
+    ),
+    info(
+        Action::Picture(crate::picture::PictureCommand::Preset(17)),
+        "frame-preset-17",
+        "Frame size preset 18",
+        None,
+        &[37417],
+        &[],
+    ),
+    info(
+        Action::Picture(crate::picture::PictureCommand::Preset(18)),
+        "frame-preset-18",
+        "Frame size preset 19",
+        None,
+        &[37418],
+        &[],
+    ),
+    info(
+        Action::Picture(crate::picture::PictureCommand::Preset(19)),
+        "frame-preset-19",
+        "Frame size preset 20",
+        None,
+        &[37419],
+        &[],
+    ),
     info(
         Action::Picture(crate::picture::PictureCommand::PresetCycle),
         "frame-preset-cycle",
@@ -2485,6 +2583,252 @@ pub const ACTIONS: &[ActionInfo] = &[
         None,
         &[10356],
         &["ID_VIDEO_IMAGE_PNG"],
+    ),
+    info(
+        Action::SetImageFormat(ImageFormat::Bmp),
+        "image-bmp",
+        "Save images in BMP format",
+        None,
+        &[10354],
+        &[],
+    ),
+    info(
+        Action::SetImageFormat(ImageFormat::Webp),
+        "image-webp",
+        "Save images in WEBP format",
+        None,
+        &[10408],
+        &[],
+    ),
+    info(
+        Action::Capture(crate::capture::CaptureCommand::Copy(
+            crate::capture::Shot::Source,
+        )),
+        "copy-frame",
+        "Copy Current Source Frame to Clipboard",
+        Some("Ctrl+C"),
+        &[10223],
+        &[],
+    ),
+    info(
+        Action::Capture(crate::capture::CaptureCommand::Copy(
+            crate::capture::Shot::Screen,
+        )),
+        "copy-screen",
+        "Copy Current Screen Frame to Clipboard",
+        Some("Ctrl+Alt+C"),
+        &[10432],
+        &[],
+    ),
+    info(
+        Action::Capture(crate::capture::CaptureCommand::SaveScreenAs),
+        "save-screen-as",
+        "Save Current Screen Frame As...",
+        None,
+        &[10434],
+        &[],
+    ),
+    info(
+        Action::Capture(crate::capture::CaptureCommand::ToggleNextToMedia),
+        "images-next-to-media",
+        "Store captured images into play folders (if available)",
+        None,
+        &[10913],
+        &[],
+    ),
+    info(
+        Action::Capture(crate::capture::CaptureCommand::ToggleNameDate),
+        "image-name-date",
+        "Include system date and time in filename",
+        None,
+        &[10556],
+        &[],
+    ),
+    info(
+        Action::Capture(crate::capture::CaptureCommand::ToggleNameElapsed),
+        "image-name-elapsed",
+        "Include file elapsed time in filename",
+        None,
+        &[10557],
+        &[],
+    ),
+    info(
+        Action::Capture(crate::capture::CaptureCommand::ToggleSubtitles),
+        "image-subtitles",
+        "Include message and subtitles in image",
+        None,
+        &[10305],
+        &[],
+    ),
+    info(
+        Action::Capture(crate::capture::CaptureCommand::ToggleAspect),
+        "image-correct-aspect",
+        "Correct aspect ratio when capturing",
+        None,
+        &[10587],
+        &[],
+    ),
+    info(
+        Action::Capture(crate::capture::CaptureCommand::ConsecutiveDialog),
+        "consecutive-images",
+        "Capture Consecutive Images...",
+        Some("Ctrl+G"),
+        &[10222],
+        &[],
+    ),
+    info(
+        Action::Capture(crate::capture::CaptureCommand::ConsecutiveToggle),
+        "consecutive-toggle",
+        "Start/Stop Consecutive Image Capturing",
+        None,
+        &[10431],
+        &[],
+    ),
+    info(
+        Action::Record(crate::record::RecordCommand::Stream),
+        "record-stream",
+        "Record Stream...",
+        Some("Ctrl+A"),
+        &[10313],
+        &[],
+    ),
+    info(
+        Action::Record(crate::record::RecordCommand::Video),
+        "record-video",
+        "Record Video...",
+        Some("Alt+C"),
+        &[10370],
+        &[],
+    ),
+    info(
+        Action::Record(crate::record::RecordCommand::VideoToggle),
+        "record-video-toggle",
+        "Start/Stop Video Recording",
+        None,
+        &[10430],
+        &[],
+    ),
+    info(
+        Action::Record(crate::record::RecordCommand::VideoFolderDialog),
+        "select-video-folder",
+        "Set Video Storage Folder...",
+        None,
+        &[10909],
+        &[],
+    ),
+    info(
+        Action::Record(crate::record::RecordCommand::OpenVideoFolder),
+        "open-video-folder",
+        "Open Video Storage Folder",
+        None,
+        &[10910],
+        &[],
+    ),
+    info(
+        Action::Record(crate::record::RecordCommand::ToggleNextToMedia),
+        "videos-next-to-media",
+        "Store recorded videos into play folders (if available)",
+        None,
+        &[10912],
+        &[],
+    ),
+    info(
+        Action::Visual(crate::visual::VisualCommand::ToggleEnabled),
+        "visualization",
+        "Enable visualization for audio tracks",
+        None,
+        &[10413],
+        &[],
+    ),
+    info(
+        Action::Visual(crate::visual::VisualCommand::ToggleAlbumArt),
+        "album-art",
+        "Display album art/cover pictures",
+        None,
+        &[10840],
+        &[],
+    ),
+    info(
+        Action::Visual(crate::visual::VisualCommand::Mode(
+            crate::visual::VisualMode::Bars,
+        )),
+        "visualization-bars",
+        "Spectrum bars",
+        None,
+        &[],
+        &[],
+    ),
+    info(
+        Action::Visual(crate::visual::VisualCommand::Mode(
+            crate::visual::VisualMode::Spectrum,
+        )),
+        "visualization-spectrum",
+        "Spectrogram",
+        None,
+        &[],
+        &[],
+    ),
+    info(
+        Action::Visual(crate::visual::VisualCommand::Mode(
+            crate::visual::VisualMode::Scope,
+        )),
+        "visualization-scope",
+        "Vector scope",
+        None,
+        &[],
+        &[],
+    ),
+    info(
+        Action::Visual(crate::visual::VisualCommand::Mode(
+            crate::visual::VisualMode::Waves,
+        )),
+        "visualization-waves",
+        "Waveform",
+        None,
+        &[],
+        &[],
+    ),
+    info(
+        Action::Visual(crate::visual::VisualCommand::Mode(
+            crate::visual::VisualMode::Slideshow,
+        )),
+        "slideshow",
+        "Slideshow",
+        None,
+        &[10320],
+        &[],
+    ),
+    info(
+        Action::Visual(crate::visual::VisualCommand::Slide(false)),
+        "previous-slide",
+        "Jump to previous slide",
+        None,
+        &[10414],
+        &[],
+    ),
+    info(
+        Action::Visual(crate::visual::VisualCommand::Slide(true)),
+        "next-slide",
+        "Jump to next slide",
+        None,
+        &[10415],
+        &[],
+    ),
+    info(
+        Action::Settings(SettingsPage::Visualization),
+        "visualization-settings",
+        "Visualization Settings...",
+        None,
+        &[10316],
+        &[],
+    ),
+    info(
+        Action::Capture(crate::capture::CaptureCommand::SheetDialog),
+        "thumbnail-image",
+        "Create Thumbnail Image...",
+        Some("Alt+N"),
+        &[10353],
+        &[],
     ),
     info(
         Action::OpenImageFolder,
@@ -3464,16 +3808,18 @@ pub const ACTIONS: &[ActionInfo] = &[
         &[10616],
         &[],
     ),
+    // The M6 names stay for the pre-resize list: users' bindings keep
+    // working.
     info(
-        Action::Shaders(ShaderChange::Toggle),
+        Action::Shaders(ShaderCommand::Toggle(Stage::Pre)),
         "shaders-toggle",
-        "Use Pixel Shaders",
+        "Use Pre-Resize Pixel Shaders",
         Some("Shift+P"),
         &[10290],
         &[],
     ),
     info(
-        Action::Shaders(ShaderChange::On),
+        Action::Shaders(ShaderCommand::On(Stage::Pre)),
         "shaders-on",
         "Enable Shader Stacker",
         None,
@@ -3481,7 +3827,7 @@ pub const ACTIONS: &[ActionInfo] = &[
         &[],
     ),
     info(
-        Action::Shaders(ShaderChange::Off),
+        Action::Shaders(ShaderCommand::Off(Stage::Pre)),
         "shaders-off",
         "Do not use",
         None,
@@ -3489,7 +3835,47 @@ pub const ACTIONS: &[ActionInfo] = &[
         &[],
     ),
     info(
-        Action::Shaders(ShaderChange::Reload),
+        Action::Shaders(ShaderCommand::Stack(Stage::Pre)),
+        "shaders-stack",
+        "Stack...",
+        None,
+        &[10287],
+        &[],
+    ),
+    info(
+        Action::Shaders(ShaderCommand::Toggle(Stage::Post)),
+        "post-shaders-toggle",
+        "Use Post-Resize Pixel Shaders",
+        Some("Ctrl+Alt+P"),
+        &[10654],
+        &[],
+    ),
+    info(
+        Action::Shaders(ShaderCommand::On(Stage::Post)),
+        "post-shaders-on",
+        "Enable Shader Stacker (post-resize)",
+        None,
+        &[39801],
+        &[],
+    ),
+    info(
+        Action::Shaders(ShaderCommand::Off(Stage::Post)),
+        "post-shaders-off",
+        "Do not use (post-resize)",
+        None,
+        &[39800],
+        &[],
+    ),
+    info(
+        Action::Shaders(ShaderCommand::Stack(Stage::Post)),
+        "post-shaders-stack",
+        "Stack... (post-resize)",
+        None,
+        &[10655],
+        &[],
+    ),
+    info(
+        Action::Shaders(ShaderCommand::Reload),
         "shaders-reload",
         "Reload Pixel Shader list",
         None,
@@ -3497,7 +3883,7 @@ pub const ACTIONS: &[ActionInfo] = &[
         &[],
     ),
     info(
-        Action::Shaders(ShaderChange::OpenFolder),
+        Action::Shaders(ShaderCommand::OpenFolder),
         "shaders-folder",
         "Open Pixel Shader folder",
         None,
@@ -3515,9 +3901,9 @@ pub const ACTIONS: &[ActionInfo] = &[
     info(
         Action::SaveFrameAs,
         "save-frame-as",
-        "Save Current Frame As...",
+        "Save Current Source Frame As...",
         None,
-        &[],
+        &[10357],
         &["ID_VIDEO_IMAGE_CAPTURE_PROMPT"],
     ),
     info(
@@ -3732,9 +4118,9 @@ pub const ACTIONS: &[ActionInfo] = &[
     info(
         Action::Settings(SettingsPage::Shaders),
         "shader-settings",
-        "Stack...",
+        "Pixel Shader Settings...",
         None,
-        &[10287, 10655],
+        &[10920],
         &[],
     ),
     info(

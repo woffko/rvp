@@ -677,6 +677,10 @@ impl App {
             self.apply_decoding(engine);
             drop(self.apply_video_filters(engine));
         }
+        if self.settings.visual != old.visual {
+            self.visual.cycled = None;
+            self.apply_visual(engine);
+        }
     }
 }
 

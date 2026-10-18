@@ -1,11 +1,16 @@
 // M12's dialogs, loaded on first use: a value typed for a purpose (a custom
-// aspect ratio, the Extend/Crop size, the custom window size) and Window
-// Size Control. Player.dialog holds the open request's data as JSON; the
-// answer goes to Player.video_dialog_answer.
+// aspect ratio, the Extend/Crop size, the custom window size), Window Size
+// Control, consecutive images, the thumbnail image, and the files and
+// folder of the recordings. Player.dialog holds
+// the open request's data as JSON; the answer goes to
+// Player.video_dialog_answer.
 import QtQuick
 import QtQuick.Controls
+// Qualified: Rvp's own FolderDialog.qml has the same name.
+import QtQuick.Dialogs as Dialogs
 import QtQuick.Layouts
 import Rvp
+import RvpNative
 
 Item {
     id: holder
@@ -26,6 +31,31 @@ Item {
             open(inputDialog)
             inputField.selectAll()
             inputField.forceActiveFocus()
+            break
+        case "consecutive":
+            intervalField.text = String(data.interval)
+            countBox.value = data.count
+            open(consecutiveDialog)
+            break
+        case "sheet":
+            columnsBox.value = data.sheet.columns
+            rowsBox.value = data.sheet.rows
+            sheetWidthBox.value = data.sheet.width
+            infoCheck.checked = data.sheet.info
+            timesCheck.checked = data.sheet.times
+            exactCheck.checked = data.sheet.exact
+            open(sheetDialog)
+            break
+        case "save":
+            saveDialog.title = data.title
+            saveDialog.nameFilters = data.filters
+            saveDialog.selectedFile = data.file
+            open(saveDialog)
+            break
+        case "folder":
+            folderDialog.title = data.title
+            folderDialog.currentFolder = data.folder
+            open(folderDialog)
             break
         case "window-control":
             widthBox.value = holder.window.width
@@ -59,6 +89,69 @@ Item {
                 Layout.preferredWidth: 320
                 onAccepted: inputDialog.accept()
             }
+        }
+    }
+
+    // Record Stream and Record Video: the file to record into.
+    Dialogs.FileDialog {
+        id: saveDialog
+        objectName: "saveDialog"
+        fileMode: Dialogs.FileDialog.SaveFile
+        onAccepted: holder.answer(Tools.local_file(selectedFile))
+    }
+    // The video storage folder.
+    Dialogs.FolderDialog {
+        id: folderDialog
+        objectName: "folderDialog"
+        onAccepted: holder.answer(Tools.local_file(selectedFolder))
+    }
+
+    // Capture Consecutive Images: every so many seconds of playback, a
+    // number of images.
+    Dialog {
+        id: consecutiveDialog
+        objectName: "consecutiveDialog"
+        title: "Capture Consecutive Images"
+        modal: true
+        anchors.centerIn: parent
+        standardButtons: Dialog.Ok | Dialog.Cancel
+        onAccepted: holder.answer(JSON.stringify({ interval: parseFloat(intervalField.text),
+                                                    count: countBox.value }))
+        GridLayout {
+            columns: 2
+            Label { text: "Every (seconds)" }
+            TextField {
+                id: intervalField
+                Layout.preferredWidth: 120
+                validator: DoubleValidator { bottom: 0.1; top: 3600; decimals: 2 }
+            }
+            Label { text: "Images" }
+            SpinBox { id: countBox; from: 1; to: 10000; editable: true }
+        }
+    }
+
+    // Create Thumbnail Image: a contact sheet of the playing file.
+    Dialog {
+        id: sheetDialog
+        objectName: "sheetDialog"
+        title: "Create Thumbnail Image"
+        modal: true
+        anchors.centerIn: parent
+        standardButtons: Dialog.Ok | Dialog.Cancel
+        onAccepted: holder.answer(JSON.stringify({
+            columns: columnsBox.value, rows: rowsBox.value, width: sheetWidthBox.value,
+            info: infoCheck.checked, times: timesCheck.checked, exact: exactCheck.checked }))
+        GridLayout {
+            columns: 2
+            Label { text: "Columns" }
+            SpinBox { id: columnsBox; from: 1; to: 10; editable: true }
+            Label { text: "Rows" }
+            SpinBox { id: rowsBox; from: 1; to: 20; editable: true }
+            Label { text: "Image width (pixels)" }
+            SpinBox { id: sheetWidthBox; from: 320; to: 7680; stepSize: 160; editable: true }
+            CheckBox { id: infoCheck; text: "File information above the pictures"; Layout.columnSpan: 2 }
+            CheckBox { id: timesCheck; text: "The time on each picture"; Layout.columnSpan: 2 }
+            CheckBox { id: exactCheck; text: "Exact frames (slower)"; Layout.columnSpan: 2 }
         }
     }
 

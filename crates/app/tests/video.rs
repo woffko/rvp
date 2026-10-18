@@ -7,7 +7,9 @@
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
-use rvp_app::video::{ColorChange, ColorKind, Deinterlace, Rotation, ShaderChange, VideoEffect};
+use rvp_app::hlsl::Stage;
+use rvp_app::shaders::ShaderCommand;
+use rvp_app::video::{ColorChange, ColorKind, Deinterlace, Rotation, VideoEffect};
 use rvp_app::{Action, App, Settings};
 use rvp_engine::{Engine, EngineOptions, PropertyId};
 
@@ -161,10 +163,10 @@ fn colour_rotation_deinterlacing_and_shaders_reach_the_renderer() {
     )
     .expect("write shader");
     app.settings.shaders.files = vec![shader.clone()];
-    app.dispatch(&engine, Action::Shaders(ShaderChange::Toggle));
+    app.dispatch(&engine, Action::Shaders(ShaderCommand::Toggle(Stage::Pre)));
     let list = engine.get_text("glsl-shaders").unwrap_or_default();
     assert!(list.contains("identity.glsl"), "shaders on: {list:?}");
-    app.dispatch(&engine, Action::Shaders(ShaderChange::Off));
+    app.dispatch(&engine, Action::Shaders(ShaderCommand::Off(Stage::Pre)));
     assert_eq!(engine.get_text("glsl-shaders").as_deref(), Some(""));
     assert!(app.model.playing(), "still playing");
     let _ = std::fs::remove_dir_all(&dir);

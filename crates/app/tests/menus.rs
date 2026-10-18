@@ -83,9 +83,13 @@ fn the_context_menu_follows_potplayer_with_rvps_keys_and_state() {
         [
             "Open File(s)...",
             "Open",
+            // Record Stream (M12) is in Tools and in TV, as in PotPlayer.
+            "Tools",
             "Album/Favorites",
             "Close Playback",
             "",
+            "Visualization",
+            "TV (WDM/BDA)",
             "DVD Control",
             "Playback",
             "Subtitles",
@@ -192,6 +196,7 @@ fn track(id: i64, kind: TrackKind, language: &str, selected: bool) -> Track {
         channels: None,
         sample_rate: None,
         bitrate: None,
+        album_art: false,
     }
 }
 

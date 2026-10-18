@@ -56,6 +56,7 @@ Window {
     readonly property int requestScenes: 33
     readonly property int requestVideoDialog: 34
     readonly property int requestWindow: 35
+    readonly property int requestSlide: 36
 
     property bool wasMaximized: false
     // The window state RVP last asked for and when (see applyVisibility).
@@ -319,6 +320,10 @@ Window {
             break
         case requestWindow:
             root.windowRequest(JSON.parse(player.dialog))
+            break
+        case requestSlide:
+            if (slideshowLoader.item)
+                slideshowLoader.item.move(argument)
             break
         }
     }
@@ -795,6 +800,19 @@ Window {
             visibility: modelData.name !== root.screen.name ? Window.FullScreen : Window.Hidden
         }
     }
+    // The slideshow for audio files lies over the video, under the bars
+    // of fullscreen (M12), created the first time it shows.
+    Loader {
+        id: slideshowLoader
+        x: player.video_rect.x
+        y: player.video_rect.y
+        width: player.video_rect.width
+        height: player.video_rect.height
+        z: 1.5
+        active: player.slideshow !== "" || item !== null
+        Component.onCompleted: setSource("Slideshow.qml", { player: player })
+        onLoaded: item.anchors.fill = slideshowLoader
+    }
     // The scene browser lies over the video (M11).
     Loader {
         id: sceneLoader
@@ -1039,6 +1057,16 @@ Window {
     //                         fixture-chapters.mkv, fixture-60s.mkv,
     //                         fixture-3s.mkv, with /seek=0:00:03 and
     //                         /title="M11 title"
+    //   --selftest=m12        M12's checks (SelfTestM12.qml): the window's
+    //                         sizes, dialogs, moves and fullscreen on another
+    //                         display, capture (BMP, the screen frame, the
+    //                         clipboard, consecutive images, the thumbnail
+    //                         image) and the settings window's tree; the
+    //                         file: fixture-60s.mkv
+    //   --selftest=shaders    the HLSL pixel shaders of the catalogue, one
+    //                         at a time in the post-resize list; needs
+    //                         --mpv-log=FILE and --mpv-options=log-file=FILE
+    //                         (mpv's errors say whether each compiled)
     //   --selftest=resume     expects the last file reopened paused within
     //                         --expect-tolerance (default 2.5) seconds of
     //                         --expect-time=SECONDS; with --expect-entry=I
@@ -1145,6 +1173,10 @@ Window {
             return speedTick()
         if (selftest.mode === "m11")
             return m11Tick()
+        if (selftest.mode === "m12")
+            return m12Tick()
+        if (selftest.mode === "shaders")
+            return m12Tick(true)
         functionalTick()
     }
 
@@ -1161,6 +1193,23 @@ Window {
         }
         m11Loader.item.tick()
     }
+    // --selftest=m12: M12's checks (SelfTestM12.qml).
+    Loader {
+        id: m12Loader
+        active: false
+        Component.onCompleted: setSource("SelfTestM12.qml", { player: player, t: selftest, host: root })
+    }
+    function m12Tick(shaders) {
+        if (!m12Loader.item) {
+            m12Loader.active = true
+            return
+        }
+        if (shaders === true)
+            m12Loader.item.shaderTick()
+        else
+            m12Loader.item.tick()
+    }
+    function settingsWindow() { return settingsLoader.item }
     // M11's dialogs and scene browser, for the self-test.
     function playbackDialogs() { return playbackLoader.item }
     function videoDialogs() { return videoDialogLoader.item }

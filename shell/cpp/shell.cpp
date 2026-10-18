@@ -9,6 +9,7 @@
 #include <utility>
 
 #include <QtCore/QByteArray>
+#include <QtCore/QDateTime>
 #include <QtCore/QDir>
 #include <QtCore/QFile>
 #include <QtCore/QFileInfo>
@@ -27,8 +28,10 @@
 #include <QtGui/QGuiApplication>
 #include <QtGui/QIcon>
 #include <QtGui/QImage>
+#include <QtGui/QImageReader>
 #include <QtGui/QOpenGLContext>
 #include <QtGui/QOpenGLFunctions>
+#include <QtGui/QPainter>
 #include <QtGui/QScreen>
 #include <QtGui/QWindow>
 #include <QtNetwork/QLocalServer>
@@ -408,6 +411,43 @@ void Tools::set_clipboard_text(const QString &text) const
     QGuiApplication::clipboard()->setText(text);
 }
 
+QString Tools::image_info(const QString &path) const
+{
+    QImageReader reader(path);
+    const QSize size = reader.size();
+    const QJsonObject object{
+        {QStringLiteral("exists"), QFileInfo::exists(path)},
+        {QStringLiteral("format"), QString::fromLatin1(reader.format())},
+        {QStringLiteral("width"), size.width()},
+        {QStringLiteral("height"), size.height()},
+    };
+    return QString::fromUtf8(QJsonDocument(object).toJson(QJsonDocument::Compact));
+}
+
+QString Tools::clipboard_image_info() const
+{
+    const QImage image = QGuiApplication::clipboard()->image();
+    const QJsonObject object{
+        {QStringLiteral("width"), image.width()},
+        {QStringLiteral("height"), image.height()},
+    };
+    return QString::fromUtf8(QJsonDocument(object).toJson(QJsonDocument::Compact));
+}
+
+QString Tools::read_file(const QString &path, qint64 from) const
+{
+    QFile file(path);
+    if (!file.open(QIODevice::ReadOnly) || !file.seek(std::max<qint64>(0, from)))
+        return {};
+    return QString::fromUtf8(file.readAll());
+}
+
+QString Tools::list_files(const QString &folder) const
+{
+    const QStringList names = QDir(folder).entryList(QDir::Files, QDir::Name);
+    return QString::fromUtf8(QJsonDocument(QJsonArray::fromStringList(names)).toJson(QJsonDocument::Compact));
+}
+
 QString Tools::screen_json(QWindow *window) const
 {
     QScreen *screen = window != nullptr ? window->screen() : QGuiApplication::primaryScreen();
@@ -574,6 +614,75 @@ void rvp_atlas_remove_prefix(rust::Str prefix)
         else
             ++it;
     }
+}
+
+namespace {
+
+// An RGBA picture from Rust as a QImage of its own (the slice belongs to
+// Rust); a null image when the sizes do not fit.
+QImage imageFromRgba(rust::Slice<const std::uint8_t> rgba, std::int32_t width, std::int32_t height)
+{
+    if (width <= 0 || height <= 0
+        || rgba.size() < static_cast<std::size_t>(width) * static_cast<std::size_t>(height) * 4) {
+        return {};
+    }
+    return QImage(rgba.data(), width, height, width * 4, QImage::Format_RGBA8888).copy();
+}
+
+} // namespace
+
+bool rvp_save_image(rust::Slice<const std::uint8_t> rgba, std::int32_t width, std::int32_t height,
+                    rust::Str path, std::int32_t quality, rust::Str texts)
+{
+    // Any thread: QImage and QPainter on a QImage need no GUI thread.
+    QImage image = imageFromRgba(rgba, width, height);
+    if (image.isNull())
+        return false;
+    const QJsonArray lines = QJsonDocument::fromJson(fromStr(texts).toUtf8()).array();
+    if (!lines.isEmpty()) {
+        QPainter painter(&image);
+        painter.setRenderHint(QPainter::TextAntialiasing);
+        for (const QJsonValue &value : lines) {
+            const QJsonObject line = value.toObject();
+            QFont font;
+            font.setPixelSize(std::max(6, line.value(QStringLiteral("size")).toInt()));
+            painter.setFont(font);
+            const QRect rect(line.value(QStringLiteral("x")).toInt(),
+                             line.value(QStringLiteral("y")).toInt(),
+                             line.value(QStringLiteral("width")).toInt(),
+                             line.value(QStringLiteral("height")).toInt());
+            const int align = (line.value(QStringLiteral("align")).toString() == QStringLiteral("right")
+                                   ? Qt::AlignRight
+                                   : Qt::AlignLeft)
+                              | Qt::AlignVCenter;
+            const QString text = line.value(QStringLiteral("text")).toString();
+            // A dark outline keeps the text readable over the pictures.
+            painter.setPen(QColor(0, 0, 0, 200));
+            painter.drawText(rect.translated(1, 1), align, text);
+            painter.setPen(QColor(235, 235, 235));
+            painter.drawText(rect, align, text);
+        }
+    }
+    const QString file = fromStr(path);
+    QDir().mkpath(QFileInfo(file).absolutePath());
+    return image.convertToFormat(QImage::Format_RGB888).save(file, nullptr, quality);
+}
+
+bool rvp_copy_image(rust::Slice<const std::uint8_t> rgba, std::int32_t width, std::int32_t height)
+{
+    // The window's thread: the clipboard belongs to it.
+    const QImage image = imageFromRgba(rgba, width, height);
+    if (image.isNull())
+        return false;
+    QGuiApplication::clipboard()->setImage(image.convertToFormat(QImage::Format_RGB888));
+    return true;
+}
+
+rust::String rvp_local_time()
+{
+    const QByteArray text =
+        QDateTime::currentDateTime().toString(QStringLiteral("yyyy-MM-dd HH.mm.ss")).toUtf8();
+    return rust::String(text.constData(), static_cast<std::size_t>(text.size()));
 }
 
 void rvp_atlas_insert(rust::Str name, rust::Slice<const std::uint8_t> rgba, std::int32_t width,

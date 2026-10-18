@@ -123,6 +123,7 @@ impl qobject::Player {
                     list_changed |= insert_picture(&key, &picture).is_some();
                 }
                 ThumbEvent::Unavailable(error) => eprintln!("rvp: thumbnails: {error}"),
+                ThumbEvent::Sheet(sheet) => self.as_mut().save_sheet(sheet),
             }
         }
         // Durations found in the background, and new list thumbnails.

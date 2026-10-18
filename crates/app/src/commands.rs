@@ -229,7 +229,6 @@ impl App {
                 Some(UiRequest::ControlPanel(self.session.control_panel))
             }
             Action::ToggleEqualizer => Some(self.toggle_equalizer(engine)),
-            Action::SaveFrameAs => self.frame_path().map(UiRequest::SaveFrameDialog),
             Action::SubtitleFont => Some(UiRequest::SubtitleFontDialog(
                 self.settings.subtitle_font.clone(),
             )),
@@ -355,8 +354,12 @@ impl App {
             Action::Picture(command) => self.picture_command(engine, command),
             Action::Stereo(command) => Some(self.stereo_command(engine, command)),
             Action::Window(command) => Some(self.window_command(command)),
-            Action::SaveFrame => self.save_frame(false),
-            Action::SaveScreen => self.save_frame(true),
+            Action::SaveFrame => self.save_shot(crate::capture::Shot::Source),
+            Action::SaveScreen => self.save_shot(crate::capture::Shot::Screen),
+            Action::SaveFrameAs => self.save_as(crate::capture::Shot::Source),
+            Action::Capture(command) => self.capture_command(command),
+            Action::Record(command) => self.recording_command(engine, command),
+            Action::Visual(command) => self.visual_command(engine, command),
             Action::SetImageFormat(format) => {
                 self.settings.image_format = format;
                 self.save_settings();
@@ -364,6 +367,8 @@ impl App {
                     match format {
                         ImageFormat::Png => "Images: PNG",
                         ImageFormat::Jpeg => "Images: JPEG",
+                        ImageFormat::Bmp => "Images: BMP",
+                        ImageFormat::Webp => "Images: WEBP",
                     }
                     .to_owned(),
                 ))
@@ -755,47 +760,6 @@ impl App {
     pub fn set_image_folder(&mut self, folder: &Path) {
         self.settings.image_folder = Some(folder.to_path_buf());
         self.save_settings();
-    }
-
-    fn save_frame(&self, subtitles: bool) -> Option<UiRequest> {
-        self.frame_path()
-            .map(|path| UiRequest::SaveFrame { path, subtitles })
-    }
-
-    /// A new file in the image folder for the current frame, named after
-    /// the video and the time; `None` without a video.
-    fn frame_path(&self) -> Option<PathBuf> {
-        let path = self.model.loaded_path()?;
-        self.model.int(PropertyId::VideoWidth)?;
-        let stem = Path::new(crate::view::file_name(path))
-            .file_stem()
-            .map_or_else(
-                || "frame".to_owned(),
-                |stem| stem.to_string_lossy().into_owned(),
-            );
-        let time = self.model.double(PropertyId::TimePos).unwrap_or(0.0);
-        // Milliseconds of a media time are far inside u64.
-        #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
-        let millis = (time.max(0.0) * 1000.0).round() as u64;
-        let extension = match self.settings.image_format {
-            ImageFormat::Png => "png",
-            ImageFormat::Jpeg => "jpg",
-        };
-        let folder = self.image_folder();
-        let name = format!(
-            "{stem} {:02}.{:02}.{:02}.{:03}",
-            millis / 3_600_000,
-            millis / 60_000 % 60,
-            millis / 1000 % 60,
-            millis % 1000
-        );
-        let mut file = folder.join(format!("{name}.{extension}"));
-        let mut counter = 2;
-        while file.exists() {
-            file = folder.join(format!("{name} ({counter}).{extension}"));
-            counter += 1;
-        }
-        Some(file)
     }
 
     fn set_on_top(&mut self, mode: OnTop) -> UiRequest {

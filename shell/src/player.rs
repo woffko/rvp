@@ -101,6 +101,8 @@ pub mod request {
     /// A window size or move (`dialog`: `rvp_app::window::WindowRequest`
     /// as JSON).
     pub const WINDOW: i32 = 35;
+    /// The slideshow moves by the argument's slides.
+    pub const SLIDE: i32 = 36;
 }
 
 /// The skin, loaded once for the process (the painters read it on the
@@ -178,6 +180,10 @@ struct Core {
     recorder: Option<crate::recorder::Recorder>,
     /// Power actions only write their name here (tests, `--selftest`).
     power_dry_run: Option<PathBuf>,
+    /// The frame the open Save As dialog saves (M12).
+    save_as: rvp_app::capture::Shot,
+    /// The slideshow state last given to the window (M12).
+    slideshow: bool,
 }
 
 /// Fitting the window to a video the user opened: requested, then the new
@@ -273,6 +279,7 @@ pub struct PlayerRust {
     pub(crate) video_aspect: f64,
     pub(crate) black_other_displays: bool,
     pub(crate) fullscreen_primary: bool,
+    pub(crate) slideshow: QString,
     pub(crate) power_notice: QString,
     pub(crate) power_seconds: i32,
     pub(crate) dialog: QString,
@@ -458,14 +465,17 @@ fn load_app() -> Result<(App, bool, Option<String>), String> {
             .map(|app| (app, dirs.portable))
             .map_err(|error| format!("cannot read the settings: {error}"))
     });
-    match loaded {
-        Ok((app, portable)) => Ok((app, portable, None)),
+    let (mut app, portable, message) = match loaded {
+        Ok((app, portable)) => (app, portable, None),
         Err(message) => {
             let fallback = std::env::temp_dir().join("rvp-state");
             let app = App::new(Settings::default(), &fallback).map_err(|e| e.to_string())?;
-            Ok((app, false, Some(message)))
+            (app, false, Some(message))
         }
-    }
+    };
+    // Captured images' names carry the local date (M12).
+    app.set_clock(crate::ffi::bridge::rvp_local_time);
+    Ok((app, portable, message))
 }
 
 /// A `file:` URL for a local path, for `Qt.openUrlExternally`.
@@ -556,6 +566,18 @@ impl qobject::Player {
         self.as_mut().set_message(QString::from(text));
     }
 
+    /// The window's and the control panel's saved places.
+    fn restore_places(mut self: Pin<&mut Self>, app: &App) {
+        if let Some(window) = app.store().state().window {
+            self.as_mut().restore_window(window);
+        }
+        if let Some((x, y)) = app.panel_position() {
+            self.as_mut().set_panel_x(x);
+            self.as_mut().set_panel_y(y);
+            self.as_mut().set_panel_has_position(true);
+        }
+    }
+
     pub(crate) fn start(mut self: Pin<&mut Self>) {
         if self.core().is_some() {
             return;
@@ -620,14 +642,7 @@ impl qobject::Player {
             }
         });
 
-        if let Some(window) = app.store().state().window {
-            self.as_mut().restore_window(window);
-        }
-        if let Some((x, y)) = app.panel_position() {
-            self.as_mut().set_panel_x(x);
-            self.as_mut().set_panel_y(y);
-            self.as_mut().set_panel_has_position(true);
-        }
+        self.as_mut().restore_places(&app);
         self.as_mut().set_has_skin(chrome.is_some());
         self.as_mut().set_window_title(QString::from("RVP"));
         let request = Request::from_cli(&cli, &std::env::current_dir().unwrap_or_default());
@@ -655,6 +670,8 @@ impl qobject::Player {
             awake: crate::awake::KeepAwake::default(),
             recorder: None,
             power_dry_run,
+            save_as: rvp_app::capture::Shot::Source,
+            slideshow: false,
         });
         if let Some(message) = messages.first() {
             self.as_mut().show_message(message);
@@ -1061,10 +1078,16 @@ impl qobject::Player {
         }
     }
 
-    pub(crate) fn save_frame_to(self: Pin<&mut Self>, path: &QString) {
+    pub(crate) fn save_frame_to(mut self: Pin<&mut Self>, path: &QString) {
         let path = path.to_string();
+        let Some(core) = self.as_mut().core_mut() else {
+            return;
+        };
         if !path.is_empty() {
-            self.save_frame(PathBuf::from(path), false);
+            let job = core
+                .app
+                .capture_job(core.save_as, Some(PathBuf::from(path)));
+            self.capture(job);
         }
     }
 
@@ -1633,7 +1656,7 @@ impl qobject::Player {
                     .set_external_url(QString::from(&file_url(&path)));
                 self.ui_request(request::OPEN_EXTERNAL, 0);
             }
-            UiRequest::SaveFrame { path, subtitles } => self.save_frame(path, subtitles),
+            UiRequest::Capture(job) => self.capture(job),
             UiRequest::ScaleWindow(factor) => self.scale_window(factor),
             UiRequest::FitAspect => self.fit_aspect_now(true),
             UiRequest::OnTop(on) => self.set_on_top(on),
@@ -1653,7 +1676,8 @@ impl qobject::Player {
                 self.as_mut().set_subtitle_font(QString::from(&family));
                 self.ui_request(request::SUBTITLE_FONT, 0);
             }
-            UiRequest::SaveFrameDialog(path) => {
+            UiRequest::SaveFrameDialog { path, shot } => {
+                core.save_as = shot;
                 self.as_mut()
                     .set_frame_path(QString::from(&file_url(&path)));
                 self.ui_request(request::SAVE_FRAME_AS, 0);
@@ -1762,35 +1786,6 @@ impl qobject::Player {
 
     /// Saves the frame on a thread: mpv encodes the image, which takes
     /// longer than a frame.
-    fn save_frame(self: Pin<&mut Self>, path: PathBuf, subtitles: bool) {
-        let thread = self.qt_thread();
-        let spawned = std::thread::Builder::new()
-            .name("rvp-frame".to_owned())
-            .spawn(move || {
-                let mode = if subtitles { "subtitles" } else { "video" };
-                let text = path.to_string_lossy().into_owned();
-                let result = path
-                    .parent()
-                    .map_or(Ok(()), std::fs::create_dir_all)
-                    .map_err(|error| error.to_string())
-                    .and_then(|()| {
-                        ENGINE
-                            .get()
-                            .ok_or_else(|| "no player".to_owned())?
-                            .command("screenshot-to-file", &[&text, mode])
-                            .map_err(|error| error.to_string())
-                    });
-                let notice = match result {
-                    Ok(()) => format!("Saved {}", view::file_name(&text)),
-                    Err(error) => format!("Cannot save the frame: {error}"),
-                };
-                let _ = thread.queue(move |player| player.set_osd(QString::from(&notice)));
-            });
-        if let Err(error) = spawned {
-            eprintln!("rvp: cannot save the frame: {error}");
-        }
-    }
-
     /// The window at `factor` times the video's size (PotPlayer's "1.0x
     /// video output size"), within the screen.
     fn scale_window(mut self: Pin<&mut Self>, factor: f64) {
@@ -2007,8 +2002,18 @@ impl qobject::Player {
         self.sync_chrome();
     }
 
-    /// The video's shape and M12's fullscreen settings for `Main.qml`.
+    /// The video's shape, M12's fullscreen settings and the slideshow for
+    /// `Main.qml`.
     fn sync_window_settings(mut self: Pin<&mut Self>) {
+        let Some(core) = self.as_mut().core_mut() else {
+            return;
+        };
+        let shown = core.app.slideshow_shown();
+        if shown != core.slideshow {
+            core.slideshow = shown;
+            let json = core.app.slideshow_json();
+            self.as_mut().set_slideshow(QString::from(&json));
+        }
         let Some(core) = self.core() else {
             return;
         };

@@ -96,8 +96,18 @@ impl Harness {
             }
             assert!(
                 Instant::now() < deadline,
-                "timed out waiting for {what}: vf {:?}",
-                self.engine.get_text("vf")
+                "timed out waiting for {what}: vf {:?}, time {:?}, core idle {:?}, eof {:?}, \
+                 vid {:?}, out {:?}, frame {:?}",
+                self.engine.get_text("vf"),
+                self.engine.get_double("time-pos"),
+                self.engine.get_text("core-idle"),
+                self.engine.get_text("eof-reached"),
+                self.engine.get_text("vid"),
+                self.engine.get_text("video-out-params/w"),
+                self.engine
+                    .screenshot_raw("video")
+                    .ok()
+                    .and_then(|image| image.rgb(image.width / 2, image.height / 2)),
             );
             std::thread::sleep(Duration::from_millis(20));
         }
@@ -481,4 +491,260 @@ fn the_360_view_turns_while_it_plays() {
     assert!(h.text("vf").contains("xstack"), "{}", h.text("vf"));
     h.stereo(StereoCommand::VrToggle);
     assert!(!h.text("vf").contains("@rvp360:"));
+}
+
+#[test]
+fn captures_name_their_files_and_mpv_writes_its_formats() {
+    use rvp_app::ImageFormat;
+    use rvp_app::capture::{CaptureCommand, Shot};
+
+    let mut h = Harness::new("capture", |_| {});
+    let folder = h.dir.join("images");
+    h.app.settings.image_folder = Some(folder.clone());
+    h.open(&[media("fixture-marker.mkv")]);
+    h.wait("playback past 0.5 s", |h| {
+        h.app
+            .model
+            .double(PropertyId::TimePos)
+            .is_some_and(|t| t > 0.5)
+    });
+    for (format, magic) in [
+        (ImageFormat::Png, b"\x89PNG".as_slice()),
+        (ImageFormat::Jpeg, b"\xff\xd8\xff".as_slice()),
+        (ImageFormat::Webp, b"RIFF".as_slice()),
+    ] {
+        h.app.dispatch(&h.engine, Action::SetImageFormat(format));
+        let Some(UiRequest::Capture(job)) = h.app.dispatch(&h.engine, Action::SaveFrame) else {
+            panic!("no capture for {format:?}");
+        };
+        assert_eq!(job.mode, "video");
+        assert!(job.by_mpv(), "{job:?}");
+        let path = job.path.clone().expect("a file");
+        assert_eq!(path.parent(), Some(folder.as_path()));
+        let name = path
+            .file_name()
+            .unwrap_or_default()
+            .to_string_lossy()
+            .into_owned();
+        // The video's name and the elapsed time, `fixture-marker 00.00.0S.mmm`.
+        assert!(name.starts_with("fixture-marker 00.00.0"), "{name}");
+        std::fs::create_dir_all(&folder).expect("folder");
+        h.engine
+            .command("screenshot-to-file", &[&path.to_string_lossy(), job.mode])
+            .expect("screenshot");
+        let bytes = std::fs::read(&path).expect("the image");
+        assert!(bytes.starts_with(magic), "{format:?}: {:?}", &bytes[..8]);
+    }
+    // BMP goes through Qt from the raw frame (the self-test writes it).
+    h.app
+        .dispatch(&h.engine, Action::SetImageFormat(ImageFormat::Bmp));
+    let Some(UiRequest::Capture(job)) = h.app.dispatch(&h.engine, Action::SaveScreen) else {
+        panic!("no capture of the screen frame");
+    };
+    assert_eq!(job.mode, "window");
+    assert!(!job.by_mpv());
+    assert!(
+        job.path
+            .is_some_and(|path| path.extension().is_some_and(|e| e == "bmp"))
+    );
+    // The date in the name, subtitles in source frames, the clipboard.
+    for command in [
+        CaptureCommand::ToggleNameDate,
+        CaptureCommand::ToggleSubtitles,
+    ] {
+        h.app.dispatch(&h.engine, Action::Capture(command));
+    }
+    let Some(UiRequest::Capture(job)) = h.app.dispatch(&h.engine, Action::SaveFrame) else {
+        panic!("no capture with the date");
+    };
+    assert_eq!(job.mode, "subtitles");
+    let name = job
+        .path
+        .and_then(|path| {
+            path.file_stem()
+                .map(|stem| stem.to_string_lossy().into_owned())
+        })
+        .unwrap_or_default();
+    // `fixture-marker YYYY-MM-DD HH.MM.SS 00.00.0S.mmm` (UTC without the
+    // window's clock).
+    assert_eq!(
+        name.len(),
+        "fixture-marker 2026-10-18 15.30.45 00.00.01.000".len(),
+        "{name}"
+    );
+    let Some(UiRequest::Capture(copy)) = h.app.dispatch(
+        &h.engine,
+        Action::Capture(CaptureCommand::Copy(Shot::Screen)),
+    ) else {
+        panic!("no clipboard capture");
+    };
+    assert_eq!((copy.mode, copy.path), ("window", None));
+    // Without a video output there is no window to capture: the source
+    // frame stands in.
+    let raw = h.engine.screenshot_raw("video").expect("the frame");
+    let rgba = rvp_app::capture::rgba_pixels(&raw);
+    assert_eq!(rgba.len(), raw.width * raw.height * 4);
+    assert!(rgba.as_chunks::<4>().0.iter().all(|pixel| pixel[3] == 255));
+}
+
+#[test]
+fn video_filters_wait_at_the_end_of_a_file() {
+    let mut h = Harness::new("near-end", |_| {});
+    h.open(&[media("fixture-sbs.mkv")]);
+    drop(h.engine.command("seek", &["11", "absolute"]));
+    h.wait("the last second", |h| {
+        h.app
+            .model
+            .double(PropertyId::TimePos)
+            .is_some_and(|t| t > 11.0)
+    });
+    // A change in the last moments waits: mpv reaches the end.
+    h.stereo(StereoCommand::Mode(ModeSwitch::On));
+    assert!(!h.text("vf").contains("@rvp3d:"), "{}", h.text("vf"));
+    h.wait("the end of the file", |h| {
+        h.app.model.flag(PropertyId::EofReached) == Some(true)
+    });
+    // Back from the end, the filter comes.
+    drop(h.engine.command("seek", &["2", "absolute"]));
+    h.wait("the waiting filter", |h| h.text("vf").contains("@rvp3d:"));
+}
+
+#[test]
+fn audio_files_show_ffmpegs_visualizations_and_the_slideshow() {
+    use rvp_app::visual::{VisualCommand, VisualMode};
+
+    let mut h = Harness::new("visual", |settings| {
+        settings.visual.size = [640, 360];
+    });
+    drop(h.engine.set_text("loop-file", "inf"));
+    h.app.dispatch(
+        &h.engine,
+        Action::Visual(VisualCommand::Mode(VisualMode::Bars)),
+    );
+    h.app
+        .open(&h.engine, &[media("fixture-tone.ogg")], false)
+        .expect("open");
+    // The graph gives mpv the sound and a picture of the visualization's size.
+    h.wait("the spectrum's picture", |h| {
+        h.text("lavfi-complex").contains("showcqt=s=640x360")
+            && h.engine.get_int("video-out-params/w") == Some(640)
+    });
+    h.app.dispatch(
+        &h.engine,
+        Action::Visual(VisualCommand::Mode(VisualMode::Scope)),
+    );
+    h.wait("the vector scope", |h| {
+        h.engine.get_int("video-out-params/w") == Some(360)
+            && h.engine.get_int("video-out-params/h") == Some(360)
+    });
+    // The slideshow: no graph, and the folder's pictures for the window.
+    h.app.dispatch(
+        &h.engine,
+        Action::Visual(VisualCommand::Mode(VisualMode::Slideshow)),
+    );
+    assert_eq!(h.text("lavfi-complex"), "");
+    assert!(h.app.slideshow_shown());
+    let show: serde_json::Value =
+        serde_json::from_str(&h.app.slideshow_json()).expect("the slideshow's JSON");
+    let files = show["files"].as_array().cloned().unwrap_or_default();
+    assert!(
+        files.iter().any(|file| file
+            .as_str()
+            .is_some_and(|f| f.ends_with("fixture-marker.png"))),
+        "{show}"
+    );
+    assert_eq!(
+        h.app
+            .dispatch(&h.engine, Action::Visual(VisualCommand::Slide(true))),
+        Some(UiRequest::Slide(1))
+    );
+    // Off: the file shows nothing again.
+    h.app
+        .dispatch(&h.engine, Action::Visual(VisualCommand::ToggleEnabled));
+    assert!(!h.app.slideshow_shown());
+    // A video file never gets the graph.
+    h.app
+        .dispatch(&h.engine, Action::Visual(VisualCommand::ToggleEnabled));
+    h.app.dispatch(
+        &h.engine,
+        Action::Visual(VisualCommand::Mode(VisualMode::Bars)),
+    );
+    h.open(&[media("fixture-60s.mkv")]);
+    assert_eq!(h.text("lavfi-complex"), "");
+}
+
+#[test]
+fn streams_and_videos_are_recorded() {
+    use rvp_app::record::RecordCommand;
+
+    let mut h = Harness::new("record", |_| {});
+    h.open(&[media("fixture-60s.mkv")]);
+    // Record Stream: the dialog suggests a file; mpv writes the source.
+    let Some(UiRequest::RecordStreamDialog(suggested)) = h
+        .app
+        .dispatch(&h.engine, Action::Record(RecordCommand::Stream))
+    else {
+        panic!("no Record Stream dialog");
+    };
+    assert!(
+        suggested.extension().is_some_and(|e| e == "mkv"),
+        "{suggested:?}"
+    );
+    let stream = h.dir.join("stream.mkv");
+    h.app.start_stream_record(&h.engine, &stream);
+    assert!(h.app.recording_stream());
+    // Some seconds: mpv's recorder starts at a keyframe (every second
+    // here).
+    let from = h.app.model.double(PropertyId::TimePos).unwrap_or(0.0);
+    h.wait("seconds of the stream", |h| {
+        h.app
+            .model
+            .double(PropertyId::TimePos)
+            .is_some_and(|time| time > from + 2.5)
+    });
+    let Some(UiRequest::Osd(notice)) = h
+        .app
+        .dispatch(&h.engine, Action::Record(RecordCommand::Stream))
+    else {
+        panic!("Record Stream did not stop");
+    };
+    assert_eq!(notice, "Recorded the stream: stream.mkv");
+    // mpv's demuxer thread closes the file.
+    h.wait("the recorded stream", |_| {
+        std::fs::metadata(&stream).is_ok_and(|meta| meta.len() > 0)
+    });
+    // Record Video: from here to the stop, encoded by a core of its own.
+    let video = h.dir.join("video.mkv");
+    h.app.start_video_record(video.clone());
+    let start = h.app.model.double(PropertyId::TimePos).unwrap_or(0.0);
+    h.wait("two seconds of video", |h| {
+        h.app
+            .model
+            .double(PropertyId::TimePos)
+            .is_some_and(|time| time > start + 2.0)
+    });
+    let Some(UiRequest::Encode(job)) = h
+        .app
+        .dispatch(&h.engine, Action::Record(RecordCommand::Video))
+    else {
+        panic!("Record Video did not stop");
+    };
+    assert_eq!(job.output, video);
+    assert!(job.end > job.start + 2.0);
+    assert!(!job.vf.contains("@svp"));
+    rvp_engine::encode::encode(&job, Duration::from_secs(60)).expect("encode");
+    let length = job.end - job.start;
+    let check = Engine::new(&EngineOptions::headless()).expect("engine");
+    check
+        .load(&video.to_string_lossy(), false)
+        .expect("the recording");
+    let deadline = Instant::now() + Duration::from_secs(10);
+    loop {
+        if let Some(duration) = check.get_double("duration") {
+            assert!((duration - length).abs() < 0.5, "{duration} for {length}");
+            break;
+        }
+        assert!(Instant::now() < deadline, "the recording has no duration");
+        std::thread::sleep(Duration::from_millis(20));
+    }
 }

@@ -46,19 +46,21 @@ ApplicationWindow {
         { key: "input", title: "Keys and Mouse" },
         { key: "skins", title: "Skins" },
         { key: "window-size", title: "Window Size" },
-        { key: "fullscreen-mode", title: "Fullscreen Mode" }
+        { key: "fullscreen-mode", title: "Fullscreen Mode" },
+        { key: "capture", title: "Video Capture" },
+        { key: "visualization", title: "Visualization" }
     ]
     // PotPlayer's tree: each group opens into its pages, and the selected
     // group's pages show as tabs over the page. `page` is the group's own
     // page (General has none yet: M14 brings PotPlayer's general options).
     readonly property var tree: [
-        { title: "General", page: "", pages: ["input", "skins", "playlist"] },
+        { title: "General", page: "", pages: ["input", "skins", "visualization", "playlist"] },
         { title: "Playback", page: "playback",
           pages: ["time-jump", "skip", "section-repeat", "scene-browser", "window-size", "fullscreen-mode"] },
         { title: "Subtitles", page: "subtitles", pages: [] },
         { title: "Device", page: "devices", pages: [] },
         { title: "Video", page: "video",
-          pages: ["aspect-ratio", "resize", "extend-crop", "frame-size", "stereo", "shaders", "svp"] },
+          pages: ["aspect-ratio", "resize", "extend-crop", "frame-size", "stereo", "shaders", "svp", "capture"] },
         { title: "Audio", page: "audio",
           pages: ["audio-volume", "equalizer", "normalizer", "audio-effects", "audio-sync"] }
     ]
@@ -389,6 +391,26 @@ ApplicationWindow {
         }
     }
     // A file list (`path`) with move and remove buttons.
+    // Adds one of the catalogue's shaders (RVP's, PotPlayer's, the
+    // folders') to a list: those of its stage and the HLSL ones.
+    component ShaderPicker: RowLayout {
+        id: picker
+        property string target
+        property string stage
+        readonly property var choices: (win.view.choices["shader-choices"] || [])
+            .filter(c => c.stage === picker.stage || c.stage === "any")
+        ComboBox {
+            id: shaderChoice
+            Layout.preferredWidth: 320
+            model: picker.choices.map(c => c.name + (c.stage === "any" ? " (HLSL)" : ""))
+        }
+        Button {
+            text: "Add"
+            enabled: shaderChoice.currentIndex >= 0
+            onClicked: win.listAdd(picker.target, [picker.choices[shaderChoice.currentIndex].path])
+        }
+    }
+
     component FileList: ColumnLayout {
         id: fileList
         property string path
@@ -1195,26 +1217,6 @@ ApplicationWindow {
                         Amount { label: "Luma offset Y"; path: "video-effects.levels.luma-offset.1"; from: -32; to: 32; unit: "px" }
                         Amount { label: "Chroma offset X"; path: "video-effects.levels.chroma-offset.0"; from: -32; to: 32; unit: "px" }
                         Amount { label: "Chroma offset Y"; path: "video-effects.levels.chroma-offset.1"; from: -32; to: 32; unit: "px" }
-                        Heading { text: "Saved frames" }
-                        Field {
-                            label: "Folder"
-                            path: "image-folder"
-                            optional: true
-                            placeholder: "Pictures/RVP in the home folder"
-                            Button {
-                                text: "Browse…"
-                                onClicked: {
-                                    folderChooser.target = "image-folder"
-                                    folderChooser.open()
-                                }
-                            }
-                        }
-                        Choice {
-                            label: "Format"
-                            path: "image-format"
-                            values: ["png", "jpeg"]
-                            texts: ({ "png": "PNG", "jpeg": "JPEG" })
-                        }
                     }
 
                     Page {
@@ -1394,14 +1396,33 @@ ApplicationWindow {
                     }
 
                     Page {
-                        Heading { text: "GLSL shaders" }
-                        Check { path: "shaders.enabled"; text: "Use the shaders (Shift+P)" }
+                        Heading { text: "Pre-resize pixel shaders" }
+                        Check { path: "shaders.enabled"; text: "Use pre-resize pixel shaders (Shift+P)" }
                         FileList { path: "shaders.files"; ordered: true }
+                        ShaderPicker { target: "shaders.files"; stage: "pre" }
+                        Heading { text: "Post-resize pixel shaders" }
+                        Check { path: "shaders.post-enabled"; text: "Use post-resize pixel shaders (Ctrl+Alt+P)" }
+                        FileList { path: "shaders.post-files"; ordered: true }
+                        ShaderPicker { target: "shaders.post-files"; stage: "post" }
+                        Heading { text: "Shader folders" }
+                        Note {
+                            text: win.view.choices["potplayer-shaders"]
+                                  ? "PotPlayer's pixel shaders (HLSL, translated when they load): " + win.view.choices["potplayer-shaders"]
+                                  : "PotPlayer's pixel shader folder was not found."
+                        }
+                        FileList { path: "shaders.folders" }
                         RowLayout {
                             Button {
-                                text: "Add Shaders…"
-                                onClicked: win.chooseFiles("shaders.files", "GLSL shaders",
-                                                           ["mpv shaders (*.glsl *.hook)", "All files (*)"])
+                                text: "Add a Folder…"
+                                onClicked: {
+                                    folderListChooser.target = "shaders.folders"
+                                    folderListChooser.open()
+                                }
+                            }
+                            Button {
+                                text: "Add Shader Files…"
+                                onClicked: win.chooseFiles("shaders.files", "Pixel shaders",
+                                                           ["Shaders (*.glsl *.hook *.hlsl *.txt *.fx)", "All files (*)"])
                             }
                             Button {
                                 text: "Open Shader Folder"
@@ -1412,7 +1433,7 @@ ApplicationWindow {
                                 onClicked: win.player.run_action("shaders-reload")
                             }
                         }
-                        Note { text: "mpv's user shaders run in the listed order. PotPlayer's HLSL pixel shaders do not run in mpv. Shader folder: " + (win.view.shader_folder || "") }
+                        Note { text: "The lists run in their order: pre-resize shaders on the video's own picture, post-resize ones after scaling. mpv's own shaders (.glsl, .hook) run where they say; RVP's set comes with RVP. RVP's shader folder: " + (win.view.shader_folder || "") }
                     }
 
                     Page {
@@ -1568,6 +1589,113 @@ ApplicationWindow {
                                       "fullscreen-playing": "While playing in fullscreen" })
                         }
                         Note { text: "Fullscreen (on Another Display) is Ctrl+Shift+Enter; Alt+Enter, Ctrl+Enter and Ctrl+Alt+Enter keep the aspect ratio, stretch, or stretch keeping the aspect ratio." }
+                    }
+
+                    Page {
+                        Heading { text: "Saved frames" }
+                        Field {
+                            label: "Folder"
+                            path: "image-folder"
+                            optional: true
+                            placeholder: "Pictures/RVP in the home folder"
+                            Button {
+                                text: "Browse…"
+                                onClicked: {
+                                    folderChooser.target = "image-folder"
+                                    folderChooser.open()
+                                }
+                            }
+                        }
+                        Check { path: "capture.next-to-media"; text: "Store captured images into play folders (if available)" }
+                        Choice {
+                            label: "Format"
+                            path: "image-format"
+                            values: ["png", "jpeg", "bmp", "webp"]
+                            texts: ({ "png": "PNG", "jpeg": "JPEG", "bmp": "BMP", "webp": "WEBP" })
+                        }
+                        Amount { label: "JPEG and WEBP quality"; path: "capture.quality"; from: 10; to: 100; step: 5; unit: "%" }
+                        Heading { text: "File names and pictures" }
+                        Check { path: "capture.name-date"; text: "Include system date and time in filename" }
+                        Check { path: "capture.name-elapsed"; text: "Include file elapsed time in filename" }
+                        Check { path: "capture.with-subtitles"; text: "Include subtitles in source frames" }
+                        Check { path: "capture.correct-aspect"; text: "Correct aspect ratio when capturing" }
+                        Note { text: "Screen frames (Ctrl+Alt+E, Ctrl+Alt+C) are the picture as shown, with subtitles and mpv's messages." }
+                        Heading { text: "Consecutive images (Ctrl+G)" }
+                        Amount { label: "Every"; path: "capture.interval"; values: [0.1, 0.2, 0.5, 1, 2, 3, 5, 10, 15, 30, 60, 120, 300, 600, 1800, 3600]; format: win.seconds }
+                        Amount { label: "Images"; path: "capture.count"; values: [1, 2, 3, 5, 10, 20, 30, 50, 100, 200, 500, 1000, 10000] }
+                        Heading { text: "Thumbnail image (Alt+N)" }
+                        Amount { label: "Columns"; path: "capture.sheet.columns"; from: 1; to: 10 }
+                        Amount { label: "Rows"; path: "capture.sheet.rows"; from: 1; to: 20 }
+                        Amount { label: "Width"; path: "capture.sheet.width"; from: 320; to: 7680; step: 160; unit: "px" }
+                        Check { path: "capture.sheet.info"; text: "File information above the pictures" }
+                        Check { path: "capture.sheet.times"; text: "The time on each picture" }
+                        Check { path: "capture.sheet.exact"; text: "Exact frames (slower)" }
+                        Heading { text: "Recording" }
+                        Field {
+                            label: "Streams (Record Stream, Ctrl+A)"
+                            path: "record.stream-folder"
+                            optional: true
+                            placeholder: "Videos/RVP in the home folder"
+                            Button {
+                                text: "Browse…"
+                                onClicked: {
+                                    folderChooser.target = "record.stream-folder"
+                                    folderChooser.open()
+                                }
+                            }
+                        }
+                        Field {
+                            label: "Videos (Record Video, Alt+C)"
+                            path: "record.video-folder"
+                            optional: true
+                            placeholder: "Videos/RVP in the home folder"
+                            Button {
+                                text: "Browse…"
+                                onClicked: {
+                                    folderChooser.target = "record.video-folder"
+                                    folderChooser.open()
+                                }
+                            }
+                        }
+                        Check { path: "record.next-to-media"; text: "Store video files into play folders (if available)" }
+                        Note { text: "Record Stream saves the file as it comes, without decoding. Record Video encodes the stretch from its start to its stop (H.264 and AAC) with RVP's video filters, after it stops." }
+                    }
+
+                    Page {
+                        Heading { text: "Visualization settings" }
+                        Check { path: "visual.enabled"; text: "Enable visualization for audio tracks" }
+                        Check { path: "visual.album-art"; text: "Display album art/cover pictures" }
+                        Choice {
+                            label: "Visualization mode"
+                            path: "visual.mode"
+                            values: ["bars", "spectrum", "scope", "waves", "slideshow"]
+                            texts: ({ "bars": "Spectrum bars", "spectrum": "Spectrogram", "scope": "Vector scope",
+                                      "waves": "Waveform", "slideshow": "Slideshow" })
+                        }
+                        Amount { label: "Width"; path: "visual.size.0"; from: 320; to: 3840; step: 160; unit: "px" }
+                        Amount { label: "Height"; path: "visual.size.1"; from: 180; to: 2160; step: 90; unit: "px" }
+                        Amount { label: "Frames a second"; path: "visual.rate"; from: 5; to: 60; step: 5 }
+                        Amount { label: "Change visualization every"; path: "visual.change-every"; values: [0, 10, 15, 20, 30, 60, 120, 300, 600]; format: v => v === 0 ? "never" : win.seconds(v) }
+                        Heading { text: "Slideshow" }
+                        Note { text: "Without folders, the slideshow shows the pictures of the playing file's folder." }
+                        FileList { path: "visual.folders"; ordered: true }
+                        Button {
+                            text: "Add a folder of pictures…"
+                            onClicked: {
+                                folderListChooser.target = "visual.folders"
+                                folderListChooser.open()
+                            }
+                        }
+                        Amount { label: "Display time"; path: "visual.slide-seconds"; values: [1, 2, 3, 5, 8, 10, 15, 20, 30, 60, 120, 300]; format: win.seconds }
+                        Amount { label: "Transition"; path: "visual.fade-seconds"; values: [0, 0.25, 0.5, 1, 1.5, 2, 3, 5]; format: win.seconds }
+                        Choice {
+                            label: "Fill mode"
+                            path: "visual.fill"
+                            values: ["fit", "fill", "stretch"]
+                            texts: ({ "fit": "Fit (keep the whole picture)", "fill": "Fill (crop)", "stretch": "Stretch" })
+                        }
+                        Check { path: "visual.random"; text: "Random slideshow" }
+                        Check { path: "visual.show-name"; text: "Show filename" }
                     }
                 }
             }

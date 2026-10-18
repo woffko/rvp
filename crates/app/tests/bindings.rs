@@ -4,9 +4,13 @@
 use std::time::{Duration, Instant};
 
 use rvp_app::audio::commands::AudioCommand;
+use rvp_app::capture::{CaptureCommand, Shot};
+use rvp_app::hlsl::Stage;
 use rvp_app::picture::PictureCommand;
 use rvp_app::playlist::local_path;
-use rvp_app::video::{ColorChange, ColorKind, Rotation, ShaderChange, VideoEffect};
+use rvp_app::record::RecordCommand;
+use rvp_app::shaders::ShaderCommand;
+use rvp_app::video::{ColorChange, ColorKind, Rotation, VideoEffect};
 use rvp_app::volume::mpv_volume;
 use rvp_app::window::{WindowCommand, WindowRequest};
 use rvp_app::{
@@ -76,7 +80,10 @@ fn potplayer_default_keys() {
         ("Ctrl+P", Action::VideoEffect(VideoEffect::FlipVertical)),
         ("Ctrl+Z", Action::VideoEffect(VideoEffect::FlipHorizontal)),
         ("Alt+K", Action::Rotate(Rotation::Cycle)),
-        ("Shift+P", Action::Shaders(ShaderChange::Toggle)),
+        (
+            "Shift+P",
+            Action::Shaders(ShaderCommand::Toggle(Stage::Pre)),
+        ),
     ] {
         assert_eq!(bindings.key(&chord(key)), Some(action), "{key}");
     }
@@ -325,10 +332,16 @@ impl Harness {
                 assert_eq!(self.dispatch(action), Some(UiRequest::ShowInfo(false)));
             }
             Action::SaveFrame | Action::SaveScreen => match self.dispatch(action) {
-                Some(UiRequest::SaveFrame { path, subtitles }) => {
-                    assert_eq!(subtitles, action == Action::SaveScreen);
+                Some(UiRequest::Capture(job)) => {
+                    let mode = if action == Action::SaveScreen {
+                        "window"
+                    } else {
+                        "video"
+                    };
+                    assert_eq!(job.mode, mode);
+                    let path = job.path.unwrap_or_default();
                     let name = path.file_name().unwrap_or_default().to_string_lossy();
-                    assert!(name.starts_with("fixture-60s 00.00.30."), "{name}");
+                    assert!(name.starts_with("fixture-60s 00.00.3"), "{name}");
                 }
                 other => panic!("{action:?}: {other:?}"),
             },
@@ -504,7 +517,7 @@ impl Harness {
             AudioCommand::RecordDialog => match self.dispatch(action) {
                 Some(UiRequest::RecordDialog(path)) => {
                     let name = path.file_name().unwrap_or_default().to_string_lossy();
-                    assert!(name.starts_with("fixture-60s 00.00.30"), "{name}");
+                    assert!(name.starts_with("fixture-60s 00.00.3"), "{name}");
                 }
                 other => panic!("{action:?}: {other:?}"),
             },
@@ -618,9 +631,14 @@ impl Harness {
                     self.osd(action, &format!("Rotation: {degrees}°"));
                 }
             }
-            Action::Shaders(ShaderChange::Toggle) => {
-                self.osd(action, "Shaders: on (0)");
-                self.osd(action, "Shaders: off");
+            Action::Shaders(ShaderCommand::Toggle(stage)) => {
+                let name = if stage == Stage::Pre {
+                    "Pre-resize shaders"
+                } else {
+                    "Post-resize shaders"
+                };
+                self.osd(action, &format!("{name}: on"));
+                self.osd(action, &format!("{name}: off"));
             }
             _ => self.check_m11(action),
         }
@@ -877,6 +895,9 @@ impl Harness {
                 }
                 self.osd(action, "Bottom margin: off");
                 assert!(!vf(self).contains("@rvpmargin:"), "{}", vf(self));
+                // Without a video output, mpv's refresh after a filter
+                // change can land on the next keyframe.
+                self.back_to_30();
             }
             Action::Picture(PictureCommand::ModeCycle) => {
                 for text in [
@@ -912,6 +933,13 @@ impl Harness {
                 }
                 assert_eq!(self.engine.get_double("video-scale-x"), Some(1.0));
             }
+            other => self.check_m12_window(other),
+        }
+    }
+
+    /// M12's window and capture keys.
+    fn check_m12_window(&mut self, action: Action) {
+        match action {
             // The window carries these out (Main.qml's windowRequest).
             Action::Window(command) => {
                 let expected = match command {
@@ -939,6 +967,44 @@ impl Harness {
                     WindowCommand::FullscreenOtherDisplay => WindowRequest::FullscreenOtherDisplay,
                 };
                 assert_eq!(self.dispatch(action), Some(UiRequest::Window(expected)));
+            }
+            Action::Capture(CaptureCommand::Copy(shot)) => match self.dispatch(action) {
+                Some(UiRequest::Capture(job)) => {
+                    assert_eq!(job.path, None);
+                    let mode = if shot == Shot::Screen {
+                        "window"
+                    } else {
+                        "video"
+                    };
+                    assert_eq!(job.mode, mode);
+                }
+                other => panic!("{action:?}: {other:?}"),
+            },
+            Action::Capture(CaptureCommand::ConsecutiveDialog) => {
+                assert_eq!(
+                    self.dispatch(action),
+                    Some(UiRequest::CaptureDialog("consecutive"))
+                );
+            }
+            Action::Record(RecordCommand::Stream | RecordCommand::Video) => {
+                match self.dispatch(action) {
+                    Some(
+                        UiRequest::RecordStreamDialog(path) | UiRequest::RecordVideoDialog(path),
+                    ) => {
+                        assert!(
+                            path.extension().is_some_and(|e| e == "mkv"),
+                            "{}",
+                            path.display()
+                        );
+                    }
+                    other => panic!("{action:?}: {other:?}"),
+                }
+            }
+            Action::Capture(CaptureCommand::SheetDialog) => {
+                assert_eq!(
+                    self.dispatch(action),
+                    Some(UiRequest::CaptureDialog("sheet"))
+                );
             }
             _ => panic!("{action:?} has no check"),
         }

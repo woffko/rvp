@@ -136,6 +136,13 @@ pub struct Settings {
     pub vr: crate::stereo::Vr,
     /// The window's sizes and moves (M12).
     pub window: crate::window::WindowSettings,
+    /// M12's capture options (file names, consecutive images, the
+    /// thumbnail image).
+    pub capture: crate::capture::CaptureSettings,
+    /// M12's stream and video recording folders.
+    pub record: crate::record::RecordSettings,
+    /// M12's visualizations for audio files.
+    pub visual: crate::visual::VisualSettings,
 }
 
 impl Default for Settings {
@@ -191,6 +198,9 @@ impl Default for Settings {
             stereo: crate::stereo::Stereo::default(),
             vr: crate::stereo::Vr::default(),
             window: crate::window::WindowSettings::default(),
+            capture: crate::capture::CaptureSettings::default(),
+            record: crate::record::RecordSettings::default(),
+            visual: crate::visual::VisualSettings::default(),
         }
     }
 }

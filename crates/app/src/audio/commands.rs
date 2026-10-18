@@ -1074,6 +1074,7 @@ mod tests {
             channels: Some(channels),
             sample_rate: Some(sample_rate),
             bitrate: Some(bitrate),
+            album_art: false,
         }
     }
 

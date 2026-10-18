@@ -198,6 +198,8 @@ pub struct Track {
     pub channels: Option<i64>,
     pub sample_rate: Option<i64>,
     pub bitrate: Option<i64>,
+    /// A video track that is a cover picture (`albumart`).
+    pub album_art: bool,
 }
 
 /// One chapter (mpv's `chapter-list`).
@@ -569,6 +571,7 @@ impl Engine {
                     channels: track["demux-channel-count"].as_i64(),
                     sample_rate: track["demux-samplerate"].as_i64(),
                     bitrate: track["demux-bitrate"].as_i64(),
+                    album_art: track["albumart"].as_bool().unwrap_or(false),
                 })
             })
             .collect()
