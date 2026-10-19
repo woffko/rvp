@@ -72,7 +72,8 @@ fn main() {
         .qml_file("qml/SelfTestM12.qml")
         .qml_file("qml/Slideshow.qml")
         .qml_file("qml/SceneBrowser.qml")
-        .qml_file("qml/SelfTestM11.qml");
+        .qml_file("qml/SelfTestM11.qml")
+        .qml_file("qml/SelfTestGpu.qml");
     CxxQtBuilder::new_qml_module(module)
         .qt_module("Gui")
         .qt_module("Qml")
@@ -88,6 +89,7 @@ fn main() {
         .cpp_file("cpp/shell.h")
         .cpp_file("cpp/shell.cpp")
         .cpp_file("cpp/video_window.cpp")
+        .cpp_file("cpp/gpu_power.cpp")
         .qrc(&look_qrc)
         .build();
 

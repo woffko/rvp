@@ -1147,6 +1147,11 @@ Window {
     //   --selftest=direct3d11 D4's renderer (render.renderer "direct3d11"
     //                         in the settings, Windows): mpv's native video
     //                         window, its place, holes and fullscreen
+    //   --selftest=gpu        the GPU power budget (SelfTestGpu.qml, D17):
+    //                         readings it gives make RVP take the lighter
+    //                         scalers and the shaders off, give them back
+    //                         and give everything back when the budget is
+    //                         turned off; the file: fixture-60s.mkv
     //   --selftest=resume     expects the last file reopened paused within
     //                         --expect-tolerance (default 2.5) seconds of
     //                         --expect-time=SECONDS; with --expect-entry=I
@@ -1259,7 +1264,23 @@ Window {
             return m12Tick()
         if (selftest.mode === "shaders" || selftest.mode === "direct3d11")
             return m12Tick(selftest.mode)
+        if (selftest.mode === "gpu")
+            return gpuTick()
         functionalTick()
+    }
+
+    // --selftest=gpu: the GPU power budget (SelfTestGpu.qml).
+    Loader {
+        id: gpuLoader
+        active: false
+        Component.onCompleted: setSource("SelfTestGpu.qml", { player: player, t: selftest, host: root })
+    }
+    function gpuTick() {
+        if (!gpuLoader.item) {
+            gpuLoader.active = true
+            return
+        }
+        gpuLoader.item.tick()
     }
 
     // --selftest=m11: M11's checks (SelfTestM11.qml).

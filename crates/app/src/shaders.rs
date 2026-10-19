@@ -212,7 +212,7 @@ impl App {
     }
 
     /// A list's files.
-    fn shader_list(&self, stage: Stage) -> &Vec<PathBuf> {
+    pub(crate) fn shader_list(&self, stage: Stage) -> &Vec<PathBuf> {
         match stage {
             Stage::Pre => &self.settings.shaders.files,
             Stage::Post => &self.settings.shaders.post_files,
@@ -277,7 +277,8 @@ impl App {
         let mut files = Vec::new();
         let mut refused = Vec::new();
         for stage in [Stage::Pre, Stage::Post] {
-            if !self.shaders_on(stage) {
+            // The GPU power budget may have taken both lists off.
+            if !self.shaders_on(stage) || self.gpu_step_taken(crate::gpu_power::Step::Shaders) {
                 continue;
             }
             for path in self.shader_list(stage) {

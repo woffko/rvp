@@ -763,7 +763,9 @@ impl App {
                 }),
         );
         let vs = &self.settings.vapoursynth;
-        if vs.enabled && vs.script.is_some() {
+        // The GPU power budget may have taken the script off.
+        if vs.enabled && vs.script.is_some() && !self.gpu_step_taken(crate::gpu_power::Step::Script)
+        {
             let wrapper = self.state_dir().join("vapoursynth").join("rvp-script.vpy");
             filters.push((
                 SCRIPT_LABEL.to_owned(),
@@ -785,15 +787,21 @@ impl App {
         self.native_video = on;
     }
 
-    /// True when the Direct3D 11 video processor runs (GPU Super Resolution,
-    /// RTX Video HDR): only on Direct3D 11 frames, so with the Direct3D 11
-    /// renderer, hardware decoding and nothing that needs the frames in
-    /// memory (RVP's filters, SVP).
-    fn processor_runs(&self) -> bool {
+    /// True when the Direct3D 11 video processor would run (GPU Super
+    /// Resolution, RTX Video HDR): only on Direct3D 11 frames, so with the
+    /// Direct3D 11 renderer, hardware decoding and nothing that needs the
+    /// frames in memory (RVP's filters, SVP).
+    pub(crate) fn processor_wanted(&self) -> bool {
         self.native_video
             && self.settings.render.wants_processor()
             && self.settings.hwdec.trim() != "no"
             && !self.needs_copy_back()
+    }
+
+    /// True when it runs: wanted, and the GPU power budget has not taken
+    /// it off.
+    fn processor_runs(&self) -> bool {
+        self.processor_wanted() && !self.gpu_step_taken(crate::gpu_power::Step::Processor)
     }
 
     /// True when the Direct3D 11 video processor's entry would change (a

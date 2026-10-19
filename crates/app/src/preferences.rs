@@ -481,7 +481,8 @@ impl App {
                     .get_text("option-info/scale/default-value")
                     .unwrap_or_else(|| "lanczos".to_owned())
             } else {
-                new.scaler.clone()
+                // The GPU power budget's lighter scaler while it is taken.
+                self.effective_scaler(&new.scaler).to_owned()
             };
             set("scale", &scaler);
         }

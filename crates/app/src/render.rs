@@ -135,6 +135,9 @@ pub struct RenderSettings {
     /// NVIDIA's RTX Video HDR, in mpv's `d3d11vpp` filter.
     pub super_resolution: String,
     pub rtx_hdr: bool,
+    /// The GPU power budget in percent of the card's rated power, 50 to
+    /// 100 (100: off; `crate::gpu_power`).
+    pub power_budget: u32,
 }
 
 impl Default for RenderSettings {
@@ -156,6 +159,7 @@ impl Default for RenderSettings {
             ten_bit: false,
             super_resolution: "off".to_owned(),
             rtx_hdr: false,
+            power_budget: crate::gpu_power::BUDGET_DEFAULT,
         }
     }
 }
@@ -191,6 +195,16 @@ impl RenderSettings {
         if self.target_peak != 0 && !(10..=10_000).contains(&self.target_peak) {
             notes.push("render.target-peak must be 0 or 10 to 10000 nits: 0 used".to_owned());
             self.target_peak = 0;
+        }
+        let budget = crate::gpu_power::BUDGET_MIN..=crate::gpu_power::BUDGET_OFF;
+        if !budget.contains(&self.power_budget) {
+            let repaired = self.power_budget.clamp(*budget.start(), *budget.end());
+            notes.push(format!(
+                "render.power-budget must be {} to {} %: {repaired} used",
+                budget.start(),
+                budget.end()
+            ));
+            self.power_budget = repaired;
         }
         if self.renderer == Renderer::Direct3d11 && !cfg!(windows) {
             notes.push("render.renderer \"direct3d11\" is for Windows: \"opengl\" used".to_owned());
@@ -356,6 +370,12 @@ impl App {
             ]);
         }
         for (name, value) in self.settings.render.mpv_options() {
+            // The budget's lighter scalers (`crate::gpu_power::Step::Scalers`).
+            let value = if matches!(name, "dscale" | "cscale") {
+                self.effective_scaler(&value).to_owned()
+            } else {
+                value
+            };
             drop(engine.set_text(name, &value));
         }
         // The HDR output changes while playing; the context only at start.
@@ -461,6 +481,14 @@ mod tests {
         settings.validate(&mut notes);
         assert_eq!(settings.cscale, "");
         assert_eq!(notes.len(), 1);
+        // The GPU power budget: 50 to 100 %, 90 by default.
+        assert_eq!(RenderSettings::default().power_budget, 90);
+        for (given, kept) in [(20, 50), (75, 75), (100, 100), (150, 100)] {
+            settings.power_budget = given;
+            settings.validate(&mut notes);
+            assert_eq!(settings.power_budget, kept);
+        }
+        assert_eq!(notes.len(), 3, "{notes:?}");
     }
 
     #[test]

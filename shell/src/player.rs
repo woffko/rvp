@@ -186,6 +186,19 @@ struct Core {
     slideshow: bool,
     /// The file the Direct3D 11 renderer's failure was told for (M12).
     native_failed: Option<String>,
+    /// Where the GPU power budget's readings come from (D17).
+    gpu_readings: GpuReadings,
+}
+
+/// Who gives the GPU power budget its readings.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum GpuReadings {
+    /// Nobody: the budget is off, or nothing plays.
+    Off,
+    /// A reader thread reads the cards (`crate::gpu_power`).
+    Cards,
+    /// The self-test gives them (`Player.feed_gpu_power`).
+    SelfTest,
 }
 
 /// Fitting the window to a video the user opened: requested, then the new
@@ -712,6 +725,7 @@ impl qobject::Player {
             save_as: rvp_app::capture::Shot::Source,
             slideshow: false,
             native_failed: None,
+            gpu_readings: GpuReadings::Off,
         });
         if let Some(message) = messages.first() {
             self.as_mut().show_message(message);
@@ -2473,7 +2487,75 @@ impl qobject::Player {
             self.as_mut().show_message(&text);
         }
         self.as_mut().tick_m11();
+        self.as_mut().tick_gpu_power();
         self.check_native_video();
+    }
+
+    /// The GPU power budget (D17): the cards are read while it is on, a
+    /// file plays (a reading a second would keep a laptop's sleeping card
+    /// awake) and no self-test gives the readings; its steps and returns
+    /// are carried out and logged.
+    fn tick_gpu_power(mut self: Pin<&mut Self>) {
+        let Some(core) = self.as_mut().core_mut() else {
+            return;
+        };
+        let wanted = core.app.gpu_power_wanted() && core.app.model.playing();
+        match core.gpu_readings {
+            GpuReadings::Off if wanted => {
+                let (sender, receiver) = std::sync::mpsc::channel();
+                core.app.gpu_power_listen(Some(receiver));
+                crate::gpu_power::start(sender);
+                core.gpu_readings = GpuReadings::Cards;
+            }
+            GpuReadings::Cards if !wanted => {
+                // The reader ends at its next reading.
+                core.app.gpu_power_listen(None);
+                core.gpu_readings = GpuReadings::Off;
+            }
+            _ => {}
+        }
+        let requests = core.app.gpu_tick(core.engine, Instant::now());
+        self.gpu_power_requests(requests);
+    }
+
+    /// The budget's notices: shown and logged (test runs show what it did).
+    fn gpu_power_requests(mut self: Pin<&mut Self>, requests: Vec<UiRequest>) {
+        for request in requests {
+            if let UiRequest::Osd(text) = &request {
+                eprintln!("rvp: {text}");
+            }
+            self.as_mut().handle_request(request);
+        }
+    }
+
+    pub(crate) fn gpu_power_json(&self) -> QString {
+        self.core().map_or_else(
+            || QString::from("{}"),
+            |core| QString::from(&core.app.gpu_power_view(Instant::now()).to_string()),
+        )
+    }
+
+    /// A self-test's reading for the budget: from the first one on, the
+    /// cards are no longer read and the budget waits seconds, not minutes.
+    pub(crate) fn feed_gpu_power(mut self: Pin<&mut Self>, draw: f64, rated: f64) {
+        let Some(core) = self.as_mut().core_mut() else {
+            return;
+        };
+        if core.gpu_readings != GpuReadings::SelfTest {
+            core.app.gpu_power_listen(None);
+            core.app.gpu_power_test();
+            core.gpu_readings = GpuReadings::SelfTest;
+        }
+        let sample = rvp_app::gpu_power::Sample {
+            name: "self-test".to_owned(),
+            draw,
+            rated,
+            unit: rvp_app::gpu_power::Unit::Watts,
+        };
+        let requests = core
+            .app
+            .gpu_power_sample(core.engine, vec![sample], Instant::now());
+        self.gpu_power_requests(requests);
     }
 
     /// The Direct3D 11 renderer's window shows nothing when mpv cannot make
@@ -2780,6 +2862,9 @@ impl qobject::Player {
             ("vf", text("vf")),
             ("af", text("af")),
             ("glsl_shaders", text("glsl-shaders")),
+            ("scale", text("scale")),
+            ("dscale", text("dscale")),
+            ("cscale", text("cscale")),
             ("deinterlace", text("deinterlace")),
             ("video_rotate", count("video-rotate")),
             ("brightness", count("brightness")),

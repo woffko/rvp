@@ -59,6 +59,14 @@ pub mod bridge {
         /// Schedules a video frame (mpv's render update callback; any
         /// thread).
         fn rvp_video_request_update();
+        /// Every graphics card's power for the GPU power budget, a line
+        /// each: `unit<TAB>draw<TAB>rated<TAB>name`, the unit `W` or `%`
+        /// (`cpp/gpu_power.cpp`: NVML unless `nvidia` is false, and on
+        /// Windows AMD's cards through D3DKMT). Only the budget's reader
+        /// threads call it.
+        fn rvp_gpu_power_read(nvidia: bool) -> String;
+        /// Lets NVML go (a reader ends).
+        fn rvp_gpu_power_close();
 
         /// True when an atlas image of this name is cached on the C++ side.
         fn rvp_atlas_contains(name: &str) -> bool;

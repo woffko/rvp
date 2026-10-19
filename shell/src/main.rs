@@ -23,6 +23,7 @@ mod crash;
 mod desktop;
 mod devices;
 mod ffi;
+mod gpu_power;
 #[cfg(windows)]
 mod media_controls;
 mod metrics;

@@ -29,7 +29,14 @@ smoothing for users without SVP, after a study of the engines.
   Local-only material lives in `~/rvp-reference` (screenshots,
   renders, geometry snapshots of third-party skins, preview content).
 - Never change PotPlayer, SVP or system settings on the Windows host.
-  Read-only access (files, registry queries) is fine.
+  Read-only access (files, registry queries) is fine. The one exception
+  is the GPU power limit for GPU test runs (owner, 2026-10-19, D17):
+  `tools/windows-vm/gpu-limit.ps1` sets 90 % of the card's default
+  through one UAC prompt and puts back the limit it found when the run
+  ends; like every host run it needs the owner's permission first. GPU
+  runs on the host go through it (`m18-study.ps1 -Gpu`, or
+  `gpu-limit.ps1 -Run COMMAND`), with `nvidia-smi` checked before and
+  after each run: on a lost GPU stop everything and tell the owner.
 - Anything that starts a program or captures the screen on the Windows host
   desktop needs advance notice and the owner's explicit permission, every
   time. Say what will run, which windows will appear and for how long, then
@@ -93,7 +100,7 @@ smoothing for users without SVP, after a study of the engines.
 ## Shell notes
 
 - `rvp --selftest` (also `=playback`, `=resume`, `=upright`, `=svp`,
-  `=vpy` and `=speed`, see `shell/qml/Main.qml`) is the functional check for the VMs,
+  `=vpy`, `=speed` and `=gpu`, see `shell/qml/Main.qml`) is the functional check for the VMs,
   the kit and the host. It drives RVP through its own input handlers,
   never through the window system, and prints `check`, `metric` and
   `status` lines.
@@ -198,6 +205,19 @@ smoothing for users without SVP, after a study of the engines.
   Windows reports changes late, so separate x/width writes undo each
   other). The VM's session 0 makes no swapchain: the picture is checked
   on the host.
+- The GPU power budget (D17, `crates/app/src/gpu_power.rs`): the cards
+  are read while a file plays, on a thread of the shell's
+  (`shell/src/gpu_power.rs`; `shell/cpp/gpu_power.cpp` loads NVML from
+  System32 only and reads AMD's cards on Windows through D3DKMT's adapter
+  counter: AMD's ADLX SDK licence forbids use in GPL software) and the
+  readings reach `App::gpu_tick` through a channel; the window's thread
+  never calls them (a hung card can hold a call up). On Linux a card in
+  runtime suspend is not read (reading would wake it).
+  Steps change only what mpv gets (`App::effective_scaler`,
+  `processor_runs`, `shader_files`, `video_filters`), never the
+  settings. A new GPU-heavy feature of RVP's becomes a step of
+  `Step::ALL`. `rvp --selftest=gpu` gives its own readings
+  (`Player.feed_gpu_power`); AMD's readers are untested on a card.
 - The control panel (F7) is a second window (`shell/qml/ControlPanel.qml`)
   with its own `Chrome` in `Mode::ControlBox`, painted whole
   (`SkinView.surface` 1, `panelDamaged`).

@@ -89,6 +89,8 @@ ApplicationWindow {
     }
     property var view: ({ settings: {}, choices: {} })
     readonly property var s: view.settings
+    // The GPU power budget's last reading (the Video page shows it).
+    property var gpuPower: ({})
     property string notice: ""
     property bool restartNeeded: false
 
@@ -236,6 +238,29 @@ ApplicationWindow {
         property string path
         checked: win.value(path) === true
         onToggled: win.set(path, checked)
+    }
+    // The GPU power budget's reading, refreshed while the Video page shows.
+    Timer {
+        interval: 2000
+        repeat: true
+        triggeredOnStart: true
+        running: win.visible && win.currentKey === "video"
+        onTriggered: win.gpuPower = JSON.parse(player.gpu_power_json())
+    }
+    function gpuPowerText() {
+        const gpu = gpuPower
+        if (gpu.on !== true)
+            return "Off: RVP does not read the card's power."
+        if (!gpu.cards || gpu.cards.length === 0)
+            return gpu.reading ? "No NVIDIA or AMD card's power can be read."
+                               : "Read while a file plays."
+        let text = "Now: " + gpu.cards.map(c => c.unit === "%"
+                                           ? c.name + " " + Math.round(c.draw) + " % of its power"
+                                           : c.name + " " + Math.round(c.draw) + " W of " + Math.round(c.rated)
+                                             + " W (" + Math.round(100 * c.draw / c.rated) + " %)").join(", ")
+        if (gpu.taken.length > 0)
+            text += ". Lightened: " + gpu.taken.join(", ") + "."
+        return text
     }
     // Seconds as the seek and sync steps show them.
     function seconds(v) {
@@ -1222,6 +1247,19 @@ ApplicationWindow {
                             path: "render.cscale"
                             values: win.view.choices["render-scaler"] || []
                             texts: ({ "": "mpv's default" })
+                        }
+                        Heading { text: "GPU power" }
+                        Amount {
+                            label: "Power budget"
+                            path: "render.power-budget"
+                            from: 50
+                            to: 100
+                            step: 5
+                            format: v => v >= 100 ? "Off" : v + " % of the card's rated power"
+                        }
+                        Note { text: win.gpuPowerText() }
+                        Note {
+                            text: "Above the budget RVP lightens its own work, a step every few seconds: EWA scalers become spline36, then GPU Super Resolution and RTX Video HDR, the pixel shaders and the VapourSynth script go off. Each comes back once the card stays 10 points below the budget for a minute. RVP never changes the card's own settings, and SVP and other programs are not limited. NVIDIA cards are read through NVML; AMD cards through Windows' adapter counter (Windows) and amdgpu (Linux)."
                         }
                         Heading { text: "HDR and colour" }
                         Check { path: "render.tone-mapping-on"; text: "Map HDR to the display (SMPTE ST 2084 correction)" }

@@ -356,6 +356,16 @@ pub mod qobject {
         #[qinvokable]
         fn tick(self: Pin<&mut Self>);
 
+        /// A reading for the GPU power budget, in watts (self-test): the
+        /// cards are no longer read and the budget's waits are seconds.
+        #[qinvokable]
+        fn feed_gpu_power(self: Pin<&mut Self>, draw: f64, rated: f64);
+
+        /// The GPU power budget as JSON: on, reading, the cards' last
+        /// reading (`name`, `draw`, `rated`) and the steps taken.
+        #[qinvokable]
+        fn gpu_power_json(self: &Self) -> QString;
+
         /// Stops playback, waits for mpv to go idle and saves (goal D rule
         /// 6). Called when the window closes.
         #[qinvokable]

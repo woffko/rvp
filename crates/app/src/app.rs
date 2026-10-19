@@ -368,6 +368,8 @@ pub struct App {
     /// The Direct3D 11 video processor's entry last put in the chain: a
     /// new video or display size changes the chain only when it changes.
     pub(crate) processor_entry: std::cell::RefCell<Option<String>>,
+    /// The GPU power budget's readings and steps (D17).
+    pub(crate) gpu: crate::gpu_power::Budget,
 }
 
 impl App {
@@ -449,6 +451,7 @@ impl App {
             render_defaults: None,
             native_video: false,
             processor_entry: std::cell::RefCell::new(None),
+            gpu: crate::gpu_power::Budget::default(),
         };
         app.start_picture();
         Ok(app)
