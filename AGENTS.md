@@ -34,8 +34,8 @@ smoothing for users without SVP, after a study of the engines.
   `tools/windows-vm/gpu-limit.ps1` sets 90 % of the card's default
   through one UAC prompt and puts back the limit it found when the run
   ends; like every host run it needs the owner's permission first. GPU
-  runs on the host go through it (`m18-study.ps1 -Gpu`, or
-  `gpu-limit.ps1 -Run COMMAND`), with `nvidia-smi` checked before and
+  runs on the host go through it (`m18-study.ps1 -Gpu`, `m18-host.ps1`,
+  or `gpu-limit.ps1 -Run COMMAND`), with `nvidia-smi` checked before and
   after each run: on a lost GPU stop everything and tell the owner.
 - Anything that starts a program or captures the screen on the Windows host
   desktop needs advance notice and the owner's explicit permission, every
@@ -237,7 +237,9 @@ smoothing for users without SVP, after a study of the engines.
   `lavfi-fruc_vulkan` at start). An engine whose filter does not raise the
   rate within 6 s is left out for the session (`App::smoothing_watch`).
   Checks: `crates/app/tests/smoothing.rs` (with `VSSCRIPT_PATH`),
-  `rvp --selftest=smoothing`, `tools/windows-vm/m18-all.ps1`.
+  `rvp --selftest=smoothing`, `tools/windows-vm/m18-all.ps1`, and on the
+  host, with permission, `tools/windows-vm/m18-host.ps1` (each GPU mode
+  in RVP's window at the power limit; `-Vm` tries it on the VM).
 - The control panel (F7) is a second window (`shell/qml/ControlPanel.qml`)
   with its own `Chrome` in `Mode::ControlBox`, painted whole
   (`SkinView.surface` 1, `panelDamaged`).

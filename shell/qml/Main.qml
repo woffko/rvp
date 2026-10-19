@@ -1091,7 +1091,8 @@ Window {
     //                         fails on dropped frames; --svp waits for
     //                         SVP's @svp filter; --next plays the album's
     //                         second entry; logs time= every second (the
-    //                         kit's kill test)
+    //                         kit's kill test) and at the end mpv's
+    //                         diagnostics and the smoothing plan
     //   --selftest=upright    plays a clip (testdata/media/fixture-marker.mkv)
     //                         and compares the picture with --reference=PNG
     //                         (default: the clip's name with .png): upright,
@@ -1753,6 +1754,7 @@ Window {
             const dropped = t.dropTotal
             const decoderDropped = t.decoderTotal
             Tools.log("diagnostics_end=" + player.diagnostics())
+            Tools.log("smoothing=" + s.smoothing)
             Tools.log("frame_drop_timeline=" + t.drops.join(","))
             Tools.log("frames_dropped=" + dropped + " decoder_dropped=" + decoderDropped
                       + " seconds=" + seconds + " fullscreen=" + root.isFullscreen)
