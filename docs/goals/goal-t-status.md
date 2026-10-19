@@ -91,16 +91,52 @@ NVML reading the host's card from WSL (33.8 W of 350 W), the Windows
 build and its reader test on the VM (whose adapter has no counter). Not
 yet checked: what Windows' adapter counter reports for a real card
 (compare it with NVML on the host; `RVP_GPU_POWER_ADAPTERS=all` reads
-every adapter). M18's smoothing joins the budget's steps.
+every adapter). M18's smoothing joins the budget's steps. Committed as
+8af11bb.
+
+## Host session, 2026-10-19 (with the owner's permission)
+
+`m18-study.ps1 -Gpu -PowerLimit 90` with the owner's UAC answer: the
+limit was 315 W for the whole session and 350 W again afterwards
+(`restored card=0 limit=350`); `nvidia-smi` saw the card before and after
+every run.
+
+- Windows' adapter counter against NVML on the RTX 30-series card: idle, 32.5 %
+  against 114.7 W (32.8 % of the 350 W default); under RIFE at 1080p,
+  95.3 % against 295.5 W (84.4 % of the default, 93.8 % of the 315 W in
+  force). The counter follows the card's draw; under load it read 11
+  points above NVML's share of the default (a share of the limit in
+  force, or an instant reading against NVML's one-second average: one
+  sample each). For AMD's cards on Windows the budget therefore steps in
+  early rather than late.
+- RIFE v4.6 at 1080p with 2 threads at the 315 W limit: 42.5 fps (51.3
+  without the limit on 2026-10-18), mean 159 W, peak 297 W; the square's
+  edge error 0.09 px.
+- Part C, the owner's clips (frames kept in
+  `~/rvp-reference/m18/partc-2026-10-19`): Apex (1080p, 24 fps,
+  a fast pan through trees, from 44:56) and 28 Years Later (720p, 23.976
+  fps, letterboxed, from 14:59) through MVTools medium and quality, RIFE
+  and fruc_vulkan medium and quality. Every motion-compensated engine
+  made one coherent picture halfway where Blend shows two; RIFE's is the
+  sharpest, MVTools' slightly softer. fruc_vulkan flickers at the
+  letterbox's edges (the change of the rows there against both
+  neighbours: 2.4 to 11.7 at medium, 2.0 to 4.1 at quality, against 1.4
+  to 1.6 in the source and MVTools and at most 1.2 with RIFE).
+- MVTools in mpv's VapourSynth filter gives three black frames after a
+  seek before its first picture (the fourth is half black): delivery has
+  to hide them.
+- ffmpeg's `-noaccurate_seek` dropped the frames before the requested
+  time, so fruc_vulkan's grabs start at the time, not at the keyframe
+  the others start from; its frames were compared with their own
+  neighbours.
 
 ## Left
 
-1. Part C: the owner's clips (Apex 1080p at 45:00, 28 Years Later 720p
-   at 15:00) through the engines, with grabs (host, permission, at the
-   power limit).
-2. `docs/spikes/m18-smoothing.md` from the numbers above and part C,
-   with how each engine reaches the user and a recommendation; the
-   owner's choice of engines and defaults.
+1. Part C: done (above).
+2. `docs/spikes/m18-smoothing.md`: written. The owner's choice (D18,
+   2026-10-19): MVTools, RIFE and fruc_vulkan (with a libmpv RVP builds
+   with FFmpeg's master), Blend always; off by default, MVTools medium up
+   to 1080p and Blend above when turned on; the display's rate.
 3. M18's delivery as `docs/PLAN.md` lists it, with the smoothing as
    budget steps, RVP's own VapourSynth runtime, and libraries loaded from
    RVP's folder only; the RIFE exit crash handled if RIFE is chosen.

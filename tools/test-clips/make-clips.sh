@@ -11,6 +11,11 @@
 #   video-1080p23976-h264.mkv   S1 (SVP) and R1 "playing": 1920x1080, 24000/1001 fps, 60 s
 #   video-2160p24-hdr10.mkv     M12's HDR checks: HEVC 10-bit HDR10 (PQ, BT.2020,
 #                               1000-nit mastering metadata), 3840x2160, 24 fps, 20 s
+#   smooth-square-1080p24.mkv   M18's artefacts: a 160x160 square moving 24 pixels a
+#                               frame and back, 1920x1080, 24000/1001 fps, 20 s
+#   smooth-pan-720p24.mkv       M18's speed: a pan over a fractal, 24000/1001 fps, 20 s,
+#   smooth-pan-1080p24.mkv      H.264 at 720p and 1080p, HEVC at 2160p
+#   smooth-pan-2160p24.mkv
 #   audio-dialogue-action.flac  S5: quiet speech-like passages and loud bursts, 90 s
 #   audio-music.flac            S5: music-like chord with pp, crescendo and ff, 90 s
 #   audio-steps.flac            S5: level steps and tone bursts for attack and release, 70 s
@@ -45,6 +50,27 @@ ff -f lavfi -i "testsrc2=size=3840x1620:rate=24" -f lavfi -i "color=c=black:size
     -x265-params "log-level=error:hdr10=1:repeat-headers=1:colorprim=bt2020:transfer=smpte2084:colormatrix=bt2020nc:master-display=G(13250,34500)B(7500,3000)R(34000,16000)WP(15635,16450)L(10000000,1):max-cll=1000,400" \
     -color_primaries bt2020 -color_trc smpte2084 -colorspace bt2020nc \
     -c:a flac "$OUT/video-2160p24-hdr10.mkv"
+
+# M18: a fast square for artefacts (it covers and uncovers the grid), and
+# pans over one fractal frame (the detailed "seahorse valley") twice the
+# width, at the same speed in each
+# size (a screen width in 640 frames).
+ff -f lavfi -i "color=0x808080:s=1920x1080:r=24000/1001:d=20,drawgrid=w=120:h=120:t=2:c=0x606060[bg];\
+color=white:s=160x160:r=24000/1001:d=20[square];\
+[bg][square]overlay=x='abs(mod(24*n+1720,3440)-1720)+20':y=460:eval=frame" -f lavfi -i "$tone" -t 20 \
+    -c:v libx264 -preset medium -crf 12 -pix_fmt yuv420p -c:a flac "$OUT/smooth-square-1080p24.mkv"
+for size in 1280x720:2 1920x1080:3 3840x2160:6; do
+    width=${size%%x*}; rest=${size#*x}; height=${rest%%:*}; step=${size##*:}
+    case $height in
+        2160) codec=(-c:v libx265 -preset fast -b:v 40M -x265-params log-level=error) ;;
+        *) codec=(-c:v libx264 -preset medium -crf 18) ;;
+    esac
+    ff -f lavfi -i "mandelbrot=size=$((2 * width))x$height:rate=24000/1001:start_x=-0.743643887037151:\
+start_y=0.13182590420533:start_scale=0.01:maxiter=2000,trim=end_frame=1,\
+loop=loop=-1:size=1,setpts=N/(24000/1001)/TB,crop=$width:$height:x='mod(n*$step,$width)':y=0" \
+        -f lavfi -i "$tone" -t 20 "${codec[@]}" -pix_fmt yuv420p -c:a flac \
+        "$OUT/smooth-pan-${height}p24.mkv"
+done
 
 # Dialogue and action, 30 s cycle: 20 s of band-limited noise with a
 # syllable-like envelope at a low level, then 10 s of loud broadband noise

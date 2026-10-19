@@ -228,6 +228,7 @@ playback state between the two systems possible (open question 2).
 | D15 | Remote control through a local HTTP API of RVP's (off by default, 127.0.0.1, a token on every request). The Unified Remote remote is a Lua remote that calls it with Unified Remote's `http` library. | One API serves Unified Remote on both systems and other clients. A remote that sends key presses needs RVP's window in front, and window messages exist only on Windows. | M15 (planned) |
 | D16 | RVP has its own motion smoothing for users without SVP (M18, goal T): mpv's frame blending and the motion-compensated engines that M18's study picks, never at the same time as SVP. | The owner asked for smooth motion like SVP's without SVP, "maybe not complete, but something substantial". | Owner, 2026-10-18 |
 | D17 | A GPU power budget: RVP keeps the graphics card below a share of its rated power (Video settings, 50 to 100 %, 90 % by default, 100 % off) by lightening its own work step by step: EWA scalers become spline36, then GPU Super Resolution and RTX Video HDR, the pixel shaders and the VapourSynth script go off (M18's smoothing joins these steps). It never changes the card's own settings. NVIDIA's cards are read through NVML (Windows and Linux), AMD's through Windows' adapter counter (D3DKMT's adapter performance data, a share of the card's power: the licence of AMD's ADLX SDK forbids its use in software under a free licence) and amdgpu's hwmon files (Linux), only while a file plays and, on Linux, never while the system has put the card to sleep. GPU test runs on the host go at a real power limit, 90 % of the card's default, which `tools/windows-vm/gpu-limit.ps1` sets through one UAC prompt and puts back when the run ends. | On 2026-10-18 RIFE at 2160p in RVP hung the host's RTX 30-series card beyond recovery (a reboot was needed). The owner asked for a power slider in the player and the tests, 90 % by default, for NVIDIA and AMD, and chose RVP's own budget for the player and the real limit for the host's test runs. | Owner, 2026-10-19 |
+| D18 | M18's engines and defaults: Blend (mpv's interpolation), MVTools (CPU) and RIFE (GPU, up to 1080p) in VapourSynth through a runtime RVP ships (never SVP's), and fruc_vulkan (NVIDIA's optical flow, RTX 30 and later) through a libmpv RVP builds with FFmpeg's master. Smoothing is off by default; turned on it is MVTools medium up to 1080p and Blend above, at the display's rate. | M18's study (`docs/spikes/m18-smoothing.md`): MVTools keeps up at 1080p on the CPU and is the most exact; RIFE is the sharpest on films; fruc_vulkan is the fastest on RTX cards but missing from the libmpv RVP ships. The owner chose all three and accepted building libmpv. | Owner, 2026-10-19 |
 
 ## 4. Usability requirements
 
@@ -1194,10 +1195,13 @@ be a substantial part of it. It runs after M12 (goal T), Windows first.
   reaches, how RVP gets it onto the user's machine (files bundled in the
   packages under GPL-compatible licenses, or the user's own install), and
   a recommendation. The owner picks the engines and the defaults.
-- **Modes.** Off, Blend (mpv's interpolation, always there), and the
-  motion-compensated modes the owner picks, with quality presets (block
-  size, search, artefact masking, scene changes) and a target rate (the
-  display's, twice the source, 60 fps or a number).
+- **Modes (D18).** Off (the default), Blend (mpv's interpolation, always
+  there), MVTools, RIFE and fruc_vulkan, with quality presets and a
+  target rate (the display's by default, twice the source, 60 fps or a
+  number). Turned on, smoothing is MVTools medium up to 1080p and Blend
+  above. MVTools and RIFE run in a VapourSynth runtime RVP ships;
+  fruc_vulkan needs a libmpv RVP builds with FFmpeg's master (RTX 30 and
+  later).
 - **Rules.** The smoothing is RVP's own labelled filter (`@rvpsmooth`)
   after RVP's other filters, or mpv's interpolation options. It never
   touches `@svp` and turns off while SVP is attached. It needs copy-back
