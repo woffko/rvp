@@ -1,0 +1,12 @@
+diff --git a/packages/curl.cmake b/packages/curl.cmake
+index 9e2130b..b737a45 100644
+--- a/packages/curl.cmake
++++ b/packages/curl.cmake
+@@ -14,6 +14,7 @@ ExternalProject_Add(curl
+     SOURCE_DIR ${SOURCE_LOCATION}
+     GIT_CLONE_FLAGS "--filter=tree:0"
+     GIT_CLONE_POST_COMMAND "sparse-checkout set --no-cone /* !tests !docs"
++    GIT_RESET 01346829096c61b372692f6dc43ffa778c6caccd
+     PATCH_COMMAND ${EXEC} git am --3way ${CMAKE_CURRENT_SOURCE_DIR}/curl-*.patch
+     UPDATE_COMMAND ""
+     CONFIGURE_COMMAND ${EXEC} ${CMAKE_COMMAND} -H<SOURCE_DIR> -B<BINARY_DIR>

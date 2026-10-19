@@ -2,12 +2,21 @@
 
 RVP's Windows packages used shinchiro's libmpv builds
 (`mpv-dev-x86_64-*-git-*.7z` from shinchiro/mpv-winbuild-cmake's releases).
-Those builds configure FFmpeg without a SPIR-V compiler, so FFmpeg leaves
-out its Vulkan compute filters, and with them `fruc_vulkan` (NVIDIA's
-optical flow), M18's fourth smoothing engine (D18). `build.sh` builds
-libmpv with the same recipe at a fixed commit plus one change,
-`ffmpeg-libshaderc.patch` (`--enable-libshaderc`; the recipe already builds
-shaderc for libplacebo and mpv).
+Those builds have FFmpeg without a SPIR-V compiler, so FFmpeg leaves out
+its Vulkan compute filters, and with them `fruc_vulkan` (NVIDIA's optical
+flow), M18's fourth smoothing engine (D18). FFmpeg compiles its Vulkan
+shaders while it builds, with a `glslc`, `glslang` or `glslangValidator` its
+configure finds on the PATH (it has no `--enable-libshaderc` any more), and
+shinchiro's build host has none. `build.sh` builds libmpv with the same
+recipe at a fixed commit, after it builds glslang 16.6.0 for the build host
+into the work folder and puts it on the PATH.
+
+The one change to the recipe, `curl-release.patch`, keeps it building: it
+holds curl at its 8.22.0 release. curl's master (since 8.23.0) calls OpenSSL
+4.1's `ASN1_STRING_get_length`, which the recipe's pinned OpenSSL
+(4.1.0-dev of 2026-07-18) does not have yet. The recipe takes every other
+package at its newest commit, so a later build may need another pin like
+this one.
 
 Nothing built here is committed: the result is a `mpv-dev-x86_64-*.7z` in
 the work folder, which takes the place of shinchiro's for the packages.
@@ -18,13 +27,27 @@ Ubuntu 24.04 (WSL works). Beyond `build-essential`, cmake, ninja, nasm,
 yasm, clang, git and curl, the recipe needs:
 
     sudo apt-get install -y --no-install-recommends mercurial subversion gyp \
-        autoconf automake libtool libtool-bin lld libc++1 libc++abi1 libgmp-dev \
+        autoconf automake libtool libtool-bin lld libc++-dev libc++abi-dev libgmp-dev \
         libmpfr-dev libmpc-dev libgcrypt20-dev gperf ragel texinfo autopoint re2c \
-        asciidoc docbook2x p7zip-full libmimalloc-dev
+        asciidoc docbook2x p7zip-full
+
+libc++'s headers (`libc++-dev`, `libc++abi-dev`), not only its libraries
+as the recipe's own README lists for Ubuntu: the recipe builds its LLVM
+with libc++ and `-ftls-model=local-exec`, and with libstdc++ instead the
+link of `llvm-profdata` fails (`R_X86_64_TPOFF32` against
+`std::__once_callable`).
 
 and meson and mako from pip (`pip install meson mako jsonschema rst2pdf`,
 in a virtual environment whose `bin` is on the PATH). The recipe builds its
 own clang toolchain for MinGW and a Rust toolchain in the work folder.
+
+Without sudo, `rootless.sh` does the same in a build root of its own: it
+unpacks Ubuntu's 24.04 base image (checked against Ubuntu's signed
+checksums) into `~/rvp-deps/mpv-root`, enters it as root of a user
+namespace that maps only the caller's user, installs the packages and
+meson there, and runs `build.sh` inside with the work folder and the
+checkout (read-only) mounted at their own paths. The system's packages
+stay as they are. RVP's libmpv of 2026-10-19 was built this way.
 
 ## Size and time
 

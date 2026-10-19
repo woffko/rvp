@@ -233,7 +233,8 @@ smoothing for users without SVP, after a study of the engines.
   renderer (`render.renderer` "vulkan": gpu-next with `winvk` in RVP's
   window; its filter uploads the frames to the output's Vulkan device,
   `hwdec_interop=vulkan`) and a libmpv whose FFmpeg has the filter
-  (`tools/libmpv/build.sh`: shinchiro's recipe with libshaderc; RVP probes
+  (`tools/libmpv/build.sh`: shinchiro's recipe with glslang for FFmpeg's
+  shaders; RVP probes
   `lavfi-fruc_vulkan` at start). An engine whose filter does not raise the
   rate within 6 s is left out for the session (`App::smoothing_watch`).
   Checks: `crates/app/tests/smoothing.rs` (with `VSSCRIPT_PATH`),

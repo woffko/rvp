@@ -27,7 +27,7 @@ paused on 2026-10-18 after a host run lost the GPU, and resumed on
 | VapourSynth runtime | RVP's own runtime in `vapoursynth\` next to `rvp.exe`: VapourSynth R73 portable on an embeddable Python 3.12.9, MVTools v24, and RIFE's ncnn-Vulkan plugin r9_mod_v33 with model v4.6 and its runtime libraries. Every download is checked by its SHA-256, and `NOTICE.txt` names the licences. RVP never uses SVP's runtime or one found on the PATH. | `tools/packaging/vapoursynth.py`, `crates/app/src/svp.rs` |
 | Libraries and exit | On Windows RVP loads libraries from its own folder, System32 and its runtime only. A process that has loaded RIFE ends with `TerminateProcess`. | `shell/src/process.rs` |
 | Vulkan renderer | `render.renderer` `vulkan`: mpv's `gpu-next` with `winvk` in RVP's native video window, like Direct3D 11's, taken at start. | `render.rs`, `shell/cpp/video_window.cpp` |
-| RVP's libmpv | shinchiro's recipe at a fixed commit, with FFmpeg given libshaderc, which `fruc_vulkan` needs. It is not built yet (see "Left"); CI keeps shinchiro's libmpv. | `tools/libmpv/` |
+| RVP's libmpv | shinchiro's recipe at a fixed commit, with glslang for the build host, which FFmpeg needs to compile its Vulkan shaders (`fruc_vulkan` among them), and curl held at its 8.22.0 release; `rootless.sh` builds it without sudo. Built on 2026-10-19 (see "RVP's libmpv"); the local Windows packages carry it, CI keeps shinchiro's. | `tools/libmpv/` |
 
 ## The study
 
@@ -205,6 +205,48 @@ Blend (no MVTools there).
 CI is green for every commit of the goal: 8af11bb, d38b9f5, a930288,
 f1a021a and aef5cad.
 
+## RVP's libmpv (2026-10-19)
+
+Built in WSL with `tools/libmpv/rootless.sh` (the owner's choice: no sudo,
+the system's packages unchanged): an Ubuntu 24.04 base image in
+`~/rvp-deps/mpv-root`, entered as root of a user namespace, with the
+recipe's packages and meson installed there. The result is
+`mpv-dev-x86_64-20261019-git-6a262d11f6.7z`, after about an hour on the
+64 threads (the recipe's own LLVM included) and four restarts. These four
+things had to change, all in `tools/libmpv/`:
+
+1. Ubuntu needs libc++'s headers (`libc++-dev`, `libc++abi-dev`), not
+   only the libraries the recipe's README lists. Without them clang fell
+   back to libstdc++ and the link of LLVM's `llvm-profdata` failed
+   (`R_X86_64_TPOFF32` against `std::__once_callable`, under the recipe's
+   `-ftls-model=local-exec`).
+2. The recipe applies its patches with `git am`, which needs a committer.
+   The build root's `/root/.gitconfig` names one.
+3. curl's master (since 8.23.0) calls OpenSSL 4.1's
+   `ASN1_STRING_get_length`, which the recipe's pinned OpenSSL (4.1.0-dev
+   of 2026-07-18) lacks. `curl-release.patch` holds curl at 8.22.0.
+4. FFmpeg's master no longer has `--enable-libshaderc`: it compiles its
+   Vulkan shaders while it builds, with a glslang or glslc it finds on the
+   PATH. `build.sh` builds glslang 16.6.0 for the build host, and FFmpeg's
+   configure took it (`GLSLC=glslang`) and enabled `fruc_vulkan` with the
+   other Vulkan filters.
+
+The DLL exports the same 54 functions as shinchiro's libmpv of
+2026-10-10, imports the same system DLLs, and has the filter ("Frame rate
+up-conversion using the Vulkan NV optical flow extension"). Its parts:
+
+| Part | Commit |
+|------|--------|
+| mpv | 6a262d11 (2026-10-18) |
+| FFmpeg | fd9a8f25a (2026-10-19) |
+| libplacebo | ccb74c6 (2026-10-18) |
+| Vulkan headers | acbb939 (2026-10-16) |
+| Vulkan loader | 52fc9f9 (2026-10-19) |
+| shaderc and glslang for libplacebo | ba3e587, 5cf91e7 |
+| libass | f61db56 (2026-09-17) |
+| curl | 8.22.0 (01346829) |
+| OpenSSL | d8bf6cdd4 (the recipe's pin) |
+
 ## Findings
 
 1. **MVTools gave black frames after every start and seek.** While a
@@ -223,10 +265,12 @@ f1a021a and aef5cad.
 4. **RIFE's plugin crashes every process at exit** (ncnn's destructors call
    the Vulkan driver). After RIFE has loaded, RVP ends its process without
    unloading libraries; settings and state are written before that.
-5. **fruc_vulkan needs a SPIR-V compiler in FFmpeg**: its configure
-   dependencies are `vulkan vulkan_1_4 spirv_compiler`. shinchiro's builds
-   (FFmpeg N-127267, 2026-10-09) have no libshaderc, so the filter is
-   missing. Andarwinux's FFmpeg has it, but they publish no libmpv.
+5. **fruc_vulkan needs a SPIR-V compiler in FFmpeg's build**: its
+   configure dependencies are `vulkan vulkan_1_4 spirv_compiler`, and
+   FFmpeg's master compiles its shaders while it builds, with a glslang or
+   glslc on the build host's PATH (its libshaderc option is gone).
+   shinchiro's build host has neither, so the filter is missing from their
+   libmpv. Andarwinux's FFmpeg has it, but they publish no libmpv.
 6. **mpv gives a lavfi graph a hardware device only through
    `hwdec_interop`**, taken from the video output's interops. That is why
    the filter needs the Vulkan renderer, and why the filter uploads

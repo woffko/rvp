@@ -1,14 +1,20 @@
 #!/usr/bin/env bash
 # Builds RVP's libmpv for Windows x86_64 (goal T, D18): shinchiro's
 # mpv-winbuild-cmake, the recipe of the libmpv RVP used before, at a fixed
-# commit, with FFmpeg given its SPIR-V compiler (libshaderc). Without one
-# FFmpeg leaves out every Vulkan compute filter, fruc_vulkan (NVIDIA's
-# optical flow, M18's fourth engine) among them; shinchiro's builds have
-# none. Everything else is the recipe's own.
+# commit, with FFmpeg given its SPIR-V compiler: FFmpeg compiles its Vulkan
+# shaders while it builds, with a glslang (or glslc) it finds on the PATH,
+# and without one leaves out every Vulkan compute filter, fruc_vulkan
+# (NVIDIA's optical flow, M18's fourth engine) among them. shinchiro's
+# builds have none; this script builds glslang for the build host at a
+# release. One more change keeps the recipe building: curl stays at its
+# 8.22.0 release, since curl's master since 8.23.0 expects an OpenSSL 4.1
+# with ASN1_STRING_get_length, newer than the 4.1.0-dev the recipe pins.
+# Everything else is the recipe's own, its other packages at their newest.
 #
 # Runs on Ubuntu (WSL included) with the packages tools/libmpv/README.md
-# lists and meson (pip) on the PATH; the recipe builds its own clang
-# toolchain for MinGW. The work folder holds the sources, the toolchain and
+# lists and meson (pip) on the PATH, or without sudo inside the build root
+# of tools/libmpv/rootless.sh; the recipe builds its own clang toolchain
+# for MinGW. The work folder holds the sources, the toolchain and
 # the build (30 to 40 GB); the result is mpv-dev-x86_64-*.7z there (libmpv-2.dll,
 # its headers and import library), never committed.
 #
@@ -26,7 +32,20 @@ cd "$WORK"
 cd mpv-winbuild-cmake
 git fetch -q origin
 git checkout -q --force "$COMMIT"
-git apply "$HERE/ffmpeg-libshaderc.patch"
+git apply "$HERE/curl-release.patch"
+
+# glslang for the build host (see above), installed in the work folder.
+GLSLANG=16.6.0
+HOST=$WORK/host-tools
+if [ ! -x "$HOST/bin/glslang" ]; then
+    rm -rf "$WORK/host-glslang"
+    git -c advice.detachedHead=false clone -q --depth 1 --branch "$GLSLANG" https://github.com/KhronosGroup/glslang.git "$WORK/host-glslang"
+    cmake -Wno-dev -G Ninja -S "$WORK/host-glslang" -B "$WORK/host-glslang/build" \
+        -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX="$HOST" \
+        -DENABLE_OPT=OFF -DGLSLANG_TESTS=OFF -DBUILD_TESTING=OFF
+    ninja -C "$WORK/host-glslang/build" install
+fi
+export PATH="$HOST/bin:$PATH"
 
 cmake -Wno-dev --fresh -G Ninja -S . -B "$BUILD" \
     -DTARGET_ARCH=x86_64-w64-mingw32 \
