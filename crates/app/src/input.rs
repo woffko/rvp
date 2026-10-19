@@ -434,6 +434,12 @@ impl Bindings {
                 _ => {}
             }
         }
+        // RVP's own: M18's motion smoothing on or off (free in PotPlayer).
+        if let Some(chord) = KeyChord::parse("Ctrl+Shift+I") {
+            keys.entry(chord).or_insert(Action::Smoothing(
+                crate::smoothing::SmoothingCommand::Toggle,
+            ));
+        }
         // Not in PotPlayer's table: undo, redo and moving the selection.
         for (key, action) in [
             ("Ctrl+Z", ListAction::Undo),

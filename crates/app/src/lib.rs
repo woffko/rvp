@@ -44,6 +44,7 @@ mod resume;
 pub mod scenes;
 mod settings;
 pub mod shaders;
+pub mod smoothing;
 pub mod sources;
 pub mod speakers;
 pub mod stereo;

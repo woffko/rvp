@@ -269,6 +269,7 @@ impl qobject::Player {
             height: pixels("height").unwrap_or(0),
             width_mm: number("width_mm"),
             height_mm: number("height_mm"),
+            refresh: number("refresh"),
         };
         let Some(core) = self.as_mut().core_mut() else {
             return;

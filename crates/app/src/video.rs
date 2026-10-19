@@ -772,6 +772,8 @@ impl App {
                 script_entry(&wrapper, vs.buffered_frames),
             ));
         }
+        // M18's motion smoothing comes last.
+        filters.extend(self.smoothing_filter());
         filters
     }
 
@@ -858,6 +860,7 @@ impl App {
             )
             .map_err(|error| format!("{}: {error}", wrapper.display()))?;
         }
+        self.write_smoothing_script()?;
         // Only labels in the chain: mpv logs a warning for the others.
         let chain = engine.get_text("vf").unwrap_or_default();
         let labels = [
@@ -872,7 +875,7 @@ impl App {
         ]
         .into_iter()
         .chain(VideoEffect::ALL.iter().map(|effect| effect.label()))
-        .chain([SCRIPT_LABEL]);
+        .chain([SCRIPT_LABEL, crate::smoothing::LABEL]);
         for label in labels {
             if chain.contains(&format!("@{label}:")) {
                 drop(engine.remove_video_filter(label));
@@ -978,6 +981,7 @@ impl App {
             Action::Rotate(rotation) => Some(self.rotate(engine, rotation)),
             Action::Shaders(command) => Some(self.shader_command(engine, command)),
             Action::ToggleVapourSynth => Some(self.toggle_script(engine)),
+            Action::Smoothing(command) => Some(self.smoothing_command(engine, command)),
             Action::OpenScriptFolder => {
                 let vs = &self.settings.vapoursynth;
                 let folder = vs
@@ -1084,7 +1088,10 @@ impl App {
         vs.enabled = true;
         self.save_settings();
         self.apply_decoding(engine);
-        Some(match self.apply_video_filters(engine) {
+        let applied = self.apply_video_filters(engine);
+        // Smoothing gives way to RVP's own script.
+        self.apply_smoothing(engine);
+        Some(match applied {
             Ok(()) => UiRequest::Osd(format!("VapourSynth: {name}")),
             Err(error) => UiRequest::Message(format!("VapourSynth: {error}")),
         })
@@ -1099,7 +1106,10 @@ impl App {
         let on = vs.enabled;
         self.save_settings();
         self.apply_decoding(engine);
-        match self.apply_video_filters(engine) {
+        let applied = self.apply_video_filters(engine);
+        // Smoothing gives way to RVP's own script.
+        self.apply_smoothing(engine);
+        match applied {
             Ok(()) => on_off("VapourSynth script", on),
             Err(error) => UiRequest::Message(format!("VapourSynth: {error}")),
         }

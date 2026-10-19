@@ -10,6 +10,7 @@ use rvp_app::picture::PictureCommand;
 use rvp_app::playlist::local_path;
 use rvp_app::record::RecordCommand;
 use rvp_app::shaders::ShaderCommand;
+use rvp_app::smoothing::SmoothingCommand;
 use rvp_app::video::{ColorChange, ColorKind, Rotation, VideoEffect};
 use rvp_app::volume::mpv_volume;
 use rvp_app::window::{WindowCommand, WindowRequest};
@@ -1032,6 +1033,26 @@ impl Harness {
                     self.dispatch(action),
                     Some(UiRequest::CaptureDialog("sheet"))
                 );
+            }
+            _ => self.check_m18(action),
+        }
+    }
+
+    /// M18's default key: motion smoothing on (MVTools, or Blend without a
+    /// VapourSynth runtime here) and off again.
+    fn check_m18(&mut self, action: Action) {
+        match action {
+            Action::Smoothing(SmoothingCommand::Toggle) => {
+                for on in [true, false] {
+                    match self.dispatch(action) {
+                        Some(UiRequest::Osd(text)) => {
+                            assert!(text.starts_with("Motion smoothing: "), "{text}");
+                            assert_eq!(text.ends_with(": Off"), !on, "{text}");
+                        }
+                        other => panic!("{action:?}: {other:?}"),
+                    }
+                    assert_eq!(self.app.settings.smoothing.enabled, on);
+                }
             }
             _ => panic!("{action:?} has no check"),
         }

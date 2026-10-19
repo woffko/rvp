@@ -148,54 +148,42 @@ pub fn copy_back(hwdec: &str) -> String {
     }
 }
 
-/// Where SVP keeps its VapourSynth runtime (VSScript), most likely first.
+/// Where RVP finds a VapourSynth runtime (VSScript), most likely first:
+/// the one RVP's packages ship in `vapoursynth` next to the executable,
+/// then, on Linux, the system's. Never SVP's, nor one found on the PATH
+/// (where SVP's installer puts its own): RVP's smoothing needs its own
+/// plugins (MVTools, RIFE; goal T), and SVP's filter runs in RVP's
+/// runtime as well, since a process has one.
 #[must_use]
-pub fn vsscript_candidates(home: Option<&Path>) -> Vec<PathBuf> {
+pub fn vsscript_candidates(exe_dir: Option<&Path>) -> Vec<PathBuf> {
+    let mut list = Vec::new();
     if cfg!(windows) {
-        let mut list = Vec::new();
-        for variable in ["ProgramFiles(x86)", "ProgramFiles"] {
-            if let Some(base) = std::env::var_os(variable) {
-                list.push(
-                    PathBuf::from(base)
-                        .join("SVP 4")
-                        .join("mpv64")
-                        .join("VSScript.dll"),
-                );
-            }
+        if let Some(dir) = exe_dir {
+            list.push(dir.join("vapoursynth").join("VSScript.dll"));
+        }
+    } else {
+        if let Some(dir) = exe_dir {
+            list.push(dir.join("vapoursynth").join("libvapoursynth-script.so.0"));
         }
         list.push(PathBuf::from(
-            r"C:\Program Files (x86)\SVP 4\mpv64\VSScript.dll",
+            "/usr/lib/x86_64-linux-gnu/libvapoursynth-script.so.0",
         ));
-        // Where Windows finds it for mpv (SVP's installer puts mpv64 on
-        // PATH).
-        if let Some(path) = std::env::var_os("PATH") {
-            list.extend(std::env::split_paths(&path).map(|dir| dir.join("VSScript.dll")));
-        }
-        list
-    } else {
-        let mut list = Vec::new();
-        if let Some(home) = home {
-            list.push(home.join("SVP4/mpv/libvapoursynth-script.so.0"));
-            list.push(home.join("SVP4/mpv/libvapoursynth-script.so"));
-        }
-        list.push(PathBuf::from("/opt/svp/mpv/libvapoursynth-script.so.0"));
-        list.push(PathBuf::from("/opt/svp/mpv/libvapoursynth-script.so"));
         list.push(PathBuf::from(
             "/usr/lib/x86_64-linux-gnu/libvapoursynth-script.so",
         ));
         list.push(PathBuf::from("/usr/local/lib/libvapoursynth-script.so"));
-        list
     }
+    list
 }
 
 /// The VSScript library mpv should load: the setting when it exists, else
 /// the first of [`vsscript_candidates`] that does.
 #[must_use]
-pub fn find_vsscript(configured: Option<&Path>, home: Option<&Path>) -> Option<PathBuf> {
+pub fn find_vsscript(configured: Option<&Path>, exe_dir: Option<&Path>) -> Option<PathBuf> {
     if let Some(path) = configured.filter(|path| path.is_file()) {
         return Some(path.to_path_buf());
     }
-    vsscript_candidates(home)
+    vsscript_candidates(exe_dir)
         .into_iter()
         .find(|path| path.is_file())
 }
@@ -477,6 +465,7 @@ impl App {
             prepare_endpoint(endpoint);
         }
         self.svp.endpoint = endpoint;
+        self.smoothing.runtime = crate::smoothing::Runtime::probe(vapoursynth.as_deref());
         self.svp.vapoursynth = vapoursynth;
     }
 }
@@ -484,6 +473,35 @@ impl App {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn rvp_looks_for_its_own_runtime_and_never_svps() {
+        let dir = std::env::temp_dir().join(format!("rvp-vsscript-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let list = vsscript_candidates(Some(&dir));
+        assert!(list[0].starts_with(dir.join("vapoursynth")), "{list:?}");
+        assert!(
+            list.iter()
+                .all(|path| !path.to_string_lossy().contains("SVP")),
+            "{list:?}"
+        );
+        let own = list[0].clone();
+        std::fs::create_dir_all(own.parent().expect("folder")).expect("folder");
+        std::fs::write(&own, b"").expect("write");
+        assert_eq!(find_vsscript(None, Some(&dir)), Some(own.clone()));
+        // The setting wins when its file is there.
+        let configured = dir.join("mine.dll");
+        std::fs::write(&configured, b"").expect("write");
+        assert_eq!(
+            find_vsscript(Some(&configured), Some(&dir)),
+            Some(configured)
+        );
+        assert_eq!(
+            find_vsscript(Some(&dir.join("gone.dll")), Some(&dir)),
+            Some(own)
+        );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
 
     #[test]
     fn copy_back_variants() {

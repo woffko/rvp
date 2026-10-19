@@ -5,7 +5,10 @@
 // scalers, then the pixel shaders: without the Direct3D 11 video
 // processor or a VapourSynth script those steps change nothing and are
 // left out); at 20 % they come back, the last first; turning the budget
-// off gives back at once what was taken. Settings change as the settings
+// off gives back at once what was taken. Then M18's smoothing (MVTools
+// quality at twice the rate) is lightened, blended and stopped, and comes
+// back the same way; without a VapourSynth runtime that has MVTools it is
+// Blend, which the budget only stops. Settings change as the settings
 // window changes them.
 //
 // Files: testdata/media/fixture-60s.mkv.
@@ -18,6 +21,8 @@ Item {
     required property Player player
     required property var t
     required property var host
+    // The runtime has MVTools: smoothing runs it (else Blend).
+    property bool mvtools: false
 
     function setSetting(path, value) {
         return JSON.parse(player.set_setting(path, JSON.stringify(value)))
@@ -38,6 +43,8 @@ Item {
                   + (t.status().osd || "") + " (" + feeds + " readings)"
         }
     }
+    // The budget's steps taken, by name.
+    function taken() { return JSON.parse(player.gpu_power_json()).taken.join(",") }
     property int feeds: 0
     // A reading of a 350 W card at `share`.
     function feed(share) {
@@ -141,9 +148,47 @@ Item {
                 setSetting("scaler", ""),
                 setSetting("render.dscale", ""),
                 setSetting("shaders.enabled", false),
-                setSetting("shaders.files", [])
+                setSetting("shaders.files", []),
+                // M18's smoothing next: MVTools quality at twice the rate.
+                setSetting("smoothing.engine", "mvtools"),
+                setSetting("smoothing.preset", "quality"),
+                setSetting("smoothing.target", "2x"),
+                setSetting("smoothing.enabled", true)
             ].map(r => r.error).filter(e => e !== "")
             t.check("gpu_settings_restored", errors.length === 0, errors.join("; "))
+            t.next()
+            break
+        }
+        case 13:
+            if (t.waitFor("gpu_smoothing_runs", () => t.status().smoothing !== "Off", 5000, () => t.status().smoothing))
+                mvtools = t.status().smoothing.startsWith("MVTools Quality")
+            break
+        case 14: {
+            // Above the budget: a lighter preset, Blend, off (Blend alone:
+            // only off).
+            feed(0.99)
+            const now = t.status().smoothing
+            const want = mvtools ? "smoothing-lighter,smoothing-blend,smoothing-off" : "smoothing-off"
+            t.waitFor("gpu_smoothing_steps", () => taken() === want && now === "Off (the GPU power budget)",
+                      15000, () => now + " [" + taken() + "]")
+            break
+        }
+        case 15: {
+            // Below it they come back, the last first, to where it began.
+            feed(0.2)
+            const now = t.status().smoothing
+            t.waitFor("gpu_smoothing_back", () => taken() === ""
+                          && (mvtools ? now.startsWith("MVTools Quality") : now === "Blend"),
+                      20000, () => now + " [" + taken() + "]")
+            break
+        }
+        case 16: {
+            const errors = [
+                setSetting("smoothing.enabled", false),
+                setSetting("smoothing.preset", "medium"),
+                setSetting("smoothing.target", "display")
+            ].map(r => r.error).filter(e => e !== "")
+            t.check("gpu_smoothing_settings_restored", errors.length === 0, errors.join("; "))
             t.finish()
             break
         }

@@ -408,8 +408,9 @@ static VSSCRIPT: OnceLock<Option<PathBuf>> = OnceLock::new();
 
 /// Points libmpv at a VapourSynth runtime through `VSSCRIPT_PATH`, which
 /// it reads when a `vapoursynth` filter starts: the one the settings name,
-/// else one already in the environment, else SVP's own (rule 8). Runs
-/// before any other thread exists.
+/// else one already in the environment, else RVP's own next to the
+/// executable (goal T: never SVP's; `rvp_app::svp::vsscript_candidates`).
+/// Runs before any other thread exists.
 fn point_at_vapoursynth(settings: &Settings) {
     let configured = settings
         .vapoursynth
@@ -422,8 +423,10 @@ fn point_at_vapoursynth(settings: &Settings) {
     let chosen = match (configured, from_environment) {
         (None, Some(path)) => Some(path),
         (configured, _) => {
-            let home = std::env::var_os("HOME").map(PathBuf::from);
-            let found = rvp_app::svp::find_vsscript(configured, home.as_deref());
+            let exe_dir = std::env::current_exe()
+                .ok()
+                .and_then(|exe| exe.parent().map(PathBuf::from));
+            let found = rvp_app::svp::find_vsscript(configured, exe_dir.as_deref());
             if let Some(path) = &found {
                 crate::ffi::bridge::rvp_set_env("VSSCRIPT_PATH", &path.to_string_lossy());
             }
@@ -2627,8 +2630,11 @@ impl qobject::Player {
             return QString::from("{}");
         };
         let model = &core.app.model;
-        let number =
-            |value: Option<f64>| value.map_or_else(|| "null".to_owned(), |v| format!("{v:.3}"));
+        let number = |value: Option<f64>| {
+            value
+                .filter(|v| v.is_finite())
+                .map_or_else(|| "null".to_owned(), |v| format!("{v:.3}"))
+        };
         let integer =
             |value: Option<i64>| value.map_or_else(|| "null".to_owned(), |v| v.to_string());
         let flag = |value: Option<bool>| value.map_or_else(|| "null".to_owned(), |v| v.to_string());
@@ -2691,8 +2697,11 @@ impl qobject::Player {
     /// The albums, the panel and the M3 settings for [`Self::status`].
     fn playlist_status(&self, core: &Core) -> Vec<(&'static str, String)> {
         let model = &core.app.model;
-        let number =
-            |value: Option<f64>| value.map_or_else(|| "null".to_owned(), |v| format!("{v:.3}"));
+        let number = |value: Option<f64>| {
+            value
+                .filter(|v| v.is_finite())
+                .map_or_else(|| "null".to_owned(), |v| format!("{v:.3}"))
+        };
         let integer =
             |value: Option<i64>| value.map_or_else(|| "null".to_owned(), |v| v.to_string());
         let text = |value: Option<&str>| value.map_or_else(|| "null".to_owned(), json_string);
@@ -2798,6 +2807,8 @@ impl qobject::Player {
             ("color_enabled", settings.color.enabled.to_string()),
             ("shaders_enabled", settings.shaders.enabled.to_string()),
             ("svp_status", text(&core.app.svp_status())),
+            // M18: what smooths the video now.
+            ("smoothing", text(&core.app.smoothing_plan().text())),
         ];
         let second = core.app.second();
         fields.push((
@@ -2833,9 +2844,12 @@ impl qobject::Player {
             mpv.get_property::<i64>(name)
                 .map_or_else(|_| "null".to_owned(), |value| value.to_string())
         };
+        // JSON has no NaN or infinity (a rate right after a filter goes).
         let float = |name: &str| {
             mpv.get_property::<f64>(name)
-                .map_or_else(|_| "null".to_owned(), |value| format!("{value:.4}"))
+                .ok()
+                .filter(|value| value.is_finite())
+                .map_or_else(|| "null".to_owned(), |value| format!("{value:.4}"))
         };
         let text = |name: &str| {
             mpv.get_property::<String>(name)

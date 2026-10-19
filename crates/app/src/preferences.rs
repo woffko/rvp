@@ -134,6 +134,7 @@ impl Settings {
         self.visual.validate(&mut notes);
         self.render.validate(&mut notes);
         self.decoders.validate(&mut notes);
+        self.smoothing.validate(&mut notes);
         notes
     }
 
@@ -397,6 +398,7 @@ pub fn import(path: &Path) -> Result<(Settings, Vec<String>), String> {
                             | "scenes"
                             | "open"
                             | "devices"
+                            | "smoothing"
                     ) {
                         value.clone()
                     } else if value.is_object() {
@@ -473,7 +475,9 @@ impl App {
             set("audio-device", &new.audio_device);
         }
         if old.video_sync != new.video_sync {
-            set("video-sync", &new.video_sync);
+            // Blend keeps display-resample while it runs.
+            let video_sync = self.effective_video_sync().to_owned();
+            set("video-sync", &video_sync);
         }
         if old.scaler != new.scaler {
             let scaler = if new.scaler.is_empty() {
@@ -534,6 +538,10 @@ impl App {
         }
         if old.output_speakers != new.output_speakers {
             self.speakers_changed(engine);
+        }
+        if old.smoothing != self.settings.smoothing || old.vapoursynth != self.settings.vapoursynth
+        {
+            self.apply_smoothing(engine);
         }
         self.apply_audio_settings(engine, &old, &mut applied.notes);
         self.apply_m6_settings(engine, &old, &mut applied);
@@ -651,6 +659,8 @@ impl App {
                     .iter()
                     .map(|preset| preset.name)
                     .collect::<Vec<_>>(),
+                "smoothing-target": crate::smoothing::TARGETS,
+                "smoothing-max-height": crate::smoothing::MAX_HEIGHTS,
             },
             "file": self.settings_path().map(|path| path.display().to_string()),
             "portable": portable,
@@ -660,6 +670,8 @@ impl App {
             "svp_endpoint": self.svp.endpoint,
             "vapoursynth_runtime": self.svp.vapoursynth.as_ref().map(|path| path.display().to_string()),
             "shader_folder": self.shader_folder().display().to_string(),
+            "smoothing": self.smoothing_plan().text(),
+            "smoothing_engines": self.smoothing_engines(),
         })
     }
 

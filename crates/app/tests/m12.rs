@@ -191,6 +191,7 @@ fn aspect_ratio_modes_reach_mpv() {
             height: 1080,
             width_mm: 600.0,
             height_mm: 340.0,
+            refresh: 0.0,
         },
     );
     h.picture(PictureCommand::OutputDevice(OutputDevice::Tv4x3));
@@ -309,6 +310,7 @@ fn rotation_by_aspect_ratio_and_frame_presets() {
             height: 1920,
             width_mm: 0.0,
             height_mm: 0.0,
+            refresh: 0.0,
         },
     );
     h.picture(PictureCommand::AutoRotate(AutoRotate::Quarter));
@@ -463,6 +465,7 @@ fn the_360_view_turns_while_it_plays() {
             height: 180,
             width_mm: 0.0,
             height_mm: 0.0,
+            refresh: 0.0,
         },
     );
     // Named as 360° video: Auto turns it on.
@@ -782,6 +785,7 @@ fn the_direct3d_video_processor_runs_without_copy_back() {
             height: 1080,
             width_mm: 0.0,
             height_mm: 0.0,
+            refresh: 0.0,
         },
     );
     assert_eq!(h.app.effective_hwdec(), "d3d11va");

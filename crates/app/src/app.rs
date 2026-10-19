@@ -370,6 +370,8 @@ pub struct App {
     pub(crate) processor_entry: std::cell::RefCell<Option<String>>,
     /// The GPU power budget's readings and steps (D17).
     pub(crate) gpu: crate::gpu_power::Budget,
+    /// M18's motion smoothing.
+    pub(crate) smoothing: crate::smoothing::Smoothing,
 }
 
 impl App {
@@ -452,6 +454,7 @@ impl App {
             native_video: false,
             processor_entry: std::cell::RefCell::new(None),
             gpu: crate::gpu_power::Budget::default(),
+            smoothing: crate::smoothing::Smoothing::default(),
         };
         app.start_picture();
         Ok(app)
@@ -893,6 +896,7 @@ impl App {
             }
             Action::Shaders(command) => self.shader_checked(command),
             Action::ToggleVapourSynth => Some(self.settings.vapoursynth.enabled),
+            Action::Smoothing(command) => Some(self.smoothing_checked(command)),
             Action::ControlPanel => Some(self.session.control_panel),
             Action::Audio(command) => self.audio_checked(command),
             other => self
@@ -1752,6 +1756,14 @@ impl App {
             self.read_chapters(engine);
         }
         self.picture_changed(engine, changes);
+        if changes.any(&[
+            PropertyId::VideoHeight,
+            PropertyId::ContainerFps,
+            PropertyId::VideoFilters,
+        ]) && self.model.int(PropertyId::VideoHeight).is_some()
+        {
+            self.apply_smoothing(engine);
+        }
         // The file's stereo metadata comes with its first frame.
         if changes.contains(PropertyId::VideoWidth) && self.model.media_loaded() {
             self.stereo_file_loaded(engine);

@@ -615,6 +615,9 @@ pub struct Screen {
     /// Its measured size in millimetres, when the system knows it.
     pub width_mm: f64,
     pub height_mm: f64,
+    /// Its refresh rate in hertz (0: unknown): M18's target rate and
+    /// Blend's rate with the OpenGL renderer.
+    pub refresh: f64,
 }
 
 impl Screen {
@@ -1024,6 +1027,8 @@ impl App {
         if resize_changes || self.processor_changed() {
             drop(self.apply_video_filters(engine));
         }
+        // The display's rate is smoothing's target.
+        self.apply_smoothing(engine);
     }
 
     /// The fullscreen state and the kind of fullscreen, for the status.

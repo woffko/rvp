@@ -42,6 +42,7 @@ ApplicationWindow {
         { key: "stereo", title: "3D and 360°" },
         { key: "shaders", title: "Pixel Shaders" },
         { key: "svp", title: "SVP and VapourSynth" },
+        { key: "smoothing", title: "Motion Smoothing" },
         { key: "subtitles", title: "Subtitles" },
         { key: "input", title: "Keys and Mouse" },
         { key: "skins", title: "Skins" },
@@ -62,7 +63,8 @@ ApplicationWindow {
         { title: "Device", page: "devices", pages: [] },
         { title: "Filter Control", page: "decoders", pages: [] },
         { title: "Video", page: "video",
-          pages: ["aspect-ratio", "resize", "extend-crop", "frame-size", "stereo", "shaders", "svp", "capture"] },
+          pages: ["aspect-ratio", "resize", "extend-crop", "frame-size", "stereo", "shaders", "svp", "smoothing",
+                  "capture"] },
         { title: "Audio", page: "audio",
           pages: ["audio-volume", "equalizer", "normalizer", "audio-effects", "audio-sync"] }
     ]
@@ -1636,7 +1638,7 @@ ApplicationWindow {
                             label: "VSScript library"
                             path: "vapoursynth.library"
                             optional: true
-                            placeholder: "SVP's runtime"
+                            placeholder: "RVP's runtime"
                             Button {
                                 text: "Browse…"
                                 onClicked: win.chooseFile("vapoursynth.library", "VSScript library",
@@ -1647,6 +1649,48 @@ ApplicationWindow {
                         Note {
                             text: "In use: " + (win.view.vapoursynth_runtime || "none found")
                                   + ". A new library takes effect at the next start. PotPlayer's .vpy scripts run unchanged: RVP wraps them for today's VapourSynth (get_core) and loads the plugins first."
+                        }
+                    }
+
+                    Page {
+                        Heading { text: "Motion Smoothing" }
+                        Check { path: "smoothing.enabled"; text: "Smooth motion (Ctrl+Shift+I)" }
+                        Choice {
+                            label: "Engine"
+                            path: "smoothing.engine"
+                            values: ["blend", "mvtools", "rife", "fruc-vulkan"]
+                            texts: ({ "blend": "Blend: neighbouring frames blended at the display's rate",
+                                      "mvtools": "MVTools: motion compensation on the CPU",
+                                      "rife": "RIFE: optical flow on the GPU (Vulkan)",
+                                      "fruc-vulkan": "NVIDIA Optical Flow: RTX 30 and later" })
+                        }
+                        Choice {
+                            label: "Preset"
+                            path: "smoothing.preset"
+                            values: ["fast", "medium", "quality"]
+                            texts: ({ "fast": "Fast", "medium": "Medium", "quality": "Quality" })
+                        }
+                        Choice {
+                            label: "Target rate"
+                            path: "smoothing.target"
+                            values: win.view.choices["smoothing-target"] || []
+                            texts: ({ "display": "The display's rate", "2x": "Twice the video's rate" })
+                        }
+                        Amount {
+                            label: "Motion compensation up to"
+                            path: "smoothing.max-height"
+                            values: win.view.choices["smoothing-max-height"] || [1080]
+                            format: v => v + "p (Blend above)"
+                        }
+                        Note { text: "Now: " + (win.view.smoothing || "") }
+                        Note {
+                            text: "Here: MVTools " + (win.view.smoothing_engines && win.view.smoothing_engines.mvtools ? "found" : "missing")
+                                  + ", RIFE " + (win.view.smoothing_engines && win.view.smoothing_engines.rife ? "found" : "missing")
+                                  + ", NVIDIA Optical Flow " + (win.view.smoothing_engines && win.view.smoothing_engines.fruc ? "found" : "missing")
+                                  + " (in RVP's VapourSynth runtime and libmpv)."
+                        }
+                        Note {
+                            text: "Smoothing stays off while SVP is attached, while RVP's own VapourSynth script runs and when the video plays at the target rate already. An engine that cannot run here gives way: RIFE and NVIDIA Optical Flow to MVTools, MVTools to Blend. Above the GPU power budget, smoothing is lightened first."
                         }
                     }
 

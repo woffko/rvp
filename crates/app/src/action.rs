@@ -15,6 +15,7 @@ use crate::audio::commands::AudioCommand;
 use crate::audio::{StereoChannel, Stretch, SyncKeep, VolumeMethod};
 use crate::hlsl::Stage;
 use crate::shaders::ShaderCommand;
+use crate::smoothing::{Engine as SmoothingEngine, Preset as SmoothingPreset, SmoothingCommand};
 use crate::video::{ColorChange, ColorKind, Deinterlace, Rotation, VideoEffect};
 
 /// One of PotPlayer's four seek steps (Left/Right, with Ctrl, with Shift,
@@ -386,10 +387,12 @@ pub enum SettingsPage {
     Capture,
     Visualization,
     Decoders,
+    /// M18's motion smoothing.
+    Smoothing,
 }
 
 impl SettingsPage {
-    pub const ALL: [SettingsPage; 29] = [
+    pub const ALL: [SettingsPage; 30] = [
         SettingsPage::Playback,
         SettingsPage::TimeJump,
         SettingsPage::Skip,
@@ -410,6 +413,7 @@ impl SettingsPage {
         SettingsPage::FrameSize,
         SettingsPage::Stereo,
         SettingsPage::Svp,
+        SettingsPage::Smoothing,
         SettingsPage::Subtitles,
         SettingsPage::Input,
         SettingsPage::Skins,
@@ -454,6 +458,7 @@ impl SettingsPage {
             SettingsPage::Capture => "capture",
             SettingsPage::Visualization => "visualization",
             SettingsPage::Decoders => "decoders",
+            SettingsPage::Smoothing => "smoothing",
         }
     }
 }
@@ -571,6 +576,8 @@ pub enum Action {
     ToggleVapourSynth,
     /// The folder of the VapourSynth scripts (M12).
     OpenScriptFolder,
+    /// M18's Video > Motion Smoothing (RVP's own; Ctrl+Shift+I).
+    Smoothing(crate::smoothing::SmoothingCommand),
     /// Save the current frame under a chosen name.
     SaveFrameAs,
     /// M12's Video Capture commands.
@@ -5001,6 +5008,95 @@ pub const ACTIONS: &[ActionInfo] = &[
         "8x Forward",
         None,
         &[10476],
+        &[],
+    ),
+    // M18: RVP's own motion smoothing (no PotPlayer command).
+    info(
+        Action::Smoothing(SmoothingCommand::Toggle),
+        "smoothing",
+        "Motion Smoothing",
+        None,
+        &[],
+        &[],
+    ),
+    info(
+        Action::Smoothing(SmoothingCommand::Engine(SmoothingEngine::Blend)),
+        "smoothing-blend",
+        "Blend (frame blending)",
+        None,
+        &[],
+        &[],
+    ),
+    info(
+        Action::Smoothing(SmoothingCommand::Engine(SmoothingEngine::MvTools)),
+        "smoothing-mvtools",
+        "MVTools (motion compensation, CPU)",
+        None,
+        &[],
+        &[],
+    ),
+    info(
+        Action::Smoothing(SmoothingCommand::Engine(SmoothingEngine::Rife)),
+        "smoothing-rife",
+        "RIFE (optical flow, GPU)",
+        None,
+        &[],
+        &[],
+    ),
+    info(
+        Action::Smoothing(SmoothingCommand::Engine(SmoothingEngine::FrucVulkan)),
+        "smoothing-fruc-vulkan",
+        "NVIDIA Optical Flow (RTX 30 and later)",
+        None,
+        &[],
+        &[],
+    ),
+    info(
+        Action::Smoothing(SmoothingCommand::Preset(SmoothingPreset::Fast)),
+        "smoothing-fast",
+        "Fast",
+        None,
+        &[],
+        &[],
+    ),
+    info(
+        Action::Smoothing(SmoothingCommand::Preset(SmoothingPreset::Medium)),
+        "smoothing-medium",
+        "Medium",
+        None,
+        &[],
+        &[],
+    ),
+    info(
+        Action::Smoothing(SmoothingCommand::Preset(SmoothingPreset::Quality)),
+        "smoothing-quality",
+        "Quality",
+        None,
+        &[],
+        &[],
+    ),
+    info(
+        Action::Smoothing(SmoothingCommand::DisplayRate(true)),
+        "smoothing-display-rate",
+        "To the Display's Rate",
+        None,
+        &[],
+        &[],
+    ),
+    info(
+        Action::Smoothing(SmoothingCommand::DisplayRate(false)),
+        "smoothing-double-rate",
+        "To Twice the Video's Rate",
+        None,
+        &[],
+        &[],
+    ),
+    info(
+        Action::Settings(SettingsPage::Smoothing),
+        "smoothing-settings",
+        "Motion Smoothing Settings...",
+        None,
+        &[],
         &[],
     ),
 ];

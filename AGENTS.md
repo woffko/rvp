@@ -100,7 +100,7 @@ smoothing for users without SVP, after a study of the engines.
 ## Shell notes
 
 - `rvp --selftest` (also `=playback`, `=resume`, `=upright`, `=svp`,
-  `=vpy`, `=speed` and `=gpu`, see `shell/qml/Main.qml`) is the functional check for the VMs,
+  `=vpy`, `=speed`, `=gpu` and `=smoothing`, see `shell/qml/Main.qml`) is the functional check for the VMs,
   the kit and the host. It drives RVP through its own input handlers,
   never through the window system, and prints `check`, `metric` and
   `status` lines.
@@ -218,6 +218,19 @@ smoothing for users without SVP, after a study of the engines.
   settings. A new GPU-heavy feature of RVP's becomes a step of
   `Step::ALL`. `rvp --selftest=gpu` gives its own readings
   (`Player.feed_gpu_power`); AMD's readers are untested on a card.
+- M18's motion smoothing (D18, `crates/app/src/smoothing.rs`): a plan per
+  file (off by default; MVTools medium up to 1080p, Blend above, at the
+  display's rate; off while `@svp` is in the chain or RVP's own script
+  slot runs) made by `App::apply_smoothing`. MVTools and RIFE are RVP's
+  filter `@rvpsmooth`, last among RVP's; their scripts end with
+  `core.clear_cache()` (mpv answers frames a script asks for while it
+  loads with black ones, which VapourSynth's cache kept). Blend is mpv's
+  `interpolation` with `video-sync=display-resample`, and with OpenGL
+  `display-fps-override` from the screen's rate. VapourSynth is RVP's own
+  runtime in `vapoursynth/` next to `rvp.exe`, never SVP's, nor one on the
+  PATH (`svp::vsscript_candidates`). The budget's first steps are the
+  smoothing's. Checks: `crates/app/tests/smoothing.rs` (with
+  `VSSCRIPT_PATH`), `rvp --selftest=smoothing`, `tools/windows-vm/m18-all.ps1`.
 - The control panel (F7) is a second window (`shell/qml/ControlPanel.qml`)
   with its own `Chrome` in `Mode::ControlBox`, painted whole
   (`SkinView.surface` 1, `panelDamaged`).

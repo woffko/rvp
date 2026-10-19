@@ -147,6 +147,8 @@ pub struct Settings {
     pub render: crate::render::RenderSettings,
     /// M12's decoders page.
     pub decoders: crate::decoders::DecoderSettings,
+    /// M18's motion smoothing (D18).
+    pub smoothing: crate::smoothing::SmoothingSettings,
 }
 
 impl Default for Settings {
@@ -207,6 +209,7 @@ impl Default for Settings {
             visual: crate::visual::VisualSettings::default(),
             render: crate::render::RenderSettings::default(),
             decoders: crate::decoders::DecoderSettings::default(),
+            smoothing: crate::smoothing::SmoothingSettings::default(),
         }
     }
 }

@@ -472,6 +472,7 @@ QString Tools::screen_json(QWindow *window) const
         {QStringLiteral("height"), qRound(size.height() * ratio)},
         {QStringLiteral("width_mm"), physical.width()},
         {QStringLiteral("height_mm"), physical.height()},
+        {QStringLiteral("refresh"), screen->refreshRate()},
         {QStringLiteral("name"), screen->name()},
         // The free area (without task bars) in the window's coordinates.
         {QStringLiteral("x"), available.x()},

@@ -791,6 +791,7 @@ impl App {
                 "101_0_10_0" => self.tracks(live, TrackKind::Subtitle),
                 "101_0_3" => self.favorites_menu(),
                 "101_0_13" => self.pipeline(live),
+                "101_0_11" => self.smoothing_menu(),
                 _ => Vec::new(),
             };
             if !extra.is_empty() {
@@ -889,6 +890,36 @@ impl App {
             });
         }
         items
+    }
+
+    /// RVP's own Video > Motion Smoothing (M18): on or off, the engines,
+    /// the presets, the rate and its settings page.
+    fn smoothing_menu(&self) -> Vec<MenuItem> {
+        use crate::smoothing::{Engine, Preset, SmoothingCommand};
+        let item = |command| self.window_item(Action::Smoothing(command), None);
+        let mut items = vec![item(SmoothingCommand::Toggle), MenuItem::separator()];
+        items.extend(
+            Engine::ALL
+                .iter()
+                .map(|engine| item(SmoothingCommand::Engine(*engine))),
+        );
+        items.push(MenuItem::separator());
+        items.extend(
+            Preset::ALL
+                .iter()
+                .map(|preset| item(SmoothingCommand::Preset(*preset))),
+        );
+        items.push(MenuItem::separator());
+        items.push(item(SmoothingCommand::DisplayRate(true)));
+        items.push(item(SmoothingCommand::DisplayRate(false)));
+        items.push(MenuItem::separator());
+        items.push(self.window_item(
+            Action::Settings(crate::action::SettingsPage::Smoothing),
+            None,
+        ));
+        MenuItem::submenu("Motion Smoothing", items)
+            .into_iter()
+            .collect()
     }
 
     /// Frame Size > Presets: Add/Edit and the cycle as PotPlayer has them,

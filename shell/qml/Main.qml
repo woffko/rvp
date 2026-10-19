@@ -1151,7 +1151,13 @@ Window {
     //                         readings it gives make RVP take the lighter
     //                         scalers and the shaders off, give them back
     //                         and give everything back when the budget is
-    //                         turned off; the file: fixture-60s.mkv
+    //                         turned off, then lighten M18's smoothing,
+    //                         blend and stop it; the file: fixture-60s.mkv
+    //   --selftest=smoothing  M18's motion smoothing (SelfTestSmoothing.qml):
+    //                         Ctrl+Shift+I on and off, MVTools raising the
+    //                         rate (Blend without a runtime that has it),
+    //                         the engines and presets, its settings page;
+    //                         the file: fixture-60s.mkv
     //   --selftest=resume     expects the last file reopened paused within
     //                         --expect-tolerance (default 2.5) seconds of
     //                         --expect-time=SECONDS; with --expect-entry=I
@@ -1266,7 +1272,23 @@ Window {
             return m12Tick(selftest.mode)
         if (selftest.mode === "gpu")
             return gpuTick()
+        if (selftest.mode === "smoothing")
+            return smoothingTick()
         functionalTick()
+    }
+
+    // --selftest=smoothing: M18's motion smoothing (SelfTestSmoothing.qml).
+    Loader {
+        id: smoothingLoader
+        active: false
+        Component.onCompleted: setSource("SelfTestSmoothing.qml", { player: player, t: selftest, host: root })
+    }
+    function smoothingTick() {
+        if (!smoothingLoader.item) {
+            smoothingLoader.active = true
+            return
+        }
+        smoothingLoader.item.tick()
     }
 
     // --selftest=gpu: the GPU power budget (SelfTestGpu.qml).

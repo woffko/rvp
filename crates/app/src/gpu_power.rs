@@ -16,9 +16,11 @@
 //! * The share is the busiest card's draw over its rated power (its
 //!   default power limit, else the one in force), averaged over the last
 //!   [`AVERAGE`] readings.
-//! * Above the budget for [`Timing::over`], RVP takes one [`Step`], the
-//!   least visible first, of those that would change something now; the
-//!   next follows after [`Timing::settle`] while the share stays above.
+//! * Above the budget for [`Timing::over`], RVP takes one [`Step`] of
+//!   those that would change something now, M18's motion smoothing first
+//!   (`crate::smoothing`: a lighter preset, Blend, off), then the least
+//!   visible of the rest; the next follows after [`Timing::settle`] while
+//!   the share stays above.
 //! * Below the budget less [`MARGIN`] for the wait (first
 //!   [`Timing::under`]), it gives the last step back. A step taken again
 //!   within [`Timing::retake`] of being given back doubles the wait, up to
@@ -99,9 +101,16 @@ pub fn busiest(samples: &[Sample]) -> Option<f64> {
         })
 }
 
-/// What RVP lightens, the least visible first ([`Step::ALL`]'s order).
+/// What RVP lightens ([`Step::ALL`]'s order): M18's smoothing first, its
+/// heaviest work, then the rest, the least visible first.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Step {
+    /// Smoothing one preset lighter; RIFE gives way to MVTools.
+    SmoothingLighter,
+    /// Blend instead of motion-compensated smoothing.
+    SmoothingBlend,
+    /// Smoothing off.
+    SmoothingOff,
     /// EWA scalers (upscaler, downscaler, chroma) become [`LIGHT_SCALER`].
     Scalers,
     /// GPU Super Resolution and RTX Video HDR off (the Direct3D 11 video
@@ -114,12 +123,23 @@ pub enum Step {
 }
 
 impl Step {
-    pub const ALL: [Self; 4] = [Self::Scalers, Self::Processor, Self::Shaders, Self::Script];
+    pub const ALL: [Self; 7] = [
+        Self::SmoothingLighter,
+        Self::SmoothingBlend,
+        Self::SmoothingOff,
+        Self::Scalers,
+        Self::Processor,
+        Self::Shaders,
+        Self::Script,
+    ];
 
     /// The notice's name of the step taken.
     #[must_use]
     pub fn taken_text(self) -> &'static str {
         match self {
+            Self::SmoothingLighter => "lighter motion smoothing",
+            Self::SmoothingBlend => "motion smoothing by blending",
+            Self::SmoothingOff => "motion smoothing off",
             Self::Scalers => "lighter scalers",
             Self::Processor => "GPU Super Resolution and RTX Video HDR off",
             Self::Shaders => "pixel shaders off",
@@ -131,6 +151,9 @@ impl Step {
     #[must_use]
     pub fn back_text(self) -> &'static str {
         match self {
+            Self::SmoothingLighter | Self::SmoothingBlend | Self::SmoothingOff => {
+                "motion smoothing back"
+            }
             Self::Scalers => "the chosen scalers back",
             Self::Processor => "GPU Super Resolution and RTX Video HDR back",
             Self::Shaders => "pixel shaders back",
@@ -142,6 +165,9 @@ impl Step {
     #[must_use]
     pub fn name(self) -> &'static str {
         match self {
+            Self::SmoothingLighter => "smoothing-lighter",
+            Self::SmoothingBlend => "smoothing-blend",
+            Self::SmoothingOff => "smoothing-off",
             Self::Scalers => "scalers",
             Self::Processor => "processor",
             Self::Shaders => "shaders",
@@ -425,6 +451,9 @@ impl App {
     /// for every reading on the window's thread: settings only, no files.
     fn gpu_step_changes(&self, step: Step) -> bool {
         match step {
+            Step::SmoothingLighter | Step::SmoothingBlend | Step::SmoothingOff => {
+                self.smoothing_step_changes(step)
+            }
             Step::Scalers => {
                 let render = &self.settings.render;
                 [&self.settings.scaler, &render.dscale, &render.cscale]
@@ -445,6 +474,9 @@ impl App {
     /// Sets on mpv what `step` changes, taken or given back.
     fn apply_gpu_step(&mut self, engine: &Engine, step: Step) {
         match step {
+            Step::SmoothingLighter | Step::SmoothingBlend | Step::SmoothingOff => {
+                self.apply_smoothing(engine);
+            }
             Step::Scalers => {
                 let scale = if self.settings.scaler.is_empty() {
                     engine
@@ -636,6 +668,9 @@ fn watts(micro: u64) -> f64 {
 mod tests {
     use super::*;
 
+    /// The steps outside smoothing, which these tests run through.
+    const STEPS: [Step; 4] = [Step::Scalers, Step::Processor, Step::Shaders, Step::Script];
+
     fn at(start: Instant, seconds: f64) -> Instant {
         start + Duration::from_secs_f64(seconds)
     }
@@ -651,11 +686,7 @@ mod tests {
             .into_iter()
             .chain((2..30).map(|second| (second, 0.99)));
         for (second, share) in readings {
-            let available: &[Step] = if second < 13 {
-                &Step::ALL
-            } else {
-                &[Step::Script]
-            };
+            let available: &[Step] = if second < 13 { &STEPS } else { &[Step::Script] };
             let now = at(start, f64::from(second));
             if let Some(change) = governor.update(Some(share), 0.9, available, now) {
                 changes.push((second, change));
@@ -683,7 +714,7 @@ mod tests {
     fn steps_come_back_below_the_margin_and_waits_grow_after_retakes() {
         let start = Instant::now();
         let mut governor = Governor::new(Timing::DEFAULT);
-        let all = Step::ALL;
+        let all = STEPS;
         let mut now = 0.0;
         let mut feed = |governor: &mut Governor, share: f64, seconds: f64| {
             let mut changes = Vec::new();
@@ -731,17 +762,12 @@ mod tests {
     fn no_reading_changes_nothing_and_off_gives_everything_back() {
         let start = Instant::now();
         let mut governor = Governor::new(Timing::TEST);
-        assert_eq!(governor.update(None, 0.9, &Step::ALL, start), None);
+        assert_eq!(governor.update(None, 0.9, &STEPS, start), None);
         assert_eq!(governor.average(), None);
         // The self-test's waits: a step 1 s after the first reading above,
         // the next 0.5 s later.
         for tenth in 0..=15 {
-            governor.update(
-                Some(1.0),
-                0.9,
-                &Step::ALL,
-                at(start, f64::from(tenth) / 10.0),
-            );
+            governor.update(Some(1.0), 0.9, &STEPS, at(start, f64::from(tenth) / 10.0));
         }
         assert_eq!(governor.taken(), [Step::Scalers, Step::Processor]);
         assert_eq!(governor.give_all(), [Step::Processor, Step::Scalers]);
