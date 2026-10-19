@@ -38,10 +38,9 @@ function Reset-State {
 
 Remove-Item -Recurse -Force $out -ErrorAction SilentlyContinue
 New-Item -ItemType Directory -Force $out | Out-Null
-if (-not (Test-Path "$bundle\vapoursynth\VSScript.dll") -and (Test-Path $VsScript)) {
-    $env:VSSCRIPT_PATH = $VsScript
-}
-Write-Host "environment vsscript=$(if ($env:VSSCRIPT_PATH) { $env:VSSCRIPT_PATH } else { "$bundle\vapoursynth" })"
+# The headless tests find the runtime through VSSCRIPT_PATH only.
+$env:VSSCRIPT_PATH = if (Test-Path "$bundle\vapoursynth\VSScript.dll") { "$bundle\vapoursynth\VSScript.dll" } else { $VsScript }
+Write-Host "environment vsscript=$env:VSSCRIPT_PATH"
 
 foreach ($mode in @('smoothing', 'gpu')) {
     Write-Host "== $mode self-test"

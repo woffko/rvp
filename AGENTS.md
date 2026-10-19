@@ -266,8 +266,10 @@ smoothing for users without SVP, after a study of the engines.
 ## Packages and the desktop (M8)
 
 - `tools/packaging/package.py` makes the packages from a release build:
-  `windows` (the folder, the portable ZIP with `rvp.portable`, the NSIS
-  installer of `packaging/windows/rvp.nsi`) and `linux` (AppDir, AppImage,
+  `windows` (the folder, with RVP's VapourSynth runtime in `vapoursynth/`
+  from `tools/packaging/vapoursynth.py`: R73, Python 3.12, MVTools, RIFE
+  and its model, each download checked by its SHA-256; the portable ZIP
+  with `rvp.portable`, the NSIS installer of `packaging/windows/rvp.nsi`) and `linux` (AppDir, AppImage,
   .deb, on Ubuntu 22.04: kit steps `m8package` and `m8`). In WSL, makensis
   is Ubuntu's nsis package unpacked into `~/rvp-deps/nsis` (`--makensis
   ~/rvp-deps/nsis/usr/bin/makensis --nsisdir ~/rvp-deps/nsis/usr/share/nsis`)
@@ -293,6 +295,11 @@ smoothing for users without SVP, after a study of the engines.
   the portal still answers success. Check it with the session manager's
   `IsInhibited 8` on the desktop's own bus, and find RVP by process name
   (`pgrep -x rvp`): `pgrep -f` also matches the shell running the check.
+- On Windows `shell/src/process.rs` restricts the library search to
+  RVP's folder, System32 and its VapourSynth runtime (never the PATH:
+  SVP's `libEGL.dll` got in through it), and ends a process that loaded
+  RIFE's plugin without unloading its libraries (its ncnn destructors
+  crash at exit).
 - Crash logs go to RVP's state folder: panics (`rvp_app::crash`), fatal
   signals and unhandled exceptions with a minidump (`shell/src/crash.rs`).
   `rvp --crash-test=panic` or `=native` crashes on purpose.

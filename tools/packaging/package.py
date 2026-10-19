@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 """Builds RVP's packages (M8) from a release build.
 
-windows: the Windows folder (rvp.exe, Qt, libmpv, the C++ runtime), the
-    portable ZIP (with rvp.portable) and the NSIS installer
-    (packaging/windows/rvp.nsi).
+windows: the Windows folder (rvp.exe, Qt, libmpv, the C++ runtime and,
+    with --vapoursynth, RVP's VapourSynth runtime in `vapoursynth/`, made
+    by tools/packaging/vapoursynth.py), the portable ZIP (with
+    rvp.portable) and the NSIS installer (packaging/windows/rvp.nsi).
 linux: the AppDir, the AppImage and the .deb. Build on the oldest system
     the packages support (Ubuntu 22.04); RVP's binary must carry
     `-Wl,-rpath,$ORIGIN/../lib -Wl,--disable-new-dtags` (see
@@ -18,7 +19,8 @@ entries and the commit's time as every file's time.
 usage:
   package.py version | mime-types
   package.py windows --exe rvp.exe --qt QT --mpv libmpv-2.dll --runtime DIR
-      --look DIR --out DIR [--makensis PATH] [--nsisdir DIR] [--objdump PATH]
+      --look DIR --out DIR [--vapoursynth DIR] [--makensis PATH] [--nsisdir DIR]
+      [--objdump PATH]
   package.py linux --exe rvp --qt QT --mpv DIR --look DIR --out DIR
       --runtime APPIMAGE_RUNTIME [--mksquashfs PATH]
 """
@@ -169,6 +171,9 @@ def windows_bundle(args, bundle: Path) -> None:
     shutil.copy2(args.mpv, bundle / Path(args.mpv).name)
     for dll in sorted(Path(args.runtime).glob("*.dll")):
         shutil.copy2(dll, bundle / dll.name)
+    if args.vapoursynth:
+        # M18's smoothing: RVP's own runtime, which it finds next to itself.
+        shutil.copytree(args.vapoursynth, bundle / "vapoursynth")
     shutil.copy2(Path(args.look) / "icons" / "rvp.ico", bundle / "rvp.ico")
     shutil.copy2(ROOT / "LICENSE", bundle / "LICENSE.txt")
     print(f"bundle: {len(copied)} Qt libraries in {bundle}")
@@ -518,6 +523,7 @@ def main() -> int:
     win.add_argument("--qt", required=True)
     win.add_argument("--mpv", required=True)
     win.add_argument("--runtime", required=True)
+    win.add_argument("--vapoursynth", help="RVP's VapourSynth runtime (tools/packaging/vapoursynth.py)")
     win.add_argument("--look", required=True)
     win.add_argument("--out", required=True)
     win.add_argument("--makensis")

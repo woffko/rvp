@@ -179,11 +179,16 @@ jobs:
           cargo xtask look look
           $runtime = Join-Path $env:RUNNER_TEMP 'msvc-runtime'
           New-Item -ItemType Directory -Force $runtime | Out-Null
-          foreach ($dll in 'concrt140', 'msvcp140', 'msvcp140_1', 'msvcp140_2', 'vcruntime140', 'vcruntime140_1') {
+          # vcomp140: Microsoft's OpenMP runtime, which RIFE's plugin needs.
+          foreach ($dll in 'concrt140', 'msvcp140', 'msvcp140_1', 'msvcp140_2', 'vcruntime140', 'vcruntime140_1', 'vcomp140') {
             Copy-Item "$env:SystemRoot\System32\$dll.dll" $runtime
           }
+          # M18: RVP's own VapourSynth runtime (MVTools, RIFE).
+          $vapoursynth = Join-Path $env:RUNNER_TEMP 'vapoursynth'
+          python tools/packaging/vapoursynth.py --out $vapoursynth --vcomp "$runtime\vcomp140.dll" `
+            --cache (Join-Path $env:RUNNER_TEMP 'vapoursynth-cache') --sevenzip 7z
           python tools/packaging/package.py windows --exe target/release/rvp.exe --qt $env:QT_ROOT_DIR `
-            --mpv "$env:MPV_LIB_DIR\libmpv-2.dll" --runtime $runtime --look look --out packages `
+            --mpv "$env:MPV_LIB_DIR\libmpv-2.dll" --runtime $runtime --vapoursynth $vapoursynth --look look --out packages `
             --makensis $env:MAKENSIS --objdump 'C:\Program Files\LLVM\bin\llvm-objdump.exe'
       - name: Windows' media controls
         shell: powershell

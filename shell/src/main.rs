@@ -30,6 +30,7 @@ mod metrics;
 mod player;
 mod player_qobject;
 mod power;
+mod process;
 mod recorder;
 mod recycle;
 mod skin_view;
@@ -47,6 +48,7 @@ use rvp_app::instance::{self, Request};
 use rvp_engine::EngineEvent;
 
 fn main() {
+    process::restrict_library_search();
     metrics::start();
     let cli = Cli::parse(std::env::args().skip(1));
     install_crash_logs(&cli);
@@ -85,7 +87,7 @@ fn main() {
         finish();
     }
     drop(app);
-    std::process::exit(code);
+    process::leave(code);
 }
 
 /// Crash logs in RVP's state folder (M8): panics, then fatal signals or
