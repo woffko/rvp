@@ -11,10 +11,12 @@
 //!
 //! The renderer itself (PotPlayer's Video Renderer) is D4's choice, taken
 //! when RVP starts: mpv's `gpu` renderer through the render API, drawn by
-//! Qt Quick (both systems), or on Windows mpv's `gpu-next` with Direct3D
-//! 11 in a native window of its own over the video area, which can send
-//! HDR to an HDR display (`docs/spikes/m12-studies.md`, "Direct3D 11
-//! output").
+//! Qt Quick (both systems), or on Windows mpv's `gpu-next` in a native
+//! window of its own over the video area, which can send HDR to an HDR
+//! display (`docs/spikes/m12-studies.md`, "Direct3D 11 output"), with
+//! Direct3D 11 or with Vulkan. Vulkan output is what M18's NVIDIA Optical
+//! Flow smoothing needs (its frames stay on the GPU, D18); Direct3D 11's
+//! video processor (GPU Super Resolution, RTX Video HDR) needs Direct3D 11.
 
 use rvp_engine::Engine;
 use serde::{Deserialize, Serialize};
@@ -77,10 +79,21 @@ pub enum Renderer {
     /// mpv's `gpu-next` with Direct3D 11 in a native window (Windows).
     #[serde(rename = "direct3d11")]
     Direct3d11,
+    /// mpv's `gpu-next` with Vulkan in the same window (Windows; M18).
+    #[serde(rename = "vulkan")]
+    Vulkan,
+}
+
+impl Renderer {
+    /// mpv draws into RVP's native video window.
+    #[must_use]
+    pub fn native_window(self) -> bool {
+        matches!(self, Renderer::Direct3d11 | Renderer::Vulkan)
+    }
 }
 
 /// The renderers' settings names, the first the default.
-pub const RENDERERS: &[&str] = &["opengl", "direct3d11"];
+pub const RENDERERS: &[&str] = &["opengl", "direct3d11", "vulkan"];
 
 /// GPU Super Resolution: off, NVIDIA's RTX Video Super Resolution or
 /// Intel's, as mpv's Direct3D 11 video processor runs them (`d3d11vpp`'s
@@ -206,8 +219,11 @@ impl RenderSettings {
             ));
             self.power_budget = repaired;
         }
-        if self.renderer == Renderer::Direct3d11 && !cfg!(windows) {
-            notes.push("render.renderer \"direct3d11\" is for Windows: \"opengl\" used".to_owned());
+        if self.renderer.native_window() && !cfg!(windows) {
+            notes.push(format!(
+                "render.renderer {:?} is for Windows: \"opengl\" used",
+                serde_json::to_value(self.renderer).unwrap_or_default()
+            ));
             self.renderer = Renderer::OpenGl;
         }
         if !TONE_MAPPINGS.contains(&self.tone_mapping.as_str()) {
@@ -265,10 +281,17 @@ impl RenderSettings {
         options
     }
 
-    /// mpv's options for the Direct3D 11 renderer's window (with
-    /// `rvp_engine::VideoOutput::Window`).
+    /// mpv's options for the native window's renderer (with
+    /// `rvp_engine::VideoOutput::Window`): Direct3D 11 or Vulkan.
     #[must_use]
     pub fn window_options(&self) -> Vec<(&'static str, String)> {
+        if self.renderer == Renderer::Vulkan {
+            return vec![
+                ("gpu-api", "vulkan".to_owned()),
+                ("gpu-context", "winvk".to_owned()),
+                ("target-colorspace-hint", self.colorspace_hint().to_owned()),
+            ];
+        }
         vec![
             ("gpu-context", "d3d11".to_owned()),
             ("target-colorspace-hint", self.colorspace_hint().to_owned()),
@@ -379,7 +402,7 @@ impl App {
             drop(engine.set_text(name, &value));
         }
         // The HDR output changes while playing; the context only at start.
-        if self.settings.render.renderer == Renderer::Direct3d11 {
+        if self.settings.render.renderer.native_window() {
             drop(engine.set_text(
                 "target-colorspace-hint",
                 self.settings.render.colorspace_hint(),
@@ -517,6 +540,25 @@ mod tests {
             serde_json::to_value(RenderSettings::default()).expect("json")["renderer"],
             "opengl"
         );
+        let mut vulkan: RenderSettings =
+            serde_json::from_str(r#"{ "renderer": "vulkan" }"#).expect("settings");
+        let mut notes = Vec::new();
+        vulkan.validate(&mut notes);
+        if cfg!(windows) {
+            assert_eq!(vulkan.renderer, Renderer::Vulkan);
+            assert!(vulkan.renderer.native_window());
+            assert_eq!(
+                vulkan.window_options(),
+                vec![
+                    ("gpu-api", "vulkan".to_owned()),
+                    ("gpu-context", "winvk".to_owned()),
+                    ("target-colorspace-hint", "yes".to_owned()),
+                ]
+            );
+        } else {
+            assert_eq!(vulkan.renderer, Renderer::OpenGl);
+            assert_eq!(notes.len(), 1, "{notes:?}");
+        }
     }
 
     #[test]

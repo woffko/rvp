@@ -599,6 +599,7 @@ impl App {
             self.warnings.push(format!("Picture settings: {error}"));
         }
         self.apply_render(engine);
+        self.probe_fruc(engine);
         if let Err(error) = self.apply_video_filters(engine) {
             self.warnings.push(format!("Video filters: {error}"));
         }

@@ -564,20 +564,19 @@ fn json_string(value: &str) -> String {
 /// `--mpv-options=name=value,name=value` for experiments and test runs.
 /// The player core's options: the settings', D4's renderer and the command
 /// line's mpv options last. The renderer is taken here, at start: the
-/// Direct3D 11 window when the settings ask for it and it can be made
-/// (Windows), the render API otherwise.
+/// native window (Direct3D 11 or Vulkan) when the settings ask for it and
+/// it can be made (Windows), the render API otherwise.
 fn engine_options(
     app: &mut App,
     cli: &Cli,
     messages: &mut Vec<String>,
 ) -> rvp_engine::EngineOptions {
     let mut window = None;
-    if app.settings.render.renderer == rvp_app::render::Renderer::Direct3d11 {
+    if app.settings.render.renderer.native_window() {
         let wid = crate::ffi::bridge::rvp_video_window_create();
         window = i64::try_from(wid).ok().filter(|wid| *wid != 0);
         if window.is_none() {
-            messages
-                .push("The Direct3D 11 video window could not be made: OpenGL is used".to_owned());
+            messages.push("The video window could not be made: OpenGL is used".to_owned());
         }
     }
     app.set_native_video(window.is_some());
@@ -2485,9 +2484,13 @@ impl qobject::Player {
             return;
         };
         core.app.tick_second(core.engine, Instant::now());
+        let watched = core.app.smoothing_watch(core.engine, Instant::now());
         if let Err(error) = core.app.tick(Instant::now()) {
             let text = format!("cannot save the playback state: {error}");
             self.as_mut().show_message(&text);
+        }
+        if let Some(request) = watched {
+            self.as_mut().handle_request(request);
         }
         self.as_mut().tick_m11();
         self.as_mut().tick_gpu_power();
@@ -2590,7 +2593,7 @@ impl qobject::Player {
         if video {
             core.native_failed = path;
             self.show_message(
-                "mpv's Direct3D 11 output could not start: choose OpenGL in Preferences > Video",
+                "mpv's output could not start in RVP's video window: choose OpenGL in Preferences > Video",
             );
         }
     }

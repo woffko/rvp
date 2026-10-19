@@ -28,6 +28,7 @@
 
 use std::fmt::Write as _;
 use std::path::{Path, PathBuf};
+use std::time::{Duration, Instant};
 
 use rvp_engine::{Engine as Mpv, PropertyId};
 use serde::{Deserialize, Serialize};
@@ -454,8 +455,11 @@ pub fn filter_entry(engine: Engine, preset: Preset, rate: (u64, u64), script: &P
             Preset::Medium => "medium",
             Preset::Quality => "slow",
         };
+        // Decoded frames (copy-back, as RVP's other filters have them) go
+        // up to the Vulkan device of mpv's output (`hwdec_interop`), and
+        // the frames it makes stay there for the output to show.
         return format!(
-            "@{LABEL}:lavfi=[hwupload,fruc_vulkan=fps={}/{}:perf={perf},hwdownload,format=nv12]",
+            "@{LABEL}:lavfi=[format=nv12,hwupload,fruc_vulkan=fps={}/{}:perf={perf}]:hwdec_interop=vulkan",
             rate.0, rate.1
         );
     }
@@ -528,7 +532,13 @@ pub(crate) struct Smoothing {
     applied: Option<Plan>,
     /// Blend's options are set.
     blend: bool,
+    /// Since when the filter in force has played (`App::smoothing_watch`).
+    since: Option<Instant>,
 }
+
+/// How long a motion-compensated filter plays before its rate is looked
+/// at (`App::smoothing_watch`).
+const WATCH: Duration = Duration::from_secs(6);
 
 /// A command of Video > Motion Smoothing.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -561,7 +571,10 @@ impl App {
             engines: Engines {
                 mvtools: self.smoothing.runtime.mvtools,
                 rife: self.smoothing.runtime.rife.is_some(),
-                fruc: self.smoothing.fruc,
+                // Its frames stay on the Vulkan device of mpv's output.
+                fruc: self.smoothing.fruc
+                    && self.native_video
+                    && self.settings.render.renderer == crate::render::Renderer::Vulkan,
             },
         }
     }
@@ -674,6 +687,7 @@ impl App {
         let filter_before = matches!(self.smoothing.applied, Some(Plan::Filter { .. }));
         let filter_now = matches!(plan, Plan::Filter { .. });
         self.smoothing.applied = Some(plan.clone());
+        self.smoothing.since = None;
         if filter_before || filter_now {
             self.apply_decoding(engine);
             drop(self.apply_video_filters(engine));
@@ -717,6 +731,62 @@ impl App {
             SmoothingCommand::Preset(preset) => smoothing.preset == preset,
             SmoothingCommand::DisplayRate(display) => (smoothing.target == "display") == display,
         }
+    }
+
+    /// Looks once, while nothing plays, whether libmpv's FFmpeg has
+    /// `fruc_vulkan`: mpv takes libavfilter's filters by name and refuses
+    /// unknown ones when they are added, before any frame.
+    pub(crate) fn probe_fruc(&mut self, engine: &Mpv) {
+        if !self.settings.render.renderer.native_window() {
+            return;
+        }
+        self.smoothing.fruc = engine
+            .command("vf", &["add", "@rvpprobe:lavfi-fruc_vulkan"])
+            .is_ok();
+        if self.smoothing.fruc {
+            drop(engine.command("vf", &["remove", "@rvpprobe"]));
+        }
+    }
+
+    /// Once a second: an engine whose filter has played for a while without
+    /// raising the rate did not start here (RIFE or `fruc_vulkan` without
+    /// their GPU, MVTools without its plugin; mpv drops a filter that
+    /// fails): it is left out for the session and the next one takes its
+    /// place.
+    pub fn smoothing_watch(&mut self, engine: &Mpv, now: Instant) -> Option<UiRequest> {
+        let Some(Plan::Filter {
+            engine: running, ..
+        }) = self.smoothing.applied.clone()
+        else {
+            self.smoothing.since = None;
+            return None;
+        };
+        if !self.model.playing() {
+            self.smoothing.since = None;
+            return None;
+        }
+        let since = *self.smoothing.since.get_or_insert(now);
+        if now.duration_since(since) < WATCH {
+            return None;
+        }
+        let source = self.model.double(PropertyId::ContainerFps).unwrap_or(0.0);
+        let filtered = self.model.double(PropertyId::EstimatedVfFps).unwrap_or(0.0);
+        if source <= 0.0 || filtered > source * 1.2 {
+            return None;
+        }
+        match running {
+            Engine::FrucVulkan => self.smoothing.fruc = false,
+            Engine::Rife => self.smoothing.runtime.rife = None,
+            Engine::MvTools => self.smoothing.runtime.mvtools = false,
+            Engine::Blend => return None,
+        }
+        self.smoothing.since = None;
+        self.apply_smoothing(engine);
+        Some(UiRequest::Osd(format!(
+            "Motion smoothing: {} did not run here; {}",
+            running.text(),
+            self.smoothing_plan().text()
+        )))
     }
 
     /// Which engines this machine has, for the settings window.
@@ -965,7 +1035,7 @@ mod tests {
                 (60, 1),
                 Path::new("unused")
             ),
-            "@rvpsmooth:lavfi=[hwupload,fruc_vulkan=fps=60/1:perf=slow,hwdownload,format=nv12]"
+            "@rvpsmooth:lavfi=[format=nv12,hwupload,fruc_vulkan=fps=60/1:perf=slow]:hwdec_interop=vulkan"
         );
     }
 

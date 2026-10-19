@@ -1200,8 +1200,10 @@ be a substantial part of it. It runs after M12 (goal T), Windows first.
   target rate (the display's by default, twice the source, 60 fps or a
   number). Turned on, smoothing is MVTools medium up to 1080p and Blend
   above. MVTools and RIFE run in a VapourSynth runtime RVP ships;
-  fruc_vulkan needs a libmpv RVP builds with FFmpeg's master (RTX 30 and
-  later).
+  fruc_vulkan needs a libmpv RVP builds with FFmpeg's master
+  (`tools/libmpv`, RTX 30 and later) and the Vulkan renderer, a third
+  renderer choice beside OpenGL and Direct3D 11 (its frames stay on the
+  output's Vulkan device).
 - **Rules.** The smoothing is RVP's own labelled filter (`@rvpsmooth`)
   after RVP's other filters, or mpv's interpolation options. It never
   touches `@svp` and turns off while SVP is attached. It needs copy-back

@@ -1196,7 +1196,8 @@ ApplicationWindow {
                             path: "render.renderer"
                             values: win.view.choices.renderer || []
                             texts: ({ "opengl": "OpenGL in the window (mpv's gpu renderer)",
-                                      "direct3d11": "Direct3D 11 window (mpv's gpu-next, HDR output)" })
+                                      "direct3d11": "Direct3D 11 window (mpv's gpu-next, HDR output)",
+                                      "vulkan": "Vulkan window (mpv's gpu-next, HDR output, NVIDIA Optical Flow smoothing)" })
                         }
                         Check {
                             visible: Qt.platform.os === "windows"

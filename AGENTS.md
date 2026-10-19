@@ -229,8 +229,15 @@ smoothing for users without SVP, after a study of the engines.
   `display-fps-override` from the screen's rate. VapourSynth is RVP's own
   runtime in `vapoursynth/` next to `rvp.exe`, never SVP's, nor one on the
   PATH (`svp::vsscript_candidates`). The budget's first steps are the
-  smoothing's. Checks: `crates/app/tests/smoothing.rs` (with
-  `VSSCRIPT_PATH`), `rvp --selftest=smoothing`, `tools/windows-vm/m18-all.ps1`.
+  smoothing's. NVIDIA Optical Flow (`fruc_vulkan`) needs the Vulkan
+  renderer (`render.renderer` "vulkan": gpu-next with `winvk` in RVP's
+  window; its filter uploads the frames to the output's Vulkan device,
+  `hwdec_interop=vulkan`) and a libmpv whose FFmpeg has the filter
+  (`tools/libmpv/build.sh`: shinchiro's recipe with libshaderc; RVP probes
+  `lavfi-fruc_vulkan` at start). An engine whose filter does not raise the
+  rate within 6 s is left out for the session (`App::smoothing_watch`).
+  Checks: `crates/app/tests/smoothing.rs` (with `VSSCRIPT_PATH`),
+  `rvp --selftest=smoothing`, `tools/windows-vm/m18-all.ps1`.
 - The control panel (F7) is a second window (`shell/qml/ControlPanel.qml`)
   with its own `Chrome` in `Mode::ControlBox`, painted whole
   (`SkinView.surface` 1, `panelDamaged`).
