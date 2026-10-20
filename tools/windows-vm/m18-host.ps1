@@ -50,6 +50,9 @@ param(
     [int]$Seconds = 15,
     [int]$PowerLimit = 90,
     [string]$CompareBundle = '',
+    # Loops the clips (mpv's loop-file) for runs longer than they are: the
+    # dropped frames' steps take about 12 s each.
+    [switch]$Loop,
     [switch]$Vm
 )
 # `-File` hands a comma list over as one string.
@@ -162,8 +165,9 @@ foreach ($run in $table) {
     # Only the SVP run keeps SVP's pipe.
     if ($name -notlike 'svp-*') { $settings['ipc-server'] = '' }
     $settings | ConvertTo-Json -Depth 4 | Set-Content -Path "$dir\config\settings.json" -Encoding ascii
-    $arguments = @('--selftest=playback', "--play-seconds=$Seconds", "--out=$dir\out",
-        "--mpv-options=ao=null,log-file=$dir\mpv.log")
+    $mpvOptions = "ao=null,log-file=$dir\mpv.log"
+    if ($Loop) { $mpvOptions += ',loop-file=inf' }
+    $arguments = @('--selftest=playback', "--play-seconds=$Seconds", "--out=$dir\out", "--mpv-options=$mpvOptions")
     if ($name -like 'svp-*') { $arguments += '--svp' }
     $arguments += "`"$Clips\$clip`""
 
@@ -221,6 +225,11 @@ foreach ($run in $table) {
         $power = $watts | Measure-Object -Average -Maximum
         $fields += 'power_mean_w={0:N0} power_max_w={1:N0}' -f $power.Average, $power.Maximum
     }
+    # When RVP's smoothing filter went in (each dropped frames' step puts
+    # it in again), in seconds of mpv's log.
+    $steps = @(Select-String -Path "$dir\mpv.log" -Pattern '^\[\s*([\d.]+)\].*operation="pre", value="@rvpsmooth' -ErrorAction SilentlyContinue |
+        ForEach-Object { '{0:N1}' -f [double]$_.Matches[0].Groups[1].Value })
+    if ($steps) { $fields += "filter_at=$($steps -join ',')" }
     if ($cpu) { $fields += 'cpu_percent={0:N0}' -f ($cpu | Measure-Object -Average).Average }
     if ($wall -gt 0) { $fields += 'rvp_cores={0:N2}' -f ($process.TotalProcessorTime.TotalSeconds / $wall) }
     Write-Host "result $name $($fields -join ' ')"

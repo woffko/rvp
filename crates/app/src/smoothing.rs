@@ -575,25 +575,116 @@ pub(crate) struct Smoothing {
     applied: Option<Plan>,
     /// Blend's options are set.
     blend: bool,
-    /// Since when the filter in force has played (`App::smoothing_watch`).
-    since: Option<Instant>,
+    /// The watch over the filter in force (`App::smoothing_watch`).
+    watch: FilterWatch,
     /// The plan waited for SVP when it was made (`App::drain` re-plans
     /// when that ends).
     pub(crate) svp_hold: bool,
     /// Steps the output's dropped frames took for this file
     /// ([`Lightened::dropped`]).
     dropped: u8,
-    /// Where the window of [`App::smoothing_watch`]'s drop count began:
-    /// when, the output's dropped frames then, and the playback time.
-    drops_from: Option<(Instant, i64, f64)>,
+    /// The engines whose filter raised the rate in this file: a dip after
+    /// a seek or a lighter step leaves them in.
+    ran: std::collections::BTreeSet<Engine>,
 }
 
 impl Smoothing {
     /// A file started: the drops of the last one count no longer.
     pub(crate) fn file_started(&mut self) {
         self.dropped = 0;
-        self.drops_from = None;
-        self.since = None;
+        self.ran.clear();
+        self.watch = FilterWatch::default();
+    }
+}
+
+/// One second's readings for [`FilterWatch::tick`].
+#[derive(Debug, Clone, Copy)]
+struct Tick {
+    now: Instant,
+    playing: bool,
+    /// The playback time and speed.
+    time: f64,
+    speed: f64,
+    /// The file's rate and the rate mpv's filters put out.
+    source_fps: f64,
+    filter_fps: f64,
+    /// Frames the output dropped so far.
+    dropped: i64,
+}
+
+/// What the watch makes of a tick.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Verdict {
+    Wait,
+    /// The filter never raised the rate: its engine did not run here.
+    LeaveOut,
+    /// The output dropped too many of the filter's frames.
+    Lighter,
+}
+
+/// The watch over a motion-compensated filter since it went in: it has to
+/// raise the rate within [`WATCH`] of steady playback, and after that the
+/// output's dropped frames are counted over windows of [`WATCH`]. A seek,
+/// a loop or a pause starts the wait again and leaves a window unjudged;
+/// once the filter has raised the rate, a dip after a seek is no failure
+/// (mpv's estimate starts again after it).
+#[derive(Debug, Default)]
+struct FilterWatch {
+    /// Steady playback since.
+    since: Option<Instant>,
+    /// The filter has raised the rate.
+    proven: bool,
+    /// The last tick's time and playback time.
+    last: Option<(Instant, f64)>,
+    /// The drop window's start: when, the drops then, the playback time.
+    drops_from: Option<(Instant, i64, f64)>,
+}
+
+impl FilterWatch {
+    fn tick(&mut self, tick: &Tick) -> Verdict {
+        if !tick.playing {
+            self.since = None;
+            self.drops_from = None;
+            self.last = None;
+            return Verdict::Wait;
+        }
+        if let Some((at, time)) = self.last {
+            let seconds = tick.now.duration_since(at).as_secs_f64();
+            if !played_on(time, tick.time, seconds, tick.speed) {
+                self.since = None;
+                self.drops_from = None;
+            }
+        }
+        self.last = Some((tick.now, tick.time));
+        let since = *self.since.get_or_insert(tick.now);
+        if tick.now.duration_since(since) < WATCH || tick.source_fps <= 0.0 {
+            return Verdict::Wait;
+        }
+        if tick.filter_fps <= tick.source_fps * 1.2 {
+            return if self.proven {
+                Verdict::Wait
+            } else {
+                Verdict::LeaveOut
+            };
+        }
+        self.proven = true;
+        let Some((from, from_dropped, from_time)) = self.drops_from else {
+            self.drops_from = Some((tick.now, tick.dropped, tick.time));
+            return Verdict::Wait;
+        };
+        let seconds = tick.now.duration_since(from).as_secs_f64();
+        if seconds < WATCH.as_secs_f64() {
+            return Verdict::Wait;
+        }
+        self.drops_from = Some((tick.now, tick.dropped, tick.time));
+        if tick.dropped >= from_dropped
+            && played_on(from_time, tick.time, seconds, tick.speed)
+            && too_many_drops(tick.dropped - from_dropped, tick.filter_fps, seconds)
+        {
+            Verdict::Lighter
+        } else {
+            Verdict::Wait
+        }
     }
 }
 
@@ -774,7 +865,7 @@ impl App {
         let filter_before = matches!(self.smoothing.applied, Some(Plan::Filter { .. }));
         let filter_now = matches!(plan, Plan::Filter { .. });
         self.smoothing.applied = Some(plan.clone());
-        self.smoothing.since = None;
+        self.smoothing.watch = FilterWatch::default();
         if filter_before || filter_now {
             self.apply_decoding(engine);
             drop(self.apply_video_filters(engine));
@@ -835,35 +926,47 @@ impl App {
         }
     }
 
-    /// Once a second: an engine whose filter has played for a while without
-    /// raising the rate did not start here (RIFE or `fruc_vulkan` without
-    /// their GPU, MVTools without its plugin; mpv drops a filter that
-    /// fails): it is left out for the session and the next one takes its
-    /// place.
+    /// Once a second, the watch over the filter in force
+    /// ([`FilterWatch`]): an engine whose filter never raised the rate did
+    /// not start here (RIFE or `fruc_vulkan` without their GPU, MVTools
+    /// without its plugin; mpv drops a filter that fails) and is left out
+    /// for the session; one that leaves the output dropping more than
+    /// [`DROP_SHARE`] of its frames takes one step lighter for the rest of
+    /// the file. Either way the next plan runs, with a notice.
     pub fn smoothing_watch(&mut self, engine: &Mpv, now: Instant) -> Option<UiRequest> {
         let Some(Plan::Filter {
             engine: running, ..
         }) = self.smoothing.applied.clone()
         else {
-            self.smoothing.since = None;
+            self.smoothing.watch = FilterWatch::default();
             return None;
         };
-        if !self.model.playing() {
-            self.smoothing.since = None;
-            self.smoothing.drops_from = None;
-            return None;
+        let tick = Tick {
+            now,
+            playing: self.model.playing(),
+            time: self.model.double(PropertyId::TimePos).unwrap_or(0.0),
+            speed: self.model.double(PropertyId::Speed).unwrap_or(1.0),
+            source_fps: self.model.double(PropertyId::ContainerFps).unwrap_or(0.0),
+            filter_fps: self.model.double(PropertyId::EstimatedVfFps).unwrap_or(0.0),
+            dropped: self.model.int(PropertyId::FrameDropCount).unwrap_or(0),
+        };
+        let before = self.smoothing_plan().text();
+        let verdict = self.smoothing.watch.tick(&tick);
+        if self.smoothing.watch.proven {
+            self.smoothing.ran.insert(running);
         }
-        let since = *self.smoothing.since.get_or_insert(now);
-        if now.duration_since(since) < WATCH {
-            return None;
-        }
-        let source = self.model.double(PropertyId::ContainerFps).unwrap_or(0.0);
-        let filtered = self.model.double(PropertyId::EstimatedVfFps).unwrap_or(0.0);
-        if source <= 0.0 {
-            return None;
-        }
-        if filtered > source * 1.2 {
-            return self.smoothing_drops(engine, now, filtered);
+        match verdict {
+            Verdict::Wait => return None,
+            Verdict::Lighter => {
+                self.smoothing.dropped = self.smoothing.dropped.saturating_add(1);
+                self.apply_smoothing(engine);
+                return Some(UiRequest::Osd(format!(
+                    "Motion smoothing: {before} dropped frames here; {}",
+                    self.smoothing_plan().text()
+                )));
+            }
+            Verdict::LeaveOut if self.smoothing.ran.contains(&running) => return None,
+            Verdict::LeaveOut => {}
         }
         match running {
             Engine::FrucVulkan => self.smoothing.fruc = false,
@@ -871,44 +974,10 @@ impl App {
             Engine::MvTools => self.smoothing.runtime.mvtools = false,
             Engine::Blend => return None,
         }
-        self.smoothing.since = None;
         self.apply_smoothing(engine);
         Some(UiRequest::Osd(format!(
             "Motion smoothing: {} did not run here; {}",
             running.text(),
-            self.smoothing_plan().text()
-        )))
-    }
-
-    /// After the filter's first [`WATCH`], the frames the output drops
-    /// over each further one: more than [`DROP_SHARE`] of those the filter
-    /// makes (at `rate`) take one step lighter for the rest of the file,
-    /// with a notice.
-    fn smoothing_drops(&mut self, engine: &Mpv, now: Instant, rate: f64) -> Option<UiRequest> {
-        let drops = self.model.int(PropertyId::FrameDropCount).unwrap_or(0);
-        let time = self.model.double(PropertyId::TimePos).unwrap_or(0.0);
-        let Some((from, from_drops, from_time)) = self.smoothing.drops_from else {
-            self.smoothing.drops_from = Some((now, drops, time));
-            return None;
-        };
-        let seconds = now.duration_since(from).as_secs_f64();
-        if seconds < WATCH.as_secs_f64() {
-            return None;
-        }
-        self.smoothing.drops_from = Some((now, drops, time));
-        let speed = self.model.double(PropertyId::Speed).unwrap_or(1.0);
-        if drops < from_drops
-            || !played_on(from_time, time, seconds, speed)
-            || !too_many_drops(drops - from_drops, rate, seconds)
-        {
-            return None;
-        }
-        let before = self.smoothing_plan().text();
-        self.smoothing.dropped = self.smoothing.dropped.saturating_add(1);
-        self.smoothing.drops_from = None;
-        self.apply_smoothing(engine);
-        Some(UiRequest::Osd(format!(
-            "Motion smoothing: {before} dropped frames here; {}",
             self.smoothing_plan().text()
         )))
     }
@@ -1175,6 +1244,99 @@ mod tests {
         assert!(played_on(10.0, 19.0, 6.0, 1.5));
         assert!(!played_on(10.0, 40.0, 6.0, 1.0));
         assert!(!played_on(10.0, 5.0, 6.0, 1.0));
+    }
+
+    /// Ticks once a second from `start`: playback time `time(n)`, the
+    /// filter's rate `fps(n)` and `dropped(n)` frames dropped so far, for
+    /// the seconds `seconds`; the verdicts that are not waits.
+    fn ticks(
+        watch: &mut FilterWatch,
+        seconds: std::ops::Range<u64>,
+        time: impl Fn(u64) -> f64,
+        fps: impl Fn(u64) -> f64,
+        dropped: impl Fn(u64) -> i64,
+    ) -> Vec<(u64, Verdict)> {
+        let start = Instant::now();
+        seconds
+            .filter_map(|n| {
+                let tick = Tick {
+                    now: start + Duration::from_secs(n),
+                    playing: true,
+                    time: time(n),
+                    speed: 1.0,
+                    source_fps: 24.0,
+                    filter_fps: fps(n),
+                    dropped: dropped(n),
+                };
+                let verdict = watch.tick(&tick);
+                (verdict != Verdict::Wait).then_some((n, verdict))
+            })
+            .collect()
+    }
+
+    #[test]
+    fn the_filter_watch_leaves_out_lightens_and_forgives_seeks() {
+        #[allow(clippy::cast_precision_loss)] // seconds of a test
+        let steady = |n: u64| n as f64;
+        // A filter that never raises the rate is left out after 6 s.
+        let mut watch = FilterWatch::default();
+        assert_eq!(
+            ticks(&mut watch, 0..8, steady, |_| 24.0, |_| 0),
+            [(6, Verdict::LeaveOut), (7, Verdict::LeaveOut)]
+        );
+        // One that raised it is not, when a loop starts mpv's estimate
+        // again (the host, 2026-10-20: MVTools went at a clip's end).
+        let mut watch = FilterWatch::default();
+        #[allow(clippy::cast_precision_loss)]
+        let looping = |n: u64| (n % 10) as f64;
+        let low_after_loop = |n: u64| if n % 10 < 2 { 24.0 } else { 60.0 };
+        assert_eq!(ticks(&mut watch, 0..30, looping, low_after_loop, |_| 0), []);
+        // A seek during the first 6 s starts the wait again.
+        let mut watch = FilterWatch::default();
+        #[allow(clippy::cast_precision_loss)]
+        let seek_at_3 = |n: u64| if n < 3 { n as f64 } else { 100.0 + n as f64 };
+        assert_eq!(
+            ticks(&mut watch, 0..10, seek_at_3, |_| 24.0, |_| 0),
+            [(9, Verdict::LeaveOut)]
+        );
+        // 10 dropped frames a second at 60: lighter after 6 s and a window.
+        let mut watch = FilterWatch::default();
+        assert_eq!(
+            ticks(
+                &mut watch,
+                0..13,
+                steady,
+                |_| 60.0,
+                |n| 10 * i64::try_from(n).unwrap_or(0)
+            ),
+            [(12, Verdict::Lighter)]
+        );
+        // A slow machine plays less than real time and is still judged.
+        let mut watch = FilterWatch::default();
+        assert_eq!(
+            ticks(
+                &mut watch,
+                0..13,
+                |n| 0.6 * steady(n),
+                |_| 60.0,
+                |n| 10 * i64::try_from(n).unwrap_or(0)
+            ),
+            [(12, Verdict::Lighter)]
+        );
+        // A loop inside a window leaves it unjudged; the next one counts.
+        let mut watch = FilterWatch::default();
+        #[allow(clippy::cast_precision_loss)]
+        let loop_at_9 = |n: u64| if n < 9 { n as f64 } else { (n - 9) as f64 };
+        assert_eq!(
+            ticks(
+                &mut watch,
+                0..22,
+                loop_at_9,
+                |_| 60.0,
+                |n| 10 * i64::try_from(n).unwrap_or(0)
+            ),
+            [(21, Verdict::Lighter)]
+        );
     }
 
     #[test]

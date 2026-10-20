@@ -1,11 +1,10 @@
 # Goal T status: milestone M18 (motion smoothing without SVP)
 
-Date: 2026-10-20. Result: **in progress, nearly done**. M18 is built and
-checked on the Windows VM, in WSL and in three host sessions at the power
-limit. RVP's own libmpv with NVIDIA Optical Flow is built. The sessions
-found four problems, all fixed (see "Findings" 7 to 10). Left: a last short
-host check of the fixes, the final build in
-`C:\Users\<user>\rvp-test\rvp-t`, and the push (see "Left").
+Date: 2026-10-20. Result: **done**. M18 is built and checked on the
+Windows VM, in WSL and in four host sessions at the power limit. RVP's own
+libmpv with NVIDIA Optical Flow is built and in the local packages. The
+sessions found five problems, all fixed (see "Findings" 7 to 11). The
+final build is in `C:\Users\<user>\rvp-test\rvp-t`.
 
 Precondition met: `goal-n-status.md` records goal N as done. The goal was
 paused on 2026-10-18 after a host run lost the GPU, and resumed on
@@ -179,6 +178,15 @@ fps for the 23.976 fps clips (`smooth-pan-*`, 20 s; the first session ran
   "[23.976 *5/2]" in RVP's own VapourSynth runtime (finding 9).
 - RIFE at 1080p and NVIDIA Optical Flow medium at 1080p cannot keep 59.94
   fps on this card at 315 W; both do at 720p (finding 10).
+- A fourth session (2026-10-20) checked the fixes on the final build with
+  the clips looping for 40 s (`-Loop`): SVP attached with RVP's smoothing
+  on (the status "Off (SVP is attached)", 59.94 fps, no frame dropped,
+  RVP's filter never added); RIFE medium at 1080p stepped to RIFE fast at
+  15.9 s and to MVTools medium at 30.0 s, which kept 59.94; NVIDIA
+  Optical Flow at 1080p stepped from medium to fast at 15.6 s. MVTools at
+  1080p ended at Blend: 3.4 s after the clip looped, mpv's rate estimate
+  was still low and the watch took MVTools for an engine that did not run
+  (finding 11).
 - Pausing the owner's fuzzers for the second session (SIGSTOP for 175 s,
   with the owner's consent) made one of them, `guard_userdata` of
   `~/Linux_Storage_Spaces`, fail its own time check ("the checks took
@@ -188,7 +196,10 @@ fps for the 23.976 fps clips (`smooth-pan-*`, 20 s; the first session ran
 ## Tests
 
 - Unit tests:
-  - `crates/app/src/smoothing.rs` (6): rates as fractions (NTSC rates
+  - `crates/app/src/smoothing.rs` (7): the filter watch (an engine that
+    never raised the rate is left out, one that did is not after a loop,
+    a seek restarts the wait, drops over 5 % lighten, slow playback is
+    judged, a window with a loop is not); rates as fractions (NTSC rates
     exact), the plan following the owner's defaults and giving way
     (waiting for SVP too), the budget's steps (lighter, then Blend, then
     off), the dropped frames' steps (presets, then MVTools, then Blend; the
@@ -262,8 +273,10 @@ With RVP's libmpv in place of shinchiro's, on the VM:
 In WSL under Xvfb, `--selftest=smoothing` and `--selftest=gpu` pass with
 Blend (no MVTools there).
 
-CI is green for every pushed commit of the goal: 8af11bb, d38b9f5, a930288,
-f1a021a, aef5cad, 78c42a5 and 690a502.
+CI is green for every commit of the goal pushed before this file's last
+change: 8af11bb, d38b9f5, a930288, f1a021a, aef5cad, 78c42a5 and 690a502.
+The last batch (the artifact pruning, the host sessions' fixes and this
+file) went to GitHub together.
 
 ## RVP's libmpv (2026-10-19)
 
@@ -360,6 +373,17 @@ up-conversion using the Vulkan NV optical flow extension"). Its parts:
     itself when the output drops more than 5 % of the filter's frames
     (the owner's choice); on this card RIFE at 1080p ends at MVTools.
 
+11. **A seek or a loop could leave a working engine out.** Right after
+    one, mpv's rate estimate starts again from the source's rate, and the
+    watch, which looked at it every second, took MVTools for an engine
+    that never ran. The watch (`FilterWatch`) now judges an engine only
+    after 6 s of steady playback, starts that wait again after a seek, a
+    loop or a pause, and leaves out no engine that has raised the rate in
+    the file; dropped frames are counted only over windows without a
+    seek. Its unit test covers these cases; on the VM a looping clip
+    stepped from MVTools medium to fast and then to Blend on its drops
+    alone (the watch's ticks printed for the check).
+
 ## Differences from SVP
 
 - **Engines.** SVP uses its own svpflow libraries, with GPU work through
@@ -441,10 +465,7 @@ In `C:\Users\<user>\rvp-test\rvp-t` (portable: its settings stay beside
 
 ## Left
 
-1. **A last short host session** with permission and at the power limit,
-   for the fixes made after the three sessions: SVP attaching with RVP's
-   smoothing on (the wait), and RIFE and NVIDIA Optical Flow at 1080p
-   stepping down by themselves.
-2. **The final build** in `C:\Users\<user>\rvp-test\rvp-t` (file copies
-   only; the folder holds an earlier build of this goal now), then this
-   file's last results, a green CI, a commit and a push.
+Nothing of the goal's own work. After the push, CI's result for the last
+commits is the one thing to look at; the owner may want one more host run
+of MVTools at 1080p over a looping clip to see finding 11's fix on the
+card (its logic is covered by the unit test and the VM).
