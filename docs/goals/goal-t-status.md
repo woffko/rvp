@@ -273,10 +273,15 @@ With RVP's libmpv in place of shinchiro's, on the VM:
 In WSL under Xvfb, `--selftest=smoothing` and `--selftest=gpu` pass with
 Blend (no MVTools there).
 
-CI is green for every commit of the goal pushed before this file's last
-change: 8af11bb, d38b9f5, a930288, f1a021a, aef5cad, 78c42a5 and 690a502.
-The last batch (the artifact pruning, the host sessions' fixes and this
-file) went to GitHub together.
+CI is green for every pushed commit of the goal but one: 8af11bb,
+d38b9f5, a930288, f1a021a, aef5cad, 78c42a5 and fd531d8, the last
+(pushed in one batch with ad76250 and fec5576; its `prune-artifacts` job
+left only fd531d8's two packages). 690a502, which changed only
+`tools/libmpv` and the documentation, failed one check of
+`package-windows`: on the hosted runner the media controls showed Next
+as disabled for the 10 s `m8-smtc.ps1` waits (`buttons_playing`), while
+Next itself worked. The same code passed before (78c42a5) and after
+(fd531d8), so the check is taken as flaky on the runner.
 
 ## RVP's libmpv (2026-10-19)
 
@@ -465,7 +470,6 @@ In `C:\Users\<user>\rvp-test\rvp-t` (portable: its settings stay beside
 
 ## Left
 
-Nothing of the goal's own work. After the push, CI's result for the last
-commits is the one thing to look at; the owner may want one more host run
+Nothing of the goal's own work. The owner may want one more host run
 of MVTools at 1080p over a looping clip to see finding 11's fix on the
 card (its logic is covered by the unit test and the VM).
