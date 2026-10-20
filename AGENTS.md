@@ -284,7 +284,9 @@ smoothing for users without SVP, after a study of the engines.
   is Ubuntu's nsis package unpacked into `~/rvp-deps/nsis` (`--makensis
   ~/rvp-deps/nsis/usr/bin/makensis --nsisdir ~/rvp-deps/nsis/usr/share/nsis`)
   and the C++ runtime is `~/rvp-deps/win/msvc-runtime`. CI builds both as
-  artifacts; nothing is published.
+  artifacts and keeps only the newest run's (`prune-artifacts`: the
+  account's artifact storage is small, so push commits in batches);
+  nothing is published.
 - The registered types are `packaging/associations.tsv` (the installer,
   the `.desktop` file, MPRIS). RVP only registers itself as a handler and
   never makes itself the default (owner, 2026-10-16). The installer is per
