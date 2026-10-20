@@ -1,13 +1,11 @@
 # Goal T status: milestone M18 (motion smoothing without SVP)
 
-Date: 2026-10-19. Result: **in progress**. M18 is built and checked on the
-Windows VM and in WSL (parts 1 to 3a, committed and pushed). Three things
-are left (see "Left"):
-
-- RVP's own libmpv with NVIDIA Optical Flow: its build needs packages in
-  WSL, which only the owner can install (sudo asks for a password);
-- the host session for the GPU modes;
-- the portable folder `C:\Users\<user>\rvp-test\rvp-t`.
+Date: 2026-10-20. Result: **in progress, nearly done**. M18 is built and
+checked on the Windows VM, in WSL and in three host sessions at the power
+limit. RVP's own libmpv with NVIDIA Optical Flow is built. The sessions
+found four problems, all fixed (see "Findings" 7 to 10). Left: a last short
+host check of the fixes, the final build in
+`C:\Users\<user>\rvp-test\rvp-t`, and the push (see "Left").
 
 Precondition met: `goal-n-status.md` records goal N as done. The goal was
 paused on 2026-10-18 after a host run lost the GPU, and resumed on
@@ -17,11 +15,11 @@ paused on 2026-10-18 after a host run lost the GPU, and resumed on
 
 | Part | Result | Where |
 |------|--------|-------|
-| The plan | One plan per file. Smoothing is off by default. When on, it uses MVTools medium up to 1080p and Blend above (the size limit is a setting), at the display's rate (Qt's refresh rate), at twice the video's rate or at a set rate. It stays off while SVP's `@svp` is in the chain (and comes back when `@svp` goes), while RVP's own VapourSynth script slot runs, and when the video already plays at the target rate. | `crates/app/src/smoothing.rs` |
+| The plan | One plan per file. Smoothing is off by default. When on, it uses MVTools medium up to 1080p and Blend above (the size limit is a setting), at the display's rate (Qt's refresh rate), at twice the video's rate or at a set rate. It stays off while SVP's `@svp` is in the chain (and comes back when `@svp` goes), while RVP's own VapourSynth script slot runs, and when the video already plays at the target rate. While SVP 4 Manager runs, it waits SVP's 8 s after a file starts (SVP does not attach to a video RVP's filter already plays). | `crates/app/src/smoothing.rs`, `svp.rs` |
 | Blend | mpv's `interpolation` with `video-sync=display-resample` and `tscale=oversample`. With the OpenGL renderer RVP gives mpv the display's rate (`display-fps-override`). | `smoothing.rs` |
-| MVTools and RIFE | RVP's labelled filter `@rvpsmooth`, last among RVP's filters, on a script RVP writes into its state folder, with copy-back decoding. MVTools has three presets: fast (`BlockFPS` with scene-change thresholds), medium (`FlowFPS`) and quality (`FlowFPS` with `Recalculate` at 8 px blocks). RIFE (model v4.6) uses 1, 2 or 4 GPU threads. Both scripts end with `core.clear_cache()` (see "Findings"). | `smoothing.rs` |
-| NVIDIA Optical Flow | FFmpeg's `fruc_vulkan` (RTX 30 and later) as `@rvpsmooth`. It needs the Vulkan renderer: the decoded frames go up to mpv's Vulkan device (`hwdec_interop=vulkan`) and the filter's frames stay there. RVP probes at start whether libmpv's FFmpeg has the filter. | `smoothing.rs`, `render.rs` |
-| Fallbacks | RIFE and NVIDIA Optical Flow give way to MVTools where they cannot run, and MVTools gives way to Blend. An engine whose filter plays for 6 s without raising the rate above 1.2x the source's is left out for the session, with a notice. | `smoothing.rs` (`smoothing_watch`) |
+| MVTools and RIFE | RVP's labelled filter `@rvpsmooth`, last among RVP's filters, on a script RVP writes into its state folder, with copy-back decoding. MVTools has three presets: fast (`BlockFPS` with scene-change thresholds), medium (`FlowFPS`) and quality (`FlowFPS` with `Recalculate` at 8 px blocks), with as many frames in flight as mpv's default (one per logical CPU). RIFE (model v4.6) uses 1, 2 or 4 GPU threads with 8 frames in flight. Both scripts end with `core.clear_cache()` (see "Findings"). | `smoothing.rs` |
+| NVIDIA Optical Flow | FFmpeg's `fruc_vulkan` (RTX 30 and later) as `@rvpsmooth`. It needs the Vulkan renderer: two `format` filters of RVP's before it make the decoded frames NV12 and have mpv upload them to its output's Vulkan device, and the filter's frames stay there. RVP probes at start whether libmpv's FFmpeg has the filter. | `smoothing.rs`, `render.rs` |
+| Fallbacks | RIFE and NVIDIA Optical Flow give way to MVTools where they cannot run, and MVTools gives way to Blend. An engine whose filter plays for 6 s without raising the rate above 1.2x the source's is left out for the session, with a notice. One that runs but leaves the output dropping more than 5 % of its frames over 6 s (after its first 6 s) takes a lighter step for the rest of the file, with a notice: a lighter preset, then RIFE or NVIDIA Optical Flow give way to MVTools, then Blend (the owner, 2026-10-20). | `smoothing.rs` (`smoothing_watch`) |
 | Controls | Video > Motion Smoothing: on and off (Ctrl+Shift+I), the four engines, Fast/Medium/Quality, the display's rate or twice the video's, and the settings. The Motion Smoothing page is in the Video group (engine, preset, rate, size limit, the plan now, the engines found here). The status gives the plan with the rate it makes. | `action.rs`, `menu.rs`, `shell/qml/Settings.qml` |
 | GPU power budget (D17) | Smoothing comes first among the budget's steps: a lighter preset (RIFE gives way to MVTools), then Blend, then off. After that come the EWA scalers, GPU Super Resolution and RTX Video HDR, the shaders and the script. Each step comes back as before. | `crates/app/src/gpu_power.rs` |
 | VapourSynth runtime | RVP's own runtime in `vapoursynth\` next to `rvp.exe`: VapourSynth R73 portable on an embeddable Python 3.12.9, MVTools v24, and RIFE's ncnn-Vulkan plugin r9_mod_v33 with model v4.6 and its runtime libraries. Every download is checked by its SHA-256, and `NOTICE.txt` names the licences. RVP never uses SVP's runtime or one found on the PATH. | `tools/packaging/vapoursynth.py`, `crates/app/src/svp.rs` |
@@ -143,19 +141,67 @@ The owner chose MVTools, RIFE and fruc_vulkan, through a libmpv RVP builds,
 with Blend always there. Smoothing is off by default; when turned on, it is
 MVTools medium up to 1080p and Blend above, at the display's rate (D18).
 
+## Host sessions of the delivery (2026-10-19, with the owner's permission)
+
+Three sessions of `tools/windows-vm/m18-host.ps1` from `rvp-t` with RVP's
+libmpv, each after the owner answered one UAC prompt. The card's limit was
+315 W during each and 350 W again afterwards (`restored card=0 limit=350`,
+and nvidia-smi from WSL), nvidia-smi saw the card before and after every
+run, and no run lost the GPU or crashed at exit (no crash logs, RIFE's
+included). The display is 2560x1440 at 59.951 Hz, so the target was 59.94
+fps for the 23.976 fps clips (`smooth-pan-*`, 20 s; the first session ran
+30 s, past their end, which failed only `still_playing`).
+
+| Run | Session | Plan at the end | Dropped after the first 10 s | GPU, power (mean, peak) | RVP's CPU |
+|-----|---------|-----------------|------------------------------|-------------------------|-----------|
+| Blend, Direct3D 11, 1080p | 1 | Blend | 0 | 20 %, 47 / 117 W | |
+| MVTools medium, OpenGL, 1080p | 1 | MVTools medium | 478 in 10 s | 14 %, 54 / 115 W | |
+| the same after the fix (finding 7) | 2 | MVTools medium | 0 | 21 %, 71 / 137 W | 4.8 cores |
+| MVTools medium, Direct3D 11, 1080p, fixed | 2 | MVTools medium | 0 | 26 %, 60 / 141 W | 4.5 cores |
+| RIFE medium, 720p | 1 | RIFE medium | 0 | 32 %, 166 / 286 W | |
+| RIFE medium, 1080p | 2 | RIFE medium | 237 in 5 s | 74 %, 249 / 308 W | 2.0 cores |
+| RIFE quality, 1080p | 2 | RIFE quality | 288 in 5 s | 83 %, 252 / 313 W | 2.5 cores |
+| NVIDIA Optical Flow medium, 720p, fixed (finding 8) | 3 | NVIDIA Optical Flow medium | 0 (none at all) | 17 %, 89 / 140 W | 0.4 cores |
+| NVIDIA Optical Flow medium, 1080p, fixed | 3 | NVIDIA Optical Flow medium | 244 in 5 s | 11 %, 148 / 164 W | 0.4 cores |
+| SVP, RVP's smoothing on | 1 to 3 | MVTools medium; SVP did not attach | | | |
+| SVP, RVP's smoothing off | 3 | off; SVP attached at once | 0 | 36 %, 196 / 239 W | 1.6 cores |
+
+- The background was measured from the second session on (`baseline`):
+  11 % of the CPU's 64 threads with the owner's fuzzers in WSL paused
+  (session 2), 26 % with them running (session 3); the GPU idle at 35 W.
+  During the first session 12 of the owner's fuzzers ran in WSL (about 13
+  threads).
+- SVP attached to RVP's mpv through `mpvpipe` in both of its libmpv
+  builds (SVP's log names mpv 0.41.0-1224-g6a262d11f and shinchiro's
+  0.41.0-1115-gb2c255c13), but only with RVP's smoothing off: with
+  RVP's filter in the chain SVP stayed at "waiting for the video info".
+  With it off SVP took its "Алгоритм RIFE" profile and played at 59.94
+  "[23.976 *5/2]" in RVP's own VapourSynth runtime (finding 9).
+- RIFE at 1080p and NVIDIA Optical Flow medium at 1080p cannot keep 59.94
+  fps on this card at 315 W; both do at 720p (finding 10).
+- Pausing the owner's fuzzers for the second session (SIGSTOP for 175 s,
+  with the owner's consent) made one of them, `guard_userdata` of
+  `~/Linux_Storage_Spaces`, fail its own time check ("the checks took
+  156.7s") and stop with a false crash artifact. The owner was told at
+  once; host sessions no longer pause other work.
+
 ## Tests
 
 - Unit tests:
-  - `crates/app/src/smoothing.rs` (5): rates as fractions (NTSC rates
-    exact), the plan following the owner's defaults and giving way, the
-    budget's steps (lighter, then Blend, then off), the scripts (the cache
-    cleared, the rate made), and the settings' checks;
+  - `crates/app/src/smoothing.rs` (6): rates as fractions (NTSC rates
+    exact), the plan following the owner's defaults and giving way
+    (waiting for SVP too), the budget's steps (lighter, then Blend, then
+    off), the dropped frames' steps (presets, then MVTools, then Blend; the
+    5 % share; a seek leaves a window unjudged, slow playback does not),
+    the scripts (the cache cleared, the rate made) and the filter entries,
+    and the settings' checks;
   - `gpu_power.rs` (6): the governor's steps one at a time above the
     budget and back below its margin, with longer waits after a retake;
     no reading changes nothing; the busiest card counts; amdgpu's hwmon
     files; NVML left alone while NVIDIA's cards sleep;
   - `svp.rs`: RVP looks for its own VapourSynth runtime and never for
-    SVP's;
+    SVP's; the smoothing waits for SVP in SVP mode until SVP 4 Manager is
+    known not to run or the wait is over;
   - the shell's `gpu_power.rs` (2): the reader's lines, and this machine's
     cards read sensibly.
 - `crates/app/tests/smoothing.rs` (3, headless libmpv with
@@ -179,12 +225,11 @@ MVTools medium up to 1080p and Blend above, at the display's rate (D18).
   host session's script reads it.
 - `tools/windows-vm/m18-all.ps1`: both self-tests and the headless tests
   on the Windows VM.
-- `tools/windows-vm/m18-host.ps1`: the host session. Each GPU mode runs in
+- `tools/windows-vm/m18-host.ps1`: the host sessions. Each GPU mode runs in
   RVP's own window at the power limit and gives one `result` line: the
-  plan, the rate reached, drops, power, exit code and crash logs. It was
-  tried on the VM with `-Vm`: MVTools took 23.976 fps to 60.000, and
-  Direct3D 11 said that its output could not start (session 0 has no
-  swapchain).
+  plan, the rate reached, drops, the CPU's and the GPU's load, power, exit
+  code and crash logs, after a `baseline` line of the background; mpv's
+  log of each run stays beside it. It was tried on the VM with `-Vm`.
 
 ## Checks on the Windows VM
 
@@ -199,11 +244,26 @@ With the portable package and its own runtime (`C:\rvp-test\rvp-t\RVP`):
   could not start and plays on, and the fruc probe answers no with
   shinchiro's libmpv.
 
+With RVP's libmpv in place of shinchiro's, on the VM:
+
+- `m18-all.ps1`: 27 checks and the 3 headless tests pass;
+- `m12-all.ps1`: 43 checks and the headless tests (14 and 10) pass;
+- `m11-all.ps1`: 47 checks and the headless tests (8 and 11) pass. Its
+  DVD and external-audio checks failed at first with both libmpv builds:
+  the bundle had lost the `dvd` fixture folder, and they pass with it
+  back;
+- `m10-all.ps1`: 94 checks and the headless tests pass (with both builds;
+  one first run's `second_device_follows` failure did not come back);
+- RVP's start-up probe finds `fruc_vulkan` (`vf add` accepted);
+- the dropped frames' steps: MVTools medium at 1080p on the VM's software
+  rendering, over 40 s of a looping clip, stepped to MVTools fast at
+  16.6 s and then to Blend.
+
 In WSL under Xvfb, `--selftest=smoothing` and `--selftest=gpu` pass with
 Blend (no MVTools there).
 
-CI is green for every commit of the goal: 8af11bb, d38b9f5, a930288,
-f1a021a and aef5cad.
+CI is green for every pushed commit of the goal: 8af11bb, d38b9f5, a930288,
+f1a021a, aef5cad, 78c42a5 and 690a502.
 
 ## RVP's libmpv (2026-10-19)
 
@@ -273,8 +333,32 @@ up-conversion using the Vulkan NV optical flow extension"). Its parts:
    libmpv. Andarwinux's FFmpeg has it, but they publish no libmpv.
 6. **mpv gives a lavfi graph a hardware device only through
    `hwdec_interop`**, taken from the video output's interops. That is why
-   the filter needs the Vulkan renderer, and why the filter uploads
-   decoded frames itself.
+   the filter needs the Vulkan renderer.
+7. **MVTools could not keep up at 1080p on the host's 64 threads**: RVP's
+   filter asked for 4 frames at once (`concurrent-frames=4`), and the
+   output dropped about 48 of 60 frames a second. The study's bench and
+   part B's script slot had 8 or mpv's default (one per logical CPU).
+   MVTools now gets mpv's default: 0 frames dropped, 4.5 to 4.8 cores.
+8. **FFmpeg's `hwupload` wants its device when the graph is parsed**
+   (`hwupload_init`), while mpv's lavfi filter hands the `hwdec_interop`
+   device to the graph's filters only after parsing, just before
+   `avfilter_graph_config`: "hwupload: A hardware device reference is
+   required to upload frames to", and the engine gave way to MVTools. RVP
+   now puts `format=fmt=nv12` and `format=fmt=vulkan` before
+   `fruc_vulkan`, so mpv's own conversion uploads the frames to the
+   output's Vulkan device (it loads the output's Vulkan interop on
+   demand), and the graph holds `fruc_vulkan` alone.
+9. **SVP does not attach while RVP's smoothing filter plays**: SVP 4
+   connected and waited for "the video info" forever, with both libmpv
+   builds, and attached at once with RVP's smoothing off. RVP's smoothing
+   now waits SVP's 8 s (`svp::ATTACH_WAIT`) after a file starts while SVP
+   4 Manager runs (checked with `tasklist` on a thread), and starts when
+   SVP has not attached by then.
+10. **RIFE and NVIDIA Optical Flow medium do not reach 1080p at 60 fps** on
+    the RTX 30-series card at its 315 W test limit (RIFE quality peaks at 313 W);
+    at 720p both do with no frames dropped. Smoothing now steps down by
+    itself when the output drops more than 5 % of the filter's frames
+    (the owner's choice); on this card RIFE at 1080p ends at MVTools.
 
 ## Differences from SVP
 
@@ -286,14 +370,17 @@ up-conversion using the Vulkan NV optical flow extension"). Its parts:
 - **Profiles.** SVP picks a profile by video size and rate. RVP has one
   rule: motion compensation up to a height (1080p by default) and Blend
   above.
-- **GPU load.** RVP's smoothing is the first thing RVP lightens when the
-  card goes above its GPU power budget (D17).
 - **Black bars and lights.** SVP's black-bar handling and its "lights"
   around the picture are not in RVP. NVIDIA Optical Flow flickers at
   letterbox edges, where MVTools and RIFE do not.
 - **Never together.** RVP never runs its smoothing together with SVP's.
-  Once SVP attaches (through `mpvpipe`), RVP's smoothing stays off until
-  SVP's filter goes, and RVP never changes `@svp`.
+  While SVP 4 Manager runs, RVP's smoothing waits 8 s after a file starts
+  so that SVP can attach; once SVP attaches (through `mpvpipe`), RVP's
+  smoothing stays off until SVP's filter goes, and RVP never changes
+  `@svp`. SVP itself does not attach to a video RVP's filter plays.
+- **Load.** SVP keeps its profile's settings; RVP steps its smoothing down
+  when the output drops frames, and when the card goes above the GPU
+  power budget.
 - **Process.** SVP's filter runs in RVP's VapourSynth runtime (a process
   has one): SVP's script loads SVP's plugins by their own paths. RVP uses
   none of SVP's files itself.
@@ -316,7 +403,14 @@ up-conversion using the Vulkan NV optical flow extension"). Its parts:
 - **RIFE's exit.** Check whether its exit crash exists under Linux's
   NVIDIA driver; `process::leave` ends the process early on Windows only.
 - **Speed on Linux.** MVTools and RIFE on the 32-core processor and the RTX
-  card under Linux (the study measured Windows only).
+  card under Linux (the study measured Windows only), and the dropped
+  frames' steps there.
+- **NVIDIA Optical Flow's upload on Linux.** mpv's conversion uploads the
+  frames to the output's Vulkan device (finding 8): check it with the
+  kit's libmpv and a Vulkan output on X11.
+- **Waiting for SVP on Linux.** `svp::manager_running` reads `/proc` for
+  SVP's Linux manager; check that SVP for Linux behaves as on Windows
+  (it does not attach while RVP's filter plays).
 
 ## What to try
 
@@ -326,34 +420,31 @@ In `C:\Users\<user>\rvp-test\rvp-t` (portable: its settings stay beside
 1. **Ctrl+Shift+I** on a 24 or 25 fps film: MVTools medium raises it to
    the display's 59.94 (the notice and the status say so), and
    Ctrl+Shift+I again turns it off. Above 1080p it is Blend.
-2. **Video > Motion Smoothing**: Blend, MVTools, RIFE (on the GPU; up to
-   1080p with the default size limit), and Fast/Medium/Quality.
+2. **Video > Motion Smoothing**: Blend, MVTools, RIFE (on the GPU; on this
+   card real time up to 720p; at 1080p it steps down by itself, to RIFE
+   fast and then MVTools, each step about 12 s after the last, with a
+   notice), and Fast/Medium/Quality.
 3. **NVIDIA Optical Flow**: Preferences > Video, Output "Vulkan window",
-   start RVP again, then Video > Motion Smoothing > NVIDIA Optical Flow.
-   This needs RVP's libmpv: with shinchiro's, the settings page shows it as
-   missing and smoothing uses MVTools.
+   start RVP again, then Video > Motion Smoothing > NVIDIA Optical Flow
+   (720p plays with no frames dropped; 1080p steps down to fast, then
+   MVTools). The settings page says whether this machine has it.
 4. **Preferences > Video > Motion Smoothing**: the engine, preset, rate,
    the height up to which motion compensation runs, what runs now and
    which engines this machine has.
 5. **Power budget** (Preferences > Video): with RIFE at 1080p, a lower
    budget lightens smoothing first (RIFE gives way to MVTools, then Blend,
    then off) and gives it back after a minute below.
-6. **With SVP running**: SVP attaches as before and RVP's smoothing stays
-   off while it does.
+6. **With SVP running**: SVP attaches as before, also with RVP's smoothing
+   on (the status says "Off (waiting for SVP)" for up to 8 s, then "Off
+   (SVP is attached)"); quit SVP 4 Manager and RVP's own smoothing takes
+   over with the next file.
 
 ## Left
 
-1. **RVP's libmpv with NVIDIA Optical Flow.** `tools/libmpv/build.sh` needs
-   22 Ubuntu packages (`tools/libmpv/README.md`); installing them needs the
-   owner's sudo password. Then: build it, check that `fruc_vulkan` is
-   there (RVP's probe), and use it in the local Windows packages (CI keeps
-   shinchiro's).
-2. **The host session**, with permission and at the power limit
-   (`m18-host.ps1`): Blend with Direct3D 11, MVTools with OpenGL and
-   Direct3D 11, RIFE at 720p and 1080p (and its exit), NVIDIA Optical Flow
-   with the Vulkan renderer, and SVP attaching and interpolating in RVP's
-   own runtime (goal H ran SVP's filter in SVP's runtime, which RVP no
-   longer uses).
-3. **The portable folder** `C:\Users\<user>\rvp-test\rvp-t` with the final
-   build (file copies only), then this file's results, a green CI, a
-   commit and a push.
+1. **A last short host session** with permission and at the power limit,
+   for the fixes made after the three sessions: SVP attaching with RVP's
+   smoothing on (the wait), and RIFE and NVIDIA Optical Flow at 1080p
+   stepping down by themselves.
+2. **The final build** in `C:\Users\<user>\rvp-test\rvp-t` (file copies
+   only; the folder holds an earlier build of this goal now), then this
+   file's last results, a green CI, a commit and a push.

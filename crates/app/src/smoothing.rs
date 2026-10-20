@@ -9,14 +9,26 @@
 //!   2026-10-19). `docs/spikes/m18-smoothing.md` has the study.
 //! * The motion-compensated engines are RVP's labelled filter
 //!   [`LABEL`] after RVP's other filters (`App::video_filters`); like them
-//!   they need copy-back decoding. Blend is mpv's `interpolation` with
+//!   they need copy-back decoding. `fruc_vulkan` works on frames on the
+//!   Vulkan device of mpv's output: mpv uploads them in two filters of
+//!   RVP's before it ([`FRUC_LABELS`]), since FFmpeg's own `hwupload` now
+//!   wants its device when the graph is parsed, before mpv's lavfi filter
+//!   hands it over. Blend is mpv's `interpolation` with
 //!   `video-sync=display-resample`; with the OpenGL renderer mpv does not
 //!   know the display's rate, so RVP gives it (`display-fps-override`).
 //! * Smoothing stays off while SVP is attached (`@svp` in the chain; RVP
 //!   never touches SVP's filter), while RVP's own VapourSynth script slot
-//!   runs, and when the video already plays at the target rate. An engine
+//!   runs, and when the video already plays at the target rate. In SVP
+//!   mode it waits for SVP for `svp::ATTACH_WAIT` after a file starts
+//!   while SVP 4 Manager runs: SVP does not attach to a video RVP's filter
+//!   already plays. An engine
 //!   that cannot run here gives way: RIFE and `fruc_vulkan` to MVTools,
-//!   MVTools to Blend.
+//!   MVTools to Blend. One that runs but leaves the output dropping more
+//!   than 5 % of its frames takes a lighter step for the rest of the file
+//!   (the owner, 2026-10-20): a lighter preset, then RIFE or `fruc_vulkan`
+//!   give way to MVTools, then Blend. On the host (RTX 30-series card at its
+//!   315 W test limit) RIFE and `fruc_vulkan` medium reach 720p at 60 fps
+//!   but not 1080p.
 //! * MVTools and RIFE run in the VapourSynth runtime RVP ships (never
 //!   SVP's). The scripts end with `core.clear_cache()`: mpv answers the
 //!   frames a script asks for while it loads with black ones (MVTools asks
@@ -38,6 +50,10 @@ use crate::gpu_power::Step;
 
 /// The label of RVP's smoothing filter.
 pub const LABEL: &str = "rvpsmooth";
+
+/// The labels of the filters before `fruc_vulkan`: to NV12, then mpv's
+/// upload to its output's Vulkan device.
+pub const FRUC_LABELS: [&str; 2] = ["rvpsmoothnv12", "rvpsmoothvk"];
 
 /// The target rates the settings offer: the display's, twice the
 /// source's, or a rate.
@@ -181,6 +197,8 @@ pub struct Facts {
     pub display_fps: f64,
     /// SVP's filter is in the chain.
     pub svp_attached: bool,
+    /// SVP may still attach to the file (`svp::Watch::holds_smoothing`).
+    pub svp_waiting: bool,
     /// RVP's VapourSynth script slot runs.
     pub script_slot: bool,
     pub engines: Engines,
@@ -206,6 +224,10 @@ pub struct Lightened {
     pub blend: bool,
     /// Off.
     pub off: bool,
+    /// Steps taken because the output dropped frames while the file
+    /// played (`App::smoothing_watch`): a lighter preset, then RIFE or
+    /// `fruc_vulkan` give way to MVTools, then Blend.
+    pub dropped: u8,
 }
 
 /// What runs for the file that plays.
@@ -305,6 +327,9 @@ pub fn plan(settings: &SmoothingSettings, facts: &Facts, lightened: Lightened) -
     if facts.svp_attached {
         return Plan::Off("SVP is attached");
     }
+    if facts.svp_waiting {
+        return Plan::Off("waiting for SVP");
+    }
     if facts.script_slot {
         return Plan::Off("RVP's VapourSynth script runs");
     }
@@ -334,6 +359,16 @@ pub fn plan(settings: &SmoothingSettings, facts: &Facts, lightened: Lightened) -
             engine = Engine::MvTools;
         } else {
             preset = preset.lighter();
+        }
+    }
+    for _ in 0..lightened.dropped {
+        if preset != Preset::Fast {
+            preset = preset.lighter();
+        } else if engine != Engine::MvTools {
+            engine = Engine::MvTools;
+            preset = settings.preset.min(Preset::Medium);
+        } else {
+            return Plan::Blend;
         }
     }
     if engine == Engine::MvTools && !facts.engines.mvtools {
@@ -456,20 +491,28 @@ pub fn filter_entry(engine: Engine, preset: Preset, rate: (u64, u64), script: &P
             Preset::Quality => "slow",
         };
         // Decoded frames (copy-back, as RVP's other filters have them) go
-        // up to the Vulkan device of mpv's output (`hwdec_interop`), and
-        // the frames it makes stay there for the output to show.
+        // up to the Vulkan device of mpv's output through mpv's own
+        // conversion (a format filter asking for Vulkan frames), and the
+        // frames it makes stay there for the output to show.
+        let [nv12, vulkan] = FRUC_LABELS;
         return format!(
-            "@{LABEL}:lavfi=[format=nv12,hwupload,fruc_vulkan=fps={}/{}:perf={perf}]:hwdec_interop=vulkan",
+            "@{nv12}:format=fmt=nv12,@{vulkan}:format=fmt=vulkan,\
+             @{LABEL}:lavfi=[fruc_vulkan=fps={}/{}:perf={perf}]:hwdec_interop=vulkan",
             rate.0, rate.1
         );
     }
     let path = script.to_string_lossy().replace('\\', "/");
-    // RIFE keeps its GPU threads busy with the frames in flight.
-    let frames = if engine == Engine::Rife { 8 } else { 4 };
-    format!(
-        "@{LABEL}:vapoursynth=file=%{}%{path}:buffered-frames={frames}:concurrent-frames={frames}",
-        path.len()
-    )
+    let entry = format!("@{LABEL}:vapoursynth=file=%{}%{path}", path.len());
+    if engine == Engine::Rife {
+        // RIFE keeps its GPU threads busy with the frames in flight.
+        format!("{entry}:buffered-frames=8:concurrent-frames=8")
+    } else {
+        // MVTools spreads over the CPU's threads only as far as frames are
+        // asked for at once: mpv's default asks for one per logical CPU,
+        // while 4 at once left 1080p at 2.5x dropping about 48 of its 60
+        // frames a second on the host (64 threads).
+        format!("{entry}:buffered-frames=4")
+    }
 }
 
 /// RIFE's plugin and model in the VapourSynth runtime whose VSScript
@@ -534,6 +577,48 @@ pub(crate) struct Smoothing {
     blend: bool,
     /// Since when the filter in force has played (`App::smoothing_watch`).
     since: Option<Instant>,
+    /// The plan waited for SVP when it was made (`App::drain` re-plans
+    /// when that ends).
+    pub(crate) svp_hold: bool,
+    /// Steps the output's dropped frames took for this file
+    /// ([`Lightened::dropped`]).
+    dropped: u8,
+    /// Where the window of [`App::smoothing_watch`]'s drop count began:
+    /// when, the output's dropped frames then, and the playback time.
+    drops_from: Option<(Instant, i64, f64)>,
+}
+
+impl Smoothing {
+    /// A file started: the drops of the last one count no longer.
+    pub(crate) fn file_started(&mut self) {
+        self.dropped = 0;
+        self.drops_from = None;
+        self.since = None;
+    }
+}
+
+/// The share of the filter's frames that the output may drop over a watch
+/// before smoothing takes a lighter step: 5 % (the owner, 2026-10-20).
+const DROP_SHARE: f64 = 0.05;
+
+/// Whether `dropped` frames over `seconds` of a filter that makes `rate`
+/// frames a second are too many ([`DROP_SHARE`]).
+#[must_use]
+fn too_many_drops(dropped: i64, rate: f64, seconds: f64) -> bool {
+    // Frame counts of a few seconds.
+    #[allow(clippy::cast_precision_loss)]
+    let dropped = dropped as f64;
+    dropped > DROP_SHARE * rate * seconds
+}
+
+/// Whether playback went on from `from` to `to` (playback times) over
+/// `seconds` at `speed` without a seek: forward, and not further than it
+/// could play. A machine that cannot keep up plays less, which is no
+/// reason to leave its drops unjudged.
+#[must_use]
+fn played_on(from: f64, to: f64, seconds: f64, speed: f64) -> bool {
+    let advanced = to - from;
+    (0.0..=seconds * speed + 1.0).contains(&advanced)
 }
 
 /// How long a motion-compensated filter plays before its rate is looked
@@ -567,6 +652,7 @@ impl App {
                 .model
                 .text(PropertyId::VideoFilters)
                 .is_some_and(|vf| vf.contains("@svp")),
+            svp_waiting: self.svp.holds_smoothing(),
             script_slot: vs.enabled && vs.script.is_some() && !self.gpu_step_taken(Step::Script),
             engines: Engines {
                 mvtools: self.smoothing.runtime.mvtools,
@@ -585,6 +671,7 @@ impl App {
             lighter: self.gpu_step_taken(Step::SmoothingLighter),
             blend: self.gpu_step_taken(Step::SmoothingBlend),
             off: self.gpu_step_taken(Step::SmoothingOff),
+            dropped: self.smoothing.dropped,
         }
     }
 
@@ -763,6 +850,7 @@ impl App {
         };
         if !self.model.playing() {
             self.smoothing.since = None;
+            self.smoothing.drops_from = None;
             return None;
         }
         let since = *self.smoothing.since.get_or_insert(now);
@@ -771,8 +859,11 @@ impl App {
         }
         let source = self.model.double(PropertyId::ContainerFps).unwrap_or(0.0);
         let filtered = self.model.double(PropertyId::EstimatedVfFps).unwrap_or(0.0);
-        if source <= 0.0 || filtered > source * 1.2 {
+        if source <= 0.0 {
             return None;
+        }
+        if filtered > source * 1.2 {
+            return self.smoothing_drops(engine, now, filtered);
         }
         match running {
             Engine::FrucVulkan => self.smoothing.fruc = false,
@@ -785,6 +876,39 @@ impl App {
         Some(UiRequest::Osd(format!(
             "Motion smoothing: {} did not run here; {}",
             running.text(),
+            self.smoothing_plan().text()
+        )))
+    }
+
+    /// After the filter's first [`WATCH`], the frames the output drops
+    /// over each further one: more than [`DROP_SHARE`] of those the filter
+    /// makes (at `rate`) take one step lighter for the rest of the file,
+    /// with a notice.
+    fn smoothing_drops(&mut self, engine: &Mpv, now: Instant, rate: f64) -> Option<UiRequest> {
+        let drops = self.model.int(PropertyId::FrameDropCount).unwrap_or(0);
+        let time = self.model.double(PropertyId::TimePos).unwrap_or(0.0);
+        let Some((from, from_drops, from_time)) = self.smoothing.drops_from else {
+            self.smoothing.drops_from = Some((now, drops, time));
+            return None;
+        };
+        let seconds = now.duration_since(from).as_secs_f64();
+        if seconds < WATCH.as_secs_f64() {
+            return None;
+        }
+        self.smoothing.drops_from = Some((now, drops, time));
+        let speed = self.model.double(PropertyId::Speed).unwrap_or(1.0);
+        if drops < from_drops
+            || !played_on(from_time, time, seconds, speed)
+            || !too_many_drops(drops - from_drops, rate, seconds)
+        {
+            return None;
+        }
+        let before = self.smoothing_plan().text();
+        self.smoothing.dropped = self.smoothing.dropped.saturating_add(1);
+        self.smoothing.drops_from = None;
+        self.apply_smoothing(engine);
+        Some(UiRequest::Osd(format!(
+            "Motion smoothing: {before} dropped frames here; {}",
             self.smoothing_plan().text()
         )))
     }
@@ -893,6 +1017,13 @@ mod tests {
             ),
             (
                 Facts {
+                    svp_waiting: true,
+                    ..facts()
+                },
+                "waiting for SVP",
+            ),
+            (
+                Facts {
                     script_slot: true,
                     ..facts()
                 },
@@ -988,6 +1119,65 @@ mod tests {
     }
 
     #[test]
+    fn dropped_frames_lighten_the_preset_then_the_engine_then_blend() {
+        let quality = |engine| SmoothingSettings {
+            preset: Preset::Quality,
+            ..on(engine)
+        };
+        let dropped = |steps| Lightened {
+            dropped: steps,
+            ..Lightened::default()
+        };
+        let machine = Facts {
+            engines: Engines {
+                mvtools: true,
+                rife: true,
+                fruc: true,
+            },
+            ..facts()
+        };
+        let filter = |engine, preset| Plan::Filter {
+            engine,
+            preset,
+            rate: (60, 1),
+        };
+        for gpu in [Engine::Rife, Engine::FrucVulkan] {
+            let steps: Vec<Plan> = (0..6)
+                .map(|n| plan(&quality(gpu), &machine, dropped(n)))
+                .collect();
+            assert_eq!(
+                steps,
+                [
+                    filter(gpu, Preset::Quality),
+                    filter(gpu, Preset::Medium),
+                    filter(gpu, Preset::Fast),
+                    filter(Engine::MvTools, Preset::Medium),
+                    filter(Engine::MvTools, Preset::Fast),
+                    Plan::Blend,
+                ]
+            );
+        }
+        assert_eq!(
+            plan(&on(Engine::MvTools), &machine, dropped(1)),
+            filter(Engine::MvTools, Preset::Fast)
+        );
+        assert_eq!(
+            plan(&on(Engine::MvTools), &machine, dropped(2)),
+            Plan::Blend
+        );
+        // 5 % of 60 frames a second over 6 s: 18 frames.
+        assert!(!too_many_drops(18, 60.0, 6.0));
+        assert!(too_many_drops(19, 60.0, 6.0));
+        // A seek between leaves the drops unjudged; a machine that plays
+        // slower than real time is judged.
+        assert!(played_on(10.0, 16.1, 6.0, 1.0));
+        assert!(played_on(10.0, 13.0, 6.0, 1.0));
+        assert!(played_on(10.0, 19.0, 6.0, 1.5));
+        assert!(!played_on(10.0, 40.0, 6.0, 1.0));
+        assert!(!played_on(10.0, 5.0, 6.0, 1.0));
+    }
+
+    #[test]
     fn scripts_clear_the_cache_and_make_the_rate() {
         let mvtools = script(
             Engine::MvTools,
@@ -1026,7 +1216,7 @@ mod tests {
                 (60, 1),
                 Path::new(r"C:\s\a.vpy")
             ),
-            "@rvpsmooth:vapoursynth=file=%10%C:/s/a.vpy:buffered-frames=4:concurrent-frames=4"
+            "@rvpsmooth:vapoursynth=file=%10%C:/s/a.vpy:buffered-frames=4"
         );
         assert_eq!(
             filter_entry(
@@ -1035,7 +1225,8 @@ mod tests {
                 (60, 1),
                 Path::new("unused")
             ),
-            "@rvpsmooth:lavfi=[format=nv12,hwupload,fruc_vulkan=fps=60/1:perf=slow]:hwdec_interop=vulkan"
+            "@rvpsmoothnv12:format=fmt=nv12,@rvpsmoothvk:format=fmt=vulkan,\
+             @rvpsmooth:lavfi=[fruc_vulkan=fps=60/1:perf=slow]:hwdec_interop=vulkan"
         );
     }
 

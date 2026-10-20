@@ -345,6 +345,10 @@ pub struct Watch {
     due: Option<Instant>,
     /// The manager check running on a thread.
     pending: Option<(Receiver<Option<bool>>, Facts)>,
+    /// Whether SVP 4 Manager runs, looked at when a file starts in SVP
+    /// mode (`None` until the look answers).
+    manager: Option<bool>,
+    manager_check: Option<Receiver<Option<bool>>>,
     /// Problems already shown this session.
     shown: Vec<Problem>,
     /// The endpoint mpv opened.
@@ -363,13 +367,33 @@ impl Watch {
     /// A file started playing.
     pub fn file_started(&mut self, svp_mode: bool, now: Instant) {
         self.pending = None;
+        self.manager = None;
+        self.manager_check = None;
         if svp_mode {
             self.status = Status::Waiting;
             self.due = Some(now + ATTACH_WAIT);
+            let (sender, receiver) = channel();
+            let spawned = std::thread::Builder::new()
+                .name("rvp-svp-manager".to_owned())
+                .spawn(move || {
+                    let _ = sender.send(manager_running());
+                });
+            if spawned.is_ok() {
+                self.manager_check = Some(receiver);
+            }
         } else {
             self.status = Status::Off;
             self.due = None;
         }
+    }
+
+    /// RVP's own smoothing waits while SVP may still attach: in SVP mode,
+    /// until [`ATTACH_WAIT`] after a file starts, unless SVP 4 Manager is
+    /// known not to run. SVP does not attach to a video that RVP's
+    /// smoothing filter already plays (the host, 2026-10-19).
+    #[must_use]
+    pub fn holds_smoothing(&self) -> bool {
+        self.status == Status::Waiting && self.due.is_some() && self.manager != Some(false)
     }
 }
 
@@ -384,6 +408,16 @@ impl App {
             watch.due = None;
             watch.pending = None;
             return None;
+        }
+        if let Some(receiver) = &watch.manager_check {
+            match receiver.try_recv() {
+                Ok(manager) => {
+                    watch.manager = manager;
+                    watch.manager_check = None;
+                }
+                Err(std::sync::mpsc::TryRecvError::Empty) => {}
+                Err(std::sync::mpsc::TryRecvError::Disconnected) => watch.manager_check = None,
+            }
         }
         let vf = self.model.text(PropertyId::VideoFilters).unwrap_or("");
         let filter_in_chain = vf.contains("@svp");
@@ -536,6 +570,25 @@ mod tests {
         watch.endpoint_changed(Some("/tmp/other".to_owned()));
         assert!(watch.shown.is_empty());
         assert_eq!(watch.endpoint.as_deref(), Some("/tmp/other"));
+    }
+
+    #[test]
+    fn smoothing_waits_for_svp_while_its_manager_may_run() {
+        let now = Instant::now();
+        let mut watch = Watch::default();
+        watch.file_started(false, now);
+        assert!(!watch.holds_smoothing());
+        // SVP mode: RVP waits until the manager is known not to run, or the
+        // wait is over.
+        watch.file_started(true, now);
+        assert!(watch.holds_smoothing());
+        watch.manager = Some(true);
+        assert!(watch.holds_smoothing());
+        watch.due = None;
+        assert!(!watch.holds_smoothing());
+        watch.file_started(true, now);
+        watch.manager = Some(false);
+        assert!(!watch.holds_smoothing());
     }
 
     #[test]

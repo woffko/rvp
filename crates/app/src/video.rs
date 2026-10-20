@@ -875,7 +875,8 @@ impl App {
         ]
         .into_iter()
         .chain(VideoEffect::ALL.iter().map(|effect| effect.label()))
-        .chain([SCRIPT_LABEL, crate::smoothing::LABEL]);
+        .chain([SCRIPT_LABEL, crate::smoothing::LABEL])
+        .chain(crate::smoothing::FRUC_LABELS);
         for label in labels {
             if chain.contains(&format!("@{label}:")) {
                 drop(engine.remove_video_filter(label));

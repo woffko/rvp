@@ -220,27 +220,31 @@ smoothing for users without SVP, after a study of the engines.
   (`Player.feed_gpu_power`); AMD's readers are untested on a card.
 - M18's motion smoothing (D18, `crates/app/src/smoothing.rs`): a plan per
   file (off by default; MVTools medium up to 1080p, Blend above, at the
-  display's rate; off while `@svp` is in the chain or RVP's own script
-  slot runs) made by `App::apply_smoothing`. MVTools and RIFE are RVP's
-  filter `@rvpsmooth`, last among RVP's; their scripts end with
-  `core.clear_cache()` (mpv answers frames a script asks for while it
-  loads with black ones, which VapourSynth's cache kept). Blend is mpv's
-  `interpolation` with `video-sync=display-resample`, and with OpenGL
-  `display-fps-override` from the screen's rate. VapourSynth is RVP's own
-  runtime in `vapoursynth/` next to `rvp.exe`, never SVP's, nor one on the
-  PATH (`svp::vsscript_candidates`). The budget's first steps are the
-  smoothing's. NVIDIA Optical Flow (`fruc_vulkan`) needs the Vulkan
-  renderer (`render.renderer` "vulkan": gpu-next with `winvk` in RVP's
-  window; its filter uploads the frames to the output's Vulkan device,
-  `hwdec_interop=vulkan`) and a libmpv whose FFmpeg has the filter
+  display's rate; off while `@svp` is in the chain or RVP's own script slot
+  runs, and, while SVP 4 Manager runs, for SVP's 8 s after a file starts:
+  SVP does not attach to a video RVP's filter already plays) made by
+  `App::apply_smoothing`. MVTools and RIFE are RVP's filter `@rvpsmooth`,
+  last among RVP's; their scripts end with `core.clear_cache()` (mpv answers
+  frames a script asks for while it loads with black ones, which
+  VapourSynth's cache kept). Blend is mpv's `interpolation` with
+  `video-sync=display-resample`, and with OpenGL `display-fps-override` from
+  the screen's rate. VapourSynth is RVP's own runtime in `vapoursynth/` next
+  to `rvp.exe`, never SVP's, nor one on the PATH
+  (`svp::vsscript_candidates`). The budget's first steps are the
+  smoothing's. NVIDIA Optical Flow (`fruc_vulkan`) needs the Vulkan renderer
+  (`render.renderer` "vulkan": gpu-next with `winvk` in RVP's window; mpv
+  uploads the frames to the output's Vulkan device through two `format`
+  filters of RVP's, since FFmpeg's `hwupload` wants its device before mpv's
+  lavfi filter hands it over) and a libmpv whose FFmpeg has the filter
   (`tools/libmpv/build.sh`: shinchiro's recipe with glslang for FFmpeg's
-  shaders; RVP probes
-  `lavfi-fruc_vulkan` at start). An engine whose filter does not raise the
-  rate within 6 s is left out for the session (`App::smoothing_watch`).
-  Checks: `crates/app/tests/smoothing.rs` (with `VSSCRIPT_PATH`),
-  `rvp --selftest=smoothing`, `tools/windows-vm/m18-all.ps1`, and on the
-  host, with permission, `tools/windows-vm/m18-host.ps1` (each GPU mode
-  in RVP's window at the power limit; `-Vm` tries it on the VM).
+  shaders; RVP probes `lavfi-fruc_vulkan` at start). An engine whose filter
+  does not raise the rate within 6 s is left out for the session, and one
+  that leaves the output dropping more than 5 % of its frames over 6 s
+  takes a lighter step for the rest of the file (`App::smoothing_watch`). Checks: `crates/app/tests/smoothing.rs` (with
+  `VSSCRIPT_PATH`), `rvp --selftest=smoothing`,
+  `tools/windows-vm/m18-all.ps1`, and on the host, with permission,
+  `tools/windows-vm/m18-host.ps1` (each GPU mode in RVP's window at the
+  power limit; `-Vm` tries it on the VM).
 - The control panel (F7) is a second window (`shell/qml/ControlPanel.qml`)
   with its own `Chrome` in `Mode::ControlBox`, painted whole
   (`SkinView.surface` 1, `panelDamaged`).

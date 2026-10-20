@@ -1796,6 +1796,12 @@ impl App {
             requests.push(UiRequest::OnTop(top));
         }
         requests.extend(self.watch_svp(now));
+        // RVP's smoothing starts once SVP had its chance.
+        let hold = self.svp.holds_smoothing();
+        if hold != self.smoothing.svp_hold {
+            self.smoothing.svp_hold = hold;
+            self.apply_smoothing(engine);
+        }
         if self.started
             && changes.contains(PropertyId::Volume)
             && let Some(volume) = self.model.double(PropertyId::Volume)
@@ -1839,6 +1845,11 @@ impl App {
         if std::mem::take(&mut self.play_on_load) {
             drop(engine.set_pause(false));
         }
+        // First: the smoothing waits for SVP from here on, and the last
+        // file's dropped frames count no longer.
+        self.svp
+            .file_started(crate::svp::svp_mode(&self.settings), now);
+        self.smoothing.file_started();
         self.audio_file_loaded(engine);
         self.picture_file_loaded(engine);
         self.stereo_file_loaded(engine);
@@ -1849,8 +1860,6 @@ impl App {
             drop(self.apply_video_filters(engine));
         }
         self.apply_ab(engine);
-        self.svp
-            .file_started(crate::svp::svp_mode(&self.settings), now);
         self.store.set_last_file(path);
         self.read_chapters(engine);
         self.apply_loop_count(engine);

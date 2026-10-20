@@ -25,9 +25,17 @@
 # RVP wrote (RIFE's plugin crashes at exit unless RVP ends its process
 # first); a `notices` line lists RVP's notices (`rvp: ` lines: the steps
 # of RVP's GPU power budget, on at its default 90 %, or an output that
-# could not start). The run `svp-1080p` keeps SVP's pipe (mpvpipe) and
-# needs SVP 4 running on the desktop: SVP attaches and RVP's smoothing
-# stays off.
+# could not start). The runs `svp-*` keep SVP's pipe (mpvpipe) and need
+# SVP 4 running on the desktop: SVP attaches and RVP's smoothing stays off
+# (`svp-off-1080p` has it turned off). With -CompareBundle (a copy of the
+# bundle with another libmpv-2.dll, such as shinchiro's),
+# `svp-1080p-compare` repeats `svp-1080p` there.
+#
+# The CPU counts as much as the GPU: MVTools runs on it. Before the runs a
+# `baseline` line gives the machine's CPU load over 5 s, the busiest
+# processes (in cores) and the GPU's load and power; each `result` line
+# adds the CPU's mean load during the run and RVP's own share (in cores).
+# mpv's log of each run is mpv.log in its folder.
 #
 # -Vm leaves the GPU guard, the power limit and nvidia-smi out and takes
 # software OpenGL, for a try of this script on the Windows test VM (no GPU
@@ -38,14 +46,16 @@ param(
     [string]$Clips = 'C:\Users\<user>\rvp-test\m18-study\clips',
     [string]$Out = 'C:\Users\<user>\rvp-test\m18-host',
     [string[]]$Runs = @(),
-    [int]$Seconds = 30,
+    # The clips are 20 s long: a run plays less than that.
+    [int]$Seconds = 15,
     [int]$PowerLimit = 90,
+    [string]$CompareBundle = '',
     [switch]$Vm
 )
 # `-File` hands a comma list over as one string.
 $Runs = $Runs | ForEach-Object { $_ -split ',' } | Where-Object { $_ -ne '' }
 
-# name, renderer, engine, preset, clip
+# name, renderer, engine, preset, clip[, the bundle: main or compare]
 $table = @(
     @('blend-d3d11-1080p', 'direct3d11', 'blend', 'medium', 'smooth-pan-1080p24.mkv'),
     @('mvtools-opengl-1080p', 'opengl', 'mvtools', 'medium', 'smooth-pan-1080p24.mkv'),
@@ -55,8 +65,11 @@ $table = @(
     @('rife-quality-d3d11-1080p', 'direct3d11', 'rife', 'quality', 'smooth-pan-1080p24.mkv'),
     @('fruc-vulkan-720p', 'vulkan', 'fruc-vulkan', 'medium', 'smooth-pan-720p24.mkv'),
     @('fruc-vulkan-1080p', 'vulkan', 'fruc-vulkan', 'medium', 'smooth-pan-1080p24.mkv'),
-    @('svp-1080p', 'direct3d11', 'mvtools', 'medium', 'smooth-pan-1080p24.mkv')
+    @('svp-1080p', 'direct3d11', 'mvtools', 'medium', 'smooth-pan-1080p24.mkv'),
+    @('svp-off-1080p', 'direct3d11', 'off', 'medium', 'smooth-pan-1080p24.mkv'),
+    @('svp-1080p-compare', 'direct3d11', 'mvtools', 'medium', 'smooth-pan-1080p24.mkv', 'compare')
 )
+if ($CompareBundle -eq '') { $table = @($table | Where-Object { $_.Count -lt 6 }) }
 if ($Runs.Count -gt 0) {
     $unknown = @($Runs | Where-Object { $name = $_; -not ($table | Where-Object { $_[0] -eq $name }) })
     if ($unknown.Count -gt 0) {
@@ -109,20 +122,48 @@ function Assert-Gpu([string]$when, [string]$text = '') {
     }
 }
 
+# The CPU's load in percent of all its threads (WMI's counters, whose names
+# Windows does not translate).
+function Get-CpuPercent {
+    [double](Get-CimInstance Win32_PerfFormattedData_PerfOS_Processor -Filter "Name='_Total'").PercentProcessorTime
+}
+
+# The background before the runs (see the header).
+$cores = [Environment]::ProcessorCount
+$before = @{}
+Get-Process | ForEach-Object { if ($_.TotalProcessorTime) { $before["$($_.Id)"] = $_.TotalProcessorTime.TotalSeconds } }
+$started = Get-Date
+$samples = @(1..5 | ForEach-Object { Start-Sleep -Seconds 1; Get-CpuPercent })
+$elapsed = ((Get-Date) - $started).TotalSeconds
+$busy = Get-Process | ForEach-Object {
+    $start = $before["$($_.Id)"]
+    if ($null -ne $start -and $_.TotalProcessorTime) {
+        [pscustomobject]@{ Name = $_.ProcessName; Cores = ($_.TotalProcessorTime.TotalSeconds - $start) / $elapsed }
+    }
+} | Group-Object Name | ForEach-Object {
+    [pscustomobject]@{ Name = $_.Name; Cores = ($_.Group | Measure-Object Cores -Sum).Sum }
+} | Sort-Object Cores -Descending | Select-Object -First 8
+$top = ($busy | Where-Object { $_.Cores -ge 0.05 } | ForEach-Object { '{0}:{1:N2}' -f $_.Name, $_.Cores }) -join ','
+$gpuNow = if ($Vm) { '-' } else { (& nvidia-smi --query-gpu=utilization.gpu,power.draw --format=csv,noheader,nounits 2>&1 | Out-String).Trim() }
+Write-Host ("baseline threads=$cores cpu_percent={0:N1} top=$top gpu_util_power=$gpuNow" -f ($samples | Measure-Object -Average).Average)
+
 foreach ($run in $table) {
-    $name, $renderer, $engine, $preset, $clip = $run
+    $name, $renderer, $engine, $preset, $clip, $which = $run
+    $bundleDir = if ($which -eq 'compare') { $CompareBundle } else { $Bundle }
     Assert-Gpu "before $name"
     $dir = Join-Path $Out $name
     Remove-Item -Recurse -Force $dir -ErrorAction SilentlyContinue
     New-Item -ItemType Directory -Force "$dir\config", "$dir\state", "$dir\out" | Out-Null
     $settings = [ordered]@{
         render = @{ renderer = $renderer }
-        smoothing = [ordered]@{ enabled = $true; engine = $engine; preset = $preset; target = 'display' }
+        smoothing = [ordered]@{ enabled = ($engine -ne 'off'); engine = $(if ($engine -eq 'off') { 'mvtools' } else { $engine })
+            preset = $preset; target = 'display' }
     }
     # Only the SVP run keeps SVP's pipe.
     if ($name -notlike 'svp-*') { $settings['ipc-server'] = '' }
     $settings | ConvertTo-Json -Depth 4 | Set-Content -Path "$dir\config\settings.json" -Encoding ascii
-    $arguments = @('--selftest=playback', "--play-seconds=$Seconds", "--out=$dir\out", '--mpv-options=ao=null')
+    $arguments = @('--selftest=playback', "--play-seconds=$Seconds", "--out=$dir\out",
+        "--mpv-options=ao=null,log-file=$dir\mpv.log")
     if ($name -like 'svp-*') { $arguments += '--svp' }
     $arguments += "`"$Clips\$clip`""
 
@@ -134,19 +175,27 @@ foreach ($run in $table) {
         $smi = Start-Process -FilePath 'nvidia-smi' -NoNewWindow -PassThru -RedirectStandardOutput $gpuLog `
             -ArgumentList '--query-gpu=utilization.gpu,memory.used,power.draw', '--format=csv,noheader,nounits', '-lms', '250'
     }
-    $process = Start-Process -FilePath "$Bundle\rvp.exe" -ArgumentList $arguments -WorkingDirectory $Bundle -PassThru `
+    $process = Start-Process -FilePath "$bundleDir\rvp.exe" -ArgumentList $arguments -WorkingDirectory $bundleDir -PassThru `
         -RedirectStandardOutput "$dir\rvp.log" -RedirectStandardError "$dir\rvp.err"
-    $handle = $process.Handle  # keeps the exit code readable
-    if (-not $process.WaitForExit(($Seconds + 90) * 1000)) {
-        Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue
-        Write-Host "timeout $name"
+    $handle = $process.Handle  # keeps the exit code and times readable
+    $deadline = (Get-Date).AddSeconds($Seconds + 90)
+    $cpu = @()
+    while (-not $process.WaitForExit(2000)) {
+        $cpu += Get-CpuPercent
+        if ((Get-Date) -gt $deadline) {
+            Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue
+            Write-Host "timeout $name"
+            break
+        }
     }
     $process.WaitForExit()
+    $wall = ($process.ExitTime - $process.StartTime).TotalSeconds
     if ($smi) { Stop-Process -Id $smi.Id -ErrorAction SilentlyContinue }
     Remove-Item Env:RVP_CONFIG_DIR, Env:RVP_STATE_DIR
 
     $text = (Get-Content "$dir\rvp.log" -Raw) + (Get-Content "$dir\rvp.err" -Raw)
     $fields = @("exit=$($process.ExitCode)")
+    if ($bundleDir -ne $Bundle) { $fields += "bundle=$bundleDir" }
     if ($text -match '(?m)^smoothing=(.*)$') { $fields += "plan=`"$($Matches[1].Trim())`"" }
     if ($text -match '(?m)^diagnostics_end=(.*)$') {
         $d = $Matches[1] | ConvertFrom-Json
@@ -172,6 +221,8 @@ foreach ($run in $table) {
         $power = $watts | Measure-Object -Average -Maximum
         $fields += 'power_mean_w={0:N0} power_max_w={1:N0}' -f $power.Average, $power.Maximum
     }
+    if ($cpu) { $fields += 'cpu_percent={0:N0}' -f ($cpu | Measure-Object -Average).Average }
+    if ($wall -gt 0) { $fields += 'rvp_cores={0:N2}' -f ($process.TotalProcessorTime.TotalSeconds / $wall) }
     Write-Host "result $name $($fields -join ' ')"
     # RVP's notices (`rvp: ` on standard error).
     $notices = @([regex]::Matches($text, '(?m)^rvp: (.*)$') | ForEach-Object { $_.Groups[1].Value.Trim() })
