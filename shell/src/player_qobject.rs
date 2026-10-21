@@ -225,6 +225,14 @@ pub mod qobject {
         /// Sets the audio sync from the Adjust Audio Sync dialog (seconds).
         #[qinvokable]
         fn set_audio_delay(self: Pin<&mut Self>, seconds: f64);
+        #[qinvokable]
+        fn set_subtitle_delay(self: Pin<&mut Self>, seconds: f64);
+        #[qinvokable]
+        fn set_subtitle_fps(self: Pin<&mut Self>, fps: f64);
+        #[qinvokable]
+        fn subtitle_fps(self: &Player) -> f64;
+        #[qinvokable]
+        fn combine_subtitle(self: Pin<&mut Self>, path: &QString);
 
         /// Records what RVP plays into the file the save dialog chose.
         #[qinvokable]

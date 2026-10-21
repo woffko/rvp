@@ -44,6 +44,9 @@ ApplicationWindow {
         { key: "svp", title: "SVP and VapourSynth" },
         { key: "smoothing", title: "Motion Smoothing" },
         { key: "subtitles", title: "Subtitles" },
+        { key: "subtitle-style", title: "Font Style" },
+        { key: "subtitle-location", title: "Fade/3D/Location" },
+        { key: "subtitle-sync", title: "Language/Sync/Other" },
         { key: "input", title: "Keys and Mouse" },
         { key: "skins", title: "Skins" },
         { key: "window-size", title: "Window Size" },
@@ -59,7 +62,7 @@ ApplicationWindow {
         { title: "General", page: "", pages: ["input", "skins", "visualization", "playlist"] },
         { title: "Playback", page: "playback",
           pages: ["time-jump", "skip", "section-repeat", "scene-browser", "window-size", "fullscreen-mode"] },
-        { title: "Subtitles", page: "subtitles", pages: [] },
+        { title: "Subtitles", page: "subtitles", pages: ["subtitle-style", "subtitle-location", "subtitle-sync"] },
         { title: "Device", page: "devices", pages: [] },
         { title: "Filter Control", page: "decoders", pages: [] },
         { title: "Video", page: "video",
@@ -296,10 +299,19 @@ ApplicationWindow {
         // Text of a shown value; the unit follows the number by default.
         property var format: null
         property bool live: false
+        // Shown while the setting is unset (libmpv's own default), with a
+        // Default button once it is set.
+        property var fallback: undefined
+        readonly property bool unset: {
+            const v = win.value(amount.path)
+            return v === undefined || v === null
+        }
         readonly property bool stepped: values.length > 0
         readonly property real shown: {
             const v = win.value(amount.path)
-            return v === undefined || v === null ? NaN : v * amount.factor
+            if (v === undefined || v === null)
+                return amount.fallback === undefined || amount.fallback === null ? NaN : amount.fallback * amount.factor
+            return v * amount.factor
         }
         objectName: "amount:" + path
         // The slider position of a shown value: the nearest stop.
@@ -358,6 +370,48 @@ ApplicationWindow {
                               || amount.position(amount.shown) !== slider.value
                               ? amount.shownAt(slider.value) : amount.shown)
             Layout.minimumWidth: 80
+        }
+        Button {
+            visible: amount.fallback !== undefined && !amount.unset
+            text: "Default"
+            onClicked: win.set(amount.path, null)
+        }
+    }
+    // A colour as `#AARRGGBB` (the alpha is the opacity), chosen in Qt's
+    // colour dialog; unset: `fallback` (libmpv's default).
+    component ColorChoice: RowLayout {
+        id: colorChoice
+        property string label
+        property string path
+        property string fallback
+        readonly property string current: {
+            const v = win.value(colorChoice.path)
+            return v === undefined || v === null ? colorChoice.fallback : v
+        }
+        Label {
+            text: colorChoice.label
+            Layout.preferredWidth: 240
+        }
+        Rectangle {
+            implicitWidth: 48
+            implicitHeight: 24
+            border.width: 1
+            border.color: "gray"
+            // QML reads #AARRGGBB as mpv writes it.
+            color: colorChoice.current !== "" ? colorChoice.current : "transparent"
+        }
+        Button {
+            text: "Choose…"
+            onClicked: {
+                colorChooser.target = colorChoice.path
+                colorChooser.selectedColor = colorChoice.current !== "" ? colorChoice.current : "white"
+                colorChooser.open()
+            }
+        }
+        Button {
+            visible: win.value(colorChoice.path) !== undefined && win.value(colorChoice.path) !== null
+            text: "Default"
+            onClicked: win.set(colorChoice.path, null)
         }
     }
     component Choice: RowLayout {
@@ -558,6 +612,18 @@ ApplicationWindow {
         fileChooser.title = title
         fileChooser.nameFilters = filters
         fileChooser.open()
+    }
+    // Fills the colour setting `target` as `#AARRGGBB`.
+    Dialogs.ColorDialog {
+        id: colorChooser
+        property string target
+        title: "Subtitle Colour"
+        options: Dialogs.ColorDialog.ShowAlphaChannel
+        onAccepted: {
+            const hex = v => ("0" + Math.round(v * 255).toString(16)).slice(-2).toUpperCase()
+            const c = selectedColor
+            win.set(target, "#" + hex(c.a) + hex(c.r) + hex(c.g) + hex(c.b))
+        }
     }
     Dialogs.FontDialog {
         id: subtitleFontChooser
@@ -1697,15 +1763,43 @@ ApplicationWindow {
 
                     Page {
                         Heading { text: "Subtitles" }
-                        Field { label: "Preferred languages"; path: "subtitle-languages"; placeholder: "en,ru" }
+                        Check { path: "subtitles.show"; text: "Show subtitles when a file starts" }
                         Choice {
                             label: "Load subtitle files"
                             path: "subtitle-auto"
                             values: win.withCurrent(win.view.choices["subtitle-auto"], win.s["subtitle-auto"])
-                            texts: ({ "no": "No", "exact": "With the video's name",
-                                      "fuzzy": "Containing the video's name", "all": "All in the folder" })
+                            texts: ({ "no": "No", "exact": "Only those that match the video's name",
+                                      "fuzzy": "Those containing the video's name", "all": "All in the folder" })
                         }
-                        Amount { label: "Size"; path: "subtitle-scale"; unit: "%"; factor: 100; from: 30; to: 300; step: 5 }
+                        Check { path: "subtitles.auto-reload"; text: "Reload subtitle files when they change" }
+                        Choice {
+                            label: "ASS/SSA subtitle style"
+                            path: "subtitles.ass-override"
+                            values: win.view.choices["subtitles.ass-override"] || []
+                            texts: ({ "no": "The script's own style", "scale": "The script's style at RVP's size",
+                                      "yes": "RVP's style where the script allows", "force": "RVP's style over all styles",
+                                      "strip": "Plain text in RVP's style" })
+                        }
+                        Check { path: "subtitles.override-font"; text: "ASS scripts take RVP's font" }
+                        Check { path: "subtitles.override-color"; text: "ASS scripts take RVP's text colour" }
+                        Check {
+                            path: "subtitles.fonts-folder"
+                            text: "Load fonts from the fonts folder" + (win.view.fonts_folder ? " (" + win.view.fonts_folder + ")" : "")
+                        }
+                        Heading { text: "Placement" }
+                        Check { path: "subtitles.text-inside"; text: "Display text subtitles inside the video" }
+                        Check { path: "subtitles.under-video"; text: "Force subtitles to display under the video" }
+                        Check { path: "subtitles.bitmap-outside"; text: "Display bitmap subtitles on the whole screen (outside the video)" }
+                        Check { path: "subtitles.fix-aspect"; text: "Correct the shapes of scripts made for anamorphic video" }
+                        Note { text: "Under the video, text subtitles go into the black bars or the bottom margin (Video > Bottom Margin)." }
+                        Heading { text: "Processing" }
+                        Check { path: "subtitles.remove-sdh"; text: "Remove notes for the hearing impaired ([...] and (...))" }
+                        Check { path: "subtitles.remove-blank"; text: "Remove subtitles that are only spaces" }
+                        Note { text: "mpv (libass) draws every subtitle: PotPlayer's output surfaces, display engines and font renderers have no counterpart, and ASS animations always play." }
+                    }
+
+                    Page {
+                        Heading { text: "Font" }
                         Field {
                             label: "Font"
                             path: "subtitle-font"
@@ -1720,7 +1814,69 @@ ApplicationWindow {
                                 }
                             }
                         }
+                        Amount { label: "Size"; path: "subtitle-scale"; unit: "%"; factor: 100; from: 30; to: 300; step: 5 }
+                        Check { path: "subtitles.bold"; text: "Bold" }
+                        Check { path: "subtitles.italic"; text: "Italic" }
+                        Amount { label: "Letter spacing"; path: "subtitles.spacing"; from: -10; to: 10; step: 0.5; fallback: (win.view.subtitle_defaults || {})["spacing"] }
+                        Amount { label: "Line spacing"; path: "subtitles.line-spacing"; from: -50; to: 50; step: 1; fallback: (win.view.subtitle_defaults || {})["line-spacing"] }
+                        Amount { label: "Letter width"; path: "subtitles.scale-x"; unit: "%"; from: 10; to: 400; step: 5; fallback: 100 }
+                        Amount { label: "Letter height"; path: "subtitles.scale-y"; unit: "%"; from: 10; to: 400; step: 5; fallback: 100 }
+                        Heading { text: "Colours, outline and shadow" }
+                        ColorChoice { label: "Text"; path: "subtitles.color"; fallback: (win.view.subtitle_defaults || {})["color"] || "" }
+                        ColorChoice { label: "Outline"; path: "subtitles.outline-color"; fallback: (win.view.subtitle_defaults || {})["outline-color"] || "" }
+                        ColorChoice { label: "Shadow and box"; path: "subtitles.back-color"; fallback: (win.view.subtitle_defaults || {})["back-color"] || "" }
+                        Amount { label: "Outline width"; path: "subtitles.outline-size"; from: 0; to: 10; step: 0.25; fallback: (win.view.subtitle_defaults || {})["outline-size"] }
+                        Amount { label: "Shadow offset"; path: "subtitles.shadow-offset"; from: 0; to: 10; step: 0.25; fallback: (win.view.subtitle_defaults || {})["shadow-offset"] }
+                        Amount { label: "Outline blur"; path: "subtitles.blur"; from: 0; to: 20; step: 0.5; fallback: (win.view.subtitle_defaults || {})["blur"] }
+                        Choice {
+                            label: "Border"
+                            path: "subtitles.border-style"
+                            values: win.view.choices["subtitles.border-style"] || []
+                            texts: ({ "outline-and-shadow": "Outline and shadow",
+                                      "opaque-box": "An opaque box in the outline's colour around each line",
+                                      "background-box": "One box in the shadow's colour behind all lines" })
+                        }
+                        Heading { text: "Position and margins" }
+                        Choice {
+                            label: "Paragraph align"
+                            path: "subtitles.align"
+                            values: win.view.choices["subtitles.align"] || []
+                            texts: ({ "left": "Left", "center": "Centre", "right": "Right" })
+                        }
+                        Amount { label: "Vertical position"; path: "subtitles.position"; unit: "%"; from: 0; to: 150; step: 1; fallback: 100 }
+                        Amount { label: "Margin at the sides"; path: "subtitles.margin-x"; from: 0; to: 300; step: 5; fallback: (win.view.subtitle_defaults || {})["margin-x"] }
+                        Amount { label: "Margin at the bottom or top"; path: "subtitles.margin-y"; from: 0; to: 300; step: 5; fallback: (win.view.subtitle_defaults || {})["margin-y"] }
+                        Note { text: "A value without a Default button is libmpv's own. Margins are in pixels of a 720-line picture; mpv keeps one margin for both sides and one for the bottom or top. Moves left and right (Subtitles > Subtitle Style) go from the left edge through the centre to the right edge." }
+                    }
+
+                    Page {
+                        Heading { text: "Folders for subtitle files" }
+                        Note { text: "Besides the video's folder, RVP looks for subtitles with the video's name in these folders (a name without a drive is inside the video's folder)." }
+                        FileList { path: "subtitles.folders"; ordered: true }
+                        Button {
+                            text: "Add…"
+                            onClicked: {
+                                folderListChooser.target = "subtitles.folders"
+                                folderListChooser.open()
+                            }
+                        }
+                        Heading { text: "Fade and 3D" }
+                        Note { text: "mpv fades only the events of ASS scripts that ask for it (\\fad); other subtitles cannot fade. mpv draws subtitles once over the finished picture, not once for each eye, so there is no stereo 3D subtitle mode (docs/spikes/m12-studies.md)." }
+                    }
+
+                    Page {
+                        Heading { text: "Language" }
+                        Field { label: "Preferred languages"; path: "subtitle-languages"; placeholder: "en,ru" }
+                        Check { path: "subtitles.only-preferred"; text: "Don't select subtitles of other languages" }
+                        Check { path: "subtitles.second-auto"; text: "Show a second subtitle when there is one of these languages" }
+                        Field { label: "Second subtitle languages"; path: "subtitles.second-languages"; placeholder: "en" }
+                        Amount { label: "Second subtitle position"; path: "subtitles.second-position"; unit: "%"; from: 0; to: 150; step: 1; fallback: (win.view.subtitle_defaults || {})["second-position"] }
+                        Check { path: "subtitles.remember-tracks"; text: "Remember the chosen subtitles for each file" }
+                        Heading { text: "Synchronization" }
                         Amount { label: "Sync step (< and >)"; path: "subtitle-delay-step"; values: [0.01, 0.05, 0.1, 0.2, 0.25, 0.5, 1, 2, 5, 10, 30, 60]; format: win.seconds }
+                        Amount { label: "Sync step (Ctrl+< and Ctrl+>)"; path: "subtitles.sync-step-2"; values: [0.01, 0.05, 0.1, 0.2, 0.25, 0.5, 1, 2, 5, 10, 30, 60]; format: win.seconds }
+                        Amount { label: "Sync step (Alt+< and Alt+>)"; path: "subtitles.sync-step-3"; values: [0.01, 0.05, 0.1, 0.2, 0.25, 0.5, 1, 2, 5, 10, 30, 60]; format: win.seconds }
+                        Check { path: "subtitles.keep-sync"; text: "Keep subtitle sync changes for the next files" }
                     }
 
                     Loader {

@@ -103,6 +103,8 @@ pub mod request {
     pub const WINDOW: i32 = 35;
     /// The slideshow moves by the argument's slides.
     pub const SLIDE: i32 = 36;
+    /// The Adjust Subtitle Sync dialog (argument: the sync in ms).
+    pub const SUBTITLE_SYNC: i32 = 37;
 }
 
 /// The skin, loaded once for the process (the painters read it on the
@@ -1714,6 +1716,13 @@ impl qobject::Player {
             UiRequest::OpenFolderDialog => self.ui_request(request::OPEN_FOLDER, 0),
             UiRequest::OpenUrlDialog => self.ui_request(request::OPEN_URL, 0),
             UiRequest::OpenSubtitleDialog => self.ui_request(request::OPEN_SUBTITLE, 0),
+            UiRequest::CombineSubtitleDialog => self.ui_request(request::OPEN_SUBTITLE, 1),
+            UiRequest::SubtitleSyncDialog(seconds) => {
+                // Syncs are within ±10 min.
+                #[allow(clippy::cast_possible_truncation)]
+                let milliseconds = (seconds * 1000.0).round() as i32;
+                self.ui_request(request::SUBTITLE_SYNC, milliseconds);
+            }
             UiRequest::ImageFolderDialog => self.ui_request(request::IMAGE_FOLDER, 0),
             UiRequest::OpenExternal(path) => {
                 self.as_mut()
@@ -1818,6 +1827,46 @@ impl qobject::Player {
             }
         };
         self.set_osd(QString::from(&text));
+    }
+
+    /// The Adjust Subtitle Sync dialog set the sync (seconds).
+    pub(crate) fn set_subtitle_delay(mut self: Pin<&mut Self>, seconds: f64) {
+        let Some(core) = self.as_mut().core_mut() else {
+            return;
+        };
+        let request = core.app.set_subtitle_delay(core.engine, seconds);
+        self.handle_request(request);
+    }
+
+    /// The Adjust Subtitle Sync dialog chose the rate the subtitles were
+    /// made for (0: the video's).
+    pub(crate) fn set_subtitle_fps(mut self: Pin<&mut Self>, fps: f64) {
+        let Some(core) = self.as_mut().core_mut() else {
+            return;
+        };
+        let request = core
+            .app
+            .set_subtitle_fps(core.engine, (fps > 0.0).then_some(fps));
+        self.handle_request(request);
+    }
+
+    /// The rate the subtitles were made for, for the dialog (0: the
+    /// video's).
+    pub(crate) fn subtitle_fps(&self) -> f64 {
+        self.core()
+            .and_then(|core| core.app.subtitle_fps())
+            .unwrap_or(0.0)
+    }
+
+    /// The Combine Subtitle dialog chose a second subtitle file.
+    pub(crate) fn combine_subtitle(mut self: Pin<&mut Self>, path: &QString) {
+        let Some(core) = self.as_mut().core_mut() else {
+            return;
+        };
+        let request = core
+            .app
+            .combine_subtitle(core.engine, Path::new(&path.to_string()));
+        self.handle_request(request);
     }
 
     /// The Adjust Audio Sync dialog set the sync (seconds).
@@ -2485,11 +2534,12 @@ impl qobject::Player {
         };
         core.app.tick_second(core.engine, Instant::now());
         let watched = core.app.smoothing_watch(core.engine, Instant::now());
+        let reloaded = core.app.watch_subtitle_files(core.engine);
         if let Err(error) = core.app.tick(Instant::now()) {
             let text = format!("cannot save the playback state: {error}");
             self.as_mut().show_message(&text);
         }
-        if let Some(request) = watched {
+        for request in [watched, reloaded].into_iter().flatten() {
             self.as_mut().handle_request(request);
         }
         self.as_mut().tick_m11();

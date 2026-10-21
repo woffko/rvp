@@ -135,6 +135,7 @@ impl Settings {
         self.render.validate(&mut notes);
         self.decoders.validate(&mut notes);
         self.smoothing.validate(&mut notes);
+        self.subtitles.validate(&mut notes);
         notes
     }
 
@@ -399,6 +400,7 @@ pub fn import(path: &Path) -> Result<(Settings, Vec<String>), String> {
                             | "open"
                             | "devices"
                             | "smoothing"
+                            | "subtitles"
                     ) {
                         value.clone()
                     } else if value.is_object() {
@@ -490,25 +492,7 @@ impl App {
             };
             set("scale", &scaler);
         }
-        if old.subtitle_languages != new.subtitle_languages {
-            set("slang", &new.subtitle_languages);
-        }
-        if old.subtitle_auto != new.subtitle_auto {
-            set("sub-auto", &new.subtitle_auto);
-        }
-        if (old.subtitle_scale - new.subtitle_scale).abs() > f64::EPSILON {
-            set("sub-scale", &format!("{:.2}", new.subtitle_scale));
-        }
-        if old.subtitle_font != new.subtitle_font {
-            let font = if new.subtitle_font.is_empty() {
-                engine
-                    .get_text("option-info/sub-font/default-value")
-                    .unwrap_or_else(|| "sans-serif".to_owned())
-            } else {
-                new.subtitle_font.clone()
-            };
-            set("sub-font", &font);
-        }
+        self.subtitle_settings_changed(engine, &old, &mut applied.notes);
         if old.normalizer.enabled != new.normalizer.enabled {
             self.configure_normalizer();
             // As a toggle does: play on from here with the new chain.
@@ -661,6 +645,9 @@ impl App {
                     .collect::<Vec<_>>(),
                 "smoothing-target": crate::smoothing::TARGETS,
                 "smoothing-max-height": crate::smoothing::MAX_HEIGHTS,
+                "subtitles.ass-override": crate::subtitles::ASS_OVERRIDE,
+                "subtitles.border-style": crate::subtitles::BORDER_STYLE,
+                "subtitles.align": crate::subtitles::ALIGN,
             },
             "file": self.settings_path().map(|path| path.display().to_string()),
             "portable": portable,
@@ -672,6 +659,12 @@ impl App {
             "shader_folder": self.shader_folder().display().to_string(),
             "smoothing": self.smoothing_plan().text(),
             "smoothing_engines": self.smoothing_engines(),
+            // libmpv's own values of the subtitle options left unset.
+            "subtitle_defaults": self.subtitle_defaults.view(),
+            "fonts_folder": self
+                .settings_path()
+                .and_then(std::path::Path::parent)
+                .map(|dir| dir.join("fonts").display().to_string()),
         })
     }
 

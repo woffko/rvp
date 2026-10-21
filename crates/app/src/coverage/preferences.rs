@@ -68,6 +68,14 @@ const DEFAULT_ASPECT: &str = "RVP's idle and audio windows keep the size the use
 
 /// The options RVP has, and the reasons for single ones it lacks, by
 /// dialog and control.
+const LIBASS: &str = "mpv (libass) renders every subtitle";
+const SAMI: &str = "FFmpeg reads a SAMI (.smi) file as one track and decides its line breaks and \
+                    times; mpv has no options for them";
+const SUBPICTURES: &str = "PotPlayer's subtitle textures and queue (DirectShow); mpv's renderer \
+                           draws libass's subtitles with each frame";
+const SHOWING_PERIOD: &str =
+    "mpv shows each subtitle for its own time, with no shortest or longest";
+
 const ITEMS: &[(u32, u32, Status)] = &[
     // Audio (356).
     (356, 3003, Setting("audio-device")),
@@ -889,6 +897,209 @@ const ITEMS: &[(u32, u32, Status)] = &[
     // Filter Control > Video and Audio Decoder (360, 361).
     (360, 3110, Setting("decoders")),
     (361, 3110, Setting("audio.passthrough-device")),
+    // Subtitles (353).
+    (
+        353,
+        3003,
+        Missing("DirectShow output surfaces do not apply to libmpv"),
+    ),
+    (353, 3009, Missing(LIBASS)),
+    (353, 3007, Missing(LIBASS)),
+    (353, 3008, Setting("subtitles.ass-override")),
+    (353, 3041, Setting("subtitles.ass-override")),
+    (353, 3042, Setting("subtitle-scale")),
+    (353, 3043, Setting("subtitles.override-font")),
+    (353, 3044, Setting("subtitles.override-color")),
+    (
+        353,
+        3045,
+        Missing("mpv's style overrides always reach every style of a script"),
+    ),
+    (
+        353,
+        3046,
+        Missing("mpv's style overrides always reach every style of a script"),
+    ),
+    (353, 3040, Setting("subtitles.show")),
+    (
+        353,
+        3119,
+        Missing("DirectShow output surfaces do not apply to libmpv"),
+    ),
+    (353, 3066, Setting("subtitles.fix-aspect")),
+    (
+        353,
+        3124,
+        Missing("mpv justifies every subtitle alike (sub-justify), not by its first character"),
+    ),
+    (
+        353,
+        3126,
+        Missing("mpv cannot add lines to a subtitle; one-line subtitles sit on the margin"),
+    ),
+    (353, 3130, Setting("subtitles.fonts-folder")),
+    (
+        353,
+        3129,
+        Missing(
+            "an online video's subtitles are its own tracks (mpv's ytdl hook); RVP looks for no \
+             files beside a URL",
+        ),
+    ),
+    (353, 3131, Setting("subtitle-auto")),
+    (353, 3067, Setting("subtitle-auto")),
+    (
+        353,
+        3054,
+        Missing("mpv shows closed captions and teletext as decoded; it has no case option"),
+    ),
+    (353, 3049, Setting("subtitles.auto-reload")),
+    (353, 3059, Setting("subtitles.bitmap-outside")),
+    (353, 3057, Setting("subtitles.text-inside")),
+    (353, 3113, Setting("subtitles.under-video")),
+    (
+        353,
+        3123,
+        Missing(
+            "mpv moves bitmap subtitles with the subtitle position whenever it overrides \
+             styles (subtitles.ass-override other than no)",
+        ),
+    ),
+    (353, 3047, Missing(SAMI)),
+    (353, 3048, Missing(SAMI)),
+    (353, 3050, Missing(SAMI)),
+    (
+        353,
+        3053,
+        Missing("mpv (libass) always animates ASS subtitles"),
+    ),
+    (
+        353,
+        3127,
+        Missing("mpv shows a subtitle's text as it is; its filter only drops whole subtitles"),
+    ),
+    (353, 3128, Setting("subtitles.remove-blank")),
+    (353, 3132, Setting("subtitles.remove-sdh")),
+    (353, 3004, Missing(SUBPICTURES)),
+    (
+        353,
+        3089,
+        Missing("mpv scales bitmap and text subtitles by one size (subtitle-scale)"),
+    ),
+    (353, 3006, Missing(SUBPICTURES)),
+    (353, 3088, Missing(SUBPICTURES)),
+    // Subtitles > Font Style (383).
+    (383, 3021, Setting("subtitle-font")),
+    (
+        383,
+        3022,
+        Missing("mpv draws the second subtitle in the first one's style"),
+    ),
+    (
+        383,
+        3038,
+        Missing("RVP lists the system's fonts (Qt); libass finds glyphs for every alphabet"),
+    ),
+    (
+        383,
+        3003,
+        Missing("libass reads Unicode text; Windows' GDI charsets do not apply"),
+    ),
+    (383, 3099, Setting("subtitles.scale-x")),
+    (383, 3105, Setting("subtitles.scale-y")),
+    (383, 3088, Setting("subtitle-scale")),
+    (383, 3077, Setting("subtitles.spacing")),
+    (383, 3095, Setting("subtitles.line-spacing")),
+    (383, 3096, Missing("libass has no ruby (furigana) text")),
+    (383, 3045, Setting("subtitles.color")),
+    (383, 3046, Setting("subtitles.outline-color")),
+    (383, 3069, Setting("subtitles.outline-size")),
+    (383, 3047, Missing("libass draws one outline")),
+    (383, 3072, Missing("libass draws one outline")),
+    (383, 3048, Setting("subtitles.back-color")),
+    (383, 3082, Setting("subtitles.shadow-offset")),
+    (
+        383,
+        3070,
+        Missing("libass's edge blur (\\be) has no mpv option; its gaussian blur is subtitles.blur"),
+    ),
+    (383, 3071, Setting("subtitles.blur")),
+    (383, 3036, Setting("subtitles.border-style")),
+    (
+        383,
+        3035,
+        Missing(
+            "mpv always scales its own subtitles' outline and shadow with the text; ASS scripts say it themselves (ScaledBorderAndShadow)",
+        ),
+    ),
+    (383, 3037, Missing("libass draws one outline")),
+    (383, 3005, Setting("subtitles.align")),
+    (
+        383,
+        3271,
+        Missing(
+            "mpv puts subtitles at an edge or the centre with a side margin (subtitles.align, \
+             subtitles.margin-x), not at a horizontal position",
+        ),
+    ),
+    (383, 3253, Setting("subtitles.position")),
+    (383, 3267, Setting("subtitles.margin-y")),
+    (383, 3247, Setting("subtitles.margin-x")),
+    (383, 3251, Setting("subtitles.margin-x")),
+    (383, 3272, Setting("subtitles.margin-y")),
+    (383, 3034, Setting("subtitles.border-style")),
+    (383, 3044, Setting("subtitles.back-color")),
+    // Subtitles > Fade/3D/Location (368).
+    (368, 3339, Missing(crate::coverage::SUBTITLE_FADE)),
+    (368, 3112, Missing(crate::coverage::SUBTITLE_FADE)),
+    (368, 3114, Missing(crate::coverage::SUBTITLE_FADE)),
+    (368, 3007, Missing(SUBTITLES_3D)),
+    (368, 3006, Missing(SUBTITLES_3D)),
+    (368, 3116, Missing(SUBTITLES_3D)),
+    (368, 3117, Missing(SUBTITLES_3D)),
+    (368, 3143, Missing(SUBTITLES_3D)),
+    (368, 3142, Missing(SUBTITLES_3D)),
+    (368, 3315, Setting("subtitles.folders")),
+    (
+        368,
+        3034,
+        Missing(
+            "mpv orders the subtitle files it finds by how well their names match, wherever they are",
+        ),
+    ),
+    (368, 3021, Setting("subtitles.folders")),
+    (368, 3024, Setting("subtitles.folders")),
+    (368, 3022, Setting("subtitles.folders")),
+    (368, 3025, Setting("subtitles.folders")),
+    // Subtitles > Language/Sync/Other (442).
+    (
+        442,
+        3003,
+        Missing(
+            "mpv picks a subtitle by language, then external files first, then the default flag",
+        ),
+    ),
+    (442, 3069, Setting("subtitle-languages")),
+    (442, 3384, Setting("subtitles.only-preferred")),
+    (442, 3070, Setting("subtitles.second-languages")),
+    (442, 3117, Setting("subtitles.second-position")),
+    (442, 3044, Missing(SAMI)),
+    (442, 3061, Missing(SAMI)),
+    (442, 3062, Setting("subtitles.second-auto")),
+    (442, 3063, Setting("subtitles.remember-tracks")),
+    (442, 3111, Setting("subtitle-delay-step")),
+    (442, 3112, Setting("subtitles.sync-step-2")),
+    (442, 3113, Setting("subtitles.sync-step-3")),
+    (442, 3380, Setting("subtitles.keep-sync")),
+    (442, 3116, Missing(SHOWING_PERIOD)),
+    (442, 3115, Missing(SHOWING_PERIOD)),
+    (442, 3321, Missing(SHOWING_PERIOD)),
+    (442, 3319, Missing(SHOWING_PERIOD)),
+    (
+        442,
+        3385,
+        Missing("mpv (libass) always shows overlapping subtitles together, one above the other"),
+    ),
 ];
 
 /// The milestone or reason for whole pages, by the start of their place;
@@ -910,11 +1121,15 @@ const PAGES: &[(&str, &str)] = &[
     ("Subtitles", "planned in M13 (goal O)"),
     (
         "Subtitles > Online Subtitle Database",
-        "online subtitles: deferred by the owner (2026-10-16)",
+        crate::coverage::ONLINE_SUBTITLES,
     ),
     (
         "Subtitles > Subtitle Translation",
-        "online subtitles: deferred by the owner (2026-10-16)",
+        crate::coverage::ONLINE_SUBTITLES,
+    ),
+    (
+        "Subtitles > Word Searching",
+        crate::coverage::ONLINE_SUBTITLES,
     ),
     ("Device", "not in RVP"),
     (

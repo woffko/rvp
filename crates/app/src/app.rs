@@ -125,6 +125,11 @@ pub enum UiRequest {
     /// The Adjust Audio Sync dialog, at this sync (seconds; then
     /// `Player.set_audio_delay`).
     AudioSyncDialog(f64),
+    /// The Adjust Subtitle Sync dialog, with the subtitles' sync in seconds
+    /// (M13).
+    SubtitleSyncDialog(f64),
+    /// The file dialog for a second subtitle (Combine Subtitle).
+    CombineSubtitleDialog,
     /// A save dialog for an audio recording, suggesting this file.
     RecordDialog(PathBuf),
     /// Start or stop recording what RVP plays.
@@ -372,6 +377,15 @@ pub struct App {
     pub(crate) gpu: crate::gpu_power::Budget,
     /// M18's motion smoothing.
     pub(crate) smoothing: crate::smoothing::Smoothing,
+    /// libmpv's defaults of the subtitle options RVP leaves unset, and the
+    /// subtitle options mpv has now (`App::apply_subtitles`).
+    pub(crate) subtitle_defaults: crate::subtitles::MpvDefaults,
+    pub(crate) applied_subtitle_options: std::collections::BTreeMap<&'static str, String>,
+    /// The rate the playing file's subtitles were made for (Convert
+    /// Subtitle FPS), until the next file.
+    pub(crate) subtitle_fps: Option<f64>,
+    /// The external subtitle files watched for changes.
+    pub(crate) subtitle_files: Vec<crate::subtitles::WatchedFile>,
 }
 
 impl App {
@@ -455,6 +469,10 @@ impl App {
             processor_entry: std::cell::RefCell::new(None),
             gpu: crate::gpu_power::Budget::default(),
             smoothing: crate::smoothing::Smoothing::default(),
+            subtitle_defaults: crate::subtitles::MpvDefaults::default(),
+            applied_subtitle_options: std::collections::BTreeMap::new(),
+            subtitle_fps: None,
+            subtitle_files: Vec::new(),
         };
         app.start_picture();
         Ok(app)
@@ -600,6 +618,7 @@ impl App {
         }
         self.apply_render(engine);
         self.probe_fruc(engine);
+        self.start_subtitles(engine);
         if let Err(error) = self.apply_video_filters(engine) {
             self.warnings.push(format!("Video filters: {error}"));
         }
@@ -898,6 +917,7 @@ impl App {
             Action::Shaders(command) => self.shader_checked(command),
             Action::ToggleVapourSynth => Some(self.settings.vapoursynth.enabled),
             Action::Smoothing(command) => Some(self.smoothing_checked(command)),
+            Action::Subtitles(command) => self.subtitle_checked(command),
             Action::ControlPanel => Some(self.session.control_panel),
             Action::Audio(command) => self.audio_checked(command),
             other => self
@@ -942,6 +962,19 @@ impl App {
             }
             Action::SubtitleDelay(Delay::Earlier | Delay::Later) => {
                 text.replace("%s", &sync_step_label(self.settings.subtitle_delay_step))
+            }
+            Action::Subtitles(crate::subtitles::SubtitleCommand::DelayBy(_, step)) => {
+                let subtitles = &self.settings.subtitles;
+                let seconds = if step == 3 {
+                    subtitles.sync_step_3
+                } else {
+                    subtitles.sync_step_2
+                };
+                text.replace("%s", &sync_step_label(seconds))
+            }
+            Action::Subtitles(crate::subtitles::SubtitleCommand::Fps(_)) => {
+                let video = self.model.double(PropertyId::ContainerFps).unwrap_or(0.0);
+                text.replace("%g", &format!("{}", (video * 1000.0).round() / 1000.0))
             }
             Action::Skip(skip) => self.skip_label(skip, text),
             Action::PowerTimer(kind) => self.timer_label(kind, text),
@@ -1216,7 +1249,12 @@ impl App {
             return Some(UiRequest::Osd("Open a video first".to_owned()));
         }
         let text = path.to_string_lossy();
-        match engine.command("sub-add", &[&text, "select"]) {
+        let added = engine.command("sub-add", &[&text, "select"]);
+        if added.is_ok() {
+            self.subtitle_tracks_chosen(engine);
+            self.refresh_subtitle_files(engine);
+        }
+        match added {
             Ok(()) => Some(UiRequest::Osd(format!(
                 "Subtitles: {}",
                 crate::view::file_name(&text)
@@ -1850,6 +1888,7 @@ impl App {
         self.svp
             .file_started(crate::svp::svp_mode(&self.settings), now);
         self.smoothing.file_started();
+        self.subtitle_file_loaded(engine);
         self.audio_file_loaded(engine);
         self.picture_file_loaded(engine);
         self.stereo_file_loaded(engine);

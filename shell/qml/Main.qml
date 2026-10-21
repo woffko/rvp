@@ -47,6 +47,7 @@ Window {
     readonly property int requestSaveFrameAs: 24
     readonly property int requestSubtitleFont: 25
     readonly property int requestAudioSync: 26
+    readonly property int requestSubtitleSync: 37
     readonly property int requestRecordAs: 27
     readonly property int requestRecordFolder: 28
     readonly property int requestDialog: 29
@@ -231,7 +232,7 @@ Window {
             break
         case requestOpenSubtitle:
             dialogLoader.active = true
-            dialogLoader.item.askSubtitle()
+            dialogLoader.item.askSubtitle(argument === 1)
             break
         case requestOpenExternal:
             Qt.openUrlExternally(player.external_url)
@@ -255,6 +256,10 @@ Window {
         case requestAudioSync:
             syncLoader.active = true
             syncLoader.item.ask(argument)
+            break
+        case requestSubtitleSync:
+            subtitleSyncLoader.active = true
+            subtitleSyncLoader.item.ask(argument)
             break
         case requestRecordAs:
             dialogLoader.active = true
@@ -823,6 +828,13 @@ Window {
         z: 30
         active: false
         Component.onCompleted: setSource("AudioSync.qml", { player: player })
+    }
+    Loader {
+        id: subtitleSyncLoader
+        anchors.fill: parent
+        z: 30
+        active: false
+        Component.onCompleted: setSource("SubtitleSync.qml", { player: player })
     }
     Loader {
         id: albumLoader

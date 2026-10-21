@@ -18,7 +18,10 @@ Item {
         fileDialog.title = adding ? "Add File(s)" : "Open File(s)"
         fileDialog.open()
     }
-    function askSubtitle() {
+    // `combine`: a second subtitle shown with the first (Combine Subtitle).
+    function askSubtitle(combine) {
+        subtitleDialog.combine = combine === true
+        subtitleDialog.title = subtitleDialog.combine ? "Combine Subtitle" : "Load Subtitle"
         subtitleDialog.open()
     }
     // `family`: the current subtitle font (empty: mpv's default).
@@ -65,9 +68,15 @@ Item {
 
     FileDialog {
         id: subtitleDialog
+        property bool combine: false
         title: "Load Subtitle"
         nameFilters: ["Subtitles (*.srt *.ass *.ssa *.sub *.idx *.sup *.vtt *.smi)", "All files (*)"]
-        onAccepted: holder.player.load_subtitle(Tools.local_file(selectedFile))
+        onAccepted: {
+            if (combine)
+                holder.player.combine_subtitle(Tools.local_file(selectedFile))
+            else
+                holder.player.load_subtitle(Tools.local_file(selectedFile))
+        }
     }
 
     FileDialog {

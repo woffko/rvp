@@ -62,6 +62,20 @@ pub struct ResumeState {
     /// selections"), by mpv's track ID.
     #[serde(default)]
     pub audio_tracks: BTreeMap<String, AudioTrack>,
+    /// The subtitle tracks chosen in a file ("Remember subtitle track
+    /// selections").
+    #[serde(default)]
+    pub subtitle_tracks: BTreeMap<String, SubtitleTracks>,
+}
+
+/// The subtitles chosen in one file: the first (`None`: off) and the
+/// second, by mpv's track IDs.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SubtitleTracks {
+    pub first: Option<i64>,
+    pub second: Option<i64>,
+    /// Increases with every choice; the smallest is dropped first.
+    pub sequence: u64,
 }
 
 /// The audio track chosen in one file.
@@ -84,6 +98,7 @@ impl Default for ResumeState {
             positions: BTreeMap::new(),
             sequence: 0,
             audio_tracks: BTreeMap::new(),
+            subtitle_tracks: BTreeMap::new(),
         }
     }
 }
@@ -193,6 +208,41 @@ impl ResumeStore {
                 .map(|(name, _)| name.clone())
         {
             self.state.audio_tracks.remove(&oldest);
+        }
+    }
+
+    /// The subtitles chosen last in `file`: the first (`None`: off) and the
+    /// second.
+    #[must_use]
+    pub fn subtitle_tracks(&self, file: &str) -> Option<(Option<i64>, Option<i64>)> {
+        self.state
+            .subtitle_tracks
+            .get(file)
+            .map(|tracks| (tracks.first, tracks.second))
+    }
+
+    /// Records the subtitles chosen in `file`.
+    pub fn set_subtitle_tracks(&mut self, file: &str, first: Option<i64>, second: Option<i64>) {
+        if self.subtitle_tracks(file) == Some((first, second)) {
+            return;
+        }
+        self.state.sequence += 1;
+        let tracks = SubtitleTracks {
+            first,
+            second,
+            sequence: self.state.sequence,
+        };
+        self.state.subtitle_tracks.insert(file.to_owned(), tracks);
+        self.dirty = true;
+        if self.state.subtitle_tracks.len() > MAX_POSITIONS
+            && let Some(oldest) = self
+                .state
+                .subtitle_tracks
+                .iter()
+                .min_by_key(|(_, tracks)| tracks.sequence)
+                .map(|(name, _)| name.clone())
+        {
+            self.state.subtitle_tracks.remove(&oldest);
         }
     }
 

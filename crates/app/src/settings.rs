@@ -149,6 +149,8 @@ pub struct Settings {
     pub decoders: crate::decoders::DecoderSettings,
     /// M18's motion smoothing (D18).
     pub smoothing: crate::smoothing::SmoothingSettings,
+    /// M13's subtitle options (PotPlayer's Subtitles pages).
+    pub subtitles: crate::subtitles::SubtitleSettings,
 }
 
 impl Default for Settings {
@@ -210,6 +212,7 @@ impl Default for Settings {
             render: crate::render::RenderSettings::default(),
             decoders: crate::decoders::DecoderSettings::default(),
             smoothing: crate::smoothing::SmoothingSettings::default(),
+            subtitles: crate::subtitles::SubtitleSettings::default(),
         }
     }
 }

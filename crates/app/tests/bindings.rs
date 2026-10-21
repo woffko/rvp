@@ -11,6 +11,7 @@ use rvp_app::playlist::local_path;
 use rvp_app::record::RecordCommand;
 use rvp_app::shaders::ShaderCommand;
 use rvp_app::smoothing::SmoothingCommand;
+use rvp_app::subtitles::SubtitleCommand;
 use rvp_app::video::{ColorChange, ColorKind, Rotation, VideoEffect};
 use rvp_app::volume::mpv_volume;
 use rvp_app::window::{WindowCommand, WindowRequest};
@@ -1053,6 +1054,78 @@ impl Harness {
                     }
                     assert_eq!(self.app.settings.smoothing.enabled, on);
                 }
+            }
+            _ => self.check_m13(action),
+        }
+    }
+
+    /// M13's default keys: bold, sideways moves, letter and line spacing,
+    /// and the second and third sync steps, each undone again.
+    fn check_m13(&mut self, action: Action) {
+        let option = |engine: &Engine, name: &str| engine.get_text(name).unwrap_or_default();
+        match action {
+            Action::Subtitles(SubtitleCommand::Bold) => {
+                self.osd(action, "Bold subtitles: on");
+                assert_eq!(option(&self.engine, "sub-bold"), "yes");
+                self.osd(action, "Bold subtitles: off");
+                assert_eq!(option(&self.engine, "sub-bold"), "no");
+            }
+            Action::Subtitles(
+                command @ (SubtitleCommand::MoveLeft | SubtitleCommand::MoveRight),
+            ) => {
+                let (side, back) = if command == SubtitleCommand::MoveLeft {
+                    ("left", SubtitleCommand::MoveRight)
+                } else {
+                    ("right", SubtitleCommand::MoveLeft)
+                };
+                self.osd(action, &format!("Subtitles: 300 from the {side} edge"));
+                assert_eq!(option(&self.engine, "sub-align-x"), side);
+                assert_eq!(option(&self.engine, "sub-margin-x"), "300");
+                self.osd(Action::Subtitles(back), "Subtitles: centred");
+                assert_eq!(option(&self.engine, "sub-align-x"), "center");
+                assert_eq!(self.app.settings.subtitles.margin_x, None);
+            }
+            Action::Subtitles(command @ (SubtitleCommand::Wider | SubtitleCommand::Narrower)) => {
+                let (text, back) = if command == SubtitleCommand::Wider {
+                    ("Letter spacing: 0.5", SubtitleCommand::Narrower)
+                } else {
+                    ("Letter spacing: -0.5", SubtitleCommand::Wider)
+                };
+                self.osd(action, text);
+                let spacing: f64 = option(&self.engine, "sub-spacing").parse().expect("number");
+                assert!((spacing.abs() - 0.5).abs() < 1e-6, "{spacing}");
+                self.osd(Action::Subtitles(back), "Letter spacing: 0");
+            }
+            Action::Subtitles(
+                command @ (SubtitleCommand::LinesApart | SubtitleCommand::LinesCloser),
+            ) => {
+                let (text, back, value) = if command == SubtitleCommand::LinesApart {
+                    ("Line spacing: 2", SubtitleCommand::LinesCloser, 2.0)
+                } else {
+                    ("Line spacing: -2", SubtitleCommand::LinesApart, -2.0)
+                };
+                self.osd(action, text);
+                assert_eq!(self.app.settings.subtitles.line_spacing, Some(value));
+                self.osd(Action::Subtitles(back), "Line spacing: 0");
+            }
+            Action::Subtitles(SubtitleCommand::DelayBy(delay, step)) => {
+                let seconds = if step == 3 { 10.0 } else { 1.0 };
+                let value = if delay == Delay::Earlier {
+                    -seconds
+                } else {
+                    seconds
+                };
+                self.osd(action, &format!("Subtitle sync: {value:+.1} s"));
+                self.wait_double("subtitle sync step", PropertyId::SubDelay, value);
+                self.osd(Action::SubtitleDelay(Delay::Reset), "Subtitle sync: +0.0 s");
+                self.wait_double("subtitle sync reset", PropertyId::SubDelay, 0.0);
+            }
+            Action::Subtitles(SubtitleCommand::SyncNext) => {
+                // The fixture has no subtitles.
+                self.osd(action, "No next subtitle to sync");
+            }
+            Action::Subtitles(SubtitleCommand::SyncPrevious) => {
+                self.osd(action, "No previous subtitle to sync");
             }
             _ => panic!("{action:?} has no check"),
         }

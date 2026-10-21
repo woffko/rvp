@@ -192,6 +192,7 @@ fn track(id: i64, kind: TrackKind, language: &str, selected: bool) -> Track {
         language: Some(language.to_owned()),
         codec: Some("aac".to_owned()),
         selected,
+        main_selection: None,
         external: false,
         channels: None,
         sample_rate: None,

@@ -220,6 +220,7 @@ impl App {
                     })
             }
             Action::Subtitle(style) => self.subtitle_style(engine, style),
+            Action::Subtitles(command) => self.subtitle_command(engine, command),
             Action::Preferences => Some(UiRequest::Preferences(None)),
             Action::KeysAndMouse => Some(UiRequest::Preferences(Some("input"))),
             Action::Settings(page) => Some(UiRequest::Preferences(Some(page.key()))),
@@ -584,9 +585,12 @@ impl App {
         if choices.is_empty() {
             return Some(UiRequest::Osd(format!("{noun}: none")));
         }
+        // The second subtitle is selected too: the first is the one shown.
         let current = choices
             .iter()
-            .position(|choice| choice.is_some_and(|track| track.selected))
+            .position(|choice| {
+                choice.is_some_and(|track| track.selected && track.main_selection != Some(1))
+            })
             .unwrap_or(choices.len() - 1);
         let next = choices[(current + 1) % choices.len()];
         let result = match next {
@@ -597,6 +601,9 @@ impl App {
             && let Some(track) = next
         {
             self.audio_track_chosen(track.id);
+        }
+        if kind == TrackKind::Subtitle {
+            self.subtitle_tracks_chosen(engine);
         }
         result.ok().map(|()| {
             UiRequest::Osd(format!(
@@ -622,9 +629,12 @@ impl App {
         {
             self.audio_track_chosen(id);
         }
+        if kind == TrackKind::Subtitle {
+            self.subtitle_tracks_chosen(engine);
+        }
     }
 
-    fn delay(
+    pub(crate) fn delay(
         &self,
         engine: &Engine,
         name: &str,
@@ -642,48 +652,46 @@ impl App {
         engine.set_double(name, next).ok().map(|()| next)
     }
 
+    /// Size, position and alignment, kept in the settings as PotPlayer
+    /// keeps them.
     fn subtitle_style(&mut self, engine: &Engine, style: SubtitleStyle) -> Option<UiRequest> {
-        let scale = self
-            .model
-            .double(PropertyId::SubScale)
-            .unwrap_or(self.settings.subtitle_scale);
-        let position = self.model.double(PropertyId::SubPos).unwrap_or(100.0);
-        let (result, text) = match style {
+        let text = match style {
             SubtitleStyle::Bigger | SubtitleStyle::Smaller => {
                 let step = if style == SubtitleStyle::Bigger {
                     SUBTITLE_SCALE_STEP
                 } else {
                     -SUBTITLE_SCALE_STEP
                 };
-                let next = ((scale + step) * 10.0).round() / 10.0;
+                let next = ((self.settings.subtitle_scale + step) * 10.0).round() / 10.0;
                 let next = next.clamp(0.3, 3.0);
-                (
-                    engine.set_double("sub-scale", next),
-                    format!("Subtitle size: {:.0} %", next * 100.0),
-                )
+                engine.set_double("sub-scale", next).ok()?;
+                self.settings.subtitle_scale = next;
+                format!("Subtitle size: {:.0} %", next * 100.0)
             }
             SubtitleStyle::Up | SubtitleStyle::Down | SubtitleStyle::DefaultPosition => {
+                let position = self.settings.subtitles.position.unwrap_or(100.0);
                 let next = match style {
-                    SubtitleStyle::Up => position - 1.0,
-                    SubtitleStyle::Down => position + 1.0,
-                    _ => 100.0,
+                    SubtitleStyle::Up => Some(position - 1.0),
+                    SubtitleStyle::Down => Some(position + 1.0),
+                    _ => None,
                 }
-                .clamp(0.0, 150.0);
-                (
-                    engine.set_double("sub-pos", next),
-                    format!("Subtitle position: {next:.0} %"),
-                )
+                .map(|next| next.clamp(0.0, 150.0));
+                self.settings.subtitles.position = next;
+                format!("Subtitle position: {:.0} %", next.unwrap_or(100.0))
             }
             SubtitleStyle::AlignLeft | SubtitleStyle::AlignCenter | SubtitleStyle::AlignRight => {
-                let (value, text) = match style {
-                    SubtitleStyle::AlignLeft => ("left", "Subtitles: align left"),
-                    SubtitleStyle::AlignRight => ("right", "Subtitles: align right"),
-                    _ => ("center", "Subtitles: align center"),
+                let align = match style {
+                    SubtitleStyle::AlignLeft => "left",
+                    SubtitleStyle::AlignRight => "right",
+                    _ => "center",
                 };
-                (engine.set_text("sub-align-x", value), text.to_owned())
+                align.clone_into(&mut self.settings.subtitles.align);
+                format!("Subtitles: align {align}")
             }
         };
-        result.ok().map(|()| UiRequest::Osd(text))
+        self.save_settings();
+        self.apply_subtitles(engine);
+        Some(UiRequest::Osd(text))
     }
 
     fn set_aspect(&mut self, engine: &Engine, aspect: Aspect) -> UiRequest {

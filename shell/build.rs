@@ -66,6 +66,7 @@ fn main() {
         .qml_file("qml/UrlDialog.qml")
         .qml_file("qml/About.qml")
         .qml_file("qml/AudioSync.qml")
+        .qml_file("qml/SubtitleSync.qml")
         .qml_file("qml/ControlPanel.qml")
         .qml_file("qml/PlaybackDialogs.qml")
         .qml_file("qml/VideoDialogs.qml")

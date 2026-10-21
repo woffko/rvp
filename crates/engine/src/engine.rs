@@ -194,6 +194,9 @@ pub struct Track {
     pub language: Option<String>,
     pub codec: Option<String>,
     pub selected: bool,
+    /// Which of the selected subtitles this is: 0 the first, 1 the second
+    /// (`secondary-sid`); mpv's `main-selection`.
+    pub main_selection: Option<i64>,
     /// Loaded from a separate file (a subtitle added later).
     pub external: bool,
     /// An audio track's channels, sample rate (Hz) and bitrate (bit/s),
@@ -575,6 +578,7 @@ impl Engine {
                     language: text(&track["lang"]),
                     codec: text(&track["codec"]),
                     selected: track["selected"].as_bool().unwrap_or(false),
+                    main_selection: track["main-selection"].as_i64(),
                     external: track["external"].as_bool().unwrap_or(false),
                     channels: track["demux-channel-count"].as_i64(),
                     sample_rate: track["demux-samplerate"].as_i64(),

@@ -1070,6 +1070,7 @@ mod tests {
             language: None,
             codec: None,
             selected: id == 1,
+            main_selection: None,
             external: false,
             channels: Some(channels),
             sample_rate: Some(sample_rate),

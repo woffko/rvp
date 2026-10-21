@@ -13,6 +13,13 @@ use rvp_skin::menu::CommandUse;
 use crate::action::{Action, ListAction};
 use crate::menu::{PopupSource, Recorded, context_tree, playlist_tree, popup_source};
 
+/// The owner's decision (2026-10-16) on M13's online part.
+pub(crate) const ONLINE_SUBTITLES: &str = "online subtitles: deferred by the owner (2026-10-16)";
+
+/// Why RVP has no fade for subtitles.
+pub(crate) const SUBTITLE_FADE: &str = "libass fades only ASS events that ask for it (\\fad); mpv \
+     gives other subtitles no fade, and an ASS copy of a file would lose RVP's style settings";
+
 /// Why parts of PotPlayer's context menu (resource 101) are not in RVP, by
 /// submenu path; the longest matching path wins.
 const CONTEXT_REASONS: &[(&str, &str)] = &[
@@ -49,20 +56,12 @@ const CONTEXT_REASONS: &[(&str, &str)] = &[
     ),
     ("101_0_10", "not in RVP yet"),
     ("101_0_10_8", "mpv (libass) renders every subtitle"),
-    (
-        "101_0_10_9",
-        "bold, spacing and sideways moves are not in RVP yet (mpv cannot move subtitles sideways)",
-    ),
-    (
-        "101_0_10_10",
-        "frame rate conversion and keeping sync changes are not in RVP yet",
-    ),
-    ("101_0_10_11", "saving subtitles is not planned"),
+    ("101_0_10_11", "planned in M13 (goal O)"),
     (
         "101_0_10_12",
         "mpv draws subtitles once over the finished picture, not once for each eye (docs/spikes/m12-studies.md)",
     ),
-    ("101_0_10_13", "subtitle search is not planned"),
+    ("101_0_10_13", ONLINE_SUBTITLES),
     ("101_0_11", "not in RVP yet"),
     (
         "101_0_11_1",
@@ -116,18 +115,14 @@ const ITEM_REASONS: &[(u32, &str)] = &[
         10800,
         "thumbnail images of the playlist's entries are M14's (goal P); RVP makes the playing file's (Video Capture > Create Thumbnail Image, Alt+N)",
     ),
-    (10940, "combined subtitles are M13's (goal O)"),
-    (10228, "subtitle editing is not planned"),
-    (10266, "subtitle editing is not planned"),
+    (10228, "planned in M13 (goal O)"),
+    (10266, "planned in M13 (goal O)"),
+    (11096, ONLINE_SUBTITLES),
     (10220, "DirectShow output surfaces do not apply to libmpv"),
     (10221, "DirectShow output surfaces do not apply to libmpv"),
-    (10624, "copying to the clipboard is not in RVP yet"),
-    (10822, "mpv places subtitles (a setting may come later)"),
-    (10823, "mpv places subtitles (a setting may come later)"),
-    (10824, "mpv places subtitles (a setting may come later)"),
+    (10828, "DirectShow output surfaces do not apply to libmpv"),
     (10825, "mpv (libass) always animates ASS subtitles"),
-    (10826, "subtitle styles are not in RVP yet"),
-    (10827, "subtitle styles are not in RVP yet"),
+    (10827, SUBTITLE_FADE),
     (
         10454,
         "DirectShow filters do not apply to libmpv (its functions are FFmpeg's filters in RVP's chain)",
@@ -329,14 +324,8 @@ const RUNTIME_REASONS: &[(&str, &str)] = &[
         "RVP keeps bookmarks in its state folder (marks.json); PotPlayer's .pbf format was not recorded (R1)",
     ),
     ("Subtitles", "planned in M13 (goal O)"),
-    (
-        "Subtitles > Subtitle Translation",
-        "online subtitles: deferred by the owner (2026-10-16)",
-    ),
-    (
-        "Subtitles > Subtitle Searching",
-        "online subtitles: deferred by the owner (2026-10-16)",
-    ),
+    ("Subtitles > Subtitle Translation", ONLINE_SUBTITLES),
+    ("Subtitles > Subtitle Searching", ONLINE_SUBTITLES),
     (
         "Subtitles > Subtitle Font Renderer",
         "mpv (libass) renders every subtitle",
