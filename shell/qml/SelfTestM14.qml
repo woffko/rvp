@@ -244,7 +244,36 @@ Item {
                 setSetting("general.pause-focus-lost", false)
             }
             break
-        case 26:
+        case 26: {
+            // Presets (Configuration): a preset holds its own values; the
+            // default's wait meanwhile.
+            setSetting("presets.list", [{ name: "Quiet", conditions: {}, values: null }])
+            const step = view().settings["volume-step"]
+            player.run_menu_command("p:1")
+            t.check("m14_preset_activates", view().settings.presets.active === "Quiet",
+                    "active " + view().settings.presets.active)
+            setSetting("volume-step", 7)
+            player.run_menu_command("p:0")
+            t.check("m14_default_preset_keeps_its_values", view().settings.presets.active === ""
+                        && view().settings["volume-step"] === step, "step " + view().settings["volume-step"])
+            player.run_menu_command("p:1")
+            t.check("m14_preset_keeps_its_values", view().settings["volume-step"] === 7,
+                    "step " + view().settings["volume-step"])
+            player.run_menu_command("p:0")
+            // Auto-Preset: the tone file meets the file name condition.
+            setSetting("presets.list", [{ name: "Quiet", conditions: { "file-name": "*tone*" },
+                                          values: JSON.parse(JSON.stringify(view().settings.presets.list[0].values)) }])
+            player.run_action("next")
+            t.next()
+            break
+        }
+        case 27:
+            if (t.waitFor("m14_preset_auto_activates", () => String(s.path).endsWith("fixture-tone.ogg")
+                              && view().settings.presets.active === "Quiet", 10000,
+                          () => "path " + s.path + " active " + view().settings.presets.active))
+                player.run_menu_command("p:0")
+            break
+        case 28:
             t.finish()
             break
         }

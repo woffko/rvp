@@ -142,6 +142,7 @@ impl Settings {
         self.osd.validate(&mut notes);
         self.general.validate(&mut notes);
         self.associations.validate(&mut notes);
+        self.presets.validate(&mut notes);
         self.skins.validate(&mut notes);
         notes
     }
@@ -416,6 +417,7 @@ pub fn import(path: &Path) -> Result<(Settings, Vec<String>), String> {
                             | "general"
                             | "associations"
                             | "screensaver"
+                            | "presets"
                     ) {
                         value.clone()
                     } else if value.is_object() {

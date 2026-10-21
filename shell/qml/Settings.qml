@@ -67,7 +67,8 @@ ApplicationWindow {
         { key: "start", title: "When Starting" },
         { key: "dialogs", title: "Dialog Box" },
         { key: "association", title: "Association" },
-        { key: "screensaver", title: "Screen Saver" }
+        { key: "screensaver", title: "Screen Saver" },
+        { key: "presets", title: "Configuration" }
     ]
     // PotPlayer's tree: each group opens into its pages, and the selected
     // group's pages show as tabs over the page. `page` is the group's own
@@ -85,6 +86,7 @@ ApplicationWindow {
                   "capture"] },
         { title: "Association", page: "association", pages: [] },
         { title: "Screen Saver", page: "screensaver", pages: [] },
+        { title: "Configuration", page: "presets", pages: [] },
         { title: "Audio", page: "audio",
           pages: ["audio-volume", "equalizer", "normalizer", "audio-effects", "audio-sync"] }
     ]
@@ -2679,6 +2681,184 @@ ApplicationWindow {
                         }
                         Note { id: screenSaverResult; text: "" }
                         Note { text: "Set up makes RVP (rvp.scr beside rvp.exe) the current user's screen saver and opens Windows' screen saver settings for its wait. Windows' small preview there stays empty: RVP draws in its own window only." }
+                    }
+
+                    Page {
+                        id: presetPage
+                        // The selected preset: 0 the default, then the list's.
+                        property int selected: 0
+                        readonly property var list: win.value("presets.list") || []
+                        readonly property var preset: selected > 0 && selected <= list.length ? list[selected - 1] : null
+                        readonly property var conditions: preset ? (preset.conditions || {}) : ({})
+                        function store(list) { win.set("presets.list", list) }
+                        function copyList() { return JSON.parse(JSON.stringify(list)) }
+                        // Sets one condition of the selected preset (null: off).
+                        function condition(name, value) {
+                            if (selected === 0)
+                                return
+                            const copy = copyList()
+                            copy[selected - 1].conditions = copy[selected - 1].conditions || {}
+                            copy[selected - 1].conditions[name] = value
+                            store(copy)
+                        }
+                        Heading { text: "Configuration management" }
+                        ListView {
+                            Layout.fillWidth: true
+                            Layout.preferredHeight: 140
+                            clip: true
+                            model: [""].concat(presetPage.list.map(preset => preset.name))
+                            delegate: ItemDelegate {
+                                required property var modelData
+                                required property int index
+                                width: ListView.view.width
+                                highlighted: index === presetPage.selected
+                                text: (modelData === "" ? "Default" : modelData)
+                                      + ((win.value("presets.active") || "") === modelData ? "  (active)" : "")
+                                onClicked: {
+                                    presetPage.selected = index
+                                    presetName.text = modelData
+                                }
+                            }
+                        }
+                        RowLayout {
+                            TextField { id: presetName; placeholderText: "Name"; Layout.fillWidth: true }
+                            Button {
+                                text: "Add"
+                                onClicked: {
+                                    const copy = presetPage.copyList()
+                                    let name = presetName.text.trim()
+                                    if (name === "" || copy.some(p => p.name === name))
+                                        name = "Preset " + (copy.length + 1)
+                                    copy.push({ name: name, conditions: {}, values: null })
+                                    presetPage.store(copy)
+                                    presetPage.selected = copy.length
+                                }
+                            }
+                            Button {
+                                text: "Duplicate"
+                                enabled: presetPage.selected > 0
+                                onClicked: {
+                                    const copy = presetPage.copyList()
+                                    const source = JSON.parse(JSON.stringify(copy[presetPage.selected - 1]))
+                                    source.name = source.name + " (copy)"
+                                    copy.push(source)
+                                    presetPage.store(copy)
+                                }
+                            }
+                            Button {
+                                text: "Activate"
+                                onClicked: win.player.run_menu_command("p:" + presetPage.selected)
+                            }
+                        }
+                        RowLayout {
+                            Button {
+                                text: "Up"
+                                enabled: presetPage.selected > 1
+                                onClicked: {
+                                    const copy = presetPage.copyList()
+                                    const i = presetPage.selected - 1
+                                    copy.splice(i - 1, 0, copy.splice(i, 1)[0])
+                                    presetPage.store(copy)
+                                    presetPage.selected -= 1
+                                }
+                            }
+                            Button {
+                                text: "Down"
+                                enabled: presetPage.selected > 0 && presetPage.selected < presetPage.list.length
+                                onClicked: {
+                                    const copy = presetPage.copyList()
+                                    const i = presetPage.selected - 1
+                                    copy.splice(i + 1, 0, copy.splice(i, 1)[0])
+                                    presetPage.store(copy)
+                                    presetPage.selected += 1
+                                }
+                            }
+                            Button {
+                                text: "Rename"
+                                enabled: presetPage.selected > 0
+                                onClicked: {
+                                    const name = presetName.text.trim()
+                                    const copy = presetPage.copyList()
+                                    if (name === "" || copy.some(p => p.name === name))
+                                        return
+                                    const old = copy[presetPage.selected - 1].name
+                                    copy[presetPage.selected - 1].name = name
+                                    presetPage.store(copy)
+                                    if ((win.value("presets.active") || "") === old)
+                                        win.set("presets.active", name)
+                                }
+                            }
+                            Button {
+                                text: "Delete"
+                                enabled: presetPage.selected > 0
+                                onClicked: {
+                                    const copy = presetPage.copyList()
+                                    if ((win.value("presets.active") || "") === copy[presetPage.selected - 1].name)
+                                        win.player.run_menu_command("p:0")
+                                    copy.splice(presetPage.selected - 1, 1)
+                                    presetPage.store(copy)
+                                    presetPage.selected = 0
+                                }
+                            }
+                        }
+                        Check { path: "presets.reopen"; text: "Reopen current item when preset is manually activated" }
+                        Check { path: "presets.copy-to-default"; text: "Copy preset values into default preset when preset is manually activated" }
+                        Check { path: "presets.return-at-end"; text: "Return to previous preset at playback end when preset is auto activated" }
+                        Check { path: "presets.default-at-start"; text: "Activate default preset at program start" }
+                        Heading { text: "Auto-Preset (the selected preset activates for files that meet every condition)" }
+                        Repeater {
+                            model: [["file-name", "File name (* and ?)", "text"], ["album", "Album name", "text"],
+                                    ["power", "Power source (ac or battery)", "text"], ["duration", "File duration (sec)", "number"],
+                                    ["width", "Video width", "number"], ["height", "Video height", "number"],
+                                    ["fourcc", "Video codec (FourCC)", "text"], ["fps", "Video FPS", "number"],
+                                    ["aspect", "Video aspect ratio", "number"], ["audio-format", "Audio format", "text"],
+                                    ["sample-rate", "Audio sample rate", "number"], ["channels", "Audio channels", "number"]]
+                            delegate: RowLayout {
+                                id: conditionRow
+                                required property var modelData
+                                readonly property var current: presetPage.conditions[modelData[0]]
+                                enabled: presetPage.selected > 0
+                                CheckBox {
+                                    text: conditionRow.modelData[1]
+                                    checked: conditionRow.current !== undefined && conditionRow.current !== null
+                                    Layout.preferredWidth: 240
+                                    onToggled: presetPage.condition(conditionRow.modelData[0], !checked ? null
+                                        : conditionRow.modelData[2] === "number" ? { op: "eq", value: Number(valueField.text) || 0 }
+                                        : valueField.text)
+                                }
+                                ComboBox {
+                                    id: opBox
+                                    visible: conditionRow.modelData[2] === "number"
+                                    model: ["eq", "ne", "lt", "le", "gt", "ge"]
+                                    displayText: ({ eq: "=", ne: "≠", lt: "<", le: "≤", gt: ">", ge: "≥" })[currentText]
+                                    currentIndex: conditionRow.current && conditionRow.current.op ? model.indexOf(conditionRow.current.op) : 0
+                                    Layout.preferredWidth: 70
+                                    onActivated: if (conditionRow.current)
+                                        presetPage.condition(conditionRow.modelData[0], { op: currentText, value: conditionRow.current.value })
+                                }
+                                TextField {
+                                    id: valueField
+                                    Layout.fillWidth: true
+                                    text: conditionRow.current === undefined || conditionRow.current === null ? ""
+                                        : conditionRow.modelData[2] === "number" ? String(conditionRow.current.value) : conditionRow.current
+                                    onEditingFinished: if (conditionRow.current !== undefined && conditionRow.current !== null)
+                                        presetPage.condition(conditionRow.modelData[0], conditionRow.modelData[2] === "number"
+                                            ? { op: opBox.currentText, value: Number(text) || 0 } : text)
+                                }
+                            }
+                        }
+                        CheckBox {
+                            text: "If audio playback"
+                            enabled: presetPage.selected > 0
+                            checked: presetPage.conditions["audio-only"] === true
+                            onToggled: presetPage.condition("audio-only", checked)
+                        }
+                        CheckBox {
+                            text: "If subtitles exist"
+                            enabled: presetPage.selected > 0
+                            checked: presetPage.conditions["subtitles"] === true
+                            onToggled: presetPage.condition("subtitles", checked)
+                        }
                     }
                 }
             }

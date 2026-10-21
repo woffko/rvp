@@ -70,6 +70,16 @@ impl qobject::Player {
             }
             UiRequest::ColorThemeDialog => self.ui_request(request::COLOR_THEME, 0),
             UiRequest::SystemInfo => self.ui_request(request::SYSTEM_INFO, 0),
+            // A preset changed the settings as a whole (M14).
+            UiRequest::SettingsChanged(text) => {
+                self.as_mut().settings_applied();
+                if self
+                    .core()
+                    .is_some_and(|core| core.app.settings.osd.messages)
+                {
+                    self.set_osd(QString::from(&text));
+                }
+            }
             other => eprintln!("rvp: unhandled request {other:?}"),
         }
     }
@@ -380,6 +390,17 @@ impl qobject::Player {
             None
         };
         let line = QString::from(&core.app.misc_info(fullscreen, &core.clock, power));
+        // The presets' power condition (M14).
+        if core
+            .app
+            .settings
+            .presets
+            .list
+            .iter()
+            .any(|preset| preset.conditions.power.is_some())
+        {
+            core.app.set_on_battery(on_battery());
+        }
         if *self.osd_look() != look {
             self.as_mut().set_osd_look(look);
         }
@@ -937,4 +958,28 @@ fn system_section(mpv: Option<&str>, ffmpeg: Option<&str>) -> serde_json::Value 
             ["Battery", battery()],
         ],
     })
+}
+
+/// Whether the system runs on its battery (`None`: it has none, or cannot
+/// tell), for the presets' conditions.
+fn on_battery() -> Option<bool> {
+    #[cfg(windows)]
+    {
+        use windows::Win32::System::Power::{GetSystemPowerStatus, SYSTEM_POWER_STATUS};
+        let mut status = SYSTEM_POWER_STATUS::default();
+        // SAFETY: FFI point. GetSystemPowerStatus fills the structure it is
+        // given, which lives on this stack frame for the call; a failure
+        // is answered with no battery.
+        #[allow(unsafe_code)]
+        let read = unsafe { GetSystemPowerStatus(&raw mut status) };
+        // 128: no system battery; ACLineStatus 0 offline, 1 online.
+        if read.is_err() || status.BatteryFlag & 128 != 0 || status.ACLineStatus > 1 {
+            return None;
+        }
+        Some(status.ACLineStatus == 0)
+    }
+    #[cfg(not(windows))]
+    {
+        rvp_app::osd::on_battery_from_sysfs(std::path::Path::new("/sys/class/power_supply"))
+    }
 }

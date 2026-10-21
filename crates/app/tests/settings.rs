@@ -147,6 +147,53 @@ fn changes_apply_to_the_player_and_survive_a_restart() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
+/// M14's presets: a preset keeps its own values while the default's wait,
+/// both survive a restart, and the default comes back with its own.
+#[test]
+fn presets_keep_their_values_across_a_restart() {
+    let dir = scratch("presets");
+    let dirs = Dirs::inside(&dir);
+    let engine = Engine::new(&EngineOptions::headless()).expect("engine");
+    let mut app = App::load(&dirs).expect("load");
+    let default_step = app.settings.volume_step;
+    let night = json!([{ "name": "Night", "conditions": {}, "values": null }]);
+    let (settings, _) = change(&app.settings, "presets.list", night).expect("list");
+    app.apply_settings(&engine, settings);
+    app.activate_preset(&engine, "Night", true);
+    assert_eq!(app.settings.presets.active, "Night");
+    let (settings, _) = change(&app.settings, "volume-step", json!(7)).expect("step");
+    app.apply_settings(&engine, settings);
+    app.shutdown(&engine, Instant::now()).expect("shutdown");
+
+    // The file holds the default's values and the preset's own.
+    let stored: serde_json::Value = read_json(&dirs.config.join("settings.json"))
+        .expect("read")
+        .expect("saved");
+    assert_eq!(stored["volume-step"], json!(default_step));
+    assert_eq!(stored["presets"]["active"], json!("Night"));
+    assert_eq!(
+        stored["presets"]["list"][0]["values"]["volume-step"],
+        json!(7.0)
+    );
+
+    // A restart runs with the preset's values; the default has its own.
+    let mut again = App::load(&dirs).expect("reload");
+    assert!((again.settings.volume_step - 7.0).abs() < 1e-9);
+    again.activate_preset(&engine, "", true);
+    assert!((again.settings.volume_step - default_step).abs() < 1e-9);
+    again.activate_preset(&engine, "Night", true);
+    assert!((again.settings.volume_step - 7.0).abs() < 1e-9);
+    // "Activate default preset at program start".
+    let (settings, _) =
+        change(&again.settings, "presets.default-at-start", json!(true)).expect("default at start");
+    again.apply_settings(&engine, settings);
+    again.shutdown(&engine, Instant::now()).expect("shutdown");
+    let third = App::load(&dirs).expect("third start");
+    assert!(third.settings.presets.active.is_empty());
+    assert!((third.settings.volume_step - default_step).abs() < 1e-9);
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
 #[test]
 fn a_settings_file_moves_between_installations() {
     let dir = scratch("import-export");

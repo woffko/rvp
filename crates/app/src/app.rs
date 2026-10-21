@@ -125,6 +125,9 @@ pub enum UiRequest {
     Info(String),
     /// The Playback/System Info window (Ctrl+F1, M14).
     SystemInfo,
+    /// The settings changed as a whole (M14's presets): the window follows
+    /// them as after the settings window; the notice to show.
+    SettingsChanged(String),
     /// Dropped files ask what to do (M14's advanced drag and drop).
     DropMenu(Vec<String>),
     /// A change of the system's volume (the master volume).
@@ -422,6 +425,12 @@ pub struct App {
     /// What paused playback for the window (M14's General page): bits of
     /// minimized, focus lost and screen locked.
     pub(crate) attention_holds: u8,
+    /// M14's presets: the default's values while another preset runs, the
+    /// preset to go back to after an auto-activated one, and whether the
+    /// system runs on its battery (for the conditions).
+    pub(crate) default_values: Option<serde_json::Value>,
+    pub(crate) preset_before_auto: Option<String>,
+    pub(crate) on_battery: Option<bool>,
     /// The skin the command line or `RVP_SKIN` chose (`Some(None)`: RVP
     /// Default) until the user picks one.
     pub(crate) skin_override: crate::skins::SkinOverride,
@@ -452,6 +461,7 @@ impl App {
         };
         let mut app = Self::new(settings, &dirs.state)?;
         app.settings_path = Some(settings_path);
+        app.start_presets();
         Ok(app)
     }
 
@@ -527,6 +537,9 @@ impl App {
             random_theme: None,
             random_logo: None,
             attention_holds: 0,
+            default_values: None,
+            preset_before_auto: None,
+            on_battery: None,
             skin_override: crate::skins::SkinOverride::Off,
             audio_only: false,
         };
@@ -1606,7 +1619,8 @@ impl App {
         let Some(path) = &self.settings_path else {
             return;
         };
-        match serde_json::to_vec_pretty(&self.settings) {
+        // With a preset active, its values go into it (M14).
+        match serde_json::to_vec_pretty(&self.stored_settings()) {
             Ok(mut bytes) => {
                 bytes.push(b'\n');
                 self.writer.write(path, bytes);
@@ -1813,6 +1827,7 @@ impl App {
                     requests.extend(self.close_subtitle_editor());
                     self.file_loaded(engine, path, now);
                     requests.extend(self.speech_file_loaded(engine));
+                    requests.extend(self.auto_preset(engine));
                     save_now = true;
                 }
                 EngineEvent::EndFile {
@@ -1820,6 +1835,7 @@ impl App {
                     path: Some(path),
                 } => {
                     self.store.clear_position(path);
+                    requests.extend(self.preset_playback_end(engine));
                     save_now = true;
                 }
                 EngineEvent::EndFile {

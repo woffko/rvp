@@ -410,10 +410,12 @@ pub enum SettingsPage {
     Dialogs,
     Association,
     ScreenSaver,
+    /// Preferences > Configuration: the presets.
+    Presets,
 }
 
 impl SettingsPage {
-    pub const ALL: [SettingsPage; 43] = [
+    pub const ALL: [SettingsPage; 44] = [
         SettingsPage::Playback,
         SettingsPage::TimeJump,
         SettingsPage::Skip,
@@ -457,6 +459,7 @@ impl SettingsPage {
         SettingsPage::Dialogs,
         SettingsPage::Association,
         SettingsPage::ScreenSaver,
+        SettingsPage::Presets,
     ];
 
     /// The page's key in the settings window (`shell/qml/Settings.qml`).
@@ -506,6 +509,7 @@ impl SettingsPage {
             SettingsPage::Dialogs => "dialogs",
             SettingsPage::Association => "association",
             SettingsPage::ScreenSaver => "screensaver",
+            SettingsPage::Presets => "presets",
         }
     }
 }
@@ -5780,6 +5784,14 @@ pub const ACTIONS: &[ActionInfo] = &[
         "<Default logo>",
         None,
         &[34902],
+        &[],
+    ),
+    info(
+        Action::Settings(SettingsPage::Presets),
+        "manage-presets",
+        "Manage Presets...",
+        None,
+        &[10644],
         &[],
     ),
     info(

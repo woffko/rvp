@@ -433,6 +433,28 @@ pub fn battery_from_sysfs(root: &std::path::Path) -> Option<String> {
     ))
 }
 
+/// Whether the system runs on its battery, from Linux's power supplies:
+/// `None` without a battery.
+#[must_use]
+pub fn on_battery_from_sysfs(root: &std::path::Path) -> Option<bool> {
+    let entries = std::fs::read_dir(root).ok()?;
+    let read = |path: &std::path::Path, name: &str| {
+        std::fs::read_to_string(path.join(name))
+            .ok()
+            .map(|text| text.trim().to_owned())
+    };
+    let mut battery = false;
+    let mut mains_online = false;
+    for path in entries.flatten().map(|entry| entry.path()) {
+        match read(&path, "type").as_deref() {
+            Some("Battery") => battery = true,
+            Some("Mains") => mains_online |= read(&path, "online").as_deref() == Some("1"),
+            _ => {}
+        }
+    }
+    battery.then_some(!mains_online)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -500,6 +522,10 @@ mod tests {
             battery_from_sysfs(&root).as_deref(),
             Some("battery 57% (charging)")
         );
+        std::fs::write(mains.join("online"), "0\n").unwrap();
+        assert_eq!(on_battery_from_sysfs(&root), Some(true));
+        std::fs::write(mains.join("online"), "1\n").unwrap();
+        assert_eq!(on_battery_from_sysfs(&root), Some(false));
         std::fs::remove_dir_all(&root).unwrap();
     }
 }

@@ -142,7 +142,6 @@ const ITEM_REASONS: &[(u32, &str)] = &[
         11025,
         "mpv converts YCgCo video from the file's tags itself",
     ),
-    (10644, "presets are not in RVP yet"),
     (10809, "touch input is not planned"),
     (
         20009,
@@ -368,10 +367,16 @@ const RUNTIME_LISTS: &[(&str, &str)] = &[
 ];
 
 /// Run-time lists by their IDs, where their place holds other items too.
-const RUNTIME_LIST_IDS: &[(std::ops::RangeInclusive<u32>, &str)] = &[(
-    44_700..=44_799,
-    "RVP's skins: RVP Default and the .dsf files of its skins folder, the chosen skin's folder and PotPlayer's",
-)];
+const RUNTIME_LIST_IDS: &[(std::ops::RangeInclusive<u32>, &str)] = &[
+    (
+        44_700..=44_799,
+        "RVP's skins: RVP Default and the .dsf files of its skins folder, the chosen skin's folder and PotPlayer's",
+    ),
+    (
+        35_200..=35_299,
+        "RVP's presets: the default and the user's (Preferences > Configuration)",
+    ),
+];
 
 /// Why run-time commands are not in RVP, by place; the longest wins.
 const RUNTIME_REASONS: &[(&str, &str)] = &[

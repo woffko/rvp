@@ -344,6 +344,8 @@ pub enum Command {
     Speech(crate::speech::SpeechChoice),
     /// A skin or colour theme of the Skins menu's lists (M14).
     Skin(crate::skins::SkinChoice),
+    /// A preset to activate (M14): 0 the default, then the list's.
+    Preset(usize),
 }
 
 /// An audio output choice of the Audio menu's lists.
@@ -474,6 +476,7 @@ impl Command {
             Command::DiscAngle(angle) => format!("g:{angle}"),
             Command::Speech(choice) => format!("z:{}", choice.id()),
             Command::Skin(choice) => format!("d:{}", choice.id()),
+            Command::Preset(index) => format!("p:{index}"),
         }
     }
 
@@ -507,6 +510,7 @@ impl Command {
             "y" => value.parse().ok().map(Command::Script),
             "z" => crate::speech::SpeechChoice::parse(value).map(Command::Speech),
             "d" => crate::skins::SkinChoice::parse(value).map(Command::Skin),
+            "p" => value.parse().ok().map(Command::Preset),
             "h" => {
                 if let Some(index) = value.strip_prefix("post") {
                     index.parse().ok().map(|index| Command::Shader(true, index))
@@ -823,6 +827,13 @@ impl App {
             Command::DiscAngle(angle) => self.set_disc_angle(engine, angle),
             Command::Speech(choice) => self.speech_choice(choice),
             Command::Skin(choice) => self.skin_choice(choice),
+            Command::Preset(index) => {
+                let name = match index {
+                    0 => String::new(),
+                    index => self.settings.presets.list.get(index - 1)?.name.clone(),
+                };
+                self.activate_preset(engine, &name, true)
+            }
             Command::EqualizerPreset(index) => self.set_equalizer_preset(engine, index),
             Command::Speakers(index) => self.set_speakers(engine, index),
             Command::Audio(choice) => self.audio_choice(engine, choice),
@@ -859,12 +870,20 @@ impl App {
                 .into_iter()
                 .filter_map(|child| self.convert(child, live))
                 .collect();
-            // The Skins menu starts with RVP's skins (M14).
-            if node.path == "101_0_14" {
-                let mut skins = self.skin_items();
-                skins.push(MenuItem::separator());
-                skins.append(&mut children);
-                children = skins;
+            // The Skins menu starts with RVP's skins, Misc with the presets
+            // (M14).
+            let first = match node.path.as_str() {
+                "101_0_14" => self.skin_items(),
+                "101_0_15" => self.preset_items(),
+                _ => Vec::new(),
+            };
+            if !first.is_empty() {
+                let mut items = first;
+                if node.path == "101_0_14" {
+                    items.push(MenuItem::separator());
+                }
+                items.append(&mut children);
+                children = items;
             }
             // RVP's run-time lists where PotPlayer has its own.
             let extra = match node.path.as_str() {
@@ -975,6 +994,27 @@ impl App {
             });
         }
         items
+    }
+
+    /// The presets (M14): the default, marked `*` as PotPlayer's, and the
+    /// user's; the active one checked.
+    fn preset_items(&self) -> Vec<MenuItem> {
+        let presets = &self.settings.presets;
+        let names = std::iter::once(("*Default preset".to_owned(), String::new())).chain(
+            presets
+                .list
+                .iter()
+                .map(|preset| (preset.name.clone(), preset.name.clone())),
+        );
+        names
+            .enumerate()
+            .map(|(index, (label, name))| MenuItem {
+                label,
+                command: Some(Command::Preset(index)),
+                checked: Some(name == presets.active),
+                ..MenuItem::default()
+            })
+            .collect()
     }
 
     /// The skins to choose from (M14), in place of PotPlayer's list.

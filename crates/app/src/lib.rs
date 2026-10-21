@@ -43,6 +43,7 @@ pub mod playlist_files;
 pub mod pointer;
 pub mod power;
 pub mod preferences;
+pub mod presets;
 pub mod record;
 pub mod registration;
 pub mod render;
