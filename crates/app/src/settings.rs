@@ -161,6 +161,10 @@ pub struct Settings {
     pub osd: crate::osd::OsdSettings,
     /// M14: PotPlayer's General, When Starting and Dialog Box pages.
     pub general: crate::general::GeneralSettings,
+    /// M14: PotPlayer's Association page.
+    pub associations: crate::registration::AssociationSettings,
+    /// M14: PotPlayer's Screen Saver page.
+    pub screensaver: crate::general::ScreenSaverSettings,
     /// M13's subtitles made from the audio (Create Subtitles from Audio).
     pub speech: crate::speech::SpeechSettings,
 }
@@ -226,6 +230,8 @@ impl Default for Settings {
             smoothing: crate::smoothing::SmoothingSettings::default(),
             subtitles: crate::subtitles::SubtitleSettings::default(),
             input: crate::input::InputSettings::default(),
+            screensaver: crate::general::ScreenSaverSettings::default(),
+            associations: crate::registration::AssociationSettings::default(),
             general: crate::general::GeneralSettings::default(),
             osd: crate::osd::OsdSettings::default(),
             copy_time: crate::misc::CopyTimeSettings::default(),

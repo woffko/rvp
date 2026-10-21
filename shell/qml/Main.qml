@@ -86,6 +86,27 @@ Window {
         onFitWindow: (width, height) => root.fit(width, height)
     }
 
+    // RVP as the screen saver (M14, --screensaver): any key, click or
+    // move of the mouse ends it.
+    // Set once the player has read the command line.
+    property bool screensaver: false
+    MouseArea {
+        anchors.fill: parent
+        visible: root.screensaver
+        z: 100
+        hoverEnabled: true
+        cursorShape: Qt.BlankCursor
+        property point first: Qt.point(-1, -1)
+        onPositionChanged: (mouse) => {
+            if (first.x < 0)
+                first = Qt.point(mouse.x, mouse.y)
+            else if (Math.abs(mouse.x - first.x) + Math.abs(mouse.y - first.y) > 12)
+                Qt.quit()
+        }
+        onPressed: Qt.quit()
+        onWheel: Qt.quit()
+    }
+
     // The General page's window options (M14).
     readonly property var generalLook: player.general_look ? JSON.parse(player.general_look) : ({})
     // While a start with files must not take the keyboard (M14).
@@ -94,6 +115,7 @@ Window {
 
     Component.onCompleted: {
         player.start()
+        screensaver = player.has_option("screensaver")
         // Requests from other instances (rvp /add ...) go to the player.
         Tools.instance_receiver(player)
         if (player.restore_width > 0 && player.restore_height > 0) {
@@ -111,10 +133,18 @@ Window {
             startNoFocus = true
             noFocusTimer.start()
         }
-        if (player.restore_maximized)
+        // The screen saver (M14) plays in fullscreen; its page opens for
+        // Windows' screen saver settings.
+        if (root.screensaver)
+            showFullScreen()
+        else if (player.restore_maximized)
             showMaximized()
         else
             show()
+        if (player.has_option("screensaver-settings")) {
+            settingsLoader.active = true
+            settingsLoader.item.begin("screensaver")
+        }
         player.resized(width, height)
         player.set_screen(Tools.screen_json(root))
         logPointer = player.has_option("log-pointer")
@@ -834,6 +864,10 @@ Window {
         id: keys
         focus: true
         Keys.onPressed: (event) => {
+            if (root.screensaver) {
+                Qt.quit()
+                return
+            }
             event.accepted = player.key(event.key, event.modifiers)
         }
     }

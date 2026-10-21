@@ -68,6 +68,15 @@ pub mod bridge {
         /// Windows' Run key for "Automatically run at system startup";
         /// false when it could not be changed (and outside Windows).
         fn rvp_run_at_startup(on: bool, command: &str) -> bool;
+        /// The current user's registry (`cpp/registry.cpp`, M14's
+        /// Association page): a string value (`name` empty: the default),
+        /// a value or a key removed, whether a key exists, and the shell
+        /// told that types changed. False (and nothing) outside Windows.
+        fn rvp_registry_set(key: &str, name: &str, value: &str) -> bool;
+        fn rvp_registry_delete_value(key: &str, name: &str) -> bool;
+        fn rvp_registry_delete_key(key: &str) -> bool;
+        fn rvp_registry_has_key(key: &str) -> bool;
+        fn rvp_associations_changed();
         /// `QOpenGLContext::getProcAddress` of the current context.
         fn rvp_gl_get_proc_address(name: &str) -> usize;
         /// Schedules a video frame (mpv's render update callback; any

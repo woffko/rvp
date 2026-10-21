@@ -140,6 +140,9 @@ def windows_bundle(args, bundle: Path) -> None:
     exe = Path(args.exe)
     qt = Path(args.qt)
     shutil.copy2(exe, bundle / "rvp.exe")
+    # Windows runs screen savers as .scr programs: rvp.scr starts rvp.exe
+    # beside it (M14's Screen Saver page).
+    shutil.copy2(exe, bundle / "rvp.scr")
 
     def ignore(_directory: str, names: list[str]) -> list[str]:
         present = set(names)

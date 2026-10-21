@@ -65,7 +65,9 @@ ApplicationWindow {
         { key: "decoders", title: "Decoders" },
         { key: "general", title: "General" },
         { key: "start", title: "When Starting" },
-        { key: "dialogs", title: "Dialog Box" }
+        { key: "dialogs", title: "Dialog Box" },
+        { key: "association", title: "Association" },
+        { key: "screensaver", title: "Screen Saver" }
     ]
     // PotPlayer's tree: each group opens into its pages, and the selected
     // group's pages show as tabs over the page. `page` is the group's own
@@ -81,6 +83,8 @@ ApplicationWindow {
         { title: "Video", page: "video",
           pages: ["aspect-ratio", "resize", "extend-crop", "frame-size", "stereo", "shaders", "svp", "smoothing",
                   "capture"] },
+        { title: "Association", page: "association", pages: [] },
+        { title: "Screen Saver", page: "screensaver", pages: [] },
         { title: "Audio", page: "audio",
           pages: ["audio-volume", "equalizer", "normalizer", "audio-effects", "audio-sync"] }
     ]
@@ -2507,6 +2511,174 @@ ApplicationWindow {
                         Amount { label: "Font size"; path: "general.dialog.font-size"; from: 0; to: 72; unit: "pt"; format: v => v === 0 ? "Qt's" : v + " pt" }
                         Check { path: "general.dialog.on-top"; text: "Always keep modeless dialog boxes on top" }
                         Check { path: "general.dialog.dpi-aware"; text: "Use DPI awareness (Qt scales the windows with the display; at the next start)" }
+                    }
+
+                    Page {
+                        id: associationPage
+                        property var types: []
+                        property string result: ""
+                        function refresh() {
+                            types = JSON.parse(win.player.associations_json())
+                        }
+                        // Sets the types `pick` chooses on (`true`) or off.
+                        function select(pick, on) {
+                            const off = new Set(win.value("associations.off") || [])
+                            for (const t of types) {
+                                if (pick(t)) {
+                                    if (on)
+                                        off.delete(t.extension)
+                                    else
+                                        off.add(t.extension)
+                                }
+                            }
+                            win.set("associations.off", Array.from(off).sort())
+                            refresh()
+                        }
+                        Component.onCompleted: refresh()
+                        onVisibleChanged: if (visible) refresh()
+                        Heading { text: "Associations (for the current user)" }
+                        ListView {
+                            Layout.fillWidth: true
+                            Layout.preferredHeight: 260
+                            clip: true
+                            model: associationPage.types
+                            delegate: RowLayout {
+                                required property var modelData
+                                width: ListView.view.width
+                                CheckBox {
+                                    checked: modelData.on
+                                    text: "." + modelData.extension
+                                    Layout.preferredWidth: 110
+                                    onToggled: associationPage.select(t => t.extension === modelData.extension, checked)
+                                }
+                                Label {
+                                    text: modelData.description + (modelData.registered ? "" : "  (not registered)")
+                                    opacity: modelData.registered ? 1 : 0.6
+                                    Layout.fillWidth: true
+                                    elide: Text.ElideRight
+                                }
+                            }
+                        }
+                        Flow {
+                            Layout.fillWidth: true
+                            spacing: 6
+                            Button { text: "Select Video Ext"; onClicked: associationPage.select(t => t.kind === "video", true) }
+                            Button { text: "Select Audio Ext"; onClicked: associationPage.select(t => t.kind === "audio", true) }
+                            Button { text: "Select Subtitle Ext"; onClicked: associationPage.select(t => t.kind === "subtitle", true) }
+                            Button { text: "Select Playlist Ext"; onClicked: associationPage.select(t => t.kind === "playlist", true) }
+                            Button { text: "Select All"; onClicked: associationPage.select(t => true, true) }
+                            Button { text: "Deselect All"; onClicked: associationPage.select(t => true, false) }
+                            Button {
+                                text: "Restore to Default"
+                                onClicked: {
+                                    win.set("associations.off", [])
+                                    win.set("associations.extra", {})
+                                    win.set("associations.descriptions", {})
+                                    associationPage.refresh()
+                                }
+                            }
+                        }
+                        RowLayout {
+                            TextField { id: newExtension; placeholderText: "Extension"; Layout.preferredWidth: 110 }
+                            ComboBox { id: newKind; model: ["video", "audio", "subtitle", "playlist"] }
+                            TextField { id: newDescription; placeholderText: "Description"; Layout.fillWidth: true }
+                            Button {
+                                text: "Add"
+                                onClicked: {
+                                    const ext = newExtension.text.trim().replace(/^\./, "").toLowerCase()
+                                    if (ext === "")
+                                        return
+                                    const extra = Object.assign({}, win.value("associations.extra") || {})
+                                    extra[ext] = newKind.currentText
+                                    win.set("associations.extra", extra)
+                                    if (newDescription.text.trim() !== "") {
+                                        const names = Object.assign({}, win.value("associations.descriptions") || {})
+                                        names[ext] = newDescription.text.trim()
+                                        win.set("associations.descriptions", names)
+                                    }
+                                    associationPage.refresh()
+                                }
+                            }
+                            Button {
+                                text: "Delete"
+                                onClicked: {
+                                    const ext = newExtension.text.trim().replace(/^\./, "").toLowerCase()
+                                    const extra = Object.assign({}, win.value("associations.extra") || {})
+                                    delete extra[ext]
+                                    win.set("associations.extra", extra)
+                                    associationPage.refresh()
+                                }
+                            }
+                        }
+                        Check { path: "associations.folder-menu"; text: "Add RVP to the folder context menu" }
+                        Check { path: "associations.add-menu"; text: "Add \"Add to\" to the file context menu" }
+                        Check { path: "associations.play-menu"; text: "Add \"Play with\" to the file context menu" }
+                        Field {
+                            label: "File Open dialog's extensions"
+                            path: "associations.dialog-extensions"
+                            placeholder: "Every file (mkv mp4 ... to limit it)"
+                        }
+                        Heading { text: "AutoPlay" }
+                        Repeater {
+                            model: [["video", "Video files"], ["audio", "Audio files"], ["cd", "Audio CD"], ["vcd", "VCD"],
+                                    ["svcd", "SVCD"], ["dvd", "DVD"], ["bluray", "Blu-ray"]]
+                            delegate: CheckBox {
+                                required property var modelData
+                                text: modelData[1]
+                                checked: (win.value("associations.autoplay") || []).indexOf(modelData[0]) >= 0
+                                onToggled: {
+                                    const on = new Set(win.value("associations.autoplay") || [])
+                                    if (checked)
+                                        on.add(modelData[0])
+                                    else
+                                        on.delete(modelData[0])
+                                    win.set("associations.autoplay", Array.from(on).sort())
+                                }
+                            }
+                        }
+                        RowLayout {
+                            Button {
+                                text: "Apply to System"
+                                onClicked: {
+                                    associationPage.result = win.player.apply_associations()
+                                    associationPage.refresh()
+                                }
+                            }
+                            Button { text: "Clear and Rebuild the Icon Cache"; onClicked: win.player.rebuild_icon_cache() }
+                            Button {
+                                text: "Default Programs…"
+                                onClicked: Qt.openUrlExternally("ms-settings:defaultapps?registeredAppUser=RVP")
+                            }
+                        }
+                        Note { text: associationPage.result }
+                        Note { text: "RVP registers itself for these types and never makes itself their default: Windows' Default apps chooses that. RVP's files show RVP's icon." }
+                    }
+
+                    Page {
+                        Heading { text: "Screen saver" }
+                        Field {
+                            label: "Folder or file to play"
+                            path: "screensaver.media"
+                            placeholder: "RVP's logo"
+                            Button {
+                                text: "Browse…"
+                                onClicked: {
+                                    folderChooser.target = "screensaver.media"
+                                    folderChooser.open()
+                                }
+                            }
+                        }
+                        Check { path: "screensaver.shuffle"; text: "Shuffle" }
+                        Check { path: "screensaver.mute"; text: "Without sound" }
+                        RowLayout {
+                            Button {
+                                text: "Set up…"
+                                onClicked: screenSaverResult.text = win.player.use_as_screensaver()
+                            }
+                            Button { text: "Preview"; onClicked: Tools.run_self(["--screensaver"]) }
+                        }
+                        Note { id: screenSaverResult; text: "" }
+                        Note { text: "Set up makes RVP (rvp.scr beside rvp.exe) the current user's screen saver and opens Windows' screen saver settings for its wait. Windows' small preview there stays empty: RVP draws in its own window only." }
                     }
                 }
             }

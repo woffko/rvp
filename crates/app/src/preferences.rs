@@ -141,6 +141,7 @@ impl Settings {
         self.copy_time.validate(&mut notes);
         self.osd.validate(&mut notes);
         self.general.validate(&mut notes);
+        self.associations.validate(&mut notes);
         self.skins.validate(&mut notes);
         notes
     }
@@ -413,6 +414,8 @@ pub fn import(path: &Path) -> Result<(Settings, Vec<String>), String> {
                             | "skins"
                             | "osd"
                             | "general"
+                            | "associations"
+                            | "screensaver"
                     ) {
                         value.clone()
                     } else if value.is_object() {

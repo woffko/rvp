@@ -15,6 +15,9 @@
 //!   portrait pictures turned to landscape.
 //! * Dialogs: their font and size, kept on top, and Qt's DPI scaling
 //!   (taken at start).
+//! * The screen saver (`--screensaver`, Windows' `rvp.scr`): the page's
+//!   folder or file in fullscreen, repeated, shuffled and muted when so
+//!   set, with a state of its own and the settings left as they are.
 
 use serde::{Deserialize, Serialize};
 
@@ -199,6 +202,26 @@ pub struct StartWindow {
     pub restore_state: bool,
 }
 
+/// The Screen Saver page (`screensaver` in settings.json).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default, rename_all = "kebab-case")]
+pub struct ScreenSaverSettings {
+    /// A folder or a file; empty: RVP's logo.
+    pub media: String,
+    pub shuffle: bool,
+    pub mute: bool,
+}
+
+impl Default for ScreenSaverSettings {
+    fn default() -> Self {
+        Self {
+            media: String::new(),
+            shuffle: true,
+            mute: true,
+        }
+    }
+}
+
 /// Why the window asks RVP to pause or play on.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Attention {
@@ -261,6 +284,21 @@ impl App {
                 .model
                 .text(rvp_engine::PropertyId::FileFormat)
                 .is_some_and(|format| format.ends_with("_pipe") || format == "image2")
+    }
+
+    /// RVP starts as the screen saver: the page's media, repeated (and
+    /// shuffled) in the start's request; the settings are not saved.
+    pub fn start_screensaver(&mut self, request: &mut crate::instance::Request) {
+        let saver = self.settings.screensaver.clone();
+        self.settings_path = None;
+        self.settings.repeat = crate::Repeat::Album;
+        self.settings.playback.shuffle = saver.shuffle;
+        request.mode = crate::instance::Mode::Play;
+        request.files = if saver.media.trim().is_empty() {
+            Vec::new()
+        } else {
+            vec![saver.media]
+        };
     }
 
     /// Dropped files, asked what to do with (`drop_menu`): the choices'

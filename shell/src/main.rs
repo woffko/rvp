@@ -33,6 +33,7 @@ mod power;
 mod process;
 mod recorder;
 mod recycle;
+mod screensaver;
 mod skin_view;
 mod skin_view_qobject;
 mod startup;
@@ -49,6 +50,11 @@ use rvp_app::instance::{self, Request};
 use rvp_engine::EngineEvent;
 
 fn main() {
+    // `rvp.scr`: Windows' screen saver starts RVP and waits (M14).
+    if let Some(code) = screensaver::launch() {
+        std::process::exit(code);
+    }
+    screensaver::separate_state();
     process::restrict_library_search();
     metrics::start();
     let cli = Cli::parse(std::env::args().skip(1));

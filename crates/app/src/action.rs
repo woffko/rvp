@@ -408,10 +408,12 @@ pub enum SettingsPage {
     General,
     Start,
     Dialogs,
+    Association,
+    ScreenSaver,
 }
 
 impl SettingsPage {
-    pub const ALL: [SettingsPage; 41] = [
+    pub const ALL: [SettingsPage; 43] = [
         SettingsPage::Playback,
         SettingsPage::TimeJump,
         SettingsPage::Skip,
@@ -453,6 +455,8 @@ impl SettingsPage {
         SettingsPage::General,
         SettingsPage::Start,
         SettingsPage::Dialogs,
+        SettingsPage::Association,
+        SettingsPage::ScreenSaver,
     ];
 
     /// The page's key in the settings window (`shell/qml/Settings.qml`).
@@ -500,6 +504,8 @@ impl SettingsPage {
             SettingsPage::General => "general",
             SettingsPage::Start => "start",
             SettingsPage::Dialogs => "dialogs",
+            SettingsPage::Association => "association",
+            SettingsPage::ScreenSaver => "screensaver",
         }
     }
 }

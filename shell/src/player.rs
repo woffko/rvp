@@ -167,6 +167,19 @@ fn keep_skin(key: SkinKey, skin: Skin) -> &'static Skin {
     skin
 }
 
+/// The command line's files, or the screen saver's (M14), muted when its
+/// page says so.
+fn start_request(cli: &Cli, app: &mut App, engine: &Engine) -> Request {
+    let mut request = Request::from_cli(cli, &std::env::current_dir().unwrap_or_default());
+    if cli.flag("screensaver") {
+        app.start_screensaver(&mut request);
+        if app.settings.screensaver.mute {
+            drop(engine.set_flag("mute", true));
+        }
+    }
+    request
+}
+
 /// The command line's or `RVP_SKIN`'s skin stays until the user picks one
 /// (M14).
 fn command_line_skin(cli: &Cli, app: &mut App) {
@@ -942,7 +955,7 @@ impl qobject::Player {
         self.as_mut().set_has_skin(chrome.is_some());
         self.as_mut().set_native_video(crate::video::in_window());
         self.as_mut().set_window_title(QString::from("RVP"));
-        let request = Request::from_cli(&cli, &std::env::current_dir().unwrap_or_default());
+        let request = start_request(&cli, &mut app, engine);
         let power_dry_run = m11::power_dry_run(&cli, app.state_dir());
         self.as_mut().rust_mut().get_mut().core = Some(Core {
             app,

@@ -269,6 +269,27 @@ pub mod qobject {
         #[qinvokable]
         fn drop_choice(self: Pin<&mut Self>, choice: i32, paths: &QString);
 
+        /// The Association page's types (M14, JSON: extension, kind,
+        /// description, `on` in the settings and `registered` in the
+        /// registry now).
+        #[qinvokable]
+        fn associations_json(self: &Self) -> QString;
+
+        /// Apply to System: writes the Association page's registration for
+        /// the current user (Windows); the outcome as text.
+        #[qinvokable]
+        fn apply_associations(self: Pin<&mut Self>) -> QString;
+
+        /// Clear and Rebuild the Icon Cache (Windows' `ie4uinit -show`).
+        #[qinvokable]
+        fn rebuild_icon_cache(self: &Self) -> bool;
+
+        /// Screen Saver > Set up: RVP's `rvp.scr` as the current user's
+        /// screen saver and Windows' settings opened (Windows); the outcome
+        /// as text.
+        #[qinvokable]
+        fn use_as_screensaver(self: &Self) -> QString;
+
         /// Loads a subtitle file for the playing video.
         #[qinvokable]
         fn load_subtitle(self: Pin<&mut Self>, path: &QString);

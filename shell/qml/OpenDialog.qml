@@ -16,6 +16,11 @@ Item {
     function ask(adding) {
         holder.append = adding
         fileDialog.title = adding ? "Add File(s)" : "Open File(s)"
+        // Association: "Set File Extensions in File Open Dialog" (M14).
+        const extensions = (JSON.parse(holder.player.settings_view(false)).settings.associations["dialog-extensions"] || "")
+            .split(/[\s,;]+/).filter(ext => ext !== "").map(ext => "*." + ext.replace(/^[*.]+/, ""))
+        fileDialog.nameFilters = extensions.length > 0 ? ["Media (" + extensions.join(" ") + ")", "All files (*)"]
+                                                       : ["All files (*)"]
         fileDialog.open()
     }
     // `combine`: a second subtitle shown with the first (Combine Subtitle).

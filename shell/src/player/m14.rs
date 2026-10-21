@@ -716,6 +716,118 @@ impl qobject::Player {
         self.sync_general_look();
     }
 
+    pub(crate) fn associations_json(&self) -> QString {
+        let Some(core) = self.core() else {
+            return QString::from("[]");
+        };
+        let settings = &core.app.settings.associations;
+        let rows: Vec<serde_json::Value> = settings
+            .types()
+            .iter()
+            .map(|file_type| {
+                let key = format!(r"Software\Classes\RVP.{}", file_type.extension);
+                serde_json::json!({
+                    "extension": file_type.extension,
+                    "kind": file_type.kind,
+                    "description": settings.description(file_type),
+                    "on": !settings.off.contains(&file_type.extension),
+                    "registered": crate::ffi::bridge::rvp_registry_has_key(&key),
+                    "extra": settings.extra.contains_key(&file_type.extension),
+                })
+            })
+            .collect();
+        QString::from(&serde_json::Value::Array(rows).to_string())
+    }
+
+    pub(crate) fn apply_associations(self: Pin<&mut Self>) -> QString {
+        use crate::ffi::bridge::{
+            rvp_associations_changed, rvp_registry_delete_key, rvp_registry_delete_value,
+            rvp_registry_set,
+        };
+        use rvp_app::registration::{RegistryChange, registration};
+        if !cfg!(windows) {
+            return QString::from(
+                "On Linux the desktop entry (rvp.desktop) lists RVP's types; the desktop's settings choose the defaults.",
+            );
+        }
+        let Some(core) = self.core() else {
+            return QString::default();
+        };
+        let Ok(exe) = std::env::current_exe() else {
+            return QString::from("The program's path is unknown.");
+        };
+        let changes = registration(&core.app.settings.associations, &exe.display().to_string());
+        let failed = changes
+            .iter()
+            .filter(|change| !match change {
+                RegistryChange::Set { key, name, value } => rvp_registry_set(key, name, value),
+                RegistryChange::DeleteValue { key, name } => rvp_registry_delete_value(key, name),
+                RegistryChange::DeleteKey { key } => rvp_registry_delete_key(key),
+            })
+            .count();
+        rvp_associations_changed();
+        QString::from(&if failed == 0 {
+            format!(
+                "Applied: {} registry changes for the current user.",
+                changes.len()
+            )
+        } else {
+            format!("{failed} of {} registry changes failed.", changes.len())
+        })
+    }
+
+    // A QML invokable, so a method even though it asks the system only.
+    #[allow(clippy::unused_self)]
+    pub(crate) fn use_as_screensaver(&self) -> QString {
+        if !cfg!(windows) {
+            return QString::from("RVP is a screen saver on Windows only.");
+        }
+        let Some(saver) = std::env::current_exe()
+            .ok()
+            .map(|exe| exe.with_file_name("rvp.scr"))
+            .filter(|saver| saver.is_file())
+        else {
+            return QString::from("rvp.scr is missing beside rvp.exe.");
+        };
+        let desktop = r"Control Panel\Desktop";
+        let saver = saver.display().to_string();
+        if !(crate::ffi::bridge::rvp_registry_set(desktop, "SCRNSAVE.EXE", &saver)
+            && crate::ffi::bridge::rvp_registry_set(desktop, "ScreenSaveActive", "1"))
+        {
+            return QString::from("Windows' screen saver setting could not be changed.");
+        }
+        let opened = std::process::Command::new("control.exe")
+            .arg("desk.cpl,,@screensaver")
+            .spawn()
+            .is_ok();
+        QString::from(if opened {
+            "RVP is the screen saver; Windows' settings set its wait."
+        } else {
+            "RVP is the screen saver."
+        })
+    }
+
+    // A QML invokable, so a method even though it asks the system only.
+    #[allow(clippy::unused_self)]
+    pub(crate) fn rebuild_icon_cache(&self) -> bool {
+        if !cfg!(windows) {
+            return false;
+        }
+        let system = std::env::var_os("SystemRoot").map_or_else(
+            || std::path::PathBuf::from(r"C:\Windows"),
+            std::path::PathBuf::from,
+        );
+        let mut command = std::process::Command::new(system.join("System32").join("ie4uinit.exe"));
+        command.arg("-show");
+        #[cfg(windows)]
+        {
+            use std::os::windows::process::CommandExt;
+            // CREATE_NO_WINDOW: no console flashes up.
+            command.creation_flags(0x0800_0000);
+        }
+        command.spawn().is_ok()
+    }
+
     /// The General page's window options for QML.
     pub(super) fn sync_general_look(mut self: Pin<&mut Self>) {
         let Some(core) = self.core() else {

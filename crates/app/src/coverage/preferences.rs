@@ -913,6 +913,39 @@ const ITEMS: &[(u32, u32, Status)] = &[
     (366, 3035, Setting("input.drag-picture")),
     (366, 3036, Setting("input.drag-subtitles")),
     (366, 3037, Setting("input.x-wheel")),
+    // Screen Saver (485), M14.
+    (485, 3021, Setting("screensaver")),
+    (485, 3022, Setting("screensaver.media")),
+    (485, 3023, Setting("screensaver")),
+    // Association (336), M14.
+    (336, 3242, Setting("associations.off")),
+    (336, 3003, Missing(OWN_ICON)),
+    (336, 3088, Setting("associations.extra")),
+    (336, 3095, Setting("associations.descriptions")),
+    (336, 3031, Setting("associations.extra")),
+    (336, 3033, Setting("associations.extra")),
+    (336, 3027, Missing(OWN_ICON)),
+    (336, 3107, Setting("associations.off")),
+    (336, 3108, Setting("associations.off")),
+    (336, 3109, Setting("associations.off")),
+    (336, 3113, Setting("associations.off")),
+    (336, 3114, Setting("associations.off")),
+    (336, 3115, Setting("associations.off")),
+    (336, 3106, Setting("associations.off")),
+    (336, 3029, Setting("associations")),
+    (336, 3117, Setting("associations")),
+    (336, 3110, Setting("associations.folder-menu")),
+    (336, 3111, Setting("associations.add-menu")),
+    (336, 3112, Setting("associations.play-menu")),
+    (336, 3120, Setting("associations.dialog-extensions")),
+    (336, 3057, Setting("associations.autoplay")),
+    (336, 3061, Setting("associations.autoplay")),
+    (336, 3097, Setting("associations.autoplay")),
+    (336, 3098, Setting("associations.autoplay")),
+    (336, 3099, Setting("associations.autoplay")),
+    (336, 3066, Setting("associations.autoplay")),
+    (336, 3067, Setting("associations.autoplay")),
+    (336, 3118, Setting("associations")),
     // General (354), When Starting (457) and Dialog Box (436), M14.
     (354, 3003, Setting("on-top")),
     (354, 3005, Setting("open.when-opened")),
@@ -1288,6 +1321,9 @@ const ITEMS: &[(u32, u32, Status)] = &[
     ),
 ];
 
+/// PotPlayer's icon library: RVP draws its own art (M7).
+const OWN_ICON: &str = "RVP's files show RVP's own icon: PotPlayer's icon library is PotPlayer's art, which RVP never takes (M7's originality rules)";
+
 /// PotPlayer's update checks.
 const NO_UPDATES: &str = "RVP is private and has no website or update service";
 
@@ -1344,12 +1380,7 @@ const PAGES: &[(&str, &str)] = &[
         "PotPlayer's AngelScript extensions: with the deferred online subtitles (M13)",
     ),
     ("Accessibility", "planned in M14 (goal P)"),
-    (
-        "Association",
-        "RVP registers its types itself (M8, packaging/associations.tsv); this page's options: M14 (goal P)",
-    ),
     ("Configuration", "planned in M14 (goal P)"),
-    ("Screen Saver", "planned in M14 (goal P)"),
     ("Kakao TV", DAUM),
 ];
 

@@ -325,7 +325,7 @@ pub struct App {
     /// so it is unpaused again once loaded.
     play_on_load: bool,
     /// Where settings changed from the window (normalizer) are saved.
-    settings_path: Option<PathBuf>,
+    pub(crate) settings_path: Option<PathBuf>,
     writer: storage::Writer,
     /// The albums' file did not exist: nothing was restored.
     first_start: bool,

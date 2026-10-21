@@ -44,6 +44,7 @@ pub mod pointer;
 pub mod power;
 pub mod preferences;
 pub mod record;
+pub mod registration;
 pub mod render;
 mod resume;
 pub mod scenes;
