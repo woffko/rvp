@@ -92,11 +92,13 @@ function Title($Session) { (Await ($Session.TryGetMediaPropertiesAsync()) $prope
 
 function Status($Session) { "$($Session.GetPlaybackInfo().PlaybackStatus)" }
 
-# Waits up to 10 s until `$Test` holds for RVP's session; returns what the
-# session shows then.
+# Waits up to 30 s until `$Test` holds for RVP's session; returns what the
+# session shows then. The hosted runner sometimes takes more than 10 s to
+# start the first file (goals T and O saw `Opened` there, and Next still
+# off); the check is about the controls, not about the start's speed.
 function WaitFor([scriptblock]$Test) {
     $shown = $null
-    $deadline = (Get-Date).AddSeconds(10)
+    $deadline = (Get-Date).AddSeconds(30)
     do {
         # A session that goes away meanwhile is read again.
         try {
@@ -126,7 +128,7 @@ try {
         Check 'playing_title' ($shown.Status -eq 'Playing' -and $shown.Title -match 'clip-a') "$($shown.Status) '$($shown.Title)'"
         # Windows offers the button that fits the status: Pause while
         # playing, Play while paused. Next comes once RVP knows the album.
-        $deadline = (Get-Date).AddSeconds(10)
+        $deadline = (Get-Date).AddSeconds(30)
         do {
             $controls = (Session).GetPlaybackInfo().Controls
             if ($controls.IsPauseEnabled -and $controls.IsNextEnabled) { break }
