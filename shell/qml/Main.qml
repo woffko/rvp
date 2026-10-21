@@ -53,6 +53,7 @@ Window {
     readonly property int requestSubtitleSync: 37
     readonly property int requestSubtitleEditor: 38
     readonly property int requestColorTheme: 39
+    readonly property int requestSystemInfo: 40
     readonly property int requestRecordAs: 27
     readonly property int requestRecordFolder: 28
     readonly property int requestDialog: 29
@@ -273,6 +274,10 @@ Window {
         case requestColorTheme:
             colorThemeLoader.active = true
             colorThemeLoader.item.ask()
+            break
+        case requestSystemInfo:
+            systemInfoLoader.active = true
+            systemInfoLoader.item.begin()
             break
         case requestRecordAs:
             dialogLoader.active = true
@@ -655,7 +660,7 @@ Window {
         width: player.video_rect.width,
         height: player.video_rect.height,
         visible: player.has_video && root.visibility !== Window.Minimized && root.visibility !== Window.Hidden,
-        holes: [videoHole(seekTip), videoHole(powerBox), videoHole(infoBox),
+        holes: [videoHole(seekTip), videoHole(powerBox), videoHole(infoBox), videoHole(miscInfoBox),
                 videoHole(messageBox), videoHole(sceneLoader.item), videoHole(slideshowLoader.item)]
             .filter(hole => hole !== null)
             .concat(player.overlay && staticSkin.visible ? JSON.parse(player.chrome_bars || "[]") : [])
@@ -911,6 +916,12 @@ Window {
         active: false
         Component.onCompleted: setSource("ColorTheme.qml", { player: player })
     }
+    // Playback/System Info (Ctrl+F1, M14): a window of its own.
+    Loader {
+        id: systemInfoLoader
+        active: false
+        Component.onCompleted: setSource("SystemInfo.qml", { player: player, owner: root })
+    }
     Loader {
         id: albumLoader
         anchors.fill: parent
@@ -1000,25 +1011,41 @@ Window {
         }
     }
 
+    // The OSD Messages page's look (M14): alignment, margins and fonts.
+    readonly property var osdLook: player.osd_look ? JSON.parse(player.osd_look) : ({})
+    // A font size of the page, following the video's height when so set.
+    function osdSize(size) {
+        const base = size > 0 ? size : 20
+        return Math.max(8, Math.round(osdLook.auto === true ? base * player.video_rect.height / 720 : base))
+    }
+
     // The OSD: short notices over the video (volume, normalizer), as
-    // PotPlayer shows them at the top left.
+    // PotPlayer shows them at the top left (OSD Messages places them).
     Text {
         id: osdText
-        // mpv shows it over the Direct3D 11 renderer's window.
-        visible: player.osd !== "" && !player.native_video
+        readonly property string h: root.osdLook.h || "left"
+        readonly property string v: root.osdLook.v || "top"
+        readonly property int marginX: root.osdLook.right !== undefined ? root.osdLook.right : 16
+        readonly property int marginY: root.osdLook.top !== undefined ? root.osdLook.top : 12
+        // mpv shows it over the Direct3D 11 renderer's window, and in the
+        // picture when the page says so.
+        visible: player.osd !== "" && !player.native_video && root.osdLook.video !== true
         z: 20
-        x: player.video_rect.x + 16
-        y: player.video_rect.y + 12
+        x: player.video_rect.x + (h === "left" ? marginX : h === "right" ? player.video_rect.width - width - marginX
+                                                      : (player.video_rect.width - width) / 2)
+        y: player.video_rect.y + (v === "top" ? marginY : v === "bottom" ? player.video_rect.height - height - marginY
+                                                     : (player.video_rect.height - height) / 2)
         text: player.osd
         color: "#f0f0f0"
         style: Text.Outline
         styleColor: "#000000"
-        font.pixelSize: 20
+        font.family: root.osdLook.font || Qt.application.font.family
+        font.pixelSize: root.osdSize(root.osdLook.size)
         onTextChanged: {
             if (text === "")
                 return
             osdTimer.restart()
-            if (player.native_video)
+            if (player.native_video || root.osdLook.video === true)
                 player.mpv_osd(text, osdTimer.interval)
         }
         Timer {
@@ -1114,6 +1141,27 @@ Window {
         }
     }
 
+    // Misc info (Scroll Lock, M14): a line in the video's top right corner.
+    Rectangle {
+        id: miscInfoBox
+        visible: player.misc_info !== ""
+        z: 20
+        x: player.video_rect.x + player.video_rect.width - width - 12
+        y: player.video_rect.y + 12
+        width: miscInfoText.implicitWidth + 16
+        height: miscInfoText.implicitHeight + 8
+        radius: 4
+        color: "#99000000"
+        Text {
+            id: miscInfoText
+            anchors.centerIn: parent
+            color: "#f0f0f0"
+            font.family: root.osdLook.infoFont || Qt.application.font.family
+            font.pixelSize: root.osdSize(root.osdLook.infoSize > 0 ? root.osdLook.infoSize : 14)
+            text: player.misc_info
+        }
+    }
+
     // Playback information (Tab), refreshed every second while shown.
     Rectangle {
         id: infoBox
@@ -1130,7 +1178,8 @@ Window {
             x: 8
             y: 6
             color: "#f0f0f0"
-            font.pixelSize: 14
+            font.family: root.osdLook.infoFont || Qt.application.font.family
+            font.pixelSize: root.osdSize(root.osdLook.infoSize > 0 ? root.osdLook.infoSize : 14)
             text: ""
         }
         Timer {

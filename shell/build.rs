@@ -69,6 +69,7 @@ fn main() {
         .qml_file("qml/SubtitleSync.qml")
         .qml_file("qml/SubtitleBrowser.qml")
         .qml_file("qml/ColorTheme.qml")
+        .qml_file("qml/SystemInfo.qml")
         .qml_file("qml/ControlPanel.qml")
         .qml_file("qml/PlaybackDialogs.qml")
         .qml_file("qml/VideoDialogs.qml")

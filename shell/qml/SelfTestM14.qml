@@ -196,9 +196,30 @@ Item {
             t.check("m14_skin_zoom", bar.height > 0 && Math.abs(zoomed.height - bar.height * 1.5) <= 1,
                     bar.height + " -> " + zoomed.height)
             setSetting("skins.zoom", 100)
-            t.finish()
+            // Misc info (Scroll Lock) and the short info (Shift+Tab).
+            player.key(Qt.Key_ScrollLock, 0)
+            t.check("m14_misc_info", /\d\d:\d\d:\d\d/.test(player.misc_info), player.misc_info)
+            player.key(Qt.Key_ScrollLock, 0)
+            t.check("m14_misc_info_off", player.misc_info === "", player.misc_info)
+            player.key(Qt.Key_Backtab, Qt.ShiftModifier)
+            t.check("m14_short_info", player.osd.indexOf("fixture-60s.mkv") >= 0
+                        && player.osd.indexOf("Subtitles") >= 0, player.osd)
+            // Playback/System Info (Ctrl+F1).
+            const sections = JSON.parse(player.system_info_json())
+            const video = sections.find(section => section.title === "Video")
+            const codec = video ? video.rows.find(row => row[0] === "Codec") : null
+            t.check("m14_system_info_reads_mpv", codec && /264/.test(codec[1]), JSON.stringify(video))
+            player.key(Qt.Key_F1, Qt.ControlModifier)
+            t.next()
             break
         }
+        case 20:
+            t.waitFor("m14_system_info_window", () => Tools.windows_json().indexOf("Playback/System Info") >= 0,
+                      5000, () => Tools.windows_json())
+            break
+        case 21:
+            t.finish()
+            break
         }
     }
 }

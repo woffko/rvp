@@ -33,6 +33,7 @@ pub mod menu;
 pub mod menu_design;
 pub mod misc;
 pub mod normalizer;
+pub mod osd;
 pub mod panel;
 pub mod picture;
 pub mod playback;

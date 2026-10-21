@@ -139,6 +139,7 @@ impl Settings {
         self.subtitles.validate(&mut notes);
         self.speech.validate(&mut notes);
         self.copy_time.validate(&mut notes);
+        self.osd.validate(&mut notes);
         self.skins.validate(&mut notes);
         notes
     }
@@ -409,6 +410,7 @@ pub fn import(path: &Path) -> Result<(Settings, Vec<String>), String> {
                             | "input"
                             | "copy-time"
                             | "skins"
+                            | "osd"
                     ) {
                         value.clone()
                     } else if value.is_object() {

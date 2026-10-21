@@ -102,6 +102,10 @@ pub mod qobject {
         #[qproperty(bool, overlay)]
         #[qproperty(f64, osc_opacity)]
         #[qproperty(bool, animations)]
+        /// The OSD Messages page's look (M14, JSON: `App::osd_look`) and
+        /// the misc info line (Scroll Lock), refreshed each second.
+        #[qproperty(QString, osd_look)]
+        #[qproperty(QString, misc_info)]
         /// The slideshow for audio files (JSON, `App::slideshow_json`).
         #[qproperty(QString, slideshow)]
         #[qproperty(QString, power_notice)]
@@ -243,6 +247,12 @@ pub mod qobject {
         /// `native`, `dark`, `opacity`, `scale` and the skin's `colors`.
         #[qinvokable]
         fn menu_look_json(self: &Self) -> QString;
+
+        /// The Playback/System Info window's rows (M14, JSON: a list of
+        /// sections, each a title and its name and value pairs), read from
+        /// mpv now (once a second while the window shows).
+        #[qinvokable]
+        fn system_info_json(self: &Self) -> QString;
 
         /// Loads a subtitle file for the playing video.
         #[qinvokable]

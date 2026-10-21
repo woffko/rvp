@@ -399,6 +399,8 @@ impl App {
             Action::SetOnTop(mode) => Some(self.set_on_top(mode)),
             Action::WindowScale(scale) => Some(UiRequest::ScaleWindow(scale.factor())),
             Action::WindowFitAspect => Some(UiRequest::FitAspect),
+            Action::Osd(command) => self.osd_command(engine, command),
+            Action::SystemInfo => Some(UiRequest::SystemInfo),
             Action::PlaybackInfo => {
                 self.session.info = !self.session.info;
                 Some(UiRequest::ShowInfo(self.session.info))

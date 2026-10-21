@@ -111,6 +111,8 @@ pub mod request {
     pub const SUBTITLE_EDITOR: i32 = 38;
     /// The colour theme's Customize dialog.
     pub const COLOR_THEME: i32 = 39;
+    /// The Playback/System Info window (M14, `SystemInfo.qml`).
+    pub const SYSTEM_INFO: i32 = 40;
 }
 
 /// The skin the main window shows (the painters read it on the render
@@ -472,6 +474,8 @@ pub struct PlayerRust {
     pub(crate) overlay: bool,
     pub(crate) osc_opacity: f64,
     pub(crate) animations: bool,
+    pub(crate) osd_look: QString,
+    pub(crate) misc_info: QString,
     pub(crate) slideshow: QString,
     pub(crate) power_notice: QString,
     pub(crate) power_seconds: i32,
@@ -2007,7 +2011,16 @@ impl qobject::Player {
                     .set_frame_path(QString::from(&file_url(&path)));
                 self.ui_request(request::SAVE_FRAME_AS, 0);
             }
-            UiRequest::Osd(text) => self.set_osd(QString::from(&text)),
+            // General info messages can be turned off (M14); asked-for
+            // info shows anyway.
+            UiRequest::Osd(text) => {
+                if core.app.settings.osd.messages {
+                    self.as_mut().set_osd(QString::from(&text));
+                }
+                // Scroll Lock's line shows at once.
+                self.tick_misc_info();
+            }
+            UiRequest::Info(text) => self.set_osd(QString::from(&text)),
             UiRequest::Message(text) => self.show_message(&text),
             request @ (UiRequest::SystemVolume(_)
             | UiRequest::AudioSyncDialog(_)
@@ -2371,6 +2384,7 @@ impl qobject::Player {
         self.as_mut().sync_skin();
         self.as_mut().sync_opacity();
         self.as_mut().refresh_overlay();
+        self.as_mut().tick_misc_info();
         self.sync_chrome();
     }
 
@@ -2809,6 +2823,7 @@ impl qobject::Player {
         }
         self.as_mut().tick_m11();
         self.as_mut().tick_bars();
+        self.as_mut().tick_misc_info();
         self.as_mut().tick_gpu_power();
         self.check_native_video();
     }

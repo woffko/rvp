@@ -57,9 +57,15 @@ impl qobject::Player {
                 self.as_mut().sync_opacity();
                 self.as_mut().refresh_overlay();
                 self.as_mut().sync_logo();
-                self.set_osd(QString::from(&text));
+                if self
+                    .core()
+                    .is_some_and(|core| core.app.settings.osd.messages)
+                {
+                    self.set_osd(QString::from(&text));
+                }
             }
             UiRequest::ColorThemeDialog => self.ui_request(request::COLOR_THEME, 0),
+            UiRequest::SystemInfo => self.ui_request(request::SYSTEM_INFO, 0),
             other => eprintln!("rvp: unhandled request {other:?}"),
         }
     }
@@ -356,6 +362,28 @@ impl qobject::Player {
         }
     }
 
+    /// The misc info line (Scroll Lock) and the OSD's look, once a second
+    /// and after a change.
+    pub(super) fn tick_misc_info(mut self: Pin<&mut Self>) {
+        let fullscreen = *self.fullscreen();
+        let Some(core) = self.as_mut().core_mut() else {
+            return;
+        };
+        let look = QString::from(&core.app.osd_look().to_string());
+        let power = if core.app.settings.osd.misc.power {
+            battery()
+        } else {
+            None
+        };
+        let line = QString::from(&core.app.misc_info(fullscreen, &core.clock, power));
+        if *self.osd_look() != look {
+            self.as_mut().set_osd_look(look);
+        }
+        if *self.misc_info() != line {
+            self.set_misc_info(line);
+        }
+    }
+
     /// Sets `overlay` and the bars' look over the video from the settings;
     /// the overlay.
     pub(super) fn sync_overlay(mut self: Pin<&mut Self>) -> bool {
@@ -459,6 +487,104 @@ impl qobject::Player {
         QString::from(&look.to_string())
     }
 
+    pub(crate) fn system_info_json(&self) -> QString {
+        let Some(core) = self.core() else {
+            return QString::from("[]");
+        };
+        let mpv = core.engine.mpv();
+        let text = |name: &str| {
+            mpv.get_property::<String>(name)
+                .ok()
+                .filter(|text| !text.is_empty())
+        };
+        let int = |name: &str| mpv.get_property::<i64>(name).ok();
+        let float = |name: &str| {
+            mpv.get_property::<f64>(name)
+                .ok()
+                .filter(|value| value.is_finite())
+        };
+        let joined = |parts: Vec<Option<String>>| {
+            let parts: Vec<String> = parts.into_iter().flatten().collect();
+            (!parts.is_empty()).then(|| parts.join(", "))
+        };
+        let kbps = |name: &str| float(name).map(|bits| format!("{:.0} kbit/s", bits / 1000.0));
+        let rate = |value: Option<f64>, unit: &str| value.map(|value| format!("{value:.3} {unit}"));
+        let size = match (int("video-params/w"), int("video-params/h")) {
+            (Some(width), Some(height)) => Some(format!("{width}x{height}")),
+            _ => None,
+        };
+        let file_size = int("file-size").map(|bytes| {
+            // A size in MiB for reading.
+            #[allow(clippy::cast_precision_loss)]
+            let mib = bytes as f64 / 1_048_576.0;
+            format!("{mib:.1} MiB")
+        });
+        let time = |name: &str| float(name).map(rvp_app::view::format_time);
+        let sections = serde_json::json!([
+            {
+                "title": "File",
+                "rows": [
+                    ["Path", text("path")],
+                    ["Title", text("media-title")],
+                    ["Format", text("file-format")],
+                    ["Size", file_size],
+                    ["Duration", time("duration")],
+                    ["Position", time("time-pos")],
+                    ["Chapters", int("chapters").map(|count| count.to_string())],
+                ],
+            },
+            {
+                "title": "Video",
+                "rows": [
+                    ["Codec", text("video-codec")],
+                    ["Size", size],
+                    ["Pixel format", text("video-params/pixelformat")],
+                    ["Colour", joined(vec![
+                        text("video-params/colormatrix"),
+                        text("video-params/primaries"),
+                        text("video-params/gamma"),
+                        text("video-params/colorlevels"),
+                    ])],
+                    ["Frame rate", rate(float("container-fps"), "fps")],
+                    ["Output rate", rate(float("estimated-vf-fps"), "fps")],
+                    ["Bitrate", kbps("video-bitrate")],
+                    ["Hardware decoding", text("hwdec-current")],
+                    ["Filters", text("vf")],
+                    ["Dropped frames", joined(vec![
+                        int("frame-drop-count").map(|count| format!("{count} output")),
+                        int("decoder-frame-drop-count").map(|count| format!("{count} decoder")),
+                    ])],
+                ],
+            },
+            {
+                "title": "Audio",
+                "rows": [
+                    ["Codec", text("audio-codec")],
+                    ["Format", joined(vec![
+                        int("audio-params/samplerate").map(|rate| format!("{rate} Hz")),
+                        text("audio-params/hr-channels"),
+                        text("audio-params/format"),
+                    ])],
+                    ["Bitrate", kbps("audio-bitrate")],
+                    ["Output", joined(vec![text("current-ao"), text("audio-device")])],
+                    ["Filters", text("af")],
+                ],
+            },
+            {
+                "title": "Rendering",
+                "rows": [
+                    ["Video output", text("current-vo")],
+                    ["Display rate", rate(float("display-fps"), "Hz")],
+                    ["Video sync", text("video-sync")],
+                    ["Scaler", joined(vec![text("scale"), text("dscale"), text("cscale")])],
+                    ["Shaders", text("glsl-shaders")],
+                ],
+            },
+            system_section(text("mpv-version").as_deref(), text("ffmpeg-version").as_deref()),
+        ]);
+        QString::from(&sections.to_string())
+    }
+
     pub(crate) fn settings_folder_url(&self, kind: &QString) -> QString {
         let Some(core) = self.core() else {
             return QString::default();
@@ -494,4 +620,54 @@ impl qobject::Player {
             self.as_mut().set_panel_opacity(panel);
         }
     }
+}
+
+/// The battery's charge for the misc info: Windows' power status, or
+/// Linux's power supplies.
+fn battery() -> Option<String> {
+    #[cfg(windows)]
+    {
+        use windows::Win32::System::Power::{GetSystemPowerStatus, SYSTEM_POWER_STATUS};
+        let mut status = SYSTEM_POWER_STATUS::default();
+        // SAFETY: FFI point. GetSystemPowerStatus fills the structure it is
+        // given, which lives on this stack frame for the call; a failure
+        // leaves it zeroed and is answered with no battery.
+        #[allow(unsafe_code)]
+        let read = unsafe { GetSystemPowerStatus(&raw mut status) };
+        // 128: no system battery; 255: unknown.
+        if read.is_err() || status.BatteryFlag & 128 != 0 || status.BatteryLifePercent > 100 {
+            return None;
+        }
+        Some(format!(
+            "battery {}%{}",
+            status.BatteryLifePercent,
+            if status.ACLineStatus == 1 {
+                " (charging)"
+            } else {
+                ""
+            }
+        ))
+    }
+    #[cfg(not(windows))]
+    {
+        rvp_app::osd::battery_from_sysfs(std::path::Path::new("/sys/class/power_supply"))
+    }
+}
+
+/// The Playback/System Info window's System section: RVP's, mpv's and
+/// FFmpeg's versions, the platform, the processor and the battery (Qt's
+/// own come from QML).
+fn system_section(mpv: Option<&str>, ffmpeg: Option<&str>) -> serde_json::Value {
+    let threads = std::thread::available_parallelism().map_or(0, std::num::NonZero::get);
+    serde_json::json!({
+        "title": "System",
+        "rows": [
+            ["RVP", Some(env!("CARGO_PKG_VERSION"))],
+            ["mpv", mpv],
+            ["FFmpeg", ffmpeg],
+            ["Platform", Some(format!("{} {}", std::env::consts::OS, std::env::consts::ARCH))],
+            ["Processor threads", Some(threads.to_string())],
+            ["Battery", battery()],
+        ],
+    })
 }

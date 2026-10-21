@@ -400,13 +400,14 @@ pub enum SettingsPage {
     SubtitleBrowser,
     /// Create Subtitles from Audio.
     Speech,
-    // M14: General > Skins' pages.
+    // M14: General > Skins' pages, and OSD Messages.
     Logo,
     Osc,
+    Osd,
 }
 
 impl SettingsPage {
-    pub const ALL: [SettingsPage; 37] = [
+    pub const ALL: [SettingsPage; 38] = [
         SettingsPage::Playback,
         SettingsPage::TimeJump,
         SettingsPage::Skip,
@@ -438,6 +439,7 @@ impl SettingsPage {
         SettingsPage::Skins,
         SettingsPage::Logo,
         SettingsPage::Osc,
+        SettingsPage::Osd,
         SettingsPage::Shaders,
         SettingsPage::WindowSize,
         SettingsPage::FullscreenMode,
@@ -487,6 +489,7 @@ impl SettingsPage {
             SettingsPage::Speech => "speech",
             SettingsPage::Logo => "logo",
             SettingsPage::Osc => "osc",
+            SettingsPage::Osd => "osd",
         }
     }
 }
@@ -580,6 +583,11 @@ pub enum Action {
     TogglePlaylist,
     /// Playback information over the video (Tab).
     PlaybackInfo,
+    /// M14: the misc info line (Scroll Lock) and the short info
+    /// (Shift+Tab).
+    Osd(crate::osd::OsdCommand),
+    /// M14: the Playback/System Info window (Ctrl+F1).
+    SystemInfo,
     /// The settings window (F5, PotPlayer's Preferences).
     Preferences,
     /// The settings window's key and mouse page.
@@ -4591,8 +4599,32 @@ pub const ACTIONS: &[ActionInfo] = &[
         "playback-info",
         "Display Full Playback/Audio Tag Info on Screen",
         Some("Tab"),
-        &[10351, 10195],
-        &["ID_PLAYINFO_OSD", "ID_PLAYINFO_WINDOW"],
+        &[10351],
+        &["ID_PLAYINFO_OSD"],
+    ),
+    info(
+        Action::SystemInfo,
+        "system-info",
+        "Playback/System Info...",
+        Some("Ctrl+F1"),
+        &[10195],
+        &["ID_PLAYINFO_WINDOW"],
+    ),
+    info(
+        Action::Osd(crate::osd::OsdCommand::MiscInfo),
+        "misc-info",
+        "Display Misc Info on Screen",
+        Some("ScrollLock"),
+        &[10442],
+        &[],
+    ),
+    info(
+        Action::Osd(crate::osd::OsdCommand::ShortInfo),
+        "short-info",
+        "Show Short Playback Info on Screen",
+        Some("Shift+Tab"),
+        &[10449],
+        &[],
     ),
     info(
         Action::Preferences,

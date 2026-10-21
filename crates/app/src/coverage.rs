@@ -144,8 +144,6 @@ const ITEM_REASONS: &[(u32, &str)] = &[
     ),
     (10644, "presets are not in RVP yet"),
     (10809, "touch input is not planned"),
-    (10442, "other on-screen information is not in RVP yet"),
-    (10449, "other on-screen information is not in RVP yet"),
     (
         20009,
         "a submenu in PotPlayer's running menu: Skins > Opacity > Main Window lists the percentages (39600-39609)",

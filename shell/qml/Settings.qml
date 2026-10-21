@@ -54,6 +54,7 @@ ApplicationWindow {
         { key: "skins", title: "Skins" },
         { key: "logo", title: "Logo" },
         { key: "osc", title: "On Screen Control" },
+        { key: "osd", title: "OSD Messages" },
         { key: "window-size", title: "Window Size" },
         { key: "fullscreen-mode", title: "Fullscreen Mode" },
         { key: "capture", title: "Video Capture" },
@@ -64,7 +65,7 @@ ApplicationWindow {
     // group's pages show as tabs over the page. `page` is the group's own
     // page (General has none yet: M14 brings PotPlayer's general options).
     readonly property var tree: [
-        { title: "General", page: "", pages: ["input", "input-options", "skins", "logo", "osc", "visualization", "playlist"] },
+        { title: "General", page: "", pages: ["input", "input-options", "skins", "logo", "osc", "visualization", "osd", "playlist"] },
         { title: "Playback", page: "playback",
           pages: ["time-jump", "skip", "section-repeat", "scene-browser", "window-size", "fullscreen-mode"] },
         { title: "Subtitles", page: "subtitles", pages: ["subtitle-style", "subtitle-location", "subtitle-sync", "subtitle-browser", "speech"] },
@@ -2178,6 +2179,65 @@ ApplicationWindow {
                             }
                             Button { text: "Set Custom Color Theme…"; onClicked: win.player.run_action("theme-customize") }
                         }
+                    }
+
+                    Page {
+                        Heading { text: "General OSD settings" }
+                        Check { path: "osd.messages"; text: "Show general info messages" }
+                        Choice {
+                            label: "Output"
+                            path: "osd.output"
+                            values: ["window", "video"]
+                            texts: ({ "window": "Over the video (RVP's window)", "video": "In the picture (mpv's OSD)" })
+                        }
+                        Choice {
+                            label: "Horizontal align"
+                            path: "osd.h-align"
+                            values: ["left", "center", "right"]
+                            texts: ({ "left": "Left", "center": "Center", "right": "Right" })
+                        }
+                        Choice {
+                            label: "Vertical align"
+                            path: "osd.v-align"
+                            values: ["top", "center", "bottom"]
+                            texts: ({ "top": "Top", "center": "Center", "bottom": "Bottom" })
+                        }
+                        Amount { label: "Top margin"; path: "osd.top-margin"; from: 0; to: 200; unit: "px" }
+                        Amount { label: "Right margin"; path: "osd.right-margin"; from: 0; to: 200; unit: "px" }
+                        Check { path: "osd.auto-size"; text: "Auto font size (follows the video's height)" }
+                        Field { label: "Font"; path: "osd.font"; placeholder: "Qt's font" }
+                        Amount { label: "Font size"; path: "osd.font-size"; from: 8; to: 96; unit: "px" }
+                        Field { label: "Info font"; path: "osd.info-font"; placeholder: "Qt's font" }
+                        Amount { label: "Info font size"; path: "osd.info-font-size"; from: 8; to: 96; unit: "px" }
+                        Heading { text: "Content of Misc Info (Scroll Lock)" }
+                        Check { path: "osd.misc.show"; text: "Display misc info" }
+                        Check { path: "osd.misc.key-fullscreen-only"; text: "Operate only in fullscreen" }
+                        Check { path: "osd.misc.fullscreen-only"; text: "Display only in fullscreen" }
+                        Choice {
+                            label: "Playback time"
+                            path: "osd.misc.time"
+                            values: ["none", "elapsed", "remaining", "both"]
+                            texts: ({ "none": "Do not show", "elapsed": "Elapsed", "remaining": "Remaining",
+                                      "both": "Elapsed and remaining" })
+                        }
+                        Check { path: "osd.misc.percent"; text: "Percent value" }
+                        Check { path: "osd.misc.frames"; text: "Number of elapsed frames" }
+                        Choice {
+                            label: "Local time"
+                            path: "osd.misc.clock"
+                            values: ["none", "minutes", "seconds"]
+                            texts: ({ "none": "Do not show", "minutes": "Hours and minutes", "seconds": "With seconds" })
+                        }
+                        Check { path: "osd.misc.position"; text: "Playlist sequence number" }
+                        Check { path: "osd.misc.file"; text: "Filename" }
+                        Check { path: "osd.misc.chapter"; text: "Bookmark/chapter info" }
+                        Check { path: "osd.misc.power"; text: "System power state (the battery)" }
+                        Heading { text: "Content of Short Playback Info (Shift+Tab)" }
+                        Check { path: "osd.short.file"; text: "Filename" }
+                        Check { path: "osd.short.subtitle"; text: "Subtitle name" }
+                        Check { path: "osd.short.time"; text: "Playback time" }
+                        Check { path: "osd.short.section"; text: "Marked section (A-B)" }
+                        Check { path: "osd.short.codec"; text: "Codec info" }
                     }
 
                     Page {

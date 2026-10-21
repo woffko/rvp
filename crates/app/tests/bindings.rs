@@ -6,6 +6,7 @@ use std::time::{Duration, Instant};
 use rvp_app::audio::commands::AudioCommand;
 use rvp_app::capture::{CaptureCommand, Shot};
 use rvp_app::hlsl::Stage;
+use rvp_app::osd::OsdCommand;
 use rvp_app::picture::PictureCommand;
 use rvp_app::playlist::local_path;
 use rvp_app::record::RecordCommand;
@@ -1145,6 +1146,31 @@ impl Harness {
                     self.dispatch(action),
                     Some(UiRequest::Message("No subtitle shows".to_owned()))
                 );
+            }
+            _ => self.check_m14(action),
+        }
+    }
+
+    /// M14's default keys: the misc info line (Scroll Lock), the short info
+    /// (Shift+Tab) and the Playback/System Info window (Ctrl+F1).
+    fn check_m14(&mut self, action: Action) {
+        match action {
+            Action::Osd(OsdCommand::MiscInfo) => {
+                self.osd(action, "Misc info: on");
+                assert!(
+                    self.app
+                        .misc_info(false, "12:00:00", None)
+                        .contains("00:00")
+                );
+                self.osd(action, "Misc info: off");
+                assert_eq!(self.app.misc_info(false, "12:00:00", None), "");
+            }
+            Action::Osd(OsdCommand::ShortInfo) => match self.dispatch(action) {
+                Some(UiRequest::Info(text)) => assert!(text.contains(".mkv"), "{text}"),
+                other => panic!("{other:?}"),
+            },
+            Action::SystemInfo => {
+                assert_eq!(self.dispatch(action), Some(UiRequest::SystemInfo));
             }
             _ => panic!("{action:?} has no check"),
         }

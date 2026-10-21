@@ -120,6 +120,11 @@ pub enum UiRequest {
     },
     /// A short notice over the video (volume, normalizer).
     Osd(String),
+    /// A notice the user asked for (Shift+Tab's short info, M14): it shows
+    /// even with general info messages off.
+    Info(String),
+    /// The Playback/System Info window (Ctrl+F1, M14).
+    SystemInfo,
     /// A change of the system's volume (the master volume).
     SystemVolume(crate::audio::commands::SystemVolume),
     /// The Adjust Audio Sync dialog, at this sync (seconds; then
