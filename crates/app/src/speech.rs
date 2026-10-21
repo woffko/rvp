@@ -2,7 +2,9 @@
 //! whisper.cpp; `docs/spikes/m13-whisper.md` has the study.
 //!
 //! * The engine is whisper.cpp's command line (`whisper-cli`), started as a
-//!   process of its own with a lower priority and no console. RVP's Windows
+//!   process of its own with no console: for the whole file at normal
+//!   priority on all cores but one, in real time at a lower priority on
+//!   half of them, so playback keeps the CPU first. RVP's Windows
 //!   package has one build for the CPU and Vulkan (`whisper/` next to
 //!   `rvp.exe`, `tools/whisper/build.sh`): ggml loads its Vulkan backend
 //!   when a driver offers one, and `-ng` keeps a job on the CPU. The CUDA
@@ -388,6 +390,8 @@ struct Recognition {
     /// The engine may use the GPU (`-ng` otherwise).
     gpu: bool,
     threads: usize,
+    /// Below normal priority (real time: playback keeps the CPU first).
+    background: bool,
 }
 
 /// The audio a job reads.
@@ -520,7 +524,14 @@ fn extract(source: &Source, wav: &Path, start: f64, end: f64) -> Result<(), Stri
 
 /// Starts the engine on `wav`, writing `<base>.srt`.
 fn start_engine(recognition: &Recognition, wav: &Path, base: &Path) -> Result<Child, String> {
-    let mut command = Command::new(&recognition.program);
+    // Linux: coreutils' nice for the lower priority.
+    let mut command = if recognition.background && !cfg!(windows) {
+        let mut nice = Command::new("nice");
+        nice.args(["-n", "10"]).arg(&recognition.program);
+        nice
+    } else {
+        Command::new(&recognition.program)
+    };
     command
         .arg("-m")
         .arg(&recognition.model)
@@ -539,9 +550,14 @@ fn start_engine(recognition: &Recognition, wav: &Path, base: &Path) -> Result<Ch
     #[cfg(windows)]
     {
         use std::os::windows::process::CommandExt as _;
-        // CREATE_NO_WINDOW | BELOW_NORMAL_PRIORITY_CLASS: no console over
-        // the video, and playback keeps the CPU first.
-        command.creation_flags(0x0800_0000 | 0x0000_4000);
+        // CREATE_NO_WINDOW: no console over the video; with
+        // BELOW_NORMAL_PRIORITY_CLASS, playback keeps the CPU first.
+        let priority = if recognition.background {
+            0x0000_4000
+        } else {
+            0
+        };
+        command.creation_flags(0x0800_0000 | priority);
     }
     command
         .spawn()
@@ -742,7 +758,12 @@ impl App {
     }
 
     /// The program and model for `recognizer`, or why there are none.
-    fn recognition(&self, recognizer: &Recognizer, threads: usize) -> Result<Recognition, String> {
+    fn recognition(
+        &self,
+        recognizer: &Recognizer,
+        threads: usize,
+        background: bool,
+    ) -> Result<Recognition, String> {
         let exe_dir = std::env::current_exe()
             .ok()
             .and_then(|exe| exe.parent().map(Path::to_path_buf));
@@ -775,6 +796,7 @@ impl App {
             language: recognizer.language.clone(),
             gpu: matches!(recognizer.engine.as_str(), "vulkan" | "cuda") && !self.speech.cpu_only,
             threads,
+            background,
         })
     }
 
@@ -805,10 +827,13 @@ impl App {
         let Some(source) = self.speech_source(engine, "file") else {
             return UiRequest::Osd("Open a video first".to_owned());
         };
+        // The user waits for it: all cores but one, at normal priority.
         let threads = std::thread::available_parallelism()
             .map_or(4, usize::from)
+            .saturating_sub(1)
             .clamp(1, 8);
-        let recognition = match self.recognition(&self.settings.speech.file.clone(), threads) {
+        let recognition = match self.recognition(&self.settings.speech.file.clone(), threads, false)
+        {
             Ok(recognition) => recognition,
             Err(why) => return UiRequest::Message(why),
         };
@@ -840,11 +865,14 @@ impl App {
             .map_or(4, usize::from)
             .div_ceil(2)
             .clamp(1, 8);
-        let recognition =
-            match self.recognition(&self.settings.speech.realtime_recognizer.clone(), threads) {
-                Ok(recognition) => recognition,
-                Err(why) => return Some(UiRequest::Message(why)),
-            };
+        let recognition = match self.recognition(
+            &self.settings.speech.realtime_recognizer.clone(),
+            threads,
+            true,
+        ) {
+            Ok(recognition) => recognition,
+            Err(why) => return Some(UiRequest::Message(why)),
+        };
         let start = self
             .model
             .double(rvp_engine::PropertyId::TimePos)

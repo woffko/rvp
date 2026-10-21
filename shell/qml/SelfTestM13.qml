@@ -182,4 +182,66 @@ Item {
         }
         }
     }
+
+    // `rvp --selftest=speech FILE` (the host session, m13-host.ps1): the
+    // whole file's subtitles from its audio with --speech-engine and
+    // --speech-model (default cpu, tiny), timed, then real time from the
+    // start while it plays: a line shows within a minute.
+    property real speechStarted: 0
+    function tickSpeech() {
+        const t = m13.t
+        const s = t.status()
+        const engine = player.option("speech-engine") || "cpu"
+        const model = player.option("speech-model") || "tiny"
+        switch (t.step) {
+        case 0:
+            t.next()
+            break
+        case 1:
+            if (t.waitFor("speech_file_plays", () => s.loaded && s.duration > 1, 20000, () => shown(s))) {
+                if (s.pause === false)
+                    player.run_action("play-pause")
+                setSetting("speech.beside-video", false)
+                // The whole file's track stays unselected: what shows
+                // later is real time's.
+                setSetting("speech.show", false)
+                setSetting("speech.file.engine", engine)
+                setSetting("speech.file.model", model)
+                setSetting("speech.realtime-recognizer.engine", engine)
+                setSetting("speech.realtime-recognizer.model", model)
+                speechStarted = Date.now()
+                player.run_action("speech-start")
+            }
+            break
+        case 2:
+            if (t.waitFor("speech_whole_file", () => /^Subtitles from audio: \d+ lines in /.test(t.status().osd || ""),
+                          900000, () => shown(t.status()))) {
+                Tools.log("metric speech_file_seconds=" + ((Date.now() - speechStarted) / 1000).toFixed(1)
+                          + " engine=" + engine + " model=" + model + " duration=" + s.duration)
+                Tools.log("speech_result " + (t.status().osd || ""))
+            }
+            break
+        case 3:
+            player.jump_to("0:00:00", false)
+            setSetting("speech.show", true)
+            player.run_action("speech-realtime-always")
+            speechStarted = Date.now()
+            player.run_action("play-pause")
+            t.next()
+            break
+        case 4:
+            if (t.waitFor("speech_realtime_shows", () => {
+                    const d = diagnostics()
+                    return d.sub_text !== null && String(d.sub_text) !== ""
+                }, 60000, () => shown(t.status()))) {
+                Tools.log("metric speech_realtime_seconds=" + ((Date.now() - speechStarted) / 1000).toFixed(1))
+                Tools.log("speech_realtime_text " + JSON.stringify(diagnostics().sub_text))
+            }
+            break
+        case 5:
+            player.run_action("speech-realtime-off")
+            t.finish()
+            break
+        }
+    }
 }

@@ -348,8 +348,8 @@ smoothing for users without SVP, after a study of the engines.
   sub-delay`, mpv's `dec_sub.c`) and, into the file mpv shows, sets the
   sync back to none.
 - Subtitles from audio (`crate::speech`, `docs/spikes/m13-whisper.md`)
-  run whisper.cpp's `whisper-cli` as a process (no console, below normal
-  priority on Windows) on a WAV file a libmpv encode core writes. RVP's
+  run whisper.cpp's `whisper-cli` as a process (no console; real time below
+  normal priority) on a WAV file a libmpv encode core writes. RVP's
   CPU and Vulkan build is `tools/whisper/build.sh`
   (`tools/libmpv/rootless.sh ROOT WORK tools/whisper/build.sh`, after the
   libmpv build) and goes into the package as `whisper/`

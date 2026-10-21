@@ -44,8 +44,12 @@ needs the owner's decision and a host session with it.
   (progress), and reads its progress and the language it detects from its
   output. A program keeps a crash or a hung GPU driver out of RVP's
   process, needs no `unsafe` (AGENTS.md), and works the same for RVP's
-  build and the official ones. On Windows it starts without a console and
-  below normal priority, so playback keeps the CPU first.
+  build and the official ones. It starts without a console; the whole file's job runs at
+  normal priority on all cores but one (the user waits for it), real time
+  below normal priority (`nice` on Linux) on half of them, so playback
+  keeps the CPU first. On the Windows VM (2 cores) RVP's software
+  rendering in session 0 took nearly all the CPU and left a job below
+  normal priority there 25 times slower than alone.
 - **One build for the CPU and Vulkan.** `tools/whisper/build.sh` builds
   whisper.cpp v1.9.5 with `GGML_BACKEND_DL`: the CPU backend for each
   instruction set (from SSE 4.2 to AVX-512) and the Vulkan backend are

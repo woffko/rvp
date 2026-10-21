@@ -1190,6 +1190,10 @@ Window {
     //                         audio (whisper.cpp's CPU engine, the tiny
     //                         model); the file: fixture-chapters.mkv with
     //                         its .srt
+    //   --selftest=speech     subtitles from a file's audio (SelfTestM13.qml,
+    //                         the host session): the whole file with
+    //                         --speech-engine and --speech-model, timed,
+    //                         then real time while it plays
     //   --selftest=resume     expects the last file reopened paused within
     //                         --expect-tolerance (default 2.5) seconds of
     //                         --expect-time=SECONDS; with --expect-entry=I
@@ -1308,6 +1312,8 @@ Window {
             return smoothingTick()
         if (selftest.mode === "m13")
             return m13Tick()
+        if (selftest.mode === "speech")
+            return m13Tick(true)
         functionalTick()
     }
 
@@ -1317,12 +1323,15 @@ Window {
         active: false
         Component.onCompleted: setSource("SelfTestM13.qml", { player: player, t: selftest, host: root })
     }
-    function m13Tick() {
+    function m13Tick(speech) {
         if (!m13Loader.item) {
             m13Loader.active = true
             return
         }
-        m13Loader.item.tick()
+        if (speech)
+            m13Loader.item.tickSpeech()
+        else
+            m13Loader.item.tick()
     }
 
     // --selftest=smoothing: M18's motion smoothing (SelfTestSmoothing.qml).
