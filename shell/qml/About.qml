@@ -20,7 +20,7 @@ Item {
         // window of its own shows (D4).
         popupType: Tools.native_video ? Popup.Window : Popup.Item
         id: aboutDialog
-        title: "About RVP"
+        title: qsTr("About RVP")
         modal: true
         anchors.centerIn: parent
         standardButtons: Dialog.Ok
@@ -44,7 +44,7 @@ Item {
                 wrapMode: Text.Wrap
             }
             Label {
-                text: "Plays through libmpv and draws PotPlayer's skins; PotPlayer's and SVP's files are read where they are installed."
+                text: qsTr("Plays through libmpv and draws PotPlayer's skins; PotPlayer's and SVP's files are read where they are installed.")
                 Layout.preferredWidth: 360
                 wrapMode: Text.Wrap
                 opacity: 0.7

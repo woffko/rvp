@@ -20,15 +20,15 @@ Item {
         id: menu
         popupType: Popup.Window
         MenuItem {
-            text: "Play"
+            text: qsTr("Play")
             onTriggered: holder.player.drop_choice(0, holder.paths)
         }
         MenuItem {
-            text: "Add to the album"
+            text: qsTr("Add to the album")
             onTriggered: holder.player.drop_choice(1, holder.paths)
         }
         MenuItem {
-            text: "Load as subtitles"
+            text: qsTr("Load as subtitles")
             onTriggered: holder.player.drop_choice(2, holder.paths)
         }
     }

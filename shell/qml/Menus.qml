@@ -190,11 +190,11 @@ Item {
                 menu.addItem((styled ? styledSeparatorComponent : separatorComponent).createObject(menu.contentItem))
             } else if (item.children.length > 0) {
                 menu.addMenu((styled ? styledMenuComponent : menuComponent).createObject(menu, {
-                    title: item.label.replace(/&/g, "&&"), pending: item.children
+                    title: Tools.tr_menu(item.label).replace(/&/g, "&&"), pending: item.children
                 }))
             } else {
                 menu.addItem((styled ? styledEntryComponent : entryComponent).createObject(menu.contentItem, {
-                    label: item.label, commandId: item.id, shortcut: item.shortcut, mark: item.checked
+                    label: Tools.tr_menu(item.label), commandId: item.id, shortcut: item.shortcut, mark: item.checked
                 }))
             }
         }

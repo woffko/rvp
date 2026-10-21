@@ -23,6 +23,11 @@ use serde::{Deserialize, Serialize};
 
 use crate::app::{App, UiRequest};
 
+/// RVP's interface languages: the system's (when RVP has it, else
+/// English), English, Russian. RVP's own translations (Qt's .ts files in
+/// `shell/i18n`), never PotPlayer's.
+pub const LANGUAGES: &[(&str, &str)] = &[("auto", ""), ("en", "English"), ("ru", "Русский")];
+
 /// A second start: hands its files over, or opens its own window.
 pub const INSTANCES: &[&str] = &["single", "multiple"];
 /// The tray icon: none (the taskbar's button only), next to it, or in its
@@ -39,6 +44,8 @@ pub const START_SIZES: &[&str] = &["last", "custom"];
 // Independent options of PotPlayer's pages.
 #[allow(clippy::struct_excessive_bools)]
 pub struct GeneralSettings {
+    /// The interface's language: a code of [`LANGUAGES`].
+    pub language: String,
     /// One of [`INSTANCES`].
     pub instances: String,
     /// A new instance's window moves aside from a running one's.
@@ -81,6 +88,7 @@ pub struct GeneralSettings {
 impl Default for GeneralSettings {
     fn default() -> Self {
         Self {
+            language: "auto".to_owned(),
             instances: "single".to_owned(),
             cascade: false,
             tray: "taskbar".to_owned(),
@@ -171,6 +179,8 @@ impl GeneralSettings {
                 known[0].clone_into(value);
             }
         };
+        let languages: Vec<&str> = LANGUAGES.iter().map(|(code, _)| *code).collect();
+        choose("language", &mut self.language, &languages);
         choose("instances", &mut self.instances, INSTANCES);
         choose("tray", &mut self.tray, TRAY);
         choose("start.position", &mut self.start.position, START_POSITIONS);

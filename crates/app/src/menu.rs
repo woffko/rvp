@@ -256,6 +256,7 @@ pub fn popup_source(command: &str) -> Option<PopupSource> {
         MenuPopup::THREE_D => PopupSource::Live(&["Video", "3D Video Mode"]),
         MenuPopup::CAPTURE => PopupSource::Live(&["Video", "Video Capture"]),
         MenuPopup::SHADERS => PopupSource::Live(&["Video", "Pixel Shaders"]),
+        MenuPopup::LANGUAGE => PopupSource::Context("101_0_15_2"),
         "CMD_POPUPMENU_PLAY_GOTO" => PopupSource::Context("101_0_9_6"),
         "CMD_POPUPMENU_PLAY_REPEAT" => PopupSource::Context("101_0_9_11"),
         "CMD_POPUPMENU_SIZE" => PopupSource::Context("101_0_19"),
@@ -290,12 +291,15 @@ pub enum MenuPopup {
     Capture,
     /// S: Pixel Shaders.
     Shaders,
+    /// Shift+L: Interface Language (M14).
+    Language,
 }
 
 impl MenuPopup {
     const THREE_D: &'static str = "RVP_POPUP_3D";
     const CAPTURE: &'static str = "RVP_POPUP_CAPTURE";
     const SHADERS: &'static str = "RVP_POPUP_SHADERS";
+    const LANGUAGE: &'static str = "RVP_POPUP_LANGUAGE";
 
     /// The popup command the window asks the menu for.
     #[must_use]
@@ -304,6 +308,7 @@ impl MenuPopup {
             MenuPopup::ThreeD => Self::THREE_D,
             MenuPopup::Capture => Self::CAPTURE,
             MenuPopup::Shaders => Self::SHADERS,
+            MenuPopup::Language => Self::LANGUAGE,
         }
     }
 }
@@ -840,6 +845,33 @@ impl App {
         }
     }
 
+    /// RVP's run-time lists where PotPlayer has its own, after a
+    /// submenu's recorded items.
+    fn runtime_items(&self, path: &str, live: &Live) -> Vec<MenuItem> {
+        match path {
+            "101_0_12_0" => self.tracks(live, TrackKind::Audio),
+            "101_0_12_1" => self.device_choices(AudioChoice::Device),
+            "101_0_12_2" => self.device_choices(AudioChoice::PassthroughDevice),
+            "101_0_12_3" => self.device_choices(AudioChoice::SecondDevice),
+            "101_0_11_0" => self.tracks(live, TrackKind::Video),
+            "101_0_10_0" => self.tracks(live, TrackKind::Subtitle),
+            "101_0_3" => self.favorites_menu(),
+            "101_0_13" => self.pipeline(live),
+            "101_0_11" => self.smoothing_menu(),
+            // RVP's languages after Auto select (M14).
+            "101_0_15_2" => [1, 2]
+                .into_iter()
+                .map(|index| {
+                    self.window_item(
+                        Action::Misc(crate::misc::MiscCommand::Language(index)),
+                        None,
+                    )
+                })
+                .collect(),
+            _ => Vec::new(),
+        }
+    }
+
     fn convert(&self, node: &Recorded, live: &Live) -> Option<MenuItem> {
         if node.separator {
             return Some(MenuItem::separator());
@@ -885,19 +917,7 @@ impl App {
                 items.append(&mut children);
                 children = items;
             }
-            // RVP's run-time lists where PotPlayer has its own.
-            let extra = match node.path.as_str() {
-                "101_0_12_0" => self.tracks(live, TrackKind::Audio),
-                "101_0_12_1" => self.device_choices(AudioChoice::Device),
-                "101_0_12_2" => self.device_choices(AudioChoice::PassthroughDevice),
-                "101_0_12_3" => self.device_choices(AudioChoice::SecondDevice),
-                "101_0_11_0" => self.tracks(live, TrackKind::Video),
-                "101_0_10_0" => self.tracks(live, TrackKind::Subtitle),
-                "101_0_3" => self.favorites_menu(),
-                "101_0_13" => self.pipeline(live),
-                "101_0_11" => self.smoothing_menu(),
-                _ => Vec::new(),
-            };
+            let extra = self.runtime_items(&node.path, live);
             if !extra.is_empty() {
                 children.push(MenuItem::separator());
                 children.extend(extra);

@@ -33,13 +33,13 @@ Item {
         popupType: Tools.native_video ? Popup.Window : Popup.Item
         id: syncDialog
         objectName: "audioSyncDialog"
-        title: "Adjust Audio Sync"
+        title: qsTr("Adjust Audio Sync")
         modal: false
         anchors.centerIn: parent
         standardButtons: Dialog.Close
         contentItem: ColumnLayout {
             spacing: 8
-            Label { text: "Audio sync in milliseconds (later is positive):" }
+            Label { text: qsTr("Audio sync in milliseconds (later is positive):") }
             Slider {
                 id: syncSlider
                 objectName: "audioSyncSlider"
@@ -68,7 +68,7 @@ Item {
                     }
                 }
                 Button {
-                    text: "Default"
+                    text: qsTr("Default")
                     onClicked: {
                         syncField.value = 0
                         syncSlider.value = 0

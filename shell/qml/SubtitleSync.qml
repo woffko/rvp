@@ -40,13 +40,13 @@ Item {
         popupType: Tools.native_video ? Popup.Window : Popup.Item
         id: syncDialog
         objectName: "subtitleSyncDialog"
-        title: "Adjust Subtitle Sync"
+        title: qsTr("Adjust Subtitle Sync")
         modal: false
         anchors.centerIn: parent
         standardButtons: Dialog.Close
         contentItem: ColumnLayout {
             spacing: 8
-            Label { text: "Subtitle sync in milliseconds (later is positive):" }
+            Label { text: qsTr("Subtitle sync in milliseconds (later is positive):") }
             Slider {
                 id: syncSlider
                 objectName: "subtitleSyncSlider"
@@ -75,7 +75,7 @@ Item {
                     }
                 }
                 Button {
-                    text: "Default"
+                    text: qsTr("Default")
                     onClicked: {
                         syncField.value = 0
                         syncSlider.value = 0
@@ -83,7 +83,7 @@ Item {
                     }
                 }
             }
-            Label { text: "The subtitles were made for (their timing follows the video's rate):" }
+            Label { text: qsTr("The subtitles were made for (their timing follows the video's rate):") }
             ComboBox {
                 id: rateBox
                 objectName: "subtitleRateBox"

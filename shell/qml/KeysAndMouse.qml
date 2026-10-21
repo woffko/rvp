@@ -29,7 +29,7 @@ Item {
         gestures = JSON.parse(player.editor_gestures())
         capturing = null
         pending = null
-        notice = "Select an action, then add a key or a mouse gesture."
+        notice = qsTr("Select an action, then add a key or a mouse gesture.")
         reload()
     }
     // The settings window closes.
@@ -51,19 +51,19 @@ Item {
     function gestureText(name) {
         return name.split("-").map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(" ")
     }
-    function scopeText(scope) { return scope === "playlist" ? "Playlist" : "Window" }
+    function scopeText(scope) { return scope === "playlist" ? qsTr("Playlist") : qsTr("Window") }
 
     function visibleRows() {
         return rows.filter(r => (scopeFilter === "" || r.scope === scopeFilter)
-                           && (filter === "" || r.label.toLowerCase().indexOf(filter) >= 0
+                           && (filter === "" || Tools.tr_menu(r.label).toLowerCase().indexOf(filter) >= 0
+                               || r.label.toLowerCase().indexOf(filter) >= 0
                                || r.keys.join(" ").toLowerCase().indexOf(filter) >= 0))
     }
 
     function startCapture(row) {
         pending = null
         capturing = row
-        notice = "Press a key for “" + row.label + "” (" + scopeText(row.scope)
-                 + "). Esc cancels."
+        notice = qsTr("Press a key for “%1” (%2). Esc cancels.").arg(Tools.tr_menu(row.label)).arg(scopeText(row.scope))
         catcher.forceActiveFocus()
     }
     function keyPressed(event) {
@@ -73,7 +73,7 @@ Item {
         event.accepted = true
         if (event.key === Qt.Key_Escape && event.modifiers === Qt.NoModifier) {
             capturing = null
-            notice = "Cancelled."
+            notice = qsTr("Cancelled.")
             return
         }
         const owner = JSON.parse(player.editor_key_owner(row.scope, event.key, event.modifiers))
@@ -83,16 +83,16 @@ Item {
         if (owner.owner !== "" && owner.owner !== row.name) {
             pending = { kind: "key", row: row, key: event.key, modifiers: event.modifiers,
                         text: owner.key, owner: owner.label }
-            notice = owner.key + " is used by “" + owner.label + "”. Move it to “"
-                     + row.label + "”?"
+            notice = qsTr("%1 is used by “%2”. Move it to “%3”?").arg(owner.key).arg(Tools.tr_menu(owner.label))
+                     .arg(Tools.tr_menu(row.label))
             return
         }
         bindKey(row, event.key, event.modifiers)
     }
     function bindKey(row, key, modifiers) {
         const result = JSON.parse(player.editor_bind_key(row.scope, row.name, key, modifiers))
-        notice = result.key + " → “" + row.label + "”"
-                 + (result.displaced !== "" ? " (taken from another action)" : "")
+        notice = result.key + " → “" + Tools.tr_menu(row.label) + "”"
+                 + (result.displaced !== "" ? " " + qsTr("(taken from another action)") : "")
         commit()
     }
     function chooseGesture(row, gesture) {
@@ -100,22 +100,22 @@ Item {
         if (owner !== "" && owner !== row.label) {
             pending = { kind: "gesture", row: row, gesture: gesture, text: gestureText(gesture),
                         owner: owner }
-            notice = gestureText(gesture) + " is used by “" + owner + "”. Move it to “"
-                     + row.label + "”?"
+            notice = qsTr("%1 is used by “%2”. Move it to “%3”?").arg(gestureText(gesture)).arg(Tools.tr_menu(owner))
+                     .arg(Tools.tr_menu(row.label))
             return
         }
         bindGesture(row, gesture)
     }
     function bindGesture(row, gesture) {
         player.editor_bind_gesture(row.name, gesture)
-        notice = gestureText(gesture) + " → “" + row.label + "”"
+        notice = gestureText(gesture) + " → “" + Tools.tr_menu(row.label) + "”"
         commit()
     }
     function confirm(yes) {
         const p = pending
         pending = null
         if (!yes || !p) {
-            notice = "Unchanged."
+            notice = qsTr("Unchanged.")
             return
         }
         if (p.kind === "key") {
@@ -124,7 +124,7 @@ Item {
             bindGesture(p.row, p.gesture)
         } else {
             player.editor_reset_all()
-            notice = "All keys and mouse actions are PotPlayer's defaults again."
+            notice = qsTr("All keys and mouse actions are PotPlayer's defaults again.")
             commit()
         }
     }
@@ -146,14 +146,14 @@ Item {
 
         RowLayout {
             Layout.fillWidth: true
-            Label { text: "Find:" }
+            Label { text: qsTr("Find:") }
             TextField {
                 Layout.fillWidth: true
-                placeholderText: "action or key"
+                placeholderText: qsTr("action or key")
                 onTextChanged: editor.filter = text.toLowerCase()
             }
             ComboBox {
-                model: ["All", "Window", "Playlist"]
+                model: [qsTr("All"), qsTr("Window"), qsTr("Playlist")]
                 onActivated: (index) => editor.scopeFilter = ["", "window", "playlist"][index]
             }
         }
@@ -184,7 +184,7 @@ Item {
                         Layout.preferredWidth: 60
                     }
                     Label {
-                        text: rowItem.modelData.label
+                        text: Tools.tr_menu(rowItem.modelData.label)
                         elide: Text.ElideRight
                         Layout.preferredWidth: 220
                     }
@@ -199,7 +199,7 @@ Item {
                                 flat: true
                                 onClicked: {
                                     editor.player.editor_unbind_key(rowItem.modelData.scope, modelData)
-                                    editor.notice = modelData + " removed"
+                                    editor.notice = qsTr("%1 removed").arg(modelData)
                                     editor.commit()
                                 }
                             }
@@ -212,18 +212,18 @@ Item {
                                 flat: true
                                 onClicked: {
                                     editor.player.editor_unbind_gesture(modelData)
-                                    editor.notice = editor.gestureText(modelData) + " removed"
+                                    editor.notice = qsTr("%1 removed").arg(editor.gestureText(modelData))
                                     editor.commit()
                                 }
                             }
                         }
                     }
                     Button {
-                        text: "Key…"
+                        text: qsTr("Key…")
                         onClicked: editor.startCapture(rowItem.modelData)
                     }
                     Button {
-                        text: "Mouse…"
+                        text: qsTr("Mouse…")
                         visible: rowItem.modelData.scope === "window"
                         onClicked: gestureMenu.popup()
                         Menu {
@@ -239,10 +239,10 @@ Item {
                         }
                     }
                     Button {
-                        text: "Reset"
+                        text: qsTr("Reset")
                         onClicked: {
                             editor.player.editor_reset(rowItem.modelData.scope, rowItem.modelData.name)
-                            editor.notice = "“" + rowItem.modelData.label + "” has PotPlayer's keys again"
+                            editor.notice = qsTr("“%1” has PotPlayer's keys again").arg(Tools.tr_menu(rowItem.modelData.label))
                             editor.commit()
                         }
                     }
@@ -258,12 +258,12 @@ Item {
                 wrapMode: Text.Wrap
             }
             Button {
-                text: editor.pending !== null && editor.pending.kind === "all" ? "Reset" : "Move"
+                text: editor.pending !== null && editor.pending.kind === "all" ? qsTr("Reset") : qsTr("Move")
                 visible: editor.pending !== null
                 onClicked: editor.confirm(true)
             }
             Button {
-                text: "Keep"
+                text: qsTr("Keep")
                 visible: editor.pending !== null
                 onClicked: editor.confirm(false)
             }
@@ -272,15 +272,15 @@ Item {
         RowLayout {
             Layout.fillWidth: true
             Label {
-                text: "X1 is the Back button, X2 Forward."
+                text: qsTr("X1 is the Back button, X2 Forward.")
                 opacity: 0.6
             }
             Item { Layout.fillWidth: true }
             Button {
-                text: "Reset All"
+                text: qsTr("Reset All")
                 onClicked: {
                     editor.pending = { kind: "all" }
-                    editor.notice = "Give every action PotPlayer's keys and mouse actions again?"
+                    editor.notice = qsTr("Give every action PotPlayer's keys and mouse actions again?")
                 }
             }
         }

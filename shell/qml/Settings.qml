@@ -13,7 +13,7 @@ import RvpNative
 ApplicationWindow {
     id: win
     required property Player player
-    title: "Settings"
+    title: qsTr("Settings")
     // Dialog Box: "Always keep modeless dialog boxes on top" (M14).
     flags: Qt.Window | ((win.player.general_look ? JSON.parse(win.player.general_look) : {}).dialogOnTop === true
                         ? Qt.WindowStaysOnTopHint : 0)
@@ -24,74 +24,74 @@ ApplicationWindow {
 
     // Keys of rvp_app::SettingsPage, in the order of the pages in `stack`.
     readonly property var pages: [
-        { key: "playback", title: "Playback" },
-        { key: "time-jump", title: "Time Jump" },
-        { key: "skip", title: "Skip" },
-        { key: "section-repeat", title: "Section Repeat" },
-        { key: "scene-browser", title: "Scene Browser" },
-        { key: "playlist", title: "Playlist" },
-        { key: "devices", title: "Device" },
-        { key: "audio", title: "Audio" },
-        { key: "audio-volume", title: "Volume Control" },
-        { key: "equalizer", title: "Equalizer" },
-        { key: "normalizer", title: "Normalizer/Freeverb" },
-        { key: "audio-effects", title: "Crystality/Noise Reduction" },
-        { key: "audio-sync", title: "Language/Sync/Other" },
-        { key: "video", title: "Video" },
-        { key: "aspect-ratio", title: "Aspect Ratio" },
-        { key: "extend-crop", title: "Extend/Crop" },
-        { key: "resize", title: "Resize" },
-        { key: "frame-size", title: "Frame Size" },
-        { key: "stereo", title: "3D and 360°" },
-        { key: "shaders", title: "Pixel Shaders" },
-        { key: "svp", title: "SVP and VapourSynth" },
-        { key: "smoothing", title: "Motion Smoothing" },
-        { key: "subtitles", title: "Subtitles" },
-        { key: "subtitle-style", title: "Font Style" },
-        { key: "subtitle-location", title: "Fade/3D/Location" },
-        { key: "subtitle-sync", title: "Language/Sync/Other" },
-        { key: "subtitle-browser", title: "Subtitle Browser" },
-        { key: "speech", title: "Subtitles from Audio" },
-        { key: "input", title: "Keys and Mouse" },
-        { key: "input-options", title: "Keyboard and Mouse Options" },
-        { key: "skins", title: "Skins" },
-        { key: "logo", title: "Logo" },
-        { key: "osc", title: "On Screen Control" },
-        { key: "osd", title: "OSD Messages" },
-        { key: "window-size", title: "Window Size" },
-        { key: "fullscreen-mode", title: "Fullscreen Mode" },
-        { key: "capture", title: "Video Capture" },
-        { key: "visualization", title: "Visualization" },
-        { key: "decoders", title: "Decoders" },
-        { key: "general", title: "General" },
-        { key: "start", title: "When Starting" },
-        { key: "dialogs", title: "Dialog Box" },
-        { key: "association", title: "Association" },
-        { key: "screensaver", title: "Screen Saver" },
-        { key: "presets", title: "Configuration" },
-        { key: "tts", title: "TTS" },
-        { key: "touch", title: "Touch" },
-        { key: "xinput", title: "XInput" }
+        { key: "playback", title: qsTr("Playback") },
+        { key: "time-jump", title: qsTr("Time Jump") },
+        { key: "skip", title: qsTr("Skip") },
+        { key: "section-repeat", title: qsTr("Section Repeat") },
+        { key: "scene-browser", title: qsTr("Scene Browser") },
+        { key: "playlist", title: qsTr("Playlist") },
+        { key: "devices", title: qsTr("Device") },
+        { key: "audio", title: qsTr("Audio") },
+        { key: "audio-volume", title: qsTr("Volume Control") },
+        { key: "equalizer", title: qsTr("Equalizer") },
+        { key: "normalizer", title: qsTr("Normalizer/Freeverb") },
+        { key: "audio-effects", title: qsTr("Crystality/Noise Reduction") },
+        { key: "audio-sync", title: qsTr("Language/Sync/Other") },
+        { key: "video", title: qsTr("Video") },
+        { key: "aspect-ratio", title: qsTr("Aspect Ratio") },
+        { key: "extend-crop", title: qsTr("Extend/Crop") },
+        { key: "resize", title: qsTr("Resize") },
+        { key: "frame-size", title: qsTr("Frame Size") },
+        { key: "stereo", title: qsTr("3D and 360°") },
+        { key: "shaders", title: qsTr("Pixel Shaders") },
+        { key: "svp", title: qsTr("SVP and VapourSynth") },
+        { key: "smoothing", title: qsTr("Motion Smoothing") },
+        { key: "subtitles", title: qsTr("Subtitles") },
+        { key: "subtitle-style", title: qsTr("Font Style") },
+        { key: "subtitle-location", title: qsTr("Fade/3D/Location") },
+        { key: "subtitle-sync", title: qsTr("Language/Sync/Other") },
+        { key: "subtitle-browser", title: qsTr("Subtitle Browser") },
+        { key: "speech", title: qsTr("Subtitles from Audio") },
+        { key: "input", title: qsTr("Keys and Mouse") },
+        { key: "input-options", title: qsTr("Keyboard and Mouse Options") },
+        { key: "skins", title: qsTr("Skins") },
+        { key: "logo", title: qsTr("Logo") },
+        { key: "osc", title: qsTr("On Screen Control") },
+        { key: "osd", title: qsTr("OSD Messages") },
+        { key: "window-size", title: qsTr("Window Size") },
+        { key: "fullscreen-mode", title: qsTr("Fullscreen Mode") },
+        { key: "capture", title: qsTr("Video Capture") },
+        { key: "visualization", title: qsTr("Visualization") },
+        { key: "decoders", title: qsTr("Decoders") },
+        { key: "general", title: qsTr("General") },
+        { key: "start", title: qsTr("When Starting") },
+        { key: "dialogs", title: qsTr("Dialog Box") },
+        { key: "association", title: qsTr("Association") },
+        { key: "screensaver", title: qsTr("Screen Saver") },
+        { key: "presets", title: qsTr("Configuration") },
+        { key: "tts", title: qsTr("TTS") },
+        { key: "touch", title: qsTr("Touch") },
+        { key: "xinput", title: qsTr("XInput") }
     ]
     // PotPlayer's tree: each group opens into its pages, and the selected
     // group's pages show as tabs over the page. `page` is the group's own
     // page (General has none yet: M14 brings PotPlayer's general options).
     readonly property var tree: [
-        { title: "General", page: "general",
+        { title: qsTr("General"), page: "general",
           pages: ["start", "input", "input-options", "skins", "logo", "osc", "visualization", "osd", "dialogs", "playlist"] },
-        { title: "Playback", page: "playback",
+        { title: qsTr("Playback"), page: "playback",
           pages: ["time-jump", "skip", "section-repeat", "scene-browser", "window-size", "fullscreen-mode"] },
-        { title: "Subtitles", page: "subtitles", pages: ["subtitle-style", "subtitle-location", "subtitle-sync", "subtitle-browser", "speech"] },
-        { title: "Device", page: "devices", pages: [] },
-        { title: "Filter Control", page: "decoders", pages: [] },
-        { title: "Video", page: "video",
+        { title: qsTr("Subtitles"), page: "subtitles", pages: ["subtitle-style", "subtitle-location", "subtitle-sync", "subtitle-browser", "speech"] },
+        { title: qsTr("Device"), page: "devices", pages: [] },
+        { title: qsTr("Filter Control"), page: "decoders", pages: [] },
+        { title: qsTr("Video"), page: "video",
           pages: ["aspect-ratio", "resize", "extend-crop", "frame-size", "stereo", "shaders", "svp", "smoothing",
                   "capture"] },
-        { title: "Association", page: "association", pages: [] },
-        { title: "Screen Saver", page: "screensaver", pages: [] },
-        { title: "Configuration", page: "presets", pages: [] },
-        { title: "Accessibility", page: "", pages: ["tts", "touch", "xinput"] },
-        { title: "Audio", page: "audio",
+        { title: qsTr("Association"), page: "association", pages: [] },
+        { title: qsTr("Screen Saver"), page: "screensaver", pages: [] },
+        { title: qsTr("Configuration"), page: "presets", pages: [] },
+        { title: qsTr("Accessibility"), page: "", pages: ["tts", "touch", "xinput"] },
+        { title: qsTr("Audio"), page: "audio",
           pages: ["audio-volume", "equalizer", "normalizer", "audio-effects", "audio-sync"] }
     ]
     // The shown page (an index of `pages`) and the open groups.
@@ -368,6 +368,8 @@ ApplicationWindow {
         }
         Label {
             text: amount.label
+            // Longer labels (translations) wrap rather than run over.
+            wrapMode: Text.WordWrap
             Layout.preferredWidth: 240
         }
         Slider {
@@ -396,7 +398,7 @@ ApplicationWindow {
         }
         Button {
             visible: amount.fallback !== undefined && !amount.unset
-            text: "Default"
+            text: qsTr("Default")
             onClicked: win.set(amount.path, null)
         }
     }
@@ -413,6 +415,8 @@ ApplicationWindow {
         }
         Label {
             text: colorChoice.label
+            // Longer labels (translations) wrap rather than run over.
+            wrapMode: Text.WordWrap
             Layout.preferredWidth: 240
         }
         Rectangle {
@@ -424,7 +428,7 @@ ApplicationWindow {
             color: colorChoice.current !== "" ? colorChoice.current : "transparent"
         }
         Button {
-            text: "Choose…"
+            text: qsTr("Choose…")
             onClicked: {
                 colorChooser.target = colorChoice.path
                 colorChooser.selectedColor = colorChoice.current !== "" ? colorChoice.current : "white"
@@ -433,7 +437,7 @@ ApplicationWindow {
         }
         Button {
             visible: win.value(colorChoice.path) !== undefined && win.value(colorChoice.path) !== null
-            text: "Default"
+            text: qsTr("Default")
             onClicked: win.set(colorChoice.path, null)
         }
     }
@@ -446,6 +450,8 @@ ApplicationWindow {
         property var texts: ({})
         Label {
             text: choice.label
+            // Longer labels (translations) wrap rather than run over.
+            wrapMode: Text.WordWrap
             Layout.preferredWidth: 240
         }
         ComboBox {
@@ -465,6 +471,8 @@ ApplicationWindow {
         default property alias extra: tail.data
         Label {
             text: field.label
+            // Longer labels (translations) wrap rather than run over.
+            wrapMode: Text.WordWrap
             Layout.preferredWidth: 240
         }
         TextField {
@@ -511,7 +519,7 @@ ApplicationWindow {
             model: picker.choices.map(c => c.name + (c.stage === "any" ? " (HLSL)" : ""))
         }
         Button {
-            text: "Add"
+            text: qsTr("Add")
             enabled: shaderChoice.currentIndex >= 0
             onClicked: win.listAdd(picker.target, [picker.choices[shaderChoice.currentIndex].path])
         }
@@ -522,7 +530,7 @@ ApplicationWindow {
     component SizePresets: RowLayout {
         id: sizes
         property string target
-        Label { text: "Sizes:" }
+        Label { text: qsTr("Sizes:") }
         Repeater {
             model: [[1280, 720], [1920, 1080], [2560, 1440], [3840, 2160]]
             delegate: Button {
@@ -566,17 +574,17 @@ ApplicationWindow {
                 }
                 Button {
                     visible: fileList.ordered
-                    text: "Up"
+                    text: qsTr("Up")
                     enabled: row.index > 0
                     onClicked: win.listMove(fileList.path, row.index, -1)
                 }
                 Button {
                     visible: fileList.ordered
-                    text: "Down"
+                    text: qsTr("Down")
                     onClicked: win.listMove(fileList.path, row.index, 1)
                 }
                 Button {
-                    text: "Remove"
+                    text: qsTr("Remove")
                     onClicked: {
                         if (fileList.selectPath !== "" && win.value(fileList.selectPath) === row.modelData)
                             win.set(fileList.selectPath, null)
@@ -602,7 +610,7 @@ ApplicationWindow {
     // each shown or hidden (skins.menu-hidden).
     Dialog {
         id: menuItems
-        title: "Context Menu Items"
+        title: qsTr("Context Menu Items")
         modal: true
         anchors.centerIn: parent
         width: Math.min(win.width - 40, 420)
@@ -674,7 +682,7 @@ ApplicationWindow {
     Dialogs.ColorDialog {
         id: colorChooser
         property string target
-        title: "Subtitle Colour"
+        title: qsTr("Subtitle Colour")
         options: Dialogs.ColorDialog.ShowAlphaChannel
         onAccepted: {
             const hex = v => ("0" + Math.round(v * 255).toString(16)).slice(-2).toUpperCase()
@@ -684,24 +692,24 @@ ApplicationWindow {
     }
     Dialogs.FontDialog {
         id: subtitleFontChooser
-        title: "Subtitle Font"
+        title: qsTr("Subtitle Font")
         onAccepted: win.set("subtitle-font", selectedFont.family)
     }
     Dialogs.FileDialog {
         id: skinChooser
-        title: "PotPlayer skin"
+        title: qsTr("PotPlayer skin")
         nameFilters: ["PotPlayer skins (*.dsf)", "All files (*)"]
         onAccepted: win.set("skin", Tools.local_file(selectedFile))
     }
     Dialogs.FileDialog {
         id: importChooser
-        title: "Import Settings"
+        title: qsTr("Import Settings")
         nameFilters: ["Settings (*.json)", "All files (*)"]
         onAccepted: win.report(win.player.import_settings(Tools.local_file(selectedFile)), "Imported.")
     }
     Dialogs.FileDialog {
         id: exportChooser
-        title: "Export Settings"
+        title: qsTr("Export Settings")
         fileMode: Dialogs.FileDialog.SaveFile
         defaultSuffix: "json"
         nameFilters: ["Settings (*.json)"]
@@ -778,31 +786,31 @@ ApplicationWindow {
                     currentIndex: win.current
 
                     Page {
-                        Heading { text: "Resume" }
-                        Check { path: "remember-positions"; text: "Remember video playback positions" }
-                        Check { path: "playback.remember-audio-positions"; text: "Remember audio playback positions" }
-                        Check { path: "reopen-last-file"; text: "Reopen the last file, paused, when RVP starts without files" }
-                        Heading { text: "Playback" }
+                        Heading { text: qsTr("Resume") }
+                        Check { path: "remember-positions"; text: qsTr("Remember video playback positions") }
+                        Check { path: "playback.remember-audio-positions"; text: qsTr("Remember audio playback positions") }
+                        Check { path: "reopen-last-file"; text: qsTr("Reopen the last file, paused, when RVP starts without files") }
+                        Heading { text: qsTr("Playback") }
                         Choice {
-                            label: "At the end of a file"
+                            label: qsTr("At the end of a file")
                             path: "repeat"
                             values: ["off", "album", "item"]
-                            texts: ({ "off": "Play the next one", "album": "Repeat the playlist",
-                                      "item": "Repeat the file" })
+                            texts: ({ "off": qsTr("Play the next one"), "album": qsTr("Repeat the playlist"),
+                                      "item": qsTr("Repeat the file") })
                         }
-                        Check { path: "playback.shuffle"; text: "Shuffle playback" }
+                        Check { path: "playback.shuffle"; text: qsTr("Shuffle playback") }
                         Choice {
-                            label: "When playback failed"
+                            label: qsTr("When playback failed")
                             path: "playback.on-failure"
                             values: ["next", "stop"]
-                            texts: ({ "next": "Play the next one", "stop": "Stop" })
+                            texts: ({ "next": qsTr("Play the next one"), "stop": qsTr("Stop") })
                         }
-                        Amount { label: "Speed step"; path: "playback.speed-step"; values: [0.01, 0.02, 0.05, 0.1, 0.2, 0.25, 0.5]; format: (v) => v + "x" }
-                        Check { path: "playback.keep-speed"; text: "Keep playback speed changes for the next file" }
-                        Check { path: "playback.external-audio"; text: "Auto load external audio files" }
+                        Amount { label: qsTr("Speed step"); path: "playback.speed-step"; values: [0.01, 0.02, 0.05, 0.1, 0.2, 0.25, 0.5]; format: (v) => v + "x" }
+                        Check { path: "playback.keep-speed"; text: qsTr("Keep playback speed changes for the next file") }
+                        Check { path: "playback.external-audio"; text: qsTr("Auto load external audio files") }
                         FileList { path: "playback.audio-folders"; ordered: true }
                         Button {
-                            text: "Add a folder for external audio…"
+                            text: qsTr("Add a folder for external audio…")
                             onClicked: {
                                 folderListChooser.target = "playback.audio-folders"
                                 folderListChooser.open()
@@ -810,119 +818,119 @@ ApplicationWindow {
                         }
                         Choice {
                             visible: win.view.windows === true
-                            label: "Process priority (at the next start)"
+                            label: qsTr("Process priority (at the next start)")
                             path: "playback.priority"
                             values: ["idle", "belownormal", "normal", "abovenormal", "high"]
-                            texts: ({ "idle": "Idle", "belownormal": "Below normal", "normal": "Normal",
-                                      "abovenormal": "Above normal", "high": "High" })
+                            texts: ({ "idle": qsTr("Idle"), "belownormal": qsTr("Below normal"), "normal": qsTr("Normal"),
+                                      "abovenormal": qsTr("Above normal"), "high": qsTr("High") })
                         }
-                        Check { path: "playback.folder-neighbours"; text: "Load previous/next files in the play folder" }
-                        Check { path: "playback.auto-rotate"; text: "Auto rotate files based on metadata" }
-                        Check { path: "playback.retitle"; text: "Auto retitle items based on metadata" }
-                        Check { path: "playback.close-at-end"; text: "Close playback when the playlist ends" }
-                        Check { path: "playback.recycle-played"; text: "Offer played files to the Recycle Bin" }
-                        Heading { text: "Seek bar" }
-                        Check { path: "playback.seek-tooltip"; text: "Show time info on the tooltip" }
-                        Check { path: "playback.seek-preview"; text: "Show thumbnail previews" }
-                        Check { path: "playback.preview-title"; text: "Include the title of the bookmark or chapter" }
-                        Check { path: "playback.preview-time"; text: "Include the time" }
-                        Check { path: "playback.seek-markers"; text: "Show markers of bookmarks, chapters and A-B points" }
-                        Check { path: "playback.pause-while-seeking"; text: "Pause when seeking with the mouse" }
-                        Heading { text: "When playback finished" }
+                        Check { path: "playback.folder-neighbours"; text: qsTr("Load previous/next files in the play folder") }
+                        Check { path: "playback.auto-rotate"; text: qsTr("Auto rotate files based on metadata") }
+                        Check { path: "playback.retitle"; text: qsTr("Auto retitle items based on metadata") }
+                        Check { path: "playback.close-at-end"; text: qsTr("Close playback when the playlist ends") }
+                        Check { path: "playback.recycle-played"; text: qsTr("Offer played files to the Recycle Bin") }
+                        Heading { text: qsTr("Seek bar") }
+                        Check { path: "playback.seek-tooltip"; text: qsTr("Show time info on the tooltip") }
+                        Check { path: "playback.seek-preview"; text: qsTr("Show thumbnail previews") }
+                        Check { path: "playback.preview-title"; text: qsTr("Include the title of the bookmark or chapter") }
+                        Check { path: "playback.preview-time"; text: qsTr("Include the time") }
+                        Check { path: "playback.seek-markers"; text: qsTr("Show markers of bookmarks, chapters and A-B points") }
+                        Check { path: "playback.pause-while-seeking"; text: qsTr("Pause when seeking with the mouse") }
+                        Heading { text: qsTr("When playback finished") }
                         Choice {
-                            label: "The action"
+                            label: qsTr("The action")
                             path: "playback.finished.action"
                             values: ["shutdown", "sleep", "hibernate"]
-                            texts: ({ "shutdown": "Shut down", "sleep": "Sleep", "hibernate": "Hibernate" })
+                            texts: ({ "shutdown": qsTr("Shut down"), "sleep": qsTr("Sleep"), "hibernate": qsTr("Hibernate") })
                         }
-                        Amount { label: "Notice before it (cancellable)"; path: "playback.finished.countdown"; from: 5; to: 300; step: 5; unit: "s" }
-                        Check { path: "playback.finished.remember"; text: "Remember the playback finished action" }
-                        Heading { text: "Window" }
-                        Check { path: "fit-window-to-video"; text: "Fit the window to a newly opened video" }
-                        Check { path: "playback.center-window"; text: "Start playback in a centred window" }
-                        Check { path: "keep-aspect-window"; text: "Keep the video's shape while the window is resized" }
-                        Check { path: "prevent-screen-saver"; text: "Prevent screen saver during playback" }
-                        Check { path: "playback.hide-pointer"; text: "Hide the mouse pointer over the playing video" }
+                        Amount { label: qsTr("Notice before it (cancellable)"); path: "playback.finished.countdown"; from: 5; to: 300; step: 5; unit: "s" }
+                        Check { path: "playback.finished.remember"; text: qsTr("Remember the playback finished action") }
+                        Heading { text: qsTr("Window") }
+                        Check { path: "fit-window-to-video"; text: qsTr("Fit the window to a newly opened video") }
+                        Check { path: "playback.center-window"; text: qsTr("Start playback in a centred window") }
+                        Check { path: "keep-aspect-window"; text: qsTr("Keep the video's shape while the window is resized") }
+                        Check { path: "prevent-screen-saver"; text: qsTr("Prevent screen saver during playback") }
+                        Check { path: "playback.hide-pointer"; text: qsTr("Hide the mouse pointer over the playing video") }
                         Choice {
-                            label: "Stay on top"
+                            label: qsTr("Stay on top")
                             path: "on-top"
                             values: ["never", "always", "while-playing", "fullscreen-playing"]
-                            texts: ({ "never": "Never", "always": "Always", "while-playing": "While playing",
-                                      "fullscreen-playing": "While playing in fullscreen" })
+                            texts: ({ "never": qsTr("Never"), "always": qsTr("Always"), "while-playing": qsTr("While playing"),
+                                      "fullscreen-playing": qsTr("While playing in fullscreen") })
                         }
-                        Heading { text: "Opening" }
+                        Heading { text: qsTr("Opening") }
                         Choice {
-                            label: "Default open action"
+                            label: qsTr("Default open action")
                             path: "open.default-open"
                             values: ["files", "url", "folder"]
-                            texts: ({ "files": "Open File(s)", "url": "Open URL", "folder": "Open Folder" })
+                            texts: ({ "files": qsTr("Open File(s)"), "url": qsTr("Open URL"), "folder": qsTr("Open Folder") })
                         }
                         Choice {
-                            label: "When files are opened"
+                            label: qsTr("When files are opened")
                             path: "open.when-opened"
                             values: ["selected", "similar", "all"]
-                            texts: ({ "selected": "Add only the files opened", "similar": "Add similar files too",
-                                      "all": "Add every file of the folder" })
+                            texts: ({ "selected": qsTr("Add only the files opened"), "similar": qsTr("Add similar files too"),
+                                      "all": qsTr("Add every file of the folder") })
                         }
-                        Check { path: "open.recent"; text: "Store and show recent items" }
-                        Check { path: "open.ytdl"; text: "Open streaming sites with yt-dlp" }
-                        Field { label: "yt-dlp program"; path: "open.ytdl-path"; placeholder: "yt-dlp" }
-                        Field { label: "yt-dlp format"; path: "open.ytdl-format"; placeholder: "bestvideo+bestaudio/best" }
+                        Check { path: "open.recent"; text: qsTr("Store and show recent items") }
+                        Check { path: "open.ytdl"; text: qsTr("Open streaming sites with yt-dlp") }
+                        Field { label: qsTr("yt-dlp program"); path: "open.ytdl-path"; placeholder: qsTr("yt-dlp") }
+                        Field { label: qsTr("yt-dlp format"); path: "open.ytdl-format"; placeholder: qsTr("bestvideo+bestaudio/best") }
                     }
 
                     Page {
-                        Heading { text: "Time jump (the arrow keys)" }
-                        Amount { label: "Left / Right"; path: "seek-seconds.0"; values: [0.5, 1, 2, 3, 5, 10, 15, 20, 30, 45, 60, 90, 120, 180, 300, 600, 900, 1800, 3600]; format: win.seconds }
-                        Amount { label: "Ctrl+Left / Right"; path: "seek-seconds.1"; values: [0.5, 1, 2, 3, 5, 10, 15, 20, 30, 45, 60, 90, 120, 180, 300, 600, 900, 1800, 3600]; format: win.seconds }
-                        Amount { label: "Shift+Left / Right"; path: "seek-seconds.2"; values: [0.5, 1, 2, 3, 5, 10, 15, 20, 30, 45, 60, 90, 120, 180, 300, 600, 900, 1800, 3600]; format: win.seconds }
-                        Amount { label: "Ctrl+Alt+Left / Right"; path: "seek-seconds.3"; values: [0.5, 1, 2, 3, 5, 10, 15, 20, 30, 45, 60, 90, 120, 180, 300, 600, 900, 1800, 3600]; format: win.seconds }
-                        Check { path: "keyframe-seeks"; text: "Jump to keyframes (faster, less exact)" }
+                        Heading { text: qsTr("Time jump (the arrow keys)") }
+                        Amount { label: qsTr("Left / Right"); path: "seek-seconds.0"; values: [0.5, 1, 2, 3, 5, 10, 15, 20, 30, 45, 60, 90, 120, 180, 300, 600, 900, 1800, 3600]; format: win.seconds }
+                        Amount { label: qsTr("Ctrl+Left / Right"); path: "seek-seconds.1"; values: [0.5, 1, 2, 3, 5, 10, 15, 20, 30, 45, 60, 90, 120, 180, 300, 600, 900, 1800, 3600]; format: win.seconds }
+                        Amount { label: qsTr("Shift+Left / Right"); path: "seek-seconds.2"; values: [0.5, 1, 2, 3, 5, 10, 15, 20, 30, 45, 60, 90, 120, 180, 300, 600, 900, 1800, 3600]; format: win.seconds }
+                        Amount { label: qsTr("Ctrl+Alt+Left / Right"); path: "seek-seconds.3"; values: [0.5, 1, 2, 3, 5, 10, 15, 20, 30, 45, 60, 90, 120, 180, 300, 600, 900, 1800, 3600]; format: win.seconds }
+                        Check { path: "keyframe-seeks"; text: qsTr("Jump to keyframes (faster, less exact)") }
                     }
 
                     Page {
-                        Heading { text: "Skip" }
-                        Check { path: "playback.skip.enabled"; text: "Enable the skip feature" }
-                        Check { path: "playback.skip.intro"; text: "Skip the intro" }
-                        Amount { label: "Intro length"; path: "playback.skip.intro-seconds"; from: 1; to: 600; step: 1; format: win.seconds }
-                        Check { path: "playback.skip.ending"; text: "Skip the ending" }
-                        Amount { label: "Ending length"; path: "playback.skip.ending-seconds"; from: 1; to: 600; step: 1; format: win.seconds }
-                        Check { path: "playback.skip.chapters"; text: "Skip chapters" }
-                        Field { label: "Chapters to skip"; path: "playback.skip.chapter-names"; placeholder: "Opening;Ending;3" }
-                        Note { text: "Titles (a part, any case) or numbers, separated by semicolons." }
+                        Heading { text: qsTr("Skip") }
+                        Check { path: "playback.skip.enabled"; text: qsTr("Enable the skip feature") }
+                        Check { path: "playback.skip.intro"; text: qsTr("Skip the intro") }
+                        Amount { label: qsTr("Intro length"); path: "playback.skip.intro-seconds"; from: 1; to: 600; step: 1; format: win.seconds }
+                        Check { path: "playback.skip.ending"; text: qsTr("Skip the ending") }
+                        Amount { label: qsTr("Ending length"); path: "playback.skip.ending-seconds"; from: 1; to: 600; step: 1; format: win.seconds }
+                        Check { path: "playback.skip.chapters"; text: qsTr("Skip chapters") }
+                        Field { label: qsTr("Chapters to skip"); path: "playback.skip.chapter-names"; placeholder: qsTr("Opening;Ending;3") }
+                        Note { text: qsTr("Titles (a part, any case) or numbers, separated by semicolons.") }
                     }
 
                     Page {
-                        Heading { text: "Section repeat (A-B)" }
-                        Amount { label: "Repeats (0: endless)"; path: "playback.ab.loops"; from: 0; to: 100; step: 1 }
-                        Amount { label: "Fine move"; path: "playback.ab.step"; values: [0.01, 0.05, 0.1, 0.2, 0.5, 1]; format: win.seconds }
-                        Amount { label: "Repeat behind the current point"; path: "playback.ab.behind"; from: 1; to: 60; step: 1; format: win.seconds }
-                        Check { path: "playback.ab.remember"; text: "Remember the A-B repeat lists" }
-                        Check { path: "playback.ab.prevent-backward"; text: "Prevent backward navigation from point A" }
-                        Check { path: "playback.ab.toggle-current"; text: "Repeat-current commands also turn the repeat off" }
-                        Heading { text: "Bookmarks" }
-                        Check { path: "playback.bookmarks.prompt"; text: "Prompt before adding a bookmark" }
-                        Check { path: "playback.bookmarks.in-menu"; text: "Show the bookmark list in the Chapter/Bookmark menu" }
-                        Check { path: "playback.bookmarks.auto-delete"; text: "Delete a bookmark once it is chosen" }
+                        Heading { text: qsTr("Section repeat (A-B)") }
+                        Amount { label: qsTr("Repeats (0: endless)"); path: "playback.ab.loops"; from: 0; to: 100; step: 1 }
+                        Amount { label: qsTr("Fine move"); path: "playback.ab.step"; values: [0.01, 0.05, 0.1, 0.2, 0.5, 1]; format: win.seconds }
+                        Amount { label: qsTr("Repeat behind the current point"); path: "playback.ab.behind"; from: 1; to: 60; step: 1; format: win.seconds }
+                        Check { path: "playback.ab.remember"; text: qsTr("Remember the A-B repeat lists") }
+                        Check { path: "playback.ab.prevent-backward"; text: qsTr("Prevent backward navigation from point A") }
+                        Check { path: "playback.ab.toggle-current"; text: qsTr("Repeat-current commands also turn the repeat off") }
+                        Heading { text: qsTr("Bookmarks") }
+                        Check { path: "playback.bookmarks.prompt"; text: qsTr("Prompt before adding a bookmark") }
+                        Check { path: "playback.bookmarks.in-menu"; text: qsTr("Show the bookmark list in the Chapter/Bookmark menu") }
+                        Check { path: "playback.bookmarks.auto-delete"; text: qsTr("Delete a bookmark once it is chosen") }
                     }
 
                     Page {
-                        Heading { text: "Scene browser" }
-                        Amount { label: "Scene width"; path: "scenes.size"; values: [96, 128, 160, 192, 224, 256, 320, 400, 480]; unit: "px" }
-                        Amount { label: "Time interval (0: auto)"; path: "scenes.interval"; values: [0, 5, 10, 15, 30, 60, 120, 300, 600]; format: (v) => v === 0 ? "Auto" : win.seconds(v) }
-                        Amount { label: "Opacity"; path: "scenes.opacity"; from: 20; to: 100; step: 5; unit: "%" }
-                        Check { path: "scenes.close-on-change"; text: "Close on scene changes" }
-                        Check { path: "scenes.fall-back-to-time"; text: "Time-based scenes when there is no marker or subtitle" }
+                        Heading { text: qsTr("Scene browser") }
+                        Amount { label: qsTr("Scene width"); path: "scenes.size"; values: [96, 128, 160, 192, 224, 256, 320, 400, 480]; unit: "px" }
+                        Amount { label: qsTr("Time interval (0: auto)"); path: "scenes.interval"; values: [0, 5, 10, 15, 30, 60, 120, 300, 600]; format: (v) => v === 0 ? "Auto" : win.seconds(v) }
+                        Amount { label: qsTr("Opacity"); path: "scenes.opacity"; from: 20; to: 100; step: 5; unit: "%" }
+                        Check { path: "scenes.close-on-change"; text: qsTr("Close on scene changes") }
+                        Check { path: "scenes.fall-back-to-time"; text: qsTr("Time-based scenes when there is no marker or subtitle") }
                     }
 
                     Page {
-                        Heading { text: "PotPlayer's playlists" }
+                        Heading { text: qsTr("PotPlayer's playlists") }
                         Field {
-                            label: "Playlist folder"
+                            label: qsTr("Playlist folder")
                             path: "potplayer-playlists"
                             optional: true
                             placeholder: win.view.windows ? "%APPDATA%\\PotPlayerMini64\\Playlist" : "not set"
                             Button {
-                                text: "Browse…"
+                                text: qsTr("Browse…")
                                 onClicked: {
                                     folderChooser.target = "potplayer-playlists"
                                     folderChooser.open()
@@ -931,21 +939,21 @@ ApplicationWindow {
                         }
                         RowLayout {
                             Button {
-                                text: "Import Playlists Now"
+                                text: qsTr("Import Playlists Now")
                                 onClicked: {
                                     win.player.run_action("import-playlists")
                                     win.notice = "Imported (see the message in the player window)."
                                 }
                             }
-                            Note { text: "Reads PotPlayer's .dpl files; PotPlayer's files are not changed." }
+                            Note { text: qsTr("Reads PotPlayer's .dpl files; PotPlayer's files are not changed.") }
                         }
                         Heading {
-                            text: "Drives in PotPlayer's playlists"
+                            text: qsTr("Drives in PotPlayer's playlists")
                             visible: !win.view.windows
                         }
                         Note {
                             visible: !win.view.windows
-                            text: "Windows drive letters in imported playlists and the Linux folders they stand for; other drives become /mnt/<letter>."
+                            text: qsTr("Windows drive letters in imported playlists and the Linux folders they stand for; other drives become /mnt/<letter>.")
                         }
                         Repeater {
                             model: win.view.windows ? [] : Object.keys(win.s["drive-map"] || {})
@@ -965,7 +973,7 @@ ApplicationWindow {
                                     }
                                 }
                                 Button {
-                                    text: "Remove"
+                                    text: qsTr("Remove")
                                     onClicked: {
                                         const map = Object.assign({}, win.s["drive-map"])
                                         delete map[modelData]
@@ -978,16 +986,16 @@ ApplicationWindow {
                             visible: !win.view.windows
                             TextField {
                                 id: newDrive
-                                placeholderText: "V:"
+                                placeholderText: qsTr("V:")
                                 Layout.preferredWidth: 60
                             }
                             TextField {
                                 id: newFolder
-                                placeholderText: "/mnt/media"
+                                placeholderText: qsTr("/mnt/media")
                                 Layout.fillWidth: true
                             }
                             Button {
-                                text: "Add"
+                                text: qsTr("Add")
                                 onClicked: {
                                     const map = Object.assign({}, win.s["drive-map"])
                                     map[newDrive.text.toUpperCase()] = newFolder.text
@@ -997,49 +1005,49 @@ ApplicationWindow {
                                 }
                             }
                         }
-                        Heading { text: "Playlist" }
+                        Heading { text: qsTr("Playlist") }
                         Choice {
-                            label: "View items as"
+                            label: qsTr("View items as")
                             path: "playlist.thumbnail-rows"
                             values: [0, 2, 3, 4, 5, 6, 7]
                             texts: ({ 0: "List", 2: "Thumbnails (2 rows) + details", 3: "Thumbnails (3 rows) + details",
                                       4: "Thumbnails (4 rows) + details", 5: "Thumbnails (5 rows) + details",
                                       6: "Thumbnails (6 rows) + details", 7: "Thumbnails (7 rows) + details" })
                         }
-                        Amount { label: "Thumbnail position"; path: "playlist.thumbnail-position"; from: 0; to: 95; step: 5; unit: "%" }
-                        Check { path: "playlist.wide-thumbnails"; text: "Use a 16:9 thumbnail ratio" }
-                        Check { path: "playlist.detect-durations"; text: "Detect durations after adding files to the list" }
-                        Check { path: "playlist.remember-default"; text: "Remember the Default album and recent URLs" }
-                        Check { path: "playlist.instant-albums"; text: "Start albums chosen in menus at once" }
-                        Check { path: "playlist.append-on-open"; text: "Append opened files rather than clear the album" }
-                        Check { path: "playlist.no-duplicates"; text: "Do not add duplicate files" }
-                        Check { path: "playlist.sort-dropped"; text: "Sort dropped files before adding them" }
-                        Check { path: "playlist.focus-main"; text: "Give the window the keyboard when an entry plays" }
+                        Amount { label: qsTr("Thumbnail position"); path: "playlist.thumbnail-position"; from: 0; to: 95; step: 5; unit: "%" }
+                        Check { path: "playlist.wide-thumbnails"; text: qsTr("Use a 16:9 thumbnail ratio") }
+                        Check { path: "playlist.detect-durations"; text: qsTr("Detect durations after adding files to the list") }
+                        Check { path: "playlist.remember-default"; text: qsTr("Remember the Default album and recent URLs") }
+                        Check { path: "playlist.instant-albums"; text: qsTr("Start albums chosen in menus at once") }
+                        Check { path: "playlist.append-on-open"; text: qsTr("Append opened files rather than clear the album") }
+                        Check { path: "playlist.no-duplicates"; text: qsTr("Do not add duplicate files") }
+                        Check { path: "playlist.sort-dropped"; text: qsTr("Sort dropped files before adding them") }
+                        Check { path: "playlist.focus-main"; text: qsTr("Give the window the keyboard when an entry plays") }
                     }
 
                     Page {
-                        Heading { text: "Screen capture" }
+                        Heading { text: qsTr("Screen capture") }
                         Choice {
-                            label: "Method"
+                            label: qsTr("Method")
                             path: "devices.capture"
                             values: ["gdigrab", "ddagrab"]
-                            texts: ({ "gdigrab": "GDI (any desktop)", "ddagrab": "Desktop Duplication (Windows 8 and later)" })
+                            texts: ({ "gdigrab": qsTr("GDI (any desktop)"), "ddagrab": qsTr("Desktop Duplication (Windows 8 and later)") })
                         }
-                        Amount { label: "Frames a second"; path: "devices.capture-fps"; values: [5, 10, 15, 24, 25, 30, 50, 60]; unit: "fps" }
-                        Check { path: "devices.capture-pointer"; text: "Show the mouse pointer" }
-                        Heading { text: "Webcam and other devices" }
-                        Field { label: "Device opened without asking"; path: "devices.webcam"; placeholder: "ask every time" }
-                        Heading { text: "Discs" }
-                        Field { label: "DVD drive or folder"; path: "devices.dvd"; placeholder: "ask every time" }
-                        Field { label: "Blu-ray drive or folder"; path: "devices.bluray"; placeholder: "ask every time" }
-                        Field { label: "CD drive"; path: "devices.cd"; placeholder: "libmpv's default" }
-                        Note { text: "Discs play their titles; their menus come with a later version." }
+                        Amount { label: qsTr("Frames a second"); path: "devices.capture-fps"; values: [5, 10, 15, 24, 25, 30, 50, 60]; unit: "fps" }
+                        Check { path: "devices.capture-pointer"; text: qsTr("Show the mouse pointer") }
+                        Heading { text: qsTr("Webcam and other devices") }
+                        Field { label: qsTr("Device opened without asking"); path: "devices.webcam"; placeholder: qsTr("ask every time") }
+                        Heading { text: qsTr("Discs") }
+                        Field { label: qsTr("DVD drive or folder"); path: "devices.dvd"; placeholder: qsTr("ask every time") }
+                        Field { label: qsTr("Blu-ray drive or folder"); path: "devices.bluray"; placeholder: qsTr("ask every time") }
+                        Field { label: qsTr("CD drive"); path: "devices.cd"; placeholder: qsTr("libmpv's default") }
+                        Note { text: qsTr("Discs play their titles; their menus come with a later version.") }
                     }
 
                     Page {
-                        Heading { text: "Audio Output" }
+                        Heading { text: qsTr("Audio Output") }
                         Choice {
-                            label: "Audio Renderer"
+                            label: qsTr("Audio Renderer")
                             path: "audio-device"
                             values: win.withCurrent((win.view.choices["audio-device"] || []).map(d => d.name),
                                                     win.s["audio-device"])
@@ -1076,12 +1084,12 @@ ApplicationWindow {
                             label: "Output format"
                             path: "audio.sample-format"
                             values: ["same", "s16", "s24", "s32", "float", "s16-dither"]
-                            texts: ({ "same": "As the output device takes it", "s16": "16-bit",
-                                      "s24": "24-bit", "s32": "32-bit", "float": "32-bit (floating point)",
-                                      "s16-dither": "16-bit (dithering)" })
+                            texts: ({ "same": qsTr("As the output device takes it"), "s16": qsTr("16-bit"),
+                                      "s24": qsTr("24-bit"), "s32": qsTr("32-bit"), "float": qsTr("32-bit (floating point)"),
+                                      "s16-dither": qsTr("16-bit (dithering)") })
                         }
                         Choice {
-                            label: "Sample rate"
+                            label: qsTr("Sample rate")
                             path: "audio.sample-rate"
                             values: win.view.choices["sample-rate"] || [0]
                             texts: {
@@ -1095,103 +1103,103 @@ ApplicationWindow {
                             label: "Resample"
                             path: "audio.resample-quality"
                             values: ["high", "normal", "low"]
-                            texts: ({ "high": "High quality", "normal": "Normal quality (Recommended)",
-                                      "low": "Low quality" })
+                            texts: ({ "high": qsTr("High quality"), "normal": qsTr("Normal quality (Recommended)"),
+                                      "low": qsTr("Low quality") })
                         }
                         Choice {
-                            label: "Change the sample rate"
+                            label: qsTr("Change the sample rate")
                             path: "audio.resample-when"
                             values: ["always", "below", "above"]
-                            texts: ({ "always": "Always", "below": "When sample rate is smaller than",
-                                      "above": "When sample rate is larger than" })
+                            texts: ({ "always": qsTr("Always"), "below": qsTr("When sample rate is smaller than"),
+                                      "above": qsTr("When sample rate is larger than") })
                         }
-                        Amount { label: "That sample rate"; path: "audio.resample-limit"; unit: "Hz"; values: [8000, 11025, 12000, 16000, 22050, 24000, 32000, 44100, 48000, 96000, 192000] }
+                        Amount { label: qsTr("That sample rate"); path: "audio.resample-limit"; unit: "Hz"; values: [8000, 11025, 12000, 16000, 22050, 24000, 32000, 44100, 48000, 96000, 192000] }
                         Choice {
-                            label: "Output"
+                            label: qsTr("Output")
                             path: "audio.output-mode"
                             values: ["pcm", "passthrough", "ac3-encode"]
-                            texts: ({ "pcm": "PCM (Default) (Recommended)", "passthrough": "Pass-through",
-                                      "ac3-encode": "Pass-through after AC3 re-encoding" })
+                            texts: ({ "pcm": qsTr("PCM (Default) (Recommended)"), "passthrough": qsTr("Pass-through"),
+                                      "ac3-encode": qsTr("Pass-through after AC3 re-encoding") })
                         }
-                        Amount { label: "AC3 re-encoding bitrate"; path: "audio.ac3-bitrate"; unit: "kbps"; values: [64, 80, 96, 112, 128, 160, 192, 224, 256, 320, 384, 448, 512, 576, 640] }
+                        Amount { label: qsTr("AC3 re-encoding bitrate"); path: "audio.ac3-bitrate"; unit: "kbps"; values: [64, 80, 96, 112, 128, 160, 192, 224, 256, 320, 384, 448, 512, 576, 640] }
                         Choice {
-                            label: "Pass-through when the source has"
+                            label: qsTr("Pass-through when the source has")
                             path: "audio.passthrough-min-channels"
                             values: [null, 2, 3, 4, 5, 6, 7, 8]
-                            texts: ({ "null": "Any number of channels", 2: "2 channels or more",
+                            texts: ({ "null": qsTr("Any number of channels"), 2: "2 channels or more",
                                       3: "3 channels or more", 4: "4 channels or more", 5: "5 channels or more",
                                       6: "6 channels or more", 7: "7 channels or more", 8: "8 channels" })
                         }
-                        Check { path: "audio.exclusive"; text: "Exclusive mode (the device plays only RVP)" }
-                        Heading { text: "Mixer Settings" }
-                        Check { path: "audio.mixer.normalize"; text: "Normalize matrix (scale the mix down so it cannot clip)" }
-                        Check { path: "audio.mixer.expand-center"; text: "Expand stereo to center" }
-                        Check { path: "audio.mixer.expand-surround"; text: "Expand stereo to surround" }
-                        Heading { text: "Mixer Level" }
-                        Amount { label: "Front"; path: "audio.mixer.front"; unit: "dB"; from: -30; to: 12; step: 0.5 }
-                        Amount { label: "Center"; path: "audio.mixer.center"; unit: "dB"; from: -30; to: 12; step: 0.5 }
-                        Amount { label: "Surround"; path: "audio.mixer.surround"; unit: "dB"; from: -30; to: 12; step: 0.5 }
-                        Amount { label: "LFE"; path: "audio.mixer.lfe"; unit: "dB"; from: -30; to: 12; step: 0.5 }
+                        Check { path: "audio.exclusive"; text: qsTr("Exclusive mode (the device plays only RVP)") }
+                        Heading { text: qsTr("Mixer Settings") }
+                        Check { path: "audio.mixer.normalize"; text: qsTr("Normalize matrix (scale the mix down so it cannot clip)") }
+                        Check { path: "audio.mixer.expand-center"; text: qsTr("Expand stereo to center") }
+                        Check { path: "audio.mixer.expand-surround"; text: qsTr("Expand stereo to surround") }
+                        Heading { text: qsTr("Mixer Level") }
+                        Amount { label: qsTr("Front"); path: "audio.mixer.front"; unit: "dB"; from: -30; to: 12; step: 0.5 }
+                        Amount { label: qsTr("Center"); path: "audio.mixer.center"; unit: "dB"; from: -30; to: 12; step: 0.5 }
+                        Amount { label: qsTr("Surround"); path: "audio.mixer.surround"; unit: "dB"; from: -30; to: 12; step: 0.5 }
+                        Amount { label: qsTr("LFE"); path: "audio.mixer.lfe"; unit: "dB"; from: -30; to: 12; step: 0.5 }
                         Note {
-                            text: "Stereo mixes 5.1 and 7.1 down as PotPlayer does (centre and LFE at -3 dB, "
+                            text: qsTr("Stereo mixes 5.1 and 7.1 down as PotPlayer does (centre and LFE at -3 dB, ")
                                   + "surround channels at their level) before the equalizer and the normalizer."
                         }
-                        Heading { text: "Headphone & Dolby Decoder Settings" }
-                        Amount { label: "Distance (virtual speakers' room)"; path: "audio.virtualizer.distance"; from: 0; to: 100 }
-                        Amount { label: "Delay (decoded surround)"; path: "audio.virtualizer.delay"; unit: "ms"; from: 0; to: 100 }
-                        Heading { text: "LFE Redirection" }
-                        Check { path: "audio.lfe-redirect.enabled"; text: "Enable" }
-                        Check { path: "audio.lfe-redirect.remove-low"; text: "Remove low frequencies from the other speakers" }
-                        Amount { label: "Low frequency"; path: "audio.lfe-redirect.frequency"; unit: "Hz"; from: 20; to: 300; step: 5 }
-                        Amount { label: "Gain"; path: "audio.lfe-redirect.gain"; unit: "dB"; from: -20; to: 20; step: 0.5 }
-                        Heading { text: "Second Device" }
-                        Amount { label: "Sync of the 2nd device"; path: "audio.second-delay"; unit: "ms"; from: -2000; to: 2000; step: 10 }
+                        Heading { text: qsTr("Headphone & Dolby Decoder Settings") }
+                        Amount { label: qsTr("Distance (virtual speakers' room)"); path: "audio.virtualizer.distance"; from: 0; to: 100 }
+                        Amount { label: qsTr("Delay (decoded surround)"); path: "audio.virtualizer.delay"; unit: "ms"; from: 0; to: 100 }
+                        Heading { text: qsTr("LFE Redirection") }
+                        Check { path: "audio.lfe-redirect.enabled"; text: qsTr("Enable") }
+                        Check { path: "audio.lfe-redirect.remove-low"; text: qsTr("Remove low frequencies from the other speakers") }
+                        Amount { label: qsTr("Low frequency"); path: "audio.lfe-redirect.frequency"; unit: "Hz"; from: 20; to: 300; step: 5 }
+                        Amount { label: qsTr("Gain"); path: "audio.lfe-redirect.gain"; unit: "dB"; from: -20; to: 20; step: 0.5 }
+                        Heading { text: qsTr("Second Device") }
+                        Amount { label: qsTr("Sync of the 2nd device"); path: "audio.second-delay"; unit: "ms"; from: -2000; to: 2000; step: 10 }
                     }
 
                     Page {
-                        Heading { text: "Volume control setting" }
+                        Heading { text: qsTr("Volume control setting") }
                         Choice {
-                            label: "Method"
+                            label: qsTr("Method")
                             path: "audio.volume-method"
                             values: ["player", "wave", "master"]
-                            texts: ({ "player": "Default volume control (Recommended)",
-                                      "wave": "System Wave volume control",
-                                      "master": "System Master volume control" })
+                            texts: ({ "player": qsTr("Default volume control (Recommended)"),
+                                      "wave": qsTr("System Wave volume control"),
+                                      "master": qsTr("System Master volume control") })
                         }
-                        Check { path: "audio.wave-to-max"; text: "Adjust wave volume to max" }
-                        Check { path: "audio.accelerate"; text: "Accelerate control speed" }
-                        Amount { label: "Volume step (Up, Down, wheel)"; path: "volume-step"; unit: "%"; from: 1; to: 20 }
-                        Amount { label: "Max amplification (above 100 amplifies)"; path: "volume-max"; unit: "%"
+                        Check { path: "audio.wave-to-max"; text: qsTr("Adjust wave volume to max") }
+                        Check { path: "audio.accelerate"; text: qsTr("Accelerate control speed") }
+                        Amount { label: qsTr("Volume step (Up, Down, wheel)"); path: "volume-step"; unit: "%"; from: 1; to: 20 }
+                        Amount { label: qsTr("Max amplification (above 100 amplifies)"); path: "volume-max"; unit: "%"
                                  values: [100, 110, 120, 130, 150, 175, 200, 250, 300, 400, 500, 700, 1000] }
                         CheckBox {
-                            text: "Startup volume"
+                            text: qsTr("Startup volume")
                             checked: win.value("audio.startup-volume") !== null
                                      && win.value("audio.startup-volume") !== undefined
                             onToggled: win.set("audio.startup-volume", checked ? 50 : null)
                         }
-                        Amount { label: "Volume at every start"; path: "audio.startup-volume"; unit: "%"; from: 0; to: 200
+                        Amount { label: qsTr("Volume at every start"); path: "audio.startup-volume"; unit: "%"; from: 0; to: 200
                                  enabled: win.value("audio.startup-volume") !== null }
-                        Heading { text: "Individual volume control" }
-                        Check { path: "audio.channel-volumes.enabled"; text: "Enable individual volume control" }
-                        Amount { label: "Master volume"; path: "audio.channel-volumes.master"; unit: "dB"; from: -40; to: 12; step: 0.5; live: true }
-                        Amount { label: "Left channel"; path: "audio.channel-volumes.left"; unit: "dB"; from: -40; to: 12; step: 0.5; live: true }
-                        Amount { label: "Right channel"; path: "audio.channel-volumes.right"; unit: "dB"; from: -40; to: 12; step: 0.5; live: true }
-                        Amount { label: "Center channel"; path: "audio.channel-volumes.center"; unit: "dB"; from: -40; to: 12; step: 0.5; live: true }
-                        Amount { label: "BackL channel"; path: "audio.channel-volumes.back-left"; unit: "dB"; from: -40; to: 12; step: 0.5; live: true }
-                        Amount { label: "BackR channel"; path: "audio.channel-volumes.back-right"; unit: "dB"; from: -40; to: 12; step: 0.5; live: true }
-                        Amount { label: "SideL channel"; path: "audio.channel-volumes.side-left"; unit: "dB"; from: -40; to: 12; step: 0.5; live: true }
-                        Amount { label: "SideR channel"; path: "audio.channel-volumes.side-right"; unit: "dB"; from: -40; to: 12; step: 0.5; live: true }
-                        Amount { label: "LFE channel"; path: "audio.channel-volumes.lfe"; unit: "dB"; from: -40; to: 12; step: 0.5; live: true }
-                        Heading { text: "Pre-amplify" }
-                        Check { path: "audio.preamp.enabled"; text: "Pre-amplify AC3/DTS Vol." }
-                        Amount { label: "PreAmp"; path: "audio.preamp.gain"; unit: "dB"; from: 0; to: 20; step: 0.5 }
+                        Heading { text: qsTr("Individual volume control") }
+                        Check { path: "audio.channel-volumes.enabled"; text: qsTr("Enable individual volume control") }
+                        Amount { label: qsTr("Master volume"); path: "audio.channel-volumes.master"; unit: "dB"; from: -40; to: 12; step: 0.5; live: true }
+                        Amount { label: qsTr("Left channel"); path: "audio.channel-volumes.left"; unit: "dB"; from: -40; to: 12; step: 0.5; live: true }
+                        Amount { label: qsTr("Right channel"); path: "audio.channel-volumes.right"; unit: "dB"; from: -40; to: 12; step: 0.5; live: true }
+                        Amount { label: qsTr("Center channel"); path: "audio.channel-volumes.center"; unit: "dB"; from: -40; to: 12; step: 0.5; live: true }
+                        Amount { label: qsTr("BackL channel"); path: "audio.channel-volumes.back-left"; unit: "dB"; from: -40; to: 12; step: 0.5; live: true }
+                        Amount { label: qsTr("BackR channel"); path: "audio.channel-volumes.back-right"; unit: "dB"; from: -40; to: 12; step: 0.5; live: true }
+                        Amount { label: qsTr("SideL channel"); path: "audio.channel-volumes.side-left"; unit: "dB"; from: -40; to: 12; step: 0.5; live: true }
+                        Amount { label: qsTr("SideR channel"); path: "audio.channel-volumes.side-right"; unit: "dB"; from: -40; to: 12; step: 0.5; live: true }
+                        Amount { label: qsTr("LFE channel"); path: "audio.channel-volumes.lfe"; unit: "dB"; from: -40; to: 12; step: 0.5; live: true }
+                        Heading { text: qsTr("Pre-amplify") }
+                        Check { path: "audio.preamp.enabled"; text: qsTr("Pre-amplify AC3/DTS Vol.") }
+                        Amount { label: qsTr("PreAmp"); path: "audio.preamp.gain"; unit: "dB"; from: 0; to: 20; step: 0.5 }
                     }
 
                     Page {
-                        Heading { text: "Equalizer" }
-                        Check { path: "equalizer.enabled"; text: "Enable (Shift+E), before the normalizer" }
+                        Heading { text: qsTr("Equalizer") }
+                        Check { path: "equalizer.enabled"; text: qsTr("Enable (Shift+E), before the normalizer") }
                         RowLayout {
-                            Label { text: "Preset"; Layout.preferredWidth: 240 }
+                            Label { text: qsTr("Preset"); Layout.preferredWidth: 240 }
                             ComboBox {
                                 id: presetBox
                                 Layout.preferredWidth: 300
@@ -1204,11 +1212,11 @@ ApplicationWindow {
                                 }
                             }
                             Button {
-                                text: "0 dB"
+                                text: qsTr("0 dB")
                                 onClicked: win.set("equalizer.bands", [0, 0, 0, 0, 0, 0, 0, 0, 0, 0])
                             }
                         }
-                        Check { path: "equalizer.superequalizer"; text: "SuperEQ (Naoki Shibata's equalizer, 18 bands)" }
+                        Check { path: "equalizer.superequalizer"; text: qsTr("SuperEQ (Naoki Shibata's equalizer, 18 bands)") }
                         Repeater {
                             model: ["60 Hz", "170 Hz", "310 Hz", "600 Hz", "1 kHz", "3 kHz", "6 kHz", "12 kHz", "14 kHz", "16 kHz"]
                             delegate: Amount {
@@ -1223,160 +1231,160 @@ ApplicationWindow {
                                 live: true
                             }
                         }
-                        Note { text: "The bands are also on the control panel (F7)." }
+                        Note { text: qsTr("The bands are also on the control panel (F7).") }
                     }
 
                     Page {
-                        Heading { text: "Normalizer (Auto Volume Control)" }
-                        Check { path: "normalizer.enabled"; text: "Enable (Shift+N)" }
-                        Check { path: "normalizer.video-only"; text: "Operate only with video playback" }
-                        Note { text: "Method: TomSteady 32-bit floating point arithmetic, PotPlayer's recommended one." }
-                        Check { path: "normalizer.boost"; text: "Boost audio (raise quiet passages)" }
-                        Amount { label: "Level"; path: "normalizer.level"; unit: "%"; from: 10; to: 100 }
-                        Amount { label: "Release time"; path: "normalizer.release"; from: 5; to: 10 }
-                        Heading { text: "Freeverb" }
-                        Check { path: "audio.freeverb.enabled"; text: "Enable (Shift+R)" }
-                        Note { text: "It operates only in 2 channels." }
-                        Amount { label: "Room size"; path: "audio.freeverb.room-size"; from: 0; to: 1; step: 0.01 }
-                        Amount { label: "Damping"; path: "audio.freeverb.damping"; from: 0; to: 1; step: 0.01 }
-                        Amount { label: "Wet level"; path: "audio.freeverb.wet"; from: 0; to: 1; step: 0.001 }
-                        Amount { label: "Dry level"; path: "audio.freeverb.dry"; from: 0; to: 1; step: 0.01 }
-                        Amount { label: "Width"; path: "audio.freeverb.width"; from: 0; to: 1; step: 0.01 }
+                        Heading { text: qsTr("Normalizer (Auto Volume Control)") }
+                        Check { path: "normalizer.enabled"; text: qsTr("Enable (Shift+N)") }
+                        Check { path: "normalizer.video-only"; text: qsTr("Operate only with video playback") }
+                        Note { text: qsTr("Method: TomSteady 32-bit floating point arithmetic, PotPlayer's recommended one.") }
+                        Check { path: "normalizer.boost"; text: qsTr("Boost audio (raise quiet passages)") }
+                        Amount { label: qsTr("Level"); path: "normalizer.level"; unit: "%"; from: 10; to: 100 }
+                        Amount { label: qsTr("Release time"); path: "normalizer.release"; from: 5; to: 10 }
+                        Heading { text: qsTr("Freeverb") }
+                        Check { path: "audio.freeverb.enabled"; text: qsTr("Enable (Shift+R)") }
+                        Note { text: qsTr("It operates only in 2 channels.") }
+                        Amount { label: qsTr("Room size"); path: "audio.freeverb.room-size"; from: 0; to: 1; step: 0.01 }
+                        Amount { label: qsTr("Damping"); path: "audio.freeverb.damping"; from: 0; to: 1; step: 0.01 }
+                        Amount { label: qsTr("Wet level"); path: "audio.freeverb.wet"; from: 0; to: 1; step: 0.001 }
+                        Amount { label: qsTr("Dry level"); path: "audio.freeverb.dry"; from: 0; to: 1; step: 0.01 }
+                        Amount { label: qsTr("Width"); path: "audio.freeverb.width"; from: 0; to: 1; step: 0.01 }
                     }
 
                     Page {
-                        Heading { text: "Crystallization" }
-                        Check { path: "audio.crystality.enabled"; text: "Enable (Shift+C)" }
-                        Amount { label: "Bandwidth extender"; path: "audio.crystality.bandwidth-extender"; from: 0; to: 100 }
-                        Amount { label: "Extender's HPF"; path: "audio.crystality.extender-hpf"; from: 1; to: 3 }
-                        Amount { label: "Harmonic booster"; path: "audio.crystality.harmonic-booster"; from: 0; to: 100 }
-                        Amount { label: "Echo volume"; path: "audio.crystality.echo-volume"; from: 0; to: 100 }
-                        Amount { label: "Echo feedback"; path: "audio.crystality.echo-feedback"; from: 0; to: 100 }
-                        Amount { label: "Extra stereo"; path: "audio.crystality.extra-stereo"; from: 0; to: 100 }
-                        Heading { text: "Noise Reduction" }
-                        Check { path: "audio.noise-reduction.enabled"; text: "Enable (Shift+D)" }
-                        Heading { text: "Crossfeed" }
-                        Check { path: "audio.crossfeed.enabled"; text: "Enable" }
-                        Amount { label: "Remove low frequencies"; path: "audio.crossfeed.cut"; unit: "Hz"; from: 300; to: 2000; step: 50 }
-                        Amount { label: "Gain"; path: "audio.crossfeed.feed"; unit: "dB"; from: 1; to: 15; step: 0.5 }
-                        Heading { text: "Voice and Channels" }
-                        Check { path: "audio.voice-removal"; text: "Voice Removal (Shift+V)" }
-                        Check { path: "audio.voice-emphasis"; text: "Voice Emphasis (Shift+A)" }
-                        Check { path: "audio.swap-channels"; text: "Swap Stereo Channels (Shift+T)" }
+                        Heading { text: qsTr("Crystallization") }
+                        Check { path: "audio.crystality.enabled"; text: qsTr("Enable (Shift+C)") }
+                        Amount { label: qsTr("Bandwidth extender"); path: "audio.crystality.bandwidth-extender"; from: 0; to: 100 }
+                        Amount { label: qsTr("Extender's HPF"); path: "audio.crystality.extender-hpf"; from: 1; to: 3 }
+                        Amount { label: qsTr("Harmonic booster"); path: "audio.crystality.harmonic-booster"; from: 0; to: 100 }
+                        Amount { label: qsTr("Echo volume"); path: "audio.crystality.echo-volume"; from: 0; to: 100 }
+                        Amount { label: qsTr("Echo feedback"); path: "audio.crystality.echo-feedback"; from: 0; to: 100 }
+                        Amount { label: qsTr("Extra stereo"); path: "audio.crystality.extra-stereo"; from: 0; to: 100 }
+                        Heading { text: qsTr("Noise Reduction") }
+                        Check { path: "audio.noise-reduction.enabled"; text: qsTr("Enable (Shift+D)") }
+                        Heading { text: qsTr("Crossfeed") }
+                        Check { path: "audio.crossfeed.enabled"; text: qsTr("Enable") }
+                        Amount { label: qsTr("Remove low frequencies"); path: "audio.crossfeed.cut"; unit: "Hz"; from: 300; to: 2000; step: 50 }
+                        Amount { label: qsTr("Gain"); path: "audio.crossfeed.feed"; unit: "dB"; from: 1; to: 15; step: 0.5 }
+                        Heading { text: qsTr("Voice and Channels") }
+                        Check { path: "audio.voice-removal"; text: qsTr("Voice Removal (Shift+V)") }
+                        Check { path: "audio.voice-emphasis"; text: qsTr("Voice Emphasis (Shift+A)") }
+                        Check { path: "audio.swap-channels"; text: qsTr("Swap Stereo Channels (Shift+T)") }
                     }
 
                     Page {
-                        Heading { text: "Language/Stream Selection" }
+                        Heading { text: qsTr("Language/Stream Selection") }
                         Choice {
-                            label: "Selection method"
+                            label: qsTr("Selection method")
                             path: "audio.selection"
                             values: ["languages", "stream", "quality", "default"]
-                            texts: ({ "languages": "Prefer specified languages (Recommended)",
-                                      "stream": "Prefer specified stream",
-                                      "quality": "Prefer highest quality ones",
-                                      "default": "Use default selection" })
+                            texts: ({ "languages": qsTr("Prefer specified languages (Recommended)"),
+                                      "stream": qsTr("Prefer specified stream"),
+                                      "quality": qsTr("Prefer highest quality ones"),
+                                      "default": qsTr("Use default selection") })
                         }
-                        Field { label: "Preferred languages"; path: "audio.languages"; placeholder: "rus,eng" }
-                        Field { label: "Turn off subtitles with"; path: "audio.subtitles-off"; placeholder: "rus" }
-                        Amount { label: "Preferred stream (0: none)"; path: "audio.preferred-stream"; from: 0; to: 9 }
-                        Check { path: "audio.remember-tracks"; text: "Remember audio track selections" }
-                        Heading { text: "Synchronization" }
+                        Field { label: qsTr("Preferred languages"); path: "audio.languages"; placeholder: qsTr("rus,eng") }
+                        Field { label: qsTr("Turn off subtitles with"); path: "audio.subtitles-off"; placeholder: qsTr("rus") }
+                        Amount { label: qsTr("Preferred stream (0: none)"); path: "audio.preferred-stream"; from: 0; to: 9 }
+                        Check { path: "audio.remember-tracks"; text: qsTr("Remember audio track selections") }
+                        Heading { text: qsTr("Synchronization") }
                         Choice {
-                            label: "Audio sync control"
+                            label: qsTr("Audio sync control")
                             path: "audio.sync-keep"
                             values: ["never", "runtime", "always"]
-                            texts: ({ "never": "Do not keep audio sync changes",
-                                      "runtime": "Keep audio sync changes over whole runtime",
-                                      "always": "Always keep audio sync changes" })
+                            texts: ({ "never": qsTr("Do not keep audio sync changes"),
+                                      "runtime": qsTr("Keep audio sync changes over whole runtime"),
+                                      "always": qsTr("Always keep audio sync changes") })
                         }
-                        Amount { label: "Audio sync step (Shift+, and Shift+.)"; path: "audio-delay-step"; values: [0.001, 0.005, 0.01, 0.02, 0.025, 0.05, 0.1, 0.2, 0.25, 0.5, 1, 2, 5, 10]; format: win.seconds }
-                        Amount { label: "Default audio sync"; path: "audio.default-delay"; unit: "ms"; from: -2000; to: 2000; step: 10 }
-                        Heading { text: "Speed" }
+                        Amount { label: qsTr("Audio sync step (Shift+, and Shift+.)"); path: "audio-delay-step"; values: [0.001, 0.005, 0.01, 0.02, 0.025, 0.05, 0.1, 0.2, 0.25, 0.5, 1, 2, 5, 10]; format: win.seconds }
+                        Amount { label: qsTr("Default audio sync"); path: "audio.default-delay"; unit: "ms"; from: -2000; to: 2000; step: 10 }
+                        Heading { text: qsTr("Speed") }
                         Choice {
-                            label: "Time stretching"
+                            label: qsTr("Time stretching")
                             path: "audio.stretch"
                             values: ["high-quality", "default-quality", "pitch"]
-                            texts: ({ "high-quality": "High quality audio time stretching (Recommended)",
-                                      "default-quality": "Default quality audio time stretching",
-                                      "pitch": "Audio pitch shifting" })
+                            texts: ({ "high-quality": qsTr("High quality audio time stretching (Recommended)"),
+                                      "default-quality": qsTr("Default quality audio time stretching"),
+                                      "pitch": qsTr("Audio pitch shifting") })
                         }
-                        Heading { text: "Audio Recording" }
-                        Field { label: "Storage folder"; path: "audio.recording.folder"; optional: true; placeholder: "Music/RVP" }
-                        Check { path: "audio.recording.in-media-folder"; text: "Store recorded audios into play folders (if available)" }
+                        Heading { text: qsTr("Audio Recording") }
+                        Field { label: qsTr("Storage folder"); path: "audio.recording.folder"; optional: true; placeholder: qsTr("Music/RVP") }
+                        Check { path: "audio.recording.in-media-folder"; text: qsTr("Store recorded audios into play folders (if available)") }
                     }
 
                     Page {
-                        Heading { text: "Decoding" }
+                        Heading { text: qsTr("Decoding") }
                         Choice {
-                            label: "Hardware decoding"
+                            label: qsTr("Hardware decoding")
                             path: "hwdec"
                             values: win.withCurrent(win.view.choices.hwdec, win.s.hwdec)
-                            texts: ({ "no": "Off (software)", "auto-copy": "auto-copy (SVP needs copy-back)" })
+                            texts: ({ "no": qsTr("Off (software)"), "auto-copy": qsTr("auto-copy (SVP needs copy-back)") })
                         }
-                        Heading { text: "Output" }
+                        Heading { text: qsTr("Output") }
                         Choice {
-                            label: "Video renderer (when RVP starts)"
+                            label: qsTr("Video renderer (when RVP starts)")
                             path: "render.renderer"
                             values: win.view.choices.renderer || []
-                            texts: ({ "opengl": "OpenGL in the window (mpv's gpu renderer)",
-                                      "direct3d11": "Direct3D 11 window (mpv's gpu-next, HDR output)",
-                                      "vulkan": "Vulkan window (mpv's gpu-next, HDR output, NVIDIA Optical Flow smoothing)" })
+                            texts: ({ "opengl": qsTr("OpenGL in the window (mpv's gpu renderer)"),
+                                      "direct3d11": qsTr("Direct3D 11 window (mpv's gpu-next, HDR output)"),
+                                      "vulkan": qsTr("Vulkan window (mpv's gpu-next, HDR output, NVIDIA Optical Flow smoothing)") })
                         }
                         Check {
                             visible: Qt.platform.os === "windows"
                             path: "render.hdr-output"
-                            text: "Send HDR video to an HDR display as HDR (Direct3D 11)"
+                            text: qsTr("Send HDR video to an HDR display as HDR (Direct3D 11)")
                         }
                         Check {
                             visible: Qt.platform.os === "windows"
                             path: "render.ten-bit"
-                            text: "10-bit output (Direct3D 11, when RVP starts)"
+                            text: qsTr("10-bit output (Direct3D 11, when RVP starts)")
                         }
                         Choice {
                             visible: Qt.platform.os === "windows"
-                            label: "GPU Super Resolution (Direct3D 11)"
+                            label: qsTr("GPU Super Resolution (Direct3D 11)")
                             path: "render.super-resolution"
                             values: win.view.choices["super-resolution"] || []
-                            texts: ({ "off": "Off", "nvidia": "NVIDIA RTX Video Super Resolution",
-                                      "intel": "Intel Video Super Resolution" })
+                            texts: ({ "off": qsTr("Off"), "nvidia": qsTr("NVIDIA RTX Video Super Resolution"),
+                                      "intel": qsTr("Intel Video Super Resolution") })
                         }
                         Check {
                             visible: Qt.platform.os === "windows"
                             path: "render.rtx-hdr"
-                            text: "NVIDIA RTX Video HDR (Direct3D 11)"
+                            text: qsTr("NVIDIA RTX Video HDR (Direct3D 11)")
                         }
                         Note {
                             visible: Qt.platform.os === "windows"
-                            text: "Both run in the GPU's video processor on Direct3D 11 frames: hardware decoding without copy-back, so not with SVP or RVP's own video filters."
+                            text: qsTr("Both run in the GPU's video processor on Direct3D 11 frames: hardware decoding without copy-back, so not with SVP or RVP's own video filters.")
                         }
                         Choice {
-                            label: "Video sync"
+                            label: qsTr("Video sync")
                             path: "video-sync"
                             values: win.withCurrent(win.view.choices["video-sync"], win.s["video-sync"])
-                            texts: ({ "audio": "audio (video follows the sound)",
-                                      "display-resample": "display-resample (smooth, resamples audio)" })
+                            texts: ({ "audio": qsTr("audio (video follows the sound)"),
+                                      "display-resample": qsTr("display-resample (smooth, resamples audio)") })
                         }
                         Choice {
-                            label: "Upscaler"
+                            label: qsTr("Upscaler")
                             path: "scaler"
                             values: win.withCurrent(win.view.choices.scaler, win.s.scaler)
-                            texts: ({ "": "mpv's default" })
+                            texts: ({ "": qsTr("mpv's default") })
                         }
                         Choice {
-                            label: "Downscaler"
+                            label: qsTr("Downscaler")
                             path: "render.dscale"
                             values: win.view.choices["render-scaler"] || []
-                            texts: ({ "": "mpv's default" })
+                            texts: ({ "": qsTr("mpv's default") })
                         }
                         Choice {
-                            label: "Chroma scaler"
+                            label: qsTr("Chroma scaler")
                             path: "render.cscale"
                             values: win.view.choices["render-scaler"] || []
-                            texts: ({ "": "mpv's default" })
+                            texts: ({ "": qsTr("mpv's default") })
                         }
-                        Heading { text: "GPU power" }
+                        Heading { text: qsTr("GPU power") }
                         Amount {
-                            label: "Power budget"
+                            label: qsTr("Power budget")
                             path: "render.power-budget"
                             from: 50
                             to: 100
@@ -1385,206 +1393,206 @@ ApplicationWindow {
                         }
                         Note { text: win.gpuPowerText() }
                         Note {
-                            text: "Above the budget RVP lightens its own work, a step every few seconds: EWA scalers become spline36, then GPU Super Resolution and RTX Video HDR, the pixel shaders and the VapourSynth script go off. Each comes back once the card stays 10 points below the budget for a minute. RVP never changes the card's own settings, and SVP and other programs are not limited. NVIDIA cards are read through NVML; AMD cards through Windows' adapter counter (Windows) and amdgpu (Linux)."
+                            text: qsTr("Above the budget RVP lightens its own work, a step every few seconds: EWA scalers become spline36, then GPU Super Resolution and RTX Video HDR, the pixel shaders and the VapourSynth script go off. Each comes back once the card stays 10 points below the budget for a minute. RVP never changes the card's own settings, and SVP and other programs are not limited. NVIDIA cards are read through NVML; AMD cards through Windows' adapter counter (Windows) and amdgpu (Linux).")
                         }
-                        Heading { text: "HDR and colour" }
-                        Check { path: "render.tone-mapping-on"; text: "Map HDR to the display (SMPTE ST 2084 correction)" }
+                        Heading { text: qsTr("HDR and colour") }
+                        Check { path: "render.tone-mapping-on"; text: qsTr("Map HDR to the display (SMPTE ST 2084 correction)") }
                         Choice {
-                            label: "Tone mapping"
+                            label: qsTr("Tone mapping")
                             path: "render.tone-mapping"
                             values: win.view.choices["tone-mapping"] || []
-                            texts: ({ "auto": "auto (mpv's choice)" })
+                            texts: ({ "auto": qsTr("auto (mpv's choice)") })
                         }
-                        Check { path: "render.hdr-metadata"; text: "Use the file's mastering metadata (SMPTE ST 2086) instead of measured peaks" }
-                        Check { path: "render.icc"; text: "Use the display's ICC profile (colour gamut correction)" }
-                        Amount { label: "SDR monitor luminance"; path: "render.target-peak"; values: [0, 100, 120, 160, 200, 203, 250, 300, 400, 500, 600, 800, 1000]; format: v => v === 0 ? "mpv's choice" : v + " nits" }
-                        Check { path: "render.limited-range"; text: "Use limited (16-235) colour range" }
+                        Check { path: "render.hdr-metadata"; text: qsTr("Use the file's mastering metadata (SMPTE ST 2086) instead of measured peaks") }
+                        Check { path: "render.icc"; text: qsTr("Use the display's ICC profile (colour gamut correction)") }
+                        Amount { label: qsTr("SDR monitor luminance"); path: "render.target-peak"; values: [0, 100, 120, 160, 200, 203, 250, 300, 400, 500, 600, 800, 1000]; format: v => v === 0 ? "mpv's choice" : v + " nits" }
+                        Check { path: "render.limited-range"; text: qsTr("Use limited (16-235) colour range") }
                         Choice {
-                            label: "YCbCr to RGB matrix"
+                            label: qsTr("YCbCr to RGB matrix")
                             path: "render.matrix"
                             values: win.view.choices["matrix"] || []
-                            texts: ({ "auto": "From the file (auto)" })
+                            texts: ({ "auto": qsTr("From the file (auto)") })
                         }
-                        Heading { text: "Deinterlacing" }
+                        Heading { text: qsTr("Deinterlacing") }
                         Choice {
-                            label: "Deinterlace (Ctrl+I)"
+                            label: qsTr("Deinterlace (Ctrl+I)")
                             path: "deinterlace"
                             values: ["auto", "on", "off"]
-                            texts: ({ "auto": "Auto (interlaced frames only)", "on": "Always", "off": "Off" })
+                            texts: ({ "auto": qsTr("Auto (interlaced frames only)"), "on": qsTr("Always"), "off": qsTr("Off") })
                         }
                         Choice {
-                            label: "Software deinterlacer"
+                            label: qsTr("Software deinterlacer")
                             path: "render.deinterlacer"
                             values: win.view.choices["deinterlacer"] || []
-                            texts: ({ "": "mpv's choice", "bwdif": "bwdif (Bob Weaver)", "yadif": "yadif", "w3fdif": "w3fdif" })
+                            texts: ({ "": qsTr("mpv's choice"), "bwdif": qsTr("bwdif (Bob Weaver)"), "yadif": qsTr("yadif"), "w3fdif": qsTr("w3fdif") })
                         }
                         Choice {
-                            label: "Field order"
+                            label: qsTr("Field order")
                             path: "render.field-order"
                             values: win.view.choices["field-order"] || []
-                            texts: ({ "auto": "From the file", "top": "Top field first", "bottom": "Bottom field first" })
+                            texts: ({ "auto": qsTr("From the file"), "top": qsTr("Top field first"), "bottom": qsTr("Bottom field first") })
                         }
-                        Heading { text: "Colour" }
-                        Check { path: "color.enabled"; text: "Use the colour adjustments (Q switches them off and back)" }
-                        Amount { label: "Brightness (W, E)"; path: "color.brightness"; from: -100; live: true }
-                        Amount { label: "Contrast (R, T)"; path: "color.contrast"; from: -100; live: true }
-                        Amount { label: "Saturation (Y, U)"; path: "color.saturation"; from: -100; live: true }
-                        Amount { label: "Hue (I, O)"; path: "color.hue"; from: -100; live: true }
-                        Amount { label: "Gamma"; path: "color.gamma"; from: -100; live: true }
-                        Heading { text: "Effects" }
-                        Effect { effect: "deblock"; text: "Deblock (Ctrl+H)" }
-                        Effect { effect: "denoise"; text: "Denoise 3D (Ctrl+N)" }
-                        Effect { effect: "soften"; text: "Soften (Ctrl+B)" }
-                        Effect { effect: "sharpen"; text: "Sharpen (Ctrl+R)" }
-                        Effect { effect: "flip-vertical"; text: "Flip vertical (Ctrl+P)" }
-                        Effect { effect: "flip-horizontal"; text: "Flip horizontal (Ctrl+Z)" }
-                        Effect { effect: "rotate"; text: "Rotation" }
-                        Effect { effect: "auto-level"; text: "Auto level control" }
-                        Effect { effect: "levels"; text: "Level control (Ctrl+L)" }
-                        Effect { effect: "gradual-denoise"; text: "Gradual denoise" }
-                        Effect { effect: "temporal-denoise"; text: "Temporary denoise (Ctrl+M)" }
-                        Effect { effect: "offset"; text: "Luma and chroma offset" }
-                        Effect { effect: "motion-blur"; text: "Motion blur" }
-                        Effect { effect: "warp-sharp"; text: "WarpSharp (approximated: FFmpeg's contrast adaptive sharpening)" }
-                        Check { path: "deband"; text: "Deband (mpv's renderer)" }
-                        Note { text: "Effects run as RVP's own filters before SVP's, which they leave in place; while one is on, hardware decoding copies the frames back." }
-                        Heading { text: "Effect strengths" }
-                        Amount { label: "Rotation"; path: "video-effects.rotate-angle"; from: -180; to: 270; step: 1; unit: "°" }
-                        Amount { label: "Soften: radius"; path: "video-effects.soften.0"; from: 0.1; to: 5; step: 0.1 }
-                        Amount { label: "Soften: luma"; path: "video-effects.soften.1"; from: 0; to: 1; step: 0.05 }
-                        Amount { label: "Soften: chroma"; path: "video-effects.soften.2"; from: 0; to: 1; step: 0.05 }
-                        Amount { label: "Sharpen: luma"; path: "video-effects.sharpen.0"; from: 0; to: 2; step: 0.05 }
-                        Amount { label: "Sharpen: chroma"; path: "video-effects.sharpen.1"; from: 0; to: 2; step: 0.05 }
-                        Amount { label: "Deblock"; path: "video-effects.deblock"; from: 1; to: 10 }
-                        Amount { label: "Gradual denoise"; path: "video-effects.gradual"; from: 1; to: 10 }
-                        Amount { label: "Denoise 3D: luma"; path: "video-effects.denoise.0"; from: 0; to: 20; step: 0.5 }
-                        Amount { label: "Denoise 3D: chroma"; path: "video-effects.denoise.1"; from: 0; to: 20; step: 0.5 }
-                        Amount { label: "Denoise 3D: time"; path: "video-effects.denoise.2"; from: 0; to: 20; step: 0.5 }
-                        Check { path: "video-effects.denoise-quality"; text: "Denoise 3D in high quality (non-local means, slow)" }
-                        Amount { label: "Temporal noise reducer: A"; path: "video-effects.temporal.0"; from: 0.005; to: 0.3; step: 0.005 }
-                        Amount { label: "Temporal noise reducer: B"; path: "video-effects.temporal.1"; from: 0.005; to: 0.3; step: 0.005 }
-                        Amount { label: "Temporal noise reducer: frames"; path: "video-effects.temporal.2"; from: 3; to: 29; step: 2 }
-                        Amount { label: "WarpSharp: depth"; path: "video-effects.warpsharp"; from: 0; to: 1; step: 0.05 }
-                        Amount { label: "Motion blur: frames"; path: "video-effects.motion-blur"; from: 2; to: 10 }
-                        Amount { label: "Deband: threshold"; path: "video-effects.deband.0"; from: 1; to: 200 }
-                        Amount { label: "Deband: radius"; path: "video-effects.deband.1"; from: 1; to: 64 }
-                        Heading { text: "Levels and offsets" }
-                        Check { path: "video-effects.levels.auto-full-range"; text: "Auto level control: full range (0-255)" }
-                        Check { path: "video-effects.levels.full-range"; text: "Level control: full range output (0-255)" }
-                        Check { path: "video-effects.levels.luma-only"; text: "Change only the luminance" }
-                        Check { path: "video-effects.levels.auto-input"; text: "Input range: automatic (the frame's own)" }
-                        Amount { label: "Input: from"; path: "video-effects.levels.input.0"; from: 0; to: 255 }
-                        Amount { label: "Input: to"; path: "video-effects.levels.input.1"; from: 0; to: 255 }
-                        Amount { label: "Output: from"; path: "video-effects.levels.output.0"; from: 0; to: 255 }
-                        Amount { label: "Output: to"; path: "video-effects.levels.output.1"; from: 0; to: 255 }
-                        Amount { label: "Gamma correction"; path: "video-effects.levels.gamma"; from: 0.1; to: 4; step: 0.05 }
-                        Amount { label: "Luma offset X"; path: "video-effects.levels.luma-offset.0"; from: -32; to: 32; unit: "px" }
-                        Amount { label: "Luma offset Y"; path: "video-effects.levels.luma-offset.1"; from: -32; to: 32; unit: "px" }
-                        Amount { label: "Chroma offset X"; path: "video-effects.levels.chroma-offset.0"; from: -32; to: 32; unit: "px" }
-                        Amount { label: "Chroma offset Y"; path: "video-effects.levels.chroma-offset.1"; from: -32; to: 32; unit: "px" }
+                        Heading { text: qsTr("Colour") }
+                        Check { path: "color.enabled"; text: qsTr("Use the colour adjustments (Q switches them off and back)") }
+                        Amount { label: qsTr("Brightness (W, E)"); path: "color.brightness"; from: -100; live: true }
+                        Amount { label: qsTr("Contrast (R, T)"); path: "color.contrast"; from: -100; live: true }
+                        Amount { label: qsTr("Saturation (Y, U)"); path: "color.saturation"; from: -100; live: true }
+                        Amount { label: qsTr("Hue (I, O)"); path: "color.hue"; from: -100; live: true }
+                        Amount { label: qsTr("Gamma"); path: "color.gamma"; from: -100; live: true }
+                        Heading { text: qsTr("Effects") }
+                        Effect { effect: "deblock"; text: qsTr("Deblock (Ctrl+H)") }
+                        Effect { effect: "denoise"; text: qsTr("Denoise 3D (Ctrl+N)") }
+                        Effect { effect: "soften"; text: qsTr("Soften (Ctrl+B)") }
+                        Effect { effect: "sharpen"; text: qsTr("Sharpen (Ctrl+R)") }
+                        Effect { effect: "flip-vertical"; text: qsTr("Flip vertical (Ctrl+P)") }
+                        Effect { effect: "flip-horizontal"; text: qsTr("Flip horizontal (Ctrl+Z)") }
+                        Effect { effect: "rotate"; text: qsTr("Rotation") }
+                        Effect { effect: "auto-level"; text: qsTr("Auto level control") }
+                        Effect { effect: "levels"; text: qsTr("Level control (Ctrl+L)") }
+                        Effect { effect: "gradual-denoise"; text: qsTr("Gradual denoise") }
+                        Effect { effect: "temporal-denoise"; text: qsTr("Temporary denoise (Ctrl+M)") }
+                        Effect { effect: "offset"; text: qsTr("Luma and chroma offset") }
+                        Effect { effect: "motion-blur"; text: qsTr("Motion blur") }
+                        Effect { effect: "warp-sharp"; text: qsTr("WarpSharp (approximated: FFmpeg's contrast adaptive sharpening)") }
+                        Check { path: "deband"; text: qsTr("Deband (mpv's renderer)") }
+                        Note { text: qsTr("Effects run as RVP's own filters before SVP's, which they leave in place; while one is on, hardware decoding copies the frames back.") }
+                        Heading { text: qsTr("Effect strengths") }
+                        Amount { label: qsTr("Rotation"); path: "video-effects.rotate-angle"; from: -180; to: 270; step: 1; unit: "°" }
+                        Amount { label: qsTr("Soften: radius"); path: "video-effects.soften.0"; from: 0.1; to: 5; step: 0.1 }
+                        Amount { label: qsTr("Soften: luma"); path: "video-effects.soften.1"; from: 0; to: 1; step: 0.05 }
+                        Amount { label: qsTr("Soften: chroma"); path: "video-effects.soften.2"; from: 0; to: 1; step: 0.05 }
+                        Amount { label: qsTr("Sharpen: luma"); path: "video-effects.sharpen.0"; from: 0; to: 2; step: 0.05 }
+                        Amount { label: qsTr("Sharpen: chroma"); path: "video-effects.sharpen.1"; from: 0; to: 2; step: 0.05 }
+                        Amount { label: qsTr("Deblock"); path: "video-effects.deblock"; from: 1; to: 10 }
+                        Amount { label: qsTr("Gradual denoise"); path: "video-effects.gradual"; from: 1; to: 10 }
+                        Amount { label: qsTr("Denoise 3D: luma"); path: "video-effects.denoise.0"; from: 0; to: 20; step: 0.5 }
+                        Amount { label: qsTr("Denoise 3D: chroma"); path: "video-effects.denoise.1"; from: 0; to: 20; step: 0.5 }
+                        Amount { label: qsTr("Denoise 3D: time"); path: "video-effects.denoise.2"; from: 0; to: 20; step: 0.5 }
+                        Check { path: "video-effects.denoise-quality"; text: qsTr("Denoise 3D in high quality (non-local means, slow)") }
+                        Amount { label: qsTr("Temporal noise reducer: A"); path: "video-effects.temporal.0"; from: 0.005; to: 0.3; step: 0.005 }
+                        Amount { label: qsTr("Temporal noise reducer: B"); path: "video-effects.temporal.1"; from: 0.005; to: 0.3; step: 0.005 }
+                        Amount { label: qsTr("Temporal noise reducer: frames"); path: "video-effects.temporal.2"; from: 3; to: 29; step: 2 }
+                        Amount { label: qsTr("WarpSharp: depth"); path: "video-effects.warpsharp"; from: 0; to: 1; step: 0.05 }
+                        Amount { label: qsTr("Motion blur: frames"); path: "video-effects.motion-blur"; from: 2; to: 10 }
+                        Amount { label: qsTr("Deband: threshold"); path: "video-effects.deband.0"; from: 1; to: 200 }
+                        Amount { label: qsTr("Deband: radius"); path: "video-effects.deband.1"; from: 1; to: 64 }
+                        Heading { text: qsTr("Levels and offsets") }
+                        Check { path: "video-effects.levels.auto-full-range"; text: qsTr("Auto level control: full range (0-255)") }
+                        Check { path: "video-effects.levels.full-range"; text: qsTr("Level control: full range output (0-255)") }
+                        Check { path: "video-effects.levels.luma-only"; text: qsTr("Change only the luminance") }
+                        Check { path: "video-effects.levels.auto-input"; text: qsTr("Input range: automatic (the frame's own)") }
+                        Amount { label: qsTr("Input: from"); path: "video-effects.levels.input.0"; from: 0; to: 255 }
+                        Amount { label: qsTr("Input: to"); path: "video-effects.levels.input.1"; from: 0; to: 255 }
+                        Amount { label: qsTr("Output: from"); path: "video-effects.levels.output.0"; from: 0; to: 255 }
+                        Amount { label: qsTr("Output: to"); path: "video-effects.levels.output.1"; from: 0; to: 255 }
+                        Amount { label: qsTr("Gamma correction"); path: "video-effects.levels.gamma"; from: 0.1; to: 4; step: 0.05 }
+                        Amount { label: qsTr("Luma offset X"); path: "video-effects.levels.luma-offset.0"; from: -32; to: 32; unit: "px" }
+                        Amount { label: qsTr("Luma offset Y"); path: "video-effects.levels.luma-offset.1"; from: -32; to: 32; unit: "px" }
+                        Amount { label: qsTr("Chroma offset X"); path: "video-effects.levels.chroma-offset.0"; from: -32; to: 32; unit: "px" }
+                        Amount { label: qsTr("Chroma offset Y"); path: "video-effects.levels.chroma-offset.1"; from: -32; to: 32; unit: "px" }
                     }
 
                     Page {
-                        Heading { text: "Aspect Ratio" }
-                        Field { label: "Custom aspect ratio"; path: "picture.custom-aspect"; placeholder: "21:9" }
+                        Heading { text: qsTr("Aspect Ratio") }
+                        Field { label: qsTr("Custom aspect ratio"); path: "picture.custom-aspect"; placeholder: "21:9" }
                         Choice {
-                            label: "Correct the aspect ratio of the output device"
+                            label: qsTr("Correct the aspect ratio of the output device")
                             path: "picture.output-device"
                             values: ["monitor", "tv4x3", "tv16x9", "auto"]
-                            texts: ({ "monitor": "Monitor output (square pixels)", "tv4x3": "TV-OUT 4:3",
-                                      "tv16x9": "TV-OUT 16:9", "auto": "Detect from the screen's size" })
+                            texts: ({ "monitor": qsTr("Monitor output (square pixels)"), "tv4x3": qsTr("TV-OUT 4:3"),
+                                      "tv16x9": qsTr("TV-OUT 16:9"), "auto": qsTr("Detect from the screen's size") })
                         }
-                        Check { path: "picture.adjust-to-window"; text: "Adjust the aspect ratio to the window (not in fullscreen)" }
-                        Heading { text: "Aspect ratio mode in fullscreen" }
-                        Check { path: "picture.fullscreen-mode-limited"; text: "Use the chosen mode only while the margin around the video is small" }
-                        Amount { label: "Margin below"; path: "picture.fullscreen-margin"; from: 0; to: 50; unit: "%" }
-                        Heading { text: "Bottom margin for subtitles" }
-                        Check { path: "picture.subtitle-margin"; text: "Provide a bottom margin for subtitles" }
+                        Check { path: "picture.adjust-to-window"; text: qsTr("Adjust the aspect ratio to the window (not in fullscreen)") }
+                        Heading { text: qsTr("Aspect ratio mode in fullscreen") }
+                        Check { path: "picture.fullscreen-mode-limited"; text: qsTr("Use the chosen mode only while the margin around the video is small") }
+                        Amount { label: qsTr("Margin below"); path: "picture.fullscreen-margin"; from: 0; to: 50; unit: "%" }
+                        Heading { text: qsTr("Bottom margin for subtitles") }
+                        Check { path: "picture.subtitle-margin"; text: qsTr("Provide a bottom margin for subtitles") }
                         Choice {
-                            label: "As bottom margin"
+                            label: qsTr("As bottom margin")
                             path: "picture.subtitle-room"
                             values: ["one-line", "two-lines", "three-lines", "available", "available-always"]
-                            texts: ({ "one-line": "Reserve 1 line", "two-lines": "Reserve 2 lines",
-                                      "three-lines": "Reserve 3 lines", "available": "Reserve the space below the video",
-                                      "available-always": "Reserve the space below the video, even without subtitles" })
+                            texts: ({ "one-line": qsTr("Reserve 1 line"), "two-lines": qsTr("Reserve 2 lines"),
+                                      "three-lines": qsTr("Reserve 3 lines"), "available": qsTr("Reserve the space below the video"),
+                                      "available-always": qsTr("Reserve the space below the video, even without subtitles") })
                         }
-                        Check { path: "picture.subtitle-margin-resize"; text: "Make room by shrinking the picture (otherwise the video moves up)" }
-                        Check { path: "picture.subtitle-margin-fullscreen-only"; text: "Only in fullscreen" }
-                        Note { text: "Text subtitles go into the room under the video. Keep Video Frame and the other aspect ratio modes are in the Aspect Ratio menu." }
+                        Check { path: "picture.subtitle-margin-resize"; text: qsTr("Make room by shrinking the picture (otherwise the video moves up)") }
+                        Check { path: "picture.subtitle-margin-fullscreen-only"; text: qsTr("Only in fullscreen") }
+                        Note { text: qsTr("Text subtitles go into the room under the video. Keep Video Frame and the other aspect ratio modes are in the Aspect Ratio menu.") }
                     }
 
                     Page {
-                        Heading { text: "Extend/Crop" }
+                        Heading { text: qsTr("Extend/Crop") }
                         Choice {
-                            label: "Method"
+                            label: qsTr("Method")
                             path: "picture.extend"
                             values: ["none", "extend", "crop", "pixels"]
-                            texts: ({ "none": "Do nothing", "extend": "Extend to the aspect ratio",
-                                      "crop": "Crop to the aspect ratio", "pixels": "Extend or crop to the size" })
+                            texts: ({ "none": qsTr("Do nothing"), "extend": qsTr("Extend to the aspect ratio"),
+                                      "crop": qsTr("Crop to the aspect ratio"), "pixels": qsTr("Extend or crop to the size") })
                         }
-                        Field { label: "Aspect ratio"; path: "picture.extend-ratio"; placeholder: "4:3" }
-                        Amount { label: "Width"; path: "picture.extend-size.0"; from: 160; to: 7680; step: 16; unit: "px" }
-                        Amount { label: "Height"; path: "picture.extend-size.1"; from: 120; to: 4320; step: 8; unit: "px" }
-                        Amount { label: "Horizontal position"; path: "picture.position.0"; from: 0; to: 100; unit: "%"; live: true }
-                        Amount { label: "Vertical position"; path: "picture.position.1"; from: 0; to: 100; unit: "%"; live: true }
-                        Check { path: "picture.extend-first"; text: "Use video extension before resizing" }
-                        Check { path: "picture.extend-scale-height"; text: "Scale only the frame's height (no bars, no cutting)" }
-                        Heading { text: "Bottom margin" }
-                        Amount { label: "Black below the picture"; path: "picture.bottom-margin"; values: [0, 5, 10, 15, 20, 25, 30]; unit: "%" }
-                        Check { path: "picture.bottom-margin-subtitles-only"; text: "Only when subtitles exist" }
-                        Note { text: "Extending and cropping run as RVP's own filters before SVP's (the frame changes, so SVP processes what shows); while they are on, hardware decoding copies the frames back. The positions move the picture inside the new frame (Video > Extend/Crop > Move)." }
+                        Field { label: qsTr("Aspect ratio"); path: "picture.extend-ratio"; placeholder: "4:3" }
+                        Amount { label: qsTr("Width"); path: "picture.extend-size.0"; from: 160; to: 7680; step: 16; unit: "px" }
+                        Amount { label: qsTr("Height"); path: "picture.extend-size.1"; from: 120; to: 4320; step: 8; unit: "px" }
+                        Amount { label: qsTr("Horizontal position"); path: "picture.position.0"; from: 0; to: 100; unit: "%"; live: true }
+                        Amount { label: qsTr("Vertical position"); path: "picture.position.1"; from: 0; to: 100; unit: "%"; live: true }
+                        Check { path: "picture.extend-first"; text: qsTr("Use video extension before resizing") }
+                        Check { path: "picture.extend-scale-height"; text: qsTr("Scale only the frame's height (no bars, no cutting)") }
+                        Heading { text: qsTr("Bottom margin") }
+                        Amount { label: qsTr("Black below the picture"); path: "picture.bottom-margin"; values: [0, 5, 10, 15, 20, 25, 30]; unit: "%" }
+                        Check { path: "picture.bottom-margin-subtitles-only"; text: qsTr("Only when subtitles exist") }
+                        Note { text: qsTr("Extending and cropping run as RVP's own filters before SVP's (the frame changes, so SVP processes what shows); while they are on, hardware decoding copies the frames back. The positions move the picture inside the new frame (Video > Extend/Crop > Move).") }
                     }
 
                     Page {
-                        Heading { text: "Resize the video frame" }
+                        Heading { text: qsTr("Resize the video frame") }
                         Choice {
-                            label: "Resize video"
+                            label: qsTr("Resize video")
                             path: "picture.resize.when"
                             values: ["never", "smaller", "larger", "always"]
-                            texts: ({ "never": "Do nothing", "smaller": "When the input is smaller than",
-                                      "larger": "When the input is larger than", "always": "Always" })
+                            texts: ({ "never": qsTr("Do nothing"), "smaller": qsTr("When the input is smaller than"),
+                                      "larger": qsTr("When the input is larger than"), "always": qsTr("Always") })
                         }
-                        Check { path: "picture.resize.condition-display"; text: "Compare with the display's resolution" }
-                        Amount { label: "Or with: width"; path: "picture.resize.condition-size.0"; from: 160; to: 7680; step: 16; unit: "px" }
-                        Amount { label: "Or with: height"; path: "picture.resize.condition-size.1"; from: 120; to: 4320; step: 8; unit: "px" }
+                        Check { path: "picture.resize.condition-display"; text: qsTr("Compare with the display's resolution") }
+                        Amount { label: qsTr("Or with: width"); path: "picture.resize.condition-size.0"; from: 160; to: 7680; step: 16; unit: "px" }
+                        Amount { label: qsTr("Or with: height"); path: "picture.resize.condition-size.1"; from: 120; to: 4320; step: 8; unit: "px" }
                         SizePresets { target: "picture.resize.condition-size" }
                         Choice {
-                            label: "Size"
+                            label: qsTr("Size")
                             path: "picture.resize.target"
                             values: ["display", "multiply", "size"]
-                            texts: ({ "display": "The display's resolution", "multiply": "Multiply by", "size": "Specify size" })
+                            texts: ({ "display": qsTr("The display's resolution"), "multiply": qsTr("Multiply by"), "size": qsTr("Specify size") })
                         }
-                        Amount { label: "Multiply by"; path: "picture.resize.factor"; from: 0.25; to: 4; step: 0.25 }
-                        Amount { label: "Width"; path: "picture.resize.width"; from: 320; to: 7680; step: 16; unit: "px" }
-                        Amount { label: "Height"; path: "picture.resize.height"; from: 240; to: 4320; step: 8; unit: "px" }
+                        Amount { label: qsTr("Multiply by"); path: "picture.resize.factor"; from: 0.25; to: 4; step: 0.25 }
+                        Amount { label: qsTr("Width"); path: "picture.resize.width"; from: 320; to: 7680; step: 16; unit: "px" }
+                        Amount { label: qsTr("Height"); path: "picture.resize.height"; from: 240; to: 4320; step: 8; unit: "px" }
                         SizePresets { target: "picture.resize" }
-                        Check { path: "picture.resize.auto-height"; text: "Calculate the height from the width" }
-                        Check { path: "picture.resize.keep-aspect"; text: "Keep the video's aspect ratio inside the size" }
+                        Check { path: "picture.resize.auto-height"; text: qsTr("Calculate the height from the width") }
+                        Check { path: "picture.resize.keep-aspect"; text: qsTr("Keep the video's aspect ratio inside the size") }
                         Choice {
-                            label: "Method"
+                            label: qsTr("Method")
                             path: "picture.resize.method"
                             values: win.view.choices["resize-method"] || []
                         }
-                        Amount { label: "Method's parameter"; path: "picture.resize.param"; from: 0; to: 10; step: 0.1; format: v => v === 0 ? "FFmpeg's default" : String(v) }
-                        Check { path: "picture.resize.interlaced"; text: "Interlaced mode (scale the fields apart)" }
-                        Note { text: "Resizing changes the frame before RVP's effects and SVP (FFmpeg's scale filter, keeping the video's shape); mpv's renderer still fits the picture to the window with its own scalers (Video page)." }
+                        Amount { label: qsTr("Method's parameter"); path: "picture.resize.param"; from: 0; to: 10; step: 0.1; format: v => v === 0 ? "FFmpeg's default" : String(v) }
+                        Check { path: "picture.resize.interlaced"; text: qsTr("Interlaced mode (scale the fields apart)") }
+                        Note { text: qsTr("Resizing changes the frame before RVP's effects and SVP (FFmpeg's scale filter, keeping the video's shape); mpv's renderer still fits the picture to the window with its own scalers (Video page).") }
                     }
 
                     Page {
-                        Heading { text: "Frame size presets" }
+                        Heading { text: qsTr("Frame size presets") }
                         Repeater {
                             model: (win.s.picture && win.s.picture.presets) ? win.s.picture.presets.length : 0
                             delegate: ColumnLayout {
                                 required property int index
                                 Layout.fillWidth: true
-                                Field { label: "Preset " + (index + 1); path: "picture.presets." + index + ".name" }
-                                Amount { label: "Width"; path: "picture.presets." + index + ".width"; from: 10; to: 400; step: 5; unit: "%" }
-                                Amount { label: "Height"; path: "picture.presets." + index + ".height"; from: 10; to: 400; step: 5; unit: "%" }
+                                Field { label: qsTr("Preset %1").arg((index + 1)); path: "picture.presets." + index + ".name" }
+                                Amount { label: qsTr("Width"); path: "picture.presets." + index + ".width"; from: 10; to: 400; step: 5; unit: "%" }
+                                Amount { label: qsTr("Height"); path: "picture.presets." + index + ".height"; from: 10; to: 400; step: 5; unit: "%" }
                             }
                         }
                         RowLayout {
                             Button {
-                                text: "Add Preset"
+                                text: qsTr("Add Preset")
                                 enabled: !!win.s.picture && win.s.picture.presets.length < 20
                                 onClicked: {
                                     const list = win.s.picture.presets.slice()
@@ -1593,93 +1601,93 @@ ApplicationWindow {
                                 }
                             }
                             Button {
-                                text: "Remove Last"
+                                text: qsTr("Remove Last")
                                 enabled: !!win.s.picture && win.s.picture.presets.length > 1
                                 onClicked: win.set("picture.presets", win.s.picture.presets.slice(0, -1))
                             }
                         }
-                        Check { path: "picture.remember-frame"; text: "Remember video size/position changes (the next file keeps them)" }
-                        Heading { text: "Screen margins" }
-                        Amount { label: "Top"; path: "picture.margins.top"; from: 0; to: 40; unit: "%" }
-                        Amount { label: "Left"; path: "picture.margins.left"; from: 0; to: 40; unit: "%" }
-                        Amount { label: "Bottom"; path: "picture.margins.bottom"; from: 0; to: 40; unit: "%" }
-                        Amount { label: "Right"; path: "picture.margins.right"; from: 0; to: 40; unit: "%" }
-                        Check { path: "picture.margins-fullscreen-only"; text: "Use the margins only in fullscreen" }
-                        Check { path: "picture.remember-margins"; text: "Remember screen margin changes (these values come back at the next start)" }
+                        Check { path: "picture.remember-frame"; text: qsTr("Remember video size/position changes (the next file keeps them)") }
+                        Heading { text: qsTr("Screen margins") }
+                        Amount { label: qsTr("Top"); path: "picture.margins.top"; from: 0; to: 40; unit: "%" }
+                        Amount { label: qsTr("Left"); path: "picture.margins.left"; from: 0; to: 40; unit: "%" }
+                        Amount { label: qsTr("Bottom"); path: "picture.margins.bottom"; from: 0; to: 40; unit: "%" }
+                        Amount { label: qsTr("Right"); path: "picture.margins.right"; from: 0; to: 40; unit: "%" }
+                        Check { path: "picture.margins-fullscreen-only"; text: qsTr("Use the margins only in fullscreen") }
+                        Check { path: "picture.remember-margins"; text: qsTr("Remember screen margin changes (these values come back at the next start)") }
                     }
 
                     Page {
-                        Heading { text: "3D video" }
+                        Heading { text: qsTr("3D video") }
                         Choice {
-                            label: "3D video mode"
+                            label: qsTr("3D video mode")
                             path: "stereo.mode"
                             values: ["off", "on", "auto"]
-                            texts: ({ "off": "Off", "on": "On", "auto": "On for files that say they are 3D" })
+                            texts: ({ "off": qsTr("Off"), "on": qsTr("On"), "auto": qsTr("On for files that say they are 3D") })
                         }
                         Choice {
-                            label: "Input (source)"
+                            label: qsTr("Input (source)")
                             path: "stereo.input"
                             values: ["side-by-side", "top-bottom", "original"]
-                            texts: ({ "side-by-side": "Side by side", "top-bottom": "Top and bottom",
-                                      "original": "Original image (not 3D)" })
+                            texts: ({ "side-by-side": qsTr("Side by side"), "top-bottom": qsTr("Top and bottom"),
+                                      "original": qsTr("Original image (not 3D)") })
                         }
-                        Check { path: "stereo.full-resolution"; text: "Full resolution (each image as wide or tall as the frame)" }
-                        Check { path: "stereo.swap"; text: "Swap left and right images" }
-                        Check { path: "stereo.auto-detect"; text: "Detect the input from the file (stereo metadata, suffixes such as -lr, -ab, hsbs)" }
+                        Check { path: "stereo.full-resolution"; text: qsTr("Full resolution (each image as wide or tall as the frame)") }
+                        Check { path: "stereo.swap"; text: qsTr("Swap left and right images") }
+                        Check { path: "stereo.auto-detect"; text: qsTr("Detect the input from the file (stereo metadata, suffixes such as -lr, -ab, hsbs)") }
                         Choice {
-                            label: "Output (screen)"
+                            label: qsTr("Output (screen)")
                             path: "stereo.output"
                             values: ["side-by-side", "top-bottom", "left", "right", "rows", "columns",
                                      "red-cyan-gray", "red-cyan-half", "red-cyan-color", "red-cyan-dubois",
                                      "green-magenta-gray", "green-magenta-half", "green-magenta-color", "green-magenta-dubois",
                                      "yellow-blue-gray", "yellow-blue-half", "yellow-blue-color", "yellow-blue-dubois",
                                      "red-blue-gray", "red-green-gray"]
-                            texts: ({ "side-by-side": "Side by side", "top-bottom": "Top and bottom",
-                                      "left": "3D to 2D (left or top image)", "right": "3D to 2D (right or bottom image)",
-                                      "rows": "Row interleave", "columns": "Column interleave",
-                                      "red-cyan-gray": "Anaglyph red/cyan gray", "red-cyan-half": "Anaglyph red/cyan half colored",
-                                      "red-cyan-color": "Anaglyph red/cyan colored", "red-cyan-dubois": "Anaglyph red/cyan Dubois",
-                                      "green-magenta-gray": "Anaglyph green/magenta gray", "green-magenta-half": "Anaglyph green/magenta half colored",
-                                      "green-magenta-color": "Anaglyph green/magenta colored", "green-magenta-dubois": "Anaglyph green/magenta Dubois",
-                                      "yellow-blue-gray": "Anaglyph yellow/blue gray", "yellow-blue-half": "Anaglyph yellow/blue half colored",
-                                      "yellow-blue-color": "Anaglyph yellow/blue colored", "yellow-blue-dubois": "Anaglyph yellow/blue Dubois",
-                                      "red-blue-gray": "Anaglyph red/blue gray", "red-green-gray": "Anaglyph red/green gray" })
+                            texts: ({ "side-by-side": qsTr("Side by side"), "top-bottom": qsTr("Top and bottom"),
+                                      "left": qsTr("3D to 2D (left or top image)"), "right": qsTr("3D to 2D (right or bottom image)"),
+                                      "rows": qsTr("Row interleave"), "columns": qsTr("Column interleave"),
+                                      "red-cyan-gray": qsTr("Anaglyph red/cyan gray"), "red-cyan-half": qsTr("Anaglyph red/cyan half colored"),
+                                      "red-cyan-color": qsTr("Anaglyph red/cyan colored"), "red-cyan-dubois": qsTr("Anaglyph red/cyan Dubois"),
+                                      "green-magenta-gray": qsTr("Anaglyph green/magenta gray"), "green-magenta-half": qsTr("Anaglyph green/magenta half colored"),
+                                      "green-magenta-color": qsTr("Anaglyph green/magenta colored"), "green-magenta-dubois": qsTr("Anaglyph green/magenta Dubois"),
+                                      "yellow-blue-gray": qsTr("Anaglyph yellow/blue gray"), "yellow-blue-half": qsTr("Anaglyph yellow/blue half colored"),
+                                      "yellow-blue-color": qsTr("Anaglyph yellow/blue colored"), "yellow-blue-dubois": qsTr("Anaglyph yellow/blue Dubois"),
+                                      "red-blue-gray": qsTr("Anaglyph red/blue gray"), "red-green-gray": qsTr("Anaglyph red/green gray") })
                         }
-                        Amount { label: "Right image offset X"; path: "stereo.offset.0"; from: -100; to: 100; step: 2; unit: "px" }
-                        Amount { label: "Right image offset Y"; path: "stereo.offset.1"; from: -100; to: 100; step: 2; unit: "px" }
-                        Check { path: "stereo.invert"; text: "Flip both images horizontally" }
-                        Note { text: "FFmpeg's stereo3d converts the frame before RVP's other filters and SVP's. Shutter glasses, NVIDIA 3D Vision and Windows' stereo output need a stereo swap chain, which mpv's renderer does not have." }
-                        Heading { text: "360° video" }
+                        Amount { label: qsTr("Right image offset X"); path: "stereo.offset.0"; from: -100; to: 100; step: 2; unit: "px" }
+                        Amount { label: qsTr("Right image offset Y"); path: "stereo.offset.1"; from: -100; to: 100; step: 2; unit: "px" }
+                        Check { path: "stereo.invert"; text: qsTr("Flip both images horizontally") }
+                        Note { text: qsTr("FFmpeg's stereo3d converts the frame before RVP's other filters and SVP's. Shutter glasses, NVIDIA 3D Vision and Windows' stereo output need a stereo swap chain, which mpv's renderer does not have.") }
+                        Heading { text: qsTr("360° video") }
                         Choice {
-                            label: "360° video mode"
+                            label: qsTr("360° video mode")
                             path: "vr.mode"
                             values: ["off", "on", "auto"]
-                            texts: ({ "off": "Off", "on": "On", "auto": "On for files named as 360° video" })
+                            texts: ({ "off": qsTr("Off"), "on": qsTr("On"), "auto": qsTr("On for files named as 360° video") })
                         }
                         Choice {
-                            label: "Projection"
+                            label: qsTr("Projection")
                             path: "vr.projection"
                             values: ["auto", "equirectangular", "dual-fisheye", "cubemap", "equi-angular", "equi-angular-stereo"]
-                            texts: ({ "auto": "From the frame's shape", "equirectangular": "Equirectangular",
-                                      "dual-fisheye": "Dual fisheye", "cubemap": "Cubemap (3x2)",
-                                      "equi-angular": "Equi-angular cubemap 3x2 (mono 2D)",
-                                      "equi-angular-stereo": "Equi-angular cubemap 2x3 (stereo 3D)" })
+                            texts: ({ "auto": qsTr("From the frame's shape"), "equirectangular": qsTr("Equirectangular"),
+                                      "dual-fisheye": qsTr("Dual fisheye"), "cubemap": qsTr("Cubemap (3x2)"),
+                                      "equi-angular": qsTr("Equi-angular cubemap 3x2 (mono 2D)"),
+                                      "equi-angular-stereo": qsTr("Equi-angular cubemap 2x3 (stereo 3D)") })
                         }
-                        Check { path: "vr.four-views"; text: "Four camera angles (front, left, right, rear)" }
-                        Amount { label: "Field of view"; path: "vr.fov"; from: 30; to: 150; step: 5; unit: "°" }
-                        Note { text: "Drag the video with the mouse to look around." }
+                        Check { path: "vr.four-views"; text: qsTr("Four camera angles (front, left, right, rear)") }
+                        Amount { label: qsTr("Field of view"); path: "vr.fov"; from: 30; to: 150; step: 5; unit: "°" }
+                        Note { text: qsTr("Drag the video with the mouse to look around.") }
                     }
 
                     Page {
-                        Heading { text: "Pre-resize pixel shaders" }
-                        Check { path: "shaders.enabled"; text: "Use pre-resize pixel shaders (Shift+P)" }
+                        Heading { text: qsTr("Pre-resize pixel shaders") }
+                        Check { path: "shaders.enabled"; text: qsTr("Use pre-resize pixel shaders (Shift+P)") }
                         FileList { path: "shaders.files"; ordered: true }
                         ShaderPicker { target: "shaders.files"; stage: "pre" }
-                        Heading { text: "Post-resize pixel shaders" }
-                        Check { path: "shaders.post-enabled"; text: "Use post-resize pixel shaders (Ctrl+Alt+P)" }
+                        Heading { text: qsTr("Post-resize pixel shaders") }
+                        Check { path: "shaders.post-enabled"; text: qsTr("Use post-resize pixel shaders (Ctrl+Alt+P)") }
                         FileList { path: "shaders.post-files"; ordered: true }
                         ShaderPicker { target: "shaders.post-files"; stage: "post" }
-                        Heading { text: "Shader folders" }
+                        Heading { text: qsTr("Shader folders") }
                         Note {
                             text: win.view.choices["potplayer-shaders"]
                                   ? "PotPlayer's pixel shaders (HLSL, translated when they load): " + win.view.choices["potplayer-shaders"]
@@ -1688,181 +1696,181 @@ ApplicationWindow {
                         FileList { path: "shaders.folders" }
                         RowLayout {
                             Button {
-                                text: "Add a Folder…"
+                                text: qsTr("Add a Folder…")
                                 onClicked: {
                                     folderListChooser.target = "shaders.folders"
                                     folderListChooser.open()
                                 }
                             }
                             Button {
-                                text: "Add Shader Files…"
+                                text: qsTr("Add Shader Files…")
                                 onClicked: win.chooseFiles("shaders.files", "Pixel shaders",
                                                            ["Shaders (*.glsl *.hook *.hlsl *.txt *.fx)", "All files (*)"])
                             }
                             Button {
-                                text: "Open Shader Folder"
+                                text: qsTr("Open Shader Folder")
                                 onClicked: win.player.run_action("shaders-folder")
                             }
                             Button {
-                                text: "Reload"
+                                text: qsTr("Reload")
                                 onClicked: win.player.run_action("shaders-reload")
                             }
                         }
-                        Note { text: "The lists run in their order: pre-resize shaders on the video's own picture, post-resize ones after scaling. mpv's own shaders (.glsl, .hook) run where they say; RVP's set comes with RVP. RVP's shader folder: " + (win.view.shader_folder || "") }
+                        Note { text: qsTr("The lists run in their order: pre-resize shaders on the video's own picture, post-resize ones after scaling. mpv's own shaders (.glsl, .hook) run where they say; RVP's set comes with RVP. RVP's shader folder: %1").arg((win.view.shader_folder || "")) }
                     }
 
                     Page {
-                        Heading { text: "SVP" }
+                        Heading { text: qsTr("SVP") }
                         Field {
-                            label: "IPC endpoint SVP attaches to"
+                            label: qsTr("IPC endpoint SVP attaches to")
                             path: "ipc-server"
-                            placeholder: "empty: SVP mode off"
+                            placeholder: qsTr("empty: SVP mode off")
                             Button {
-                                text: "Default"
+                                text: qsTr("Default")
                                 onClicked: win.set("ipc-server", win.view["default-ipc"])
                             }
                         }
                         Label {
-                            text: "Status: " + (win.view.svp_status || "")
+                            text: qsTr("Status: %1").arg((win.view.svp_status || ""))
                             wrapMode: Text.Wrap
                             Layout.fillWidth: true
                         }
                         Note {
-                            text: "Endpoint in use: " + (win.view.svp_endpoint || "none")
+                            text: qsTr("Endpoint in use: %1").arg((win.view.svp_endpoint || "none"))
                                   + ". SVP 4 Manager finds a player by this pipe or socket while it plays; a second RVP window uses mpvSockets/<process id> in the temporary folder, which SVP finds too. In SVP mode hardware decoding copies the frames back, so SVP's filter gets them."
                         }
-                        Heading { text: "VapourSynth" }
-                        Check { path: "vapoursynth.enabled"; text: "Run the selected script (before SVP's filter)" }
+                        Heading { text: qsTr("VapourSynth") }
+                        Check { path: "vapoursynth.enabled"; text: qsTr("Run the selected script (before SVP's filter)") }
                         FileList { path: "vapoursynth.slots"; selectPath: "vapoursynth.script" }
                         Button {
-                            text: "Add Script…"
+                            text: qsTr("Add Script…")
                             onClicked: win.chooseFiles("vapoursynth.slots", "VapourSynth scripts",
                                                        ["VapourSynth scripts (*.vpy)", "All files (*)"])
                         }
-                        Label { text: "Plugins loaded first (mvtools for PotPlayer's motion interpolation)" }
+                        Label { text: qsTr("Plugins loaded first (mvtools for PotPlayer's motion interpolation)") }
                         FileList { path: "vapoursynth.plugins" }
                         Button {
-                            text: "Add Plugins…"
+                            text: qsTr("Add Plugins…")
                             onClicked: win.chooseFiles("vapoursynth.plugins", "VapourSynth plugins",
                                                        [win.view.windows ? "Plugins (*.dll)" : "Plugins (*.so)", "All files (*)"])
                         }
                         Label {
                             visible: win.view.windows === true
-                            text: "AviSynth plugins loaded first (VapourSynth's avs.LoadPlugin, with AviSynth+ installed)"
+                            text: qsTr("AviSynth plugins loaded first (VapourSynth's avs.LoadPlugin, with AviSynth+ installed)")
                         }
                         FileList { visible: win.view.windows === true; path: "vapoursynth.avs-plugins" }
                         Button {
                             visible: win.view.windows === true
-                            text: "Add AviSynth Plugins…"
+                            text: qsTr("Add AviSynth Plugins…")
                             onClicked: win.chooseFiles("vapoursynth.avs-plugins", "AviSynth plugins",
                                                        ["AviSynth plugins (*.dll)", "All files (*)"])
                         }
-                        Amount { label: "Buffered frames"; path: "vapoursynth.buffered-frames"; from: 1; to: 64 }
+                        Amount { label: qsTr("Buffered frames"); path: "vapoursynth.buffered-frames"; from: 1; to: 64 }
                         Field {
-                            label: "VSScript library"
+                            label: qsTr("VSScript library")
                             path: "vapoursynth.library"
                             optional: true
-                            placeholder: "RVP's runtime"
+                            placeholder: qsTr("RVP's runtime")
                             Button {
-                                text: "Browse…"
+                                text: qsTr("Browse…")
                                 onClicked: win.chooseFile("vapoursynth.library", "VSScript library",
                                                           [win.view.windows ? "VSScript (VSScript.dll)" : "VSScript (libvapoursynth-script.so*)",
                                                            "All files (*)"])
                             }
                         }
                         Note {
-                            text: "In use: " + (win.view.vapoursynth_runtime || "none found")
+                            text: qsTr("In use: %1").arg((win.view.vapoursynth_runtime || "none found"))
                                   + ". A new library takes effect at the next start. PotPlayer's .vpy scripts run unchanged: RVP wraps them for today's VapourSynth (get_core) and loads the plugins first."
                         }
                     }
 
                     Page {
-                        Heading { text: "Motion Smoothing" }
-                        Check { path: "smoothing.enabled"; text: "Smooth motion (Ctrl+Shift+I)" }
+                        Heading { text: qsTr("Motion Smoothing") }
+                        Check { path: "smoothing.enabled"; text: qsTr("Smooth motion (Ctrl+Shift+I)") }
                         Choice {
-                            label: "Engine"
+                            label: qsTr("Engine")
                             path: "smoothing.engine"
                             values: ["blend", "mvtools", "rife", "fruc-vulkan"]
-                            texts: ({ "blend": "Blend: neighbouring frames blended at the display's rate",
-                                      "mvtools": "MVTools: motion compensation on the CPU",
-                                      "rife": "RIFE: optical flow on the GPU (Vulkan)",
-                                      "fruc-vulkan": "NVIDIA Optical Flow: RTX 30 and later" })
+                            texts: ({ "blend": qsTr("Blend: neighbouring frames blended at the display's rate"),
+                                      "mvtools": qsTr("MVTools: motion compensation on the CPU"),
+                                      "rife": qsTr("RIFE: optical flow on the GPU (Vulkan)"),
+                                      "fruc-vulkan": qsTr("NVIDIA Optical Flow: RTX 30 and later") })
                         }
                         Choice {
-                            label: "Preset"
+                            label: qsTr("Preset")
                             path: "smoothing.preset"
                             values: ["fast", "medium", "quality"]
-                            texts: ({ "fast": "Fast", "medium": "Medium", "quality": "Quality" })
+                            texts: ({ "fast": qsTr("Fast"), "medium": qsTr("Medium"), "quality": qsTr("Quality") })
                         }
                         Choice {
-                            label: "Target rate"
+                            label: qsTr("Target rate")
                             path: "smoothing.target"
                             values: win.view.choices["smoothing-target"] || []
-                            texts: ({ "display": "The display's rate", "2x": "Twice the video's rate" })
+                            texts: ({ "display": qsTr("The display's rate"), "2x": qsTr("Twice the video's rate") })
                         }
                         Amount {
-                            label: "Motion compensation up to"
+                            label: qsTr("Motion compensation up to")
                             path: "smoothing.max-height"
                             values: win.view.choices["smoothing-max-height"] || [1080]
                             format: v => v + "p (Blend above)"
                         }
-                        Note { text: "Now: " + (win.view.smoothing || "") }
+                        Note { text: qsTr("Now: %1").arg((win.view.smoothing || "")) }
                         Note {
-                            text: "Here: MVTools " + (win.view.smoothing_engines && win.view.smoothing_engines.mvtools ? "found" : "missing")
+                            text: qsTr("Here: MVTools %1").arg((win.view.smoothing_engines && win.view.smoothing_engines.mvtools ? "found" : "missing"))
                                   + ", RIFE " + (win.view.smoothing_engines && win.view.smoothing_engines.rife ? "found" : "missing")
                                   + ", NVIDIA Optical Flow " + (win.view.smoothing_engines && win.view.smoothing_engines.fruc ? "found" : "missing")
                                   + " (in RVP's VapourSynth runtime and libmpv)."
                         }
                         Note {
-                            text: "Smoothing stays off while SVP is attached, while RVP's own VapourSynth script runs and when the video plays at the target rate already; while SVP 4 Manager runs, it waits 8 s for SVP after a file starts. An engine that cannot run here gives way: RIFE and NVIDIA Optical Flow to MVTools, MVTools to Blend; one that drops frames steps down (a lighter preset, then MVTools, then Blend) until the file ends. Above the GPU power budget, smoothing is lightened first."
+                            text: qsTr("Smoothing stays off while SVP is attached, while RVP's own VapourSynth script runs and when the video plays at the target rate already; while SVP 4 Manager runs, it waits 8 s for SVP after a file starts. An engine that cannot run here gives way: RIFE and NVIDIA Optical Flow to MVTools, MVTools to Blend; one that drops frames steps down (a lighter preset, then MVTools, then Blend) until the file ends. Above the GPU power budget, smoothing is lightened first.")
                         }
                     }
 
                     Page {
-                        Heading { text: "Subtitles" }
-                        Check { path: "subtitles.show"; text: "Show subtitles when a file starts" }
+                        Heading { text: qsTr("Subtitles") }
+                        Check { path: "subtitles.show"; text: qsTr("Show subtitles when a file starts") }
                         Choice {
-                            label: "Load subtitle files"
+                            label: qsTr("Load subtitle files")
                             path: "subtitle-auto"
                             values: win.withCurrent(win.view.choices["subtitle-auto"], win.s["subtitle-auto"])
-                            texts: ({ "no": "No", "exact": "Only those that match the video's name",
-                                      "fuzzy": "Those containing the video's name", "all": "All in the folder" })
+                            texts: ({ "no": qsTr("No"), "exact": qsTr("Only those that match the video's name"),
+                                      "fuzzy": qsTr("Those containing the video's name"), "all": qsTr("All in the folder") })
                         }
-                        Check { path: "subtitles.auto-reload"; text: "Reload subtitle files when they change" }
+                        Check { path: "subtitles.auto-reload"; text: qsTr("Reload subtitle files when they change") }
                         Choice {
-                            label: "ASS/SSA subtitle style"
+                            label: qsTr("ASS/SSA subtitle style")
                             path: "subtitles.ass-override"
                             values: win.view.choices["subtitles.ass-override"] || []
-                            texts: ({ "no": "The script's own style", "scale": "The script's style at RVP's size",
-                                      "yes": "RVP's style where the script allows", "force": "RVP's style over all styles",
-                                      "strip": "Plain text in RVP's style" })
+                            texts: ({ "no": qsTr("The script's own style"), "scale": qsTr("The script's style at RVP's size"),
+                                      "yes": qsTr("RVP's style where the script allows"), "force": qsTr("RVP's style over all styles"),
+                                      "strip": qsTr("Plain text in RVP's style") })
                         }
-                        Check { path: "subtitles.override-font"; text: "ASS scripts take RVP's font" }
-                        Check { path: "subtitles.override-color"; text: "ASS scripts take RVP's text colour" }
+                        Check { path: "subtitles.override-font"; text: qsTr("ASS scripts take RVP's font") }
+                        Check { path: "subtitles.override-color"; text: qsTr("ASS scripts take RVP's text colour") }
                         Check {
                             path: "subtitles.fonts-folder"
-                            text: "Load fonts from the fonts folder" + (win.view.fonts_folder ? " (" + win.view.fonts_folder + ")" : "")
+                            text: qsTr("Load fonts from the fonts folder%1").arg((win.view.fonts_folder ? " (" + win.view.fonts_folder + ")" : ""))
                         }
-                        Heading { text: "Placement" }
-                        Check { path: "subtitles.text-inside"; text: "Display text subtitles inside the video" }
-                        Check { path: "subtitles.under-video"; text: "Force subtitles to display under the video" }
-                        Check { path: "subtitles.bitmap-outside"; text: "Display bitmap subtitles on the whole screen (outside the video)" }
-                        Check { path: "subtitles.fix-aspect"; text: "Correct the shapes of scripts made for anamorphic video" }
-                        Note { text: "Under the video, text subtitles go into the black bars or the bottom margin (Video > Bottom Margin)." }
-                        Heading { text: "Processing" }
-                        Check { path: "subtitles.remove-sdh"; text: "Remove notes for the hearing impaired ([...] and (...))" }
-                        Check { path: "subtitles.remove-blank"; text: "Remove subtitles that are only spaces" }
-                        Note { text: "mpv (libass) draws every subtitle: PotPlayer's output surfaces, display engines and font renderers have no counterpart, and ASS animations always play." }
+                        Heading { text: qsTr("Placement") }
+                        Check { path: "subtitles.text-inside"; text: qsTr("Display text subtitles inside the video") }
+                        Check { path: "subtitles.under-video"; text: qsTr("Force subtitles to display under the video") }
+                        Check { path: "subtitles.bitmap-outside"; text: qsTr("Display bitmap subtitles on the whole screen (outside the video)") }
+                        Check { path: "subtitles.fix-aspect"; text: qsTr("Correct the shapes of scripts made for anamorphic video") }
+                        Note { text: qsTr("Under the video, text subtitles go into the black bars or the bottom margin (Video > Bottom Margin).") }
+                        Heading { text: qsTr("Processing") }
+                        Check { path: "subtitles.remove-sdh"; text: qsTr("Remove notes for the hearing impaired ([...] and (...))") }
+                        Check { path: "subtitles.remove-blank"; text: qsTr("Remove subtitles that are only spaces") }
+                        Note { text: qsTr("mpv (libass) draws every subtitle: PotPlayer's output surfaces, display engines and font renderers have no counterpart, and ASS animations always play.") }
                     }
 
                     Page {
-                        Heading { text: "Font" }
+                        Heading { text: qsTr("Font") }
                         Field {
-                            label: "Font"
+                            label: qsTr("Font")
                             path: "subtitle-font"
-                            placeholder: "mpv's default (sans-serif)"
+                            placeholder: qsTr("mpv's default (sans-serif)")
                             Button {
-                                text: "Choose…"
+                                text: qsTr("Choose…")
                                 onClicked: {
                                     const family = win.value("subtitle-font")
                                     subtitleFontChooser.currentFont = Qt.font({
@@ -1871,125 +1879,125 @@ ApplicationWindow {
                                 }
                             }
                         }
-                        Amount { label: "Size"; path: "subtitle-scale"; unit: "%"; factor: 100; from: 30; to: 300; step: 5 }
-                        Check { path: "subtitles.bold"; text: "Bold" }
-                        Check { path: "subtitles.italic"; text: "Italic" }
-                        Amount { label: "Letter spacing"; path: "subtitles.spacing"; from: -10; to: 10; step: 0.5; fallback: (win.view.subtitle_defaults || {})["spacing"] }
-                        Amount { label: "Line spacing"; path: "subtitles.line-spacing"; from: -50; to: 50; step: 1; fallback: (win.view.subtitle_defaults || {})["line-spacing"] }
-                        Amount { label: "Letter width"; path: "subtitles.scale-x"; unit: "%"; from: 10; to: 400; step: 5; fallback: 100 }
-                        Amount { label: "Letter height"; path: "subtitles.scale-y"; unit: "%"; from: 10; to: 400; step: 5; fallback: 100 }
-                        Heading { text: "Colours, outline and shadow" }
-                        ColorChoice { label: "Text"; path: "subtitles.color"; fallback: (win.view.subtitle_defaults || {})["color"] || "" }
-                        ColorChoice { label: "Outline"; path: "subtitles.outline-color"; fallback: (win.view.subtitle_defaults || {})["outline-color"] || "" }
-                        ColorChoice { label: "Shadow and box"; path: "subtitles.back-color"; fallback: (win.view.subtitle_defaults || {})["back-color"] || "" }
-                        Amount { label: "Outline width"; path: "subtitles.outline-size"; from: 0; to: 10; step: 0.25; fallback: (win.view.subtitle_defaults || {})["outline-size"] }
-                        Amount { label: "Shadow offset"; path: "subtitles.shadow-offset"; from: 0; to: 10; step: 0.25; fallback: (win.view.subtitle_defaults || {})["shadow-offset"] }
-                        Amount { label: "Outline blur"; path: "subtitles.blur"; from: 0; to: 20; step: 0.5; fallback: (win.view.subtitle_defaults || {})["blur"] }
+                        Amount { label: qsTr("Size"); path: "subtitle-scale"; unit: "%"; factor: 100; from: 30; to: 300; step: 5 }
+                        Check { path: "subtitles.bold"; text: qsTr("Bold") }
+                        Check { path: "subtitles.italic"; text: qsTr("Italic") }
+                        Amount { label: qsTr("Letter spacing"); path: "subtitles.spacing"; from: -10; to: 10; step: 0.5; fallback: (win.view.subtitle_defaults || {})["spacing"] }
+                        Amount { label: qsTr("Line spacing"); path: "subtitles.line-spacing"; from: -50; to: 50; step: 1; fallback: (win.view.subtitle_defaults || {})["line-spacing"] }
+                        Amount { label: qsTr("Letter width"); path: "subtitles.scale-x"; unit: "%"; from: 10; to: 400; step: 5; fallback: 100 }
+                        Amount { label: qsTr("Letter height"); path: "subtitles.scale-y"; unit: "%"; from: 10; to: 400; step: 5; fallback: 100 }
+                        Heading { text: qsTr("Colours, outline and shadow") }
+                        ColorChoice { label: qsTr("Text"); path: "subtitles.color"; fallback: (win.view.subtitle_defaults || {})["color"] || "" }
+                        ColorChoice { label: qsTr("Outline"); path: "subtitles.outline-color"; fallback: (win.view.subtitle_defaults || {})["outline-color"] || "" }
+                        ColorChoice { label: qsTr("Shadow and box"); path: "subtitles.back-color"; fallback: (win.view.subtitle_defaults || {})["back-color"] || "" }
+                        Amount { label: qsTr("Outline width"); path: "subtitles.outline-size"; from: 0; to: 10; step: 0.25; fallback: (win.view.subtitle_defaults || {})["outline-size"] }
+                        Amount { label: qsTr("Shadow offset"); path: "subtitles.shadow-offset"; from: 0; to: 10; step: 0.25; fallback: (win.view.subtitle_defaults || {})["shadow-offset"] }
+                        Amount { label: qsTr("Outline blur"); path: "subtitles.blur"; from: 0; to: 20; step: 0.5; fallback: (win.view.subtitle_defaults || {})["blur"] }
                         Choice {
-                            label: "Border"
+                            label: qsTr("Border")
                             path: "subtitles.border-style"
                             values: win.view.choices["subtitles.border-style"] || []
-                            texts: ({ "outline-and-shadow": "Outline and shadow",
-                                      "opaque-box": "An opaque box in the outline's colour around each line",
-                                      "background-box": "One box in the shadow's colour behind all lines" })
+                            texts: ({ "outline-and-shadow": qsTr("Outline and shadow"),
+                                      "opaque-box": qsTr("An opaque box in the outline's colour around each line"),
+                                      "background-box": qsTr("One box in the shadow's colour behind all lines") })
                         }
-                        Heading { text: "Position and margins" }
+                        Heading { text: qsTr("Position and margins") }
                         Choice {
-                            label: "Paragraph align"
+                            label: qsTr("Paragraph align")
                             path: "subtitles.align"
                             values: win.view.choices["subtitles.align"] || []
-                            texts: ({ "left": "Left", "center": "Centre", "right": "Right" })
+                            texts: ({ "left": qsTr("Left"), "center": qsTr("Centre"), "right": qsTr("Right") })
                         }
-                        Amount { label: "Vertical position"; path: "subtitles.position"; unit: "%"; from: 0; to: 150; step: 1; fallback: 100 }
-                        Amount { label: "Margin at the sides"; path: "subtitles.margin-x"; from: 0; to: 300; step: 5; fallback: (win.view.subtitle_defaults || {})["margin-x"] }
-                        Amount { label: "Margin at the bottom or top"; path: "subtitles.margin-y"; from: 0; to: 300; step: 5; fallback: (win.view.subtitle_defaults || {})["margin-y"] }
-                        Note { text: "A value without a Default button is libmpv's own. Margins are in pixels of a 720-line picture; mpv keeps one margin for both sides and one for the bottom or top. Moves left and right (Subtitles > Subtitle Style) go from the left edge through the centre to the right edge." }
+                        Amount { label: qsTr("Vertical position"); path: "subtitles.position"; unit: "%"; from: 0; to: 150; step: 1; fallback: 100 }
+                        Amount { label: qsTr("Margin at the sides"); path: "subtitles.margin-x"; from: 0; to: 300; step: 5; fallback: (win.view.subtitle_defaults || {})["margin-x"] }
+                        Amount { label: qsTr("Margin at the bottom or top"); path: "subtitles.margin-y"; from: 0; to: 300; step: 5; fallback: (win.view.subtitle_defaults || {})["margin-y"] }
+                        Note { text: qsTr("A value without a Default button is libmpv's own. Margins are in pixels of a 720-line picture; mpv keeps one margin for both sides and one for the bottom or top. Moves left and right (Subtitles > Subtitle Style) go from the left edge through the centre to the right edge.") }
                     }
 
                     Page {
-                        Heading { text: "Folders for subtitle files" }
-                        Note { text: "Besides the video's folder, RVP looks for subtitles with the video's name in these folders (a name without a drive is inside the video's folder)." }
+                        Heading { text: qsTr("Folders for subtitle files") }
+                        Note { text: qsTr("Besides the video's folder, RVP looks for subtitles with the video's name in these folders (a name without a drive is inside the video's folder).") }
                         FileList { path: "subtitles.folders"; ordered: true }
                         Button {
-                            text: "Add…"
+                            text: qsTr("Add…")
                             onClicked: {
                                 folderListChooser.target = "subtitles.folders"
                                 folderListChooser.open()
                             }
                         }
-                        Heading { text: "Text encoding" }
+                        Heading { text: qsTr("Text encoding") }
                         Choice {
-                            label: "Files that are not UTF-8"
+                            label: qsTr("Files that are not UTF-8")
                             path: "subtitles.encoding"
                             values: win.view.choices["subtitles.encoding"] || []
-                            texts: ({ "auto": "Guess (Automatic)" })
+                            texts: ({ "auto": qsTr("Guess (Automatic)") })
                         }
-                        Heading { text: "Fade and 3D" }
-                        Note { text: "mpv fades only the events of ASS scripts that ask for it (\\fad); other subtitles cannot fade. mpv draws subtitles once over the finished picture, not once for each eye, so there is no stereo 3D subtitle mode (docs/spikes/m12-studies.md)." }
+                        Heading { text: qsTr("Fade and 3D") }
+                        Note { text: qsTr("mpv fades only the events of ASS scripts that ask for it (\\fad); other subtitles cannot fade. mpv draws subtitles once over the finished picture, not once for each eye, so there is no stereo 3D subtitle mode (docs/spikes/m12-studies.md).") }
                     }
 
                     Page {
-                        Heading { text: "Language" }
-                        Field { label: "Preferred languages"; path: "subtitle-languages"; placeholder: "en,ru" }
-                        Check { path: "subtitles.only-preferred"; text: "Don't select subtitles of other languages" }
-                        Check { path: "subtitles.second-auto"; text: "Show a second subtitle when there is one of these languages" }
-                        Field { label: "Second subtitle languages"; path: "subtitles.second-languages"; placeholder: "en" }
-                        Amount { label: "Second subtitle position"; path: "subtitles.second-position"; unit: "%"; from: 0; to: 150; step: 1; fallback: (win.view.subtitle_defaults || {})["second-position"] }
-                        Check { path: "subtitles.remember-tracks"; text: "Remember the chosen subtitles for each file" }
-                        Heading { text: "Synchronization" }
-                        Amount { label: "Sync step (< and >)"; path: "subtitle-delay-step"; values: [0.01, 0.05, 0.1, 0.2, 0.25, 0.5, 1, 2, 5, 10, 30, 60]; format: win.seconds }
-                        Amount { label: "Sync step (Ctrl+< and Ctrl+>)"; path: "subtitles.sync-step-2"; values: [0.01, 0.05, 0.1, 0.2, 0.25, 0.5, 1, 2, 5, 10, 30, 60]; format: win.seconds }
-                        Amount { label: "Sync step (Alt+< and Alt+>)"; path: "subtitles.sync-step-3"; values: [0.01, 0.05, 0.1, 0.2, 0.25, 0.5, 1, 2, 5, 10, 30, 60]; format: win.seconds }
-                        Check { path: "subtitles.keep-sync"; text: "Keep subtitle sync changes for the next files" }
-                        Check { path: "subtitles.sync-from-next"; text: "Sync changes move only the subtitles after the current one (subtitle files RVP edits: SRT, ASS, WebVTT)" }
+                        Heading { text: qsTr("Language") }
+                        Field { label: qsTr("Preferred languages"); path: "subtitle-languages"; placeholder: qsTr("en,ru") }
+                        Check { path: "subtitles.only-preferred"; text: qsTr("Don't select subtitles of other languages") }
+                        Check { path: "subtitles.second-auto"; text: qsTr("Show a second subtitle when there is one of these languages") }
+                        Field { label: qsTr("Second subtitle languages"); path: "subtitles.second-languages"; placeholder: qsTr("en") }
+                        Amount { label: qsTr("Second subtitle position"); path: "subtitles.second-position"; unit: "%"; from: 0; to: 150; step: 1; fallback: (win.view.subtitle_defaults || {})["second-position"] }
+                        Check { path: "subtitles.remember-tracks"; text: qsTr("Remember the chosen subtitles for each file") }
+                        Heading { text: qsTr("Synchronization") }
+                        Amount { label: qsTr("Sync step (< and >)"); path: "subtitle-delay-step"; values: [0.01, 0.05, 0.1, 0.2, 0.25, 0.5, 1, 2, 5, 10, 30, 60]; format: win.seconds }
+                        Amount { label: qsTr("Sync step (Ctrl+< and Ctrl+>)"); path: "subtitles.sync-step-2"; values: [0.01, 0.05, 0.1, 0.2, 0.25, 0.5, 1, 2, 5, 10, 30, 60]; format: win.seconds }
+                        Amount { label: qsTr("Sync step (Alt+< and Alt+>)"); path: "subtitles.sync-step-3"; values: [0.01, 0.05, 0.1, 0.2, 0.25, 0.5, 1, 2, 5, 10, 30, 60]; format: win.seconds }
+                        Check { path: "subtitles.keep-sync"; text: qsTr("Keep subtitle sync changes for the next files") }
+                        Check { path: "subtitles.sync-from-next"; text: qsTr("Sync changes move only the subtitles after the current one (subtitle files RVP edits: SRT, ASS, WebVTT)") }
                     }
 
                     Page {
-                        Heading { text: "Subtitle browser (Alt+E)" }
+                        Heading { text: qsTr("Subtitle browser (Alt+E)") }
                         Choice {
-                            label: "Times"
+                            label: qsTr("Times")
                             path: "subtitles.browser.times"
                             values: win.view.choices["subtitles.browser.times"] || []
-                            texts: ({ "start-end": "Start and end", "start": "Start", "none": "None" })
+                            texts: ({ "start-end": qsTr("Start and end"), "start": qsTr("Start"), "none": qsTr("None") })
                         }
-                        Check { path: "subtitles.browser.synced-times"; text: "Show the times as they play (with the sync)" }
-                        Amount { label: "Opacity"; path: "subtitles.browser.opacity"; unit: "%"; from: 20; to: 100; step: 5 }
-                        Field { label: "Font"; path: "subtitles.browser.font"; placeholder: "The window's font" }
-                        Amount { label: "Font size"; path: "subtitles.browser.font-size"; from: 6; to: 48; step: 1 }
-                        Amount { label: "Lines of each subtitle"; path: "subtitles.browser.lines"; from: 1; to: 5; step: 1 }
-                        Check { path: "subtitles.browser.follow"; text: "Follow the subtitle that shows" }
-                        Note { text: "The browser edits subtitle files (SRT, ASS, WebVTT): edits show at once and Save writes them into the file with the sync. libmpv gives no access to the subtitles inside a video." }
+                        Check { path: "subtitles.browser.synced-times"; text: qsTr("Show the times as they play (with the sync)") }
+                        Amount { label: qsTr("Opacity"); path: "subtitles.browser.opacity"; unit: "%"; from: 20; to: 100; step: 5 }
+                        Field { label: qsTr("Font"); path: "subtitles.browser.font"; placeholder: qsTr("The window's font") }
+                        Amount { label: qsTr("Font size"); path: "subtitles.browser.font-size"; from: 6; to: 48; step: 1 }
+                        Amount { label: qsTr("Lines of each subtitle"); path: "subtitles.browser.lines"; from: 1; to: 5; step: 1 }
+                        Check { path: "subtitles.browser.follow"; text: qsTr("Follow the subtitle that shows") }
+                        Note { text: qsTr("The browser edits subtitle files (SRT, ASS, WebVTT): edits show at once and Save writes them into the file with the sync. libmpv gives no access to the subtitles inside a video.") }
                     }
 
                     Page {
-                        Heading { text: "Subtitles from audio (whisper.cpp, offline)" }
+                        Heading { text: qsTr("Subtitles from audio (whisper.cpp, offline)") }
                         Choice {
-                            label: "Engine"
+                            label: qsTr("Engine")
                             path: "speech.file.engine"
                             values: win.view.choices["speech.engine"] || []
                             texts: (win.view.speech || {}).engines || ({})
                         }
                         Choice {
-                            label: "Model"
+                            label: qsTr("Model")
                             path: "speech.file.model"
                             values: win.view.choices["speech.model"] || []
                             texts: (win.view.speech || {}).models || ({})
                         }
                         Choice {
-                            label: "Language"
+                            label: qsTr("Language")
                             path: "speech.file.language"
                             values: win.view.choices["speech.language"] || []
                             texts: (win.view.speech || {}).languages || ({})
                         }
-                        Check { path: "speech.voice-filter"; text: "Apply a voice emphasis filter when extracting the sound" }
-                        Check { path: "speech.beside-video"; text: "Save the subtitles in the video's folder when possible" }
-                        Check { path: "speech.show"; text: "Show made subtitles when they arrive" }
+                        Check { path: "speech.voice-filter"; text: qsTr("Apply a voice emphasis filter when extracting the sound") }
+                        Check { path: "speech.beside-video"; text: qsTr("Save the subtitles in the video's folder when possible") }
+                        Check { path: "speech.show"; text: qsTr("Show made subtitles when they arrive") }
                         Choice {
-                            label: "When a file starts"
+                            label: qsTr("When a file starts")
                             path: "speech.auto"
                             values: win.view.choices["speech.auto"] || []
-                            texts: ({ "off": "Do not make subtitles", "always": "Make subtitles",
-                                      "no-subtitles": "Make subtitles when the file has none" })
+                            texts: ({ "off": qsTr("Do not make subtitles"), "always": qsTr("Make subtitles"),
+                                      "no-subtitles": qsTr("Make subtitles when the file has none") })
                         }
                         RowLayout {
                             Button {
@@ -1997,43 +2005,43 @@ ApplicationWindow {
                                 onClicked: { win.player.run_action("speech-start"); win.reload(false) }
                             }
                         }
-                        Heading { text: "Real time" }
+                        Heading { text: qsTr("Real time") }
                         Choice {
-                            label: "Use"
+                            label: qsTr("Use")
                             path: "speech.realtime"
                             values: win.view.choices["speech.realtime"] || []
-                            texts: ({ "off": "Not used", "always": "Always", "no-subtitles": "When the file has no subtitles",
-                                      "streams": "For sources that are not files" })
+                            texts: ({ "off": qsTr("Not used"), "always": qsTr("Always"), "no-subtitles": qsTr("When the file has no subtitles"),
+                                      "streams": qsTr("For sources that are not files") })
                         }
                         Choice {
-                            label: "Engine"
+                            label: qsTr("Engine")
                             path: "speech.realtime-recognizer.engine"
                             values: win.view.choices["speech.engine"] || []
                             texts: (win.view.speech || {}).engines || ({})
                         }
                         Choice {
-                            label: "Model"
+                            label: qsTr("Model")
                             path: "speech.realtime-recognizer.model"
                             values: win.view.choices["speech.model"] || []
                             texts: (win.view.speech || {}).models || ({})
                         }
                         Choice {
-                            label: "Language"
+                            label: qsTr("Language")
                             path: "speech.realtime-recognizer.language"
                             values: win.view.choices["speech.language"] || []
                             texts: (win.view.speech || {}).languages || ({})
                         }
-                        Note { text: "Real time makes 30 s pieces from the playback position on, two ahead of it, and again from where a seek lands." }
-                        Heading { text: "Engines and models" }
+                        Note { text: qsTr("Real time makes 30 s pieces from the playback position on, two ahead of it, and again from where a seek lands.") }
+                        Heading { text: qsTr("Engines and models") }
                         RowLayout {
-                            Label { text: "Models: " + ((win.view.speech || {}).model_folder || ""); Layout.fillWidth: true; wrapMode: Text.WrapAnywhere }
-                            Button { text: "Open"; onClicked: win.player.run_action("speech-model-folder") }
+                            Label { text: qsTr("Models: %1").arg(((win.view.speech || {}).model_folder || "")); Layout.fillWidth: true; wrapMode: Text.WrapAnywhere }
+                            Button { text: qsTr("Open"); onClicked: win.player.run_action("speech-model-folder") }
                         }
                         RowLayout {
-                            Label { text: "Engines: " + ((win.view.speech || {}).engine_folder || ""); Layout.fillWidth: true; wrapMode: Text.WrapAnywhere }
-                            Button { text: "Open"; onClicked: win.player.run_action("speech-engine-folder") }
+                            Label { text: qsTr("Engines: %1").arg(((win.view.speech || {}).engine_folder || "")); Layout.fillWidth: true; wrapMode: Text.WrapAnywhere }
+                            Button { text: qsTr("Open"); onClicked: win.player.run_action("speech-engine-folder") }
                         }
-                        Note { text: "Models are whisper.cpp's ggml-<model>.bin files from " + ((win.view.speech || {}).models_url || "") + " that you download into the models folder; RVP downloads nothing and sends nothing anywhere. RVP's CPU and Vulkan engine comes with it; whisper.cpp's CUDA and BLAS builds (" + ((win.view.speech || {}).engines_url || "") + ") go into the engines folder's cuda and blas folders. Above the GPU power budget, the next pieces and jobs run on the CPU." }
+                        Note { text: qsTr("Models are whisper.cpp's ggml-<model>.bin files from %1 that you download into the models folder; RVP downloads nothing and sends nothing anywhere. RVP's CPU and Vulkan engine comes with it; whisper.cpp's CUDA and BLAS builds (%2) go into the engines folder's cuda and blas folders. Above the GPU power budget, the next pieces and jobs run on the CPU.").arg(((win.view.speech || {}).models_url || "")).arg(((win.view.speech || {}).engines_url || "")) }
                     }
 
                     Loader {
@@ -2042,29 +2050,30 @@ ApplicationWindow {
                     }
 
                     Page {
-                        Heading { text: "Keyboard" }
-                        Check { path: "input.disable-default-keys"; text: "Disable default hotkeys (your own keys stay)" }
-                        Check { path: "input.media-keys"; text: "Support the keyboard's media keys in RVP's window" }
-                        Check { path: "input.volume-keys"; text: "The keyboard's volume keys change RVP's volume" }
-                        Check { path: "input.navigation-keys"; text: "The keyboard's back and forward keys go to the previous and next item" }
-                        Note { text: "While RVP's window has no keyboard, Windows' media controls take the media keys (General: system media transport controls)." }
-                        Heading { text: "Mouse" }
-                        Check { path: "input.left-click-video-only"; text: "Operate the left click in the video area only" }
-                        Check { path: "input.drag-title-only"; text: "Prevent the window from being dragged outside of the title bar" }
-                        Check { path: "input.drag-picture"; text: "Alt, Ctrl and Shift with a drag on the video pan, zoom and stretch the picture" }
-                        Check { path: "input.drag-subtitles"; text: "Ctrl+Alt with a drag on the video moves the subtitles" }
-                        Check { path: "input.x-wheel"; text: "Operate the wheel while X1 or X2 is held (X1/X2 Wheel gestures on the Keys and Mouse page)" }
+                        Heading { text: qsTr("Keyboard") }
+                        Check { path: "input.disable-default-keys"; text: qsTr("Disable default hotkeys (your own keys stay)") }
+                        Check { path: "input.media-keys"; text: qsTr("Support the keyboard's media keys in RVP's window") }
+                        Check { path: "input.global-media-keys"; text: qsTr("Take the media keys while another window has the keyboard") }
+                        Check { path: "input.volume-keys"; text: qsTr("The keyboard's volume keys change RVP's volume") }
+                        Check { path: "input.navigation-keys"; text: qsTr("The keyboard's back and forward keys go to the previous and next item") }
+                        Note { text: qsTr("While RVP's window has no keyboard, Windows' media controls take the media keys (General: system media transport controls).") }
+                        Heading { text: qsTr("Mouse") }
+                        Check { path: "input.left-click-video-only"; text: qsTr("Operate the left click in the video area only") }
+                        Check { path: "input.drag-title-only"; text: qsTr("Prevent the window from being dragged outside of the title bar") }
+                        Check { path: "input.drag-picture"; text: qsTr("Alt, Ctrl and Shift with a drag on the video pan, zoom and stretch the picture") }
+                        Check { path: "input.drag-subtitles"; text: qsTr("Ctrl+Alt with a drag on the video moves the subtitles") }
+                        Check { path: "input.x-wheel"; text: qsTr("Operate the wheel while X1 or X2 is held (X1/X2 Wheel gestures on the Keys and Mouse page)") }
                     }
 
                     Page {
-                        Heading { text: "Skin" }
+                        Heading { text: qsTr("Skin") }
                         Field {
-                            label: "PotPlayer skin (.dsf)"
+                            label: qsTr("PotPlayer skin (.dsf)")
                             path: "skin"
                             optional: true
-                            placeholder: "RVP Default (built in)"
+                            placeholder: qsTr("RVP Default (built in)")
                             Button {
-                                text: "Browse…"
+                                text: qsTr("Browse…")
                                 onClicked: skinChooser.open()
                             }
                         }
@@ -2077,282 +2086,282 @@ ApplicationWindow {
                                 onClicked: win.set("skin", modelData)
                             }
                         }
-                        Note { text: "Empty: RVP Default, RVP's own skin. RVP also draws PotPlayer's .dsf skins (BlackSpace is the one it is made for), from its skins folder (" + (win.view.skins_folder || "") + "), next to the chosen skin and PotPlayer's. The skin changes at once (also from the Skins menu)." }
+                        Note { text: qsTr("Empty: RVP Default, RVP's own skin. RVP also draws PotPlayer's .dsf skins (BlackSpace is the one it is made for), from its skins folder (%1), next to the chosen skin and PotPlayer's. The skin changes at once (also from the Skins menu).").arg((win.view.skins_folder || "")) }
                         RowLayout {
-                            Button { text: "Rescan Skin Files"; onClicked: win.reload(false) }
+                            Button { text: qsTr("Rescan Skin Files"); onClicked: win.reload(false) }
                             Button {
-                                text: "Open Skin Folder"
+                                text: qsTr("Open Skin Folder")
                                 onClicked: Qt.openUrlExternally(win.player.settings_folder_url("skins"))
                             }
                         }
-                        Heading { text: "Skin modes" }
-                        Check { path: "skins.video-skin-at-start"; text: "Use the video skin at program start" }
-                        Check { path: "skins.lock-mode"; text: "Disable switching between skin modes (the audio skin for files without video)" }
-                        Check { path: "skins.remember-mode-window"; text: "Remember the window's position and size of each skin mode" }
-                        Check { path: "skins.keep-size"; text: "Keep the window's size while switching between skin modes" }
-                        Heading { text: "The skin over the video" }
-                        Check { path: "skins.auto-hide"; text: "Auto hide the main window's skin while a video shows (its bars come over the video)" }
-                        Check { path: "skins.fullscreen-resize"; text: "In fullscreen the video makes room for the bars while they show" }
-                        Check { path: "skins.animations"; text: "Enable window animations (the bars and the control panel fade)" }
-                        Heading { text: "Context menu" }
+                        Heading { text: qsTr("Skin modes") }
+                        Check { path: "skins.video-skin-at-start"; text: qsTr("Use the video skin at program start") }
+                        Check { path: "skins.lock-mode"; text: qsTr("Disable switching between skin modes (the audio skin for files without video)") }
+                        Check { path: "skins.remember-mode-window"; text: qsTr("Remember the window's position and size of each skin mode") }
+                        Check { path: "skins.keep-size"; text: qsTr("Keep the window's size while switching between skin modes") }
+                        Heading { text: qsTr("The skin over the video") }
+                        Check { path: "skins.auto-hide"; text: qsTr("Auto hide the main window's skin while a video shows (its bars come over the video)") }
+                        Check { path: "skins.fullscreen-resize"; text: qsTr("In fullscreen the video makes room for the bars while they show") }
+                        Check { path: "skins.animations"; text: qsTr("Enable window animations (the bars and the control panel fade)") }
+                        Heading { text: qsTr("Context menu") }
                         Choice {
-                            label: "Context menu design"
+                            label: qsTr("Context menu design")
                             path: "skins.menu-design"
                             values: ["skin", "default"].concat(win.view.menu_files || [])
-                            texts: ({ "skin": "Skin defined/Default (recommended)", "default": "Default" })
+                            texts: ({ "skin": qsTr("Skin defined/Default (recommended)"), "default": qsTr("Default") })
                         }
                         RowLayout {
                             Button {
-                                text: "Open Menu Folder"
+                                text: qsTr("Open Menu Folder")
                                 onClicked: Qt.openUrlExternally(win.player.settings_folder_url("menus"))
                             }
-                            Button { text: "Context Menu Items…"; onClicked: menuItems.begin() }
+                            Button { text: qsTr("Context Menu Items…"); onClicked: menuItems.begin() }
                         }
                         Choice {
-                            label: "Context menu style"
+                            label: qsTr("Context menu style")
                             path: "skins.menu-style"
                             values: ["auto", "system", "skin-1", "skin-2"]
-                            texts: ({ "auto": "Auto select", "system": "System default",
-                                      "skin-1": "Style #1 (defined in skin)", "skin-2": "Style #2 (defined in skin)" })
+                            texts: ({ "auto": qsTr("Auto select"), "system": qsTr("System default"),
+                                      "skin-1": qsTr("Style #1 (defined in skin)"), "skin-2": qsTr("Style #2 (defined in skin)") })
                         }
-                        Check { path: "skins.menu-dark"; text: "System dark mode (dark menus while the system is dark)" }
-                        Amount { label: "Transparency of the menus"; path: "skins.menu-transparency"; from: 0; to: 90; step: 10; unit: "%" }
-                        Amount { label: "Size of the menus"; path: "skins.menu-size"; from: 80; to: 200; step: 10; unit: "%" }
-                        Note { text: "Menu files hold PotPlayer's menu items (its Menus folder's format), in RVP's menus folder (" + (win.view.menus_folder || "") + ") and, on Windows, PotPlayer's. The system's menus are Windows' own; elsewhere RVP draws them." }
-                        Heading { text: "Times in the skin" }
-                        Check { path: "skins.reverse-times"; text: "Reverse the elapsed and remaining times" }
-                        Check { path: "skins.speed-times"; text: "Correct the times according to the playback speed" }
-                        Heading { text: "Opacity" }
-                        Amount { label: "Main window"; path: "skins.opacity"; from: 10; to: 100; step: 10; unit: "%" }
-                        Amount { label: "Control panel"; path: "skins.panel-opacity"; from: 10; to: 100; step: 10; unit: "%" }
+                        Check { path: "skins.menu-dark"; text: qsTr("System dark mode (dark menus while the system is dark)") }
+                        Amount { label: qsTr("Transparency of the menus"); path: "skins.menu-transparency"; from: 0; to: 90; step: 10; unit: "%" }
+                        Amount { label: qsTr("Size of the menus"); path: "skins.menu-size"; from: 80; to: 200; step: 10; unit: "%" }
+                        Note { text: qsTr("Menu files hold PotPlayer's menu items (its Menus folder's format), in RVP's menus folder (%1) and, on Windows, PotPlayer's. The system's menus are Windows' own; elsewhere RVP draws them.").arg((win.view.menus_folder || "")) }
+                        Heading { text: qsTr("Times in the skin") }
+                        Check { path: "skins.reverse-times"; text: qsTr("Reverse the elapsed and remaining times") }
+                        Check { path: "skins.speed-times"; text: qsTr("Correct the times according to the playback speed") }
+                        Heading { text: qsTr("Opacity") }
+                        Amount { label: qsTr("Main window"); path: "skins.opacity"; from: 10; to: 100; step: 10; unit: "%" }
+                        Amount { label: qsTr("Control panel"); path: "skins.panel-opacity"; from: 10; to: 100; step: 10; unit: "%" }
                     }
 
                     Page {
-                        Heading { text: "Logo while playback is off" }
+                        Heading { text: qsTr("Logo while playback is off") }
                         Choice {
-                            label: "Logo"
+                            label: qsTr("Logo")
                             path: "skins.idle-logo"
                             values: ["skin", "default"].concat(win.view.logo_list || [])
-                            texts: ({ "skin": "[Skin defined]", "default": "<Default logo>" })
+                            texts: ({ "skin": qsTr("[Skin defined]"), "default": qsTr("<Default logo>") })
                         }
-                        Heading { text: "Logo while starting playback" }
+                        Heading { text: qsTr("Logo while starting playback") }
                         Choice {
-                            label: "Logo"
+                            label: qsTr("Logo")
                             path: "skins.start-logo"
                             values: ["same", "skin", "default"].concat(win.view.logo_list || [])
-                            texts: ({ "same": "{Same as the first logo}", "skin": "[Skin defined]", "default": "<Default logo>" })
+                            texts: ({ "same": qsTr("{Same as the first logo}"), "skin": qsTr("[Skin defined]"), "default": qsTr("<Default logo>") })
                         }
-                        Heading { text: "Logo settings" }
+                        Heading { text: qsTr("Logo settings") }
                         Choice {
-                            label: "Logo position"
+                            label: qsTr("Logo position")
                             path: "skins.logo-position"
                             values: ["center", "top-left", "top-right", "bottom-left", "bottom-right", "fit"]
-                            texts: ({ "center": "Center", "top-left": "Top left", "top-right": "Top right",
-                                      "bottom-left": "Bottom left", "bottom-right": "Bottom right",
-                                      "fit": "Fit to the video area" })
+                            texts: ({ "center": qsTr("Center"), "top-left": qsTr("Top left"), "top-right": qsTr("Top right"),
+                                      "bottom-left": qsTr("Bottom left"), "bottom-right": qsTr("Bottom right"),
+                                      "fit": qsTr("Fit to the video area") })
                         }
-                        Check { path: "skins.random-logo"; text: "Change the logo randomly on each loading" }
+                        Check { path: "skins.random-logo"; text: qsTr("Change the logo randomly on each loading") }
                         RowLayout {
                             Button {
-                                text: "Open Logo Folder"
+                                text: qsTr("Open Logo Folder")
                                 onClicked: Qt.openUrlExternally(win.player.settings_folder_url("logos"))
                             }
-                            Button { text: "Rescan Logo Files"; onClicked: win.reload(false) }
+                            Button { text: qsTr("Rescan Logo Files"); onClicked: win.reload(false) }
                         }
-                        Note { text: "Pictures (PNG, JPEG, BMP, GIF) in RVP's logo folder (" + (win.view.logos_folder || "") + ") and, on Windows, PotPlayer's. The skin's own logo: PotPlayer's Flash logos (BlackSpace's) cannot show, so RVP's shows instead." }
+                        Note { text: qsTr("Pictures (PNG, JPEG, BMP, GIF) in RVP's logo folder (%1) and, on Windows, PotPlayer's. The skin's own logo: PotPlayer's Flash logos (BlackSpace's) cannot show, so RVP's shows instead.").arg((win.view.logos_folder || "")) }
                     }
 
                     Page {
-                        Heading { text: "On Screen Control" }
+                        Heading { text: qsTr("On Screen Control") }
                         Choice {
-                            label: "Method"
+                            label: qsTr("Method")
                             path: "skins.osc"
                             values: [true, false]
-                            texts: ({ "true": "The skin's bars over the video (Qt)", "false": "Disable" })
+                            texts: ({ "true": qsTr("The skin's bars over the video (Qt)"), "false": qsTr("Disable") })
                         }
-                        Check { path: "skins.osc-keep-while-over"; text: "Disable auto hide of the bars while the mouse pointer is over them" }
-                        Amount { label: "Opacity"; path: "skins.osc-opacity"; from: 10; to: 100; step: 5; unit: "%" }
-                        Heading { text: "Zoom skinned windows" }
-                        Amount { label: "Main window"; path: "skins.zoom"; from: 100; to: 300; step: 25; unit: "%" }
-                        Amount { label: "Control panel"; path: "skins.panel-zoom"; from: 100; to: 300; step: 25; unit: "%" }
-                        Note { text: "RVP's playlist is the main window's attached panel: it zooms with it." }
-                        Heading { text: "Color themes" }
+                        Check { path: "skins.osc-keep-while-over"; text: qsTr("Disable auto hide of the bars while the mouse pointer is over them") }
+                        Amount { label: qsTr("Opacity"); path: "skins.osc-opacity"; from: 10; to: 100; step: 5; unit: "%" }
+                        Heading { text: qsTr("Zoom skinned windows") }
+                        Amount { label: qsTr("Main window"); path: "skins.zoom"; from: 100; to: 300; step: 25; unit: "%" }
+                        Amount { label: qsTr("Control panel"); path: "skins.panel-zoom"; from: 100; to: 300; step: 25; unit: "%" }
+                        Note { text: qsTr("RVP's playlist is the main window's attached panel: it zooms with it.") }
+                        Heading { text: qsTr("Color themes") }
                         Choice {
-                            label: "Color theme"
+                            label: qsTr("Color theme")
                             path: "skins.color-theme"
                             values: ["", "random", "custom"].concat(win.view.skin_themes || [])
-                            texts: ({ "": "Do not use", "random": "Random (each start)", "custom": "Custom" })
+                            texts: ({ "": qsTr("Do not use"), "random": qsTr("Random (each start)"), "custom": qsTr("Custom") })
                         }
                         RowLayout {
                             RadioButton {
-                                text: "HSB color theme"
+                                text: qsTr("HSB color theme")
                                 checked: win.value("skins.custom.hsb") === true
                                 onClicked: win.set("skins.custom.hsb", true)
                             }
                             RadioButton {
-                                text: "RGB color theme"
+                                text: qsTr("RGB color theme")
                                 checked: win.value("skins.custom.hsb") === false
                                 onClicked: win.set("skins.custom.hsb", false)
                             }
-                            Button { text: "Set Custom Color Theme…"; onClicked: win.player.run_action("theme-customize") }
+                            Button { text: qsTr("Set Custom Color Theme…"); onClicked: win.player.run_action("theme-customize") }
                         }
                     }
 
                     Page {
-                        Heading { text: "General OSD settings" }
-                        Check { path: "osd.messages"; text: "Show general info messages" }
+                        Heading { text: qsTr("General OSD settings") }
+                        Check { path: "osd.messages"; text: qsTr("Show general info messages") }
                         Choice {
-                            label: "Output"
+                            label: qsTr("Output")
                             path: "osd.output"
                             values: ["window", "video"]
-                            texts: ({ "window": "Over the video (RVP's window)", "video": "In the picture (mpv's OSD)" })
+                            texts: ({ "window": qsTr("Over the video (RVP's window)"), "video": qsTr("In the picture (mpv's OSD)") })
                         }
                         Choice {
-                            label: "Horizontal align"
+                            label: qsTr("Horizontal align")
                             path: "osd.h-align"
                             values: ["left", "center", "right"]
-                            texts: ({ "left": "Left", "center": "Center", "right": "Right" })
+                            texts: ({ "left": qsTr("Left"), "center": qsTr("Center"), "right": qsTr("Right") })
                         }
                         Choice {
-                            label: "Vertical align"
+                            label: qsTr("Vertical align")
                             path: "osd.v-align"
                             values: ["top", "center", "bottom"]
-                            texts: ({ "top": "Top", "center": "Center", "bottom": "Bottom" })
+                            texts: ({ "top": qsTr("Top"), "center": qsTr("Center"), "bottom": qsTr("Bottom") })
                         }
-                        Amount { label: "Top margin"; path: "osd.top-margin"; from: 0; to: 200; unit: "px" }
-                        Amount { label: "Right margin"; path: "osd.right-margin"; from: 0; to: 200; unit: "px" }
-                        Check { path: "osd.auto-size"; text: "Auto font size (follows the video's height)" }
-                        Field { label: "Font"; path: "osd.font"; placeholder: "Qt's font" }
-                        Amount { label: "Font size"; path: "osd.font-size"; from: 8; to: 96; unit: "px" }
-                        Field { label: "Info font"; path: "osd.info-font"; placeholder: "Qt's font" }
-                        Amount { label: "Info font size"; path: "osd.info-font-size"; from: 8; to: 96; unit: "px" }
-                        Heading { text: "Content of Misc Info (Scroll Lock)" }
-                        Check { path: "osd.misc.show"; text: "Display misc info" }
-                        Check { path: "osd.misc.key-fullscreen-only"; text: "Operate only in fullscreen" }
-                        Check { path: "osd.misc.fullscreen-only"; text: "Display only in fullscreen" }
+                        Amount { label: qsTr("Top margin"); path: "osd.top-margin"; from: 0; to: 200; unit: "px" }
+                        Amount { label: qsTr("Right margin"); path: "osd.right-margin"; from: 0; to: 200; unit: "px" }
+                        Check { path: "osd.auto-size"; text: qsTr("Auto font size (follows the video's height)") }
+                        Field { label: qsTr("Font"); path: "osd.font"; placeholder: qsTr("Qt's font") }
+                        Amount { label: qsTr("Font size"); path: "osd.font-size"; from: 8; to: 96; unit: "px" }
+                        Field { label: qsTr("Info font"); path: "osd.info-font"; placeholder: qsTr("Qt's font") }
+                        Amount { label: qsTr("Info font size"); path: "osd.info-font-size"; from: 8; to: 96; unit: "px" }
+                        Heading { text: qsTr("Content of Misc Info (Scroll Lock)") }
+                        Check { path: "osd.misc.show"; text: qsTr("Display misc info") }
+                        Check { path: "osd.misc.key-fullscreen-only"; text: qsTr("Operate only in fullscreen") }
+                        Check { path: "osd.misc.fullscreen-only"; text: qsTr("Display only in fullscreen") }
                         Choice {
-                            label: "Playback time"
+                            label: qsTr("Playback time")
                             path: "osd.misc.time"
                             values: ["none", "elapsed", "remaining", "both"]
-                            texts: ({ "none": "Do not show", "elapsed": "Elapsed", "remaining": "Remaining",
-                                      "both": "Elapsed and remaining" })
+                            texts: ({ "none": qsTr("Do not show"), "elapsed": qsTr("Elapsed"), "remaining": qsTr("Remaining"),
+                                      "both": qsTr("Elapsed and remaining") })
                         }
-                        Check { path: "osd.misc.percent"; text: "Percent value" }
-                        Check { path: "osd.misc.frames"; text: "Number of elapsed frames" }
+                        Check { path: "osd.misc.percent"; text: qsTr("Percent value") }
+                        Check { path: "osd.misc.frames"; text: qsTr("Number of elapsed frames") }
                         Choice {
-                            label: "Local time"
+                            label: qsTr("Local time")
                             path: "osd.misc.clock"
                             values: ["none", "minutes", "seconds"]
-                            texts: ({ "none": "Do not show", "minutes": "Hours and minutes", "seconds": "With seconds" })
+                            texts: ({ "none": qsTr("Do not show"), "minutes": qsTr("Hours and minutes"), "seconds": qsTr("With seconds") })
                         }
-                        Check { path: "osd.misc.position"; text: "Playlist sequence number" }
-                        Check { path: "osd.misc.file"; text: "Filename" }
-                        Check { path: "osd.misc.chapter"; text: "Bookmark/chapter info" }
-                        Check { path: "osd.misc.power"; text: "System power state (the battery)" }
-                        Heading { text: "Content of Short Playback Info (Shift+Tab)" }
-                        Check { path: "osd.short.file"; text: "Filename" }
-                        Check { path: "osd.short.subtitle"; text: "Subtitle name" }
-                        Check { path: "osd.short.time"; text: "Playback time" }
-                        Check { path: "osd.short.section"; text: "Marked section (A-B)" }
-                        Check { path: "osd.short.codec"; text: "Codec info" }
+                        Check { path: "osd.misc.position"; text: qsTr("Playlist sequence number") }
+                        Check { path: "osd.misc.file"; text: qsTr("Filename") }
+                        Check { path: "osd.misc.chapter"; text: qsTr("Bookmark/chapter info") }
+                        Check { path: "osd.misc.power"; text: qsTr("System power state (the battery)") }
+                        Heading { text: qsTr("Content of Short Playback Info (Shift+Tab)") }
+                        Check { path: "osd.short.file"; text: qsTr("Filename") }
+                        Check { path: "osd.short.subtitle"; text: qsTr("Subtitle name") }
+                        Check { path: "osd.short.time"; text: qsTr("Playback time") }
+                        Check { path: "osd.short.section"; text: qsTr("Marked section (A-B)") }
+                        Check { path: "osd.short.codec"; text: qsTr("Codec info") }
                     }
 
                     Page {
-                        Heading { text: "Window size definition (relative to the desktop)" }
-                        Amount { label: "Alt+1"; path: "window.desktop-sizes.0"; from: 10; to: 100; unit: "%" }
-                        Amount { label: "Alt+2"; path: "window.desktop-sizes.1"; from: 10; to: 100; unit: "%" }
-                        Amount { label: "Alt+3"; path: "window.desktop-sizes.2"; from: 10; to: 100; unit: "%" }
-                        Amount { label: "Alt+4"; path: "window.desktop-sizes.3"; from: 10; to: 100; unit: "%" }
-                        Heading { text: "Newly opened videos" }
+                        Heading { text: qsTr("Window size definition (relative to the desktop)") }
+                        Amount { label: qsTr("Alt+1"); path: "window.desktop-sizes.0"; from: 10; to: 100; unit: "%" }
+                        Amount { label: qsTr("Alt+2"); path: "window.desktop-sizes.1"; from: 10; to: 100; unit: "%" }
+                        Amount { label: qsTr("Alt+3"); path: "window.desktop-sizes.2"; from: 10; to: 100; unit: "%" }
+                        Amount { label: qsTr("Alt+4"); path: "window.desktop-sizes.3"; from: 10; to: 100; unit: "%" }
+                        Heading { text: qsTr("Newly opened videos") }
                         Choice {
-                            label: "Window size"
+                            label: qsTr("Window size")
                             path: "window.open-size"
                             values: ["video", "last", "custom", "desktop"]
-                            texts: ({ "video": "The video's size", "last": "Keep the window's size",
-                                      "custom": "The custom size", "desktop": "The Alt+1 size" })
+                            texts: ({ "video": qsTr("The video's size"), "last": qsTr("Keep the window's size"),
+                                      "custom": qsTr("The custom size"), "desktop": qsTr("The Alt+1 size") })
                         }
-                        Amount { label: "Video size times"; path: "window.open-scale"; values: [0.25, 0.5, 0.75, 1, 1.25, 1.5, 2, 3, 4]; format: v => v + "x" }
-                        Amount { label: "Twice the size below a width of"; path: "window.double-below"; from: 0; to: 1920; step: 32; unit: "px"; format: v => v === 0 ? "never" : v + " px" }
-                        Check { path: "window.open-first-only"; text: "Operate only with the first playback at a run" }
-                        Note { text: "These apply when \"Fit the window to a newly opened video\" is on (Playback)." }
-                        Heading { text: "Custom size and steps" }
-                        Amount { label: "Custom width"; path: "window.custom-size.0"; from: 160; to: 7680; step: 16; unit: "px" }
-                        Amount { label: "Custom height"; path: "window.custom-size.1"; from: 160; to: 4320; step: 8; unit: "px" }
-                        Amount { label: "Increase and decrease"; path: "window.grow-step"; from: 1; to: 50; unit: "%" }
-                        Amount { label: "Move step"; path: "window.move-step"; from: 1; to: 200; unit: "px" }
+                        Amount { label: qsTr("Video size times"); path: "window.open-scale"; values: [0.25, 0.5, 0.75, 1, 1.25, 1.5, 2, 3, 4]; format: v => v + "x" }
+                        Amount { label: qsTr("Twice the size below a width of"); path: "window.double-below"; from: 0; to: 1920; step: 32; unit: "px"; format: v => v === 0 ? "never" : v + " px" }
+                        Check { path: "window.open-first-only"; text: qsTr("Operate only with the first playback at a run") }
+                        Note { text: qsTr("These apply when \"Fit the window to a newly opened video\" is on (Playback).") }
+                        Heading { text: qsTr("Custom size and steps") }
+                        Amount { label: qsTr("Custom width"); path: "window.custom-size.0"; from: 160; to: 7680; step: 16; unit: "px" }
+                        Amount { label: qsTr("Custom height"); path: "window.custom-size.1"; from: 160; to: 4320; step: 8; unit: "px" }
+                        Amount { label: qsTr("Increase and decrease"); path: "window.grow-step"; from: 1; to: 50; unit: "%" }
+                        Amount { label: qsTr("Move step"); path: "window.move-step"; from: 1; to: 200; unit: "px" }
                     }
 
                     Page {
-                        Heading { text: "When on fullscreen mode" }
+                        Heading { text: qsTr("When on fullscreen mode") }
                         Choice {
-                            label: "Display"
+                            label: qsTr("Display")
                             path: "window.fullscreen-display"
                             values: ["current", "primary"]
-                            texts: ({ "current": "The window's display", "primary": "The primary display" })
+                            texts: ({ "current": qsTr("The window's display"), "primary": qsTr("The primary display") })
                         }
-                        Check { path: "window.black-other-displays"; text: "Fill other monitors black in fullscreen" }
+                        Check { path: "window.black-other-displays"; text: qsTr("Fill other monitors black in fullscreen") }
                         Check {
                             visible: win.view.windows === true
                             path: "window.restrict-cursor"
-                            text: "Restrict mouse cursor to current display"
+                            text: qsTr("Restrict mouse cursor to current display")
                         }
                         Choice {
-                            label: "Stay on top"
+                            label: qsTr("Stay on top")
                             path: "on-top"
                             values: ["never", "always", "while-playing", "fullscreen-playing"]
-                            texts: ({ "never": "Never", "always": "Always", "while-playing": "While playing",
-                                      "fullscreen-playing": "While playing in fullscreen" })
+                            texts: ({ "never": qsTr("Never"), "always": qsTr("Always"), "while-playing": qsTr("While playing"),
+                                      "fullscreen-playing": qsTr("While playing in fullscreen") })
                         }
-                        Note { text: "Fullscreen (on Another Display) is Ctrl+Shift+Enter; Alt+Enter, Ctrl+Enter and Ctrl+Alt+Enter keep the aspect ratio, stretch, or stretch keeping the aspect ratio." }
+                        Note { text: qsTr("Fullscreen (on Another Display) is Ctrl+Shift+Enter; Alt+Enter, Ctrl+Enter and Ctrl+Alt+Enter keep the aspect ratio, stretch, or stretch keeping the aspect ratio.") }
                     }
 
                     Page {
-                        Heading { text: "Saved frames" }
+                        Heading { text: qsTr("Saved frames") }
                         Field {
-                            label: "Folder"
+                            label: qsTr("Folder")
                             path: "image-folder"
                             optional: true
-                            placeholder: "Pictures/RVP in the home folder"
+                            placeholder: qsTr("Pictures/RVP in the home folder")
                             Button {
-                                text: "Browse…"
+                                text: qsTr("Browse…")
                                 onClicked: {
                                     folderChooser.target = "image-folder"
                                     folderChooser.open()
                                 }
                             }
                         }
-                        Check { path: "capture.next-to-media"; text: "Store captured images into play folders (if available)" }
+                        Check { path: "capture.next-to-media"; text: qsTr("Store captured images into play folders (if available)") }
                         Choice {
-                            label: "Format"
+                            label: qsTr("Format")
                             path: "image-format"
                             values: ["png", "jpeg", "bmp", "webp"]
-                            texts: ({ "png": "PNG", "jpeg": "JPEG", "bmp": "BMP", "webp": "WEBP" })
+                            texts: ({ "png": qsTr("PNG"), "jpeg": qsTr("JPEG"), "bmp": qsTr("BMP"), "webp": qsTr("WEBP") })
                         }
-                        Amount { label: "JPEG and WEBP quality"; path: "capture.quality"; from: 10; to: 100; step: 5; unit: "%" }
-                        Heading { text: "File names and pictures" }
-                        Check { path: "capture.name-date"; text: "Include system date and time in filename" }
-                        Check { path: "capture.name-elapsed"; text: "Include file elapsed time in filename" }
-                        Check { path: "capture.with-subtitles"; text: "Include subtitles in source frames" }
-                        Check { path: "capture.correct-aspect"; text: "Correct aspect ratio when capturing" }
-                        Note { text: "Screen frames (Ctrl+Alt+E, Ctrl+Alt+C) are the picture as shown, with subtitles and mpv's messages." }
-                        Heading { text: "Consecutive images (Ctrl+G)" }
-                        Amount { label: "Every"; path: "capture.interval"; values: [0.1, 0.2, 0.5, 1, 2, 3, 5, 10, 15, 30, 60, 120, 300, 600, 1800, 3600]; format: win.seconds }
-                        Amount { label: "Images"; path: "capture.count"; values: [1, 2, 3, 5, 10, 20, 30, 50, 100, 200, 500, 1000, 10000] }
-                        Heading { text: "Thumbnail image (Alt+N)" }
-                        Amount { label: "Columns"; path: "capture.sheet.columns"; from: 1; to: 10 }
-                        Amount { label: "Rows"; path: "capture.sheet.rows"; from: 1; to: 20 }
-                        Amount { label: "Width"; path: "capture.sheet.width"; from: 320; to: 7680; step: 160; unit: "px" }
-                        Check { path: "capture.sheet.info"; text: "File information above the pictures" }
-                        Check { path: "capture.sheet.times"; text: "The time on each picture" }
-                        Check { path: "capture.sheet.exact"; text: "Exact frames (slower)" }
-                        Heading { text: "Recording" }
+                        Amount { label: qsTr("JPEG and WEBP quality"); path: "capture.quality"; from: 10; to: 100; step: 5; unit: "%" }
+                        Heading { text: qsTr("File names and pictures") }
+                        Check { path: "capture.name-date"; text: qsTr("Include system date and time in filename") }
+                        Check { path: "capture.name-elapsed"; text: qsTr("Include file elapsed time in filename") }
+                        Check { path: "capture.with-subtitles"; text: qsTr("Include subtitles in source frames") }
+                        Check { path: "capture.correct-aspect"; text: qsTr("Correct aspect ratio when capturing") }
+                        Note { text: qsTr("Screen frames (Ctrl+Alt+E, Ctrl+Alt+C) are the picture as shown, with subtitles and mpv's messages.") }
+                        Heading { text: qsTr("Consecutive images (Ctrl+G)") }
+                        Amount { label: qsTr("Every"); path: "capture.interval"; values: [0.1, 0.2, 0.5, 1, 2, 3, 5, 10, 15, 30, 60, 120, 300, 600, 1800, 3600]; format: win.seconds }
+                        Amount { label: qsTr("Images"); path: "capture.count"; values: [1, 2, 3, 5, 10, 20, 30, 50, 100, 200, 500, 1000, 10000] }
+                        Heading { text: qsTr("Thumbnail image (Alt+N)") }
+                        Amount { label: qsTr("Columns"); path: "capture.sheet.columns"; from: 1; to: 10 }
+                        Amount { label: qsTr("Rows"); path: "capture.sheet.rows"; from: 1; to: 20 }
+                        Amount { label: qsTr("Width"); path: "capture.sheet.width"; from: 320; to: 7680; step: 160; unit: "px" }
+                        Check { path: "capture.sheet.info"; text: qsTr("File information above the pictures") }
+                        Check { path: "capture.sheet.times"; text: qsTr("The time on each picture") }
+                        Check { path: "capture.sheet.exact"; text: qsTr("Exact frames (slower)") }
+                        Heading { text: qsTr("Recording") }
                         Field {
-                            label: "Streams (Record Stream, Ctrl+A)"
+                            label: qsTr("Streams (Record Stream, Ctrl+A)")
                             path: "record.stream-folder"
                             optional: true
-                            placeholder: "Videos/RVP in the home folder"
+                            placeholder: qsTr("Videos/RVP in the home folder")
                             Button {
-                                text: "Browse…"
+                                text: qsTr("Browse…")
                                 onClicked: {
                                     folderChooser.target = "record.stream-folder"
                                     folderChooser.open()
@@ -2360,62 +2369,62 @@ ApplicationWindow {
                             }
                         }
                         Field {
-                            label: "Videos (Record Video, Alt+C)"
+                            label: qsTr("Videos (Record Video, Alt+C)")
                             path: "record.video-folder"
                             optional: true
-                            placeholder: "Videos/RVP in the home folder"
+                            placeholder: qsTr("Videos/RVP in the home folder")
                             Button {
-                                text: "Browse…"
+                                text: qsTr("Browse…")
                                 onClicked: {
                                     folderChooser.target = "record.video-folder"
                                     folderChooser.open()
                                 }
                             }
                         }
-                        Check { path: "record.next-to-media"; text: "Store video files into play folders (if available)" }
-                        Note { text: "Record Stream saves the file as it comes, without decoding. Record Video encodes the stretch from its start to its stop (H.264 and AAC) with RVP's video filters, after it stops." }
+                        Check { path: "record.next-to-media"; text: qsTr("Store video files into play folders (if available)") }
+                        Note { text: qsTr("Record Stream saves the file as it comes, without decoding. Record Video encodes the stretch from its start to its stop (H.264 and AAC) with RVP's video filters, after it stops.") }
                     }
 
                     Page {
-                        Heading { text: "Visualization settings" }
-                        Check { path: "visual.enabled"; text: "Enable visualization for audio tracks" }
-                        Check { path: "visual.album-art"; text: "Display album art/cover pictures" }
+                        Heading { text: qsTr("Visualization settings") }
+                        Check { path: "visual.enabled"; text: qsTr("Enable visualization for audio tracks") }
+                        Check { path: "visual.album-art"; text: qsTr("Display album art/cover pictures") }
                         Choice {
-                            label: "Visualization mode"
+                            label: qsTr("Visualization mode")
                             path: "visual.mode"
                             values: ["bars", "spectrum", "scope", "waves", "slideshow"]
-                            texts: ({ "bars": "Spectrum bars", "spectrum": "Spectrogram", "scope": "Vector scope",
-                                      "waves": "Waveform", "slideshow": "Slideshow" })
+                            texts: ({ "bars": qsTr("Spectrum bars"), "spectrum": qsTr("Spectrogram"), "scope": qsTr("Vector scope"),
+                                      "waves": qsTr("Waveform"), "slideshow": qsTr("Slideshow") })
                         }
-                        Amount { label: "Width"; path: "visual.size.0"; from: 320; to: 3840; step: 160; unit: "px" }
-                        Amount { label: "Height"; path: "visual.size.1"; from: 180; to: 2160; step: 90; unit: "px" }
-                        Amount { label: "Frames a second"; path: "visual.rate"; from: 5; to: 60; step: 5 }
-                        Amount { label: "Change visualization every"; path: "visual.change-every"; values: [0, 10, 15, 20, 30, 60, 120, 300, 600]; format: v => v === 0 ? "never" : win.seconds(v) }
-                        Heading { text: "Slideshow" }
-                        Note { text: "Without folders, the slideshow shows the pictures of the playing file's folder." }
+                        Amount { label: qsTr("Width"); path: "visual.size.0"; from: 320; to: 3840; step: 160; unit: "px" }
+                        Amount { label: qsTr("Height"); path: "visual.size.1"; from: 180; to: 2160; step: 90; unit: "px" }
+                        Amount { label: qsTr("Frames a second"); path: "visual.rate"; from: 5; to: 60; step: 5 }
+                        Amount { label: qsTr("Change visualization every"); path: "visual.change-every"; values: [0, 10, 15, 20, 30, 60, 120, 300, 600]; format: v => v === 0 ? "never" : win.seconds(v) }
+                        Heading { text: qsTr("Slideshow") }
+                        Note { text: qsTr("Without folders, the slideshow shows the pictures of the playing file's folder.") }
                         FileList { path: "visual.folders"; ordered: true }
                         Button {
-                            text: "Add a folder of pictures…"
+                            text: qsTr("Add a folder of pictures…")
                             onClicked: {
                                 folderListChooser.target = "visual.folders"
                                 folderListChooser.open()
                             }
                         }
-                        Amount { label: "Display time"; path: "visual.slide-seconds"; values: [1, 2, 3, 5, 8, 10, 15, 20, 30, 60, 120, 300]; format: win.seconds }
-                        Amount { label: "Transition"; path: "visual.fade-seconds"; values: [0, 0.25, 0.5, 1, 1.5, 2, 3, 5]; format: win.seconds }
+                        Amount { label: qsTr("Display time"); path: "visual.slide-seconds"; values: [1, 2, 3, 5, 8, 10, 15, 20, 30, 60, 120, 300]; format: win.seconds }
+                        Amount { label: qsTr("Transition"); path: "visual.fade-seconds"; values: [0, 0.25, 0.5, 1, 1.5, 2, 3, 5]; format: win.seconds }
                         Choice {
-                            label: "Fill mode"
+                            label: qsTr("Fill mode")
                             path: "visual.fill"
                             values: ["fit", "fill", "stretch"]
-                            texts: ({ "fit": "Fit (keep the whole picture)", "fill": "Fill (crop)", "stretch": "Stretch" })
+                            texts: ({ "fit": qsTr("Fit (keep the whole picture)"), "fill": qsTr("Fill (crop)"), "stretch": qsTr("Stretch") })
                         }
-                        Check { path: "visual.random"; text: "Random slideshow" }
-                        Check { path: "visual.show-name"; text: "Show filename" }
+                        Check { path: "visual.random"; text: qsTr("Random slideshow") }
+                        Check { path: "visual.show-name"; text: qsTr("Show filename") }
                     }
 
                     Page {
-                        Heading { text: "Hardware decoding" }
-                        Note { text: "The codecs mpv decodes in hardware when Hardware decoding (Video) is on; the others are decoded in software. mpv takes a change with the next file." }
+                        Heading { text: qsTr("Hardware decoding") }
+                        Note { text: qsTr("The codecs mpv decodes in hardware when Hardware decoding (Video) is on; the others are decoded in software. mpv takes a change with the next file.") }
                         Repeater {
                             model: win.view.choices["hardware-codecs"] || []
                             delegate: CheckBox {
@@ -2430,93 +2439,100 @@ ApplicationWindow {
                                 }
                             }
                         }
-                        Heading { text: "Software decoding" }
+                        Heading { text: qsTr("Software decoding") }
                         Choice {
-                            label: "AV1 decoder"
+                            label: qsTr("AV1 decoder")
                             path: "decoders.av1"
                             values: ["dav1d", "ffmpeg"]
-                            texts: ({ "dav1d": "dav1d (faster)", "ffmpeg": "FFmpeg's own" })
+                            texts: ({ "dav1d": qsTr("dav1d (faster)"), "ffmpeg": qsTr("FFmpeg's own") })
                         }
-                        Amount { label: "Decoder threads"; path: "decoders.threads"; from: 0; to: 32; format: v => v === 0 ? "automatic" : String(v) }
-                        Note { text: "PotPlayer's DirectShow filters, splitters and their priorities have no place in RVP: libmpv decodes and splits with FFmpeg." }
+                        Amount { label: qsTr("Decoder threads"); path: "decoders.threads"; from: 0; to: 32; format: v => v === 0 ? "automatic" : String(v) }
+                        Note { text: qsTr("PotPlayer's DirectShow filters, splitters and their priorities have no place in RVP: libmpv decodes and splits with FFmpeg.") }
                     }
 
                     Page {
-                        Heading { text: "General settings" }
+                        Heading { text: qsTr("General settings") }
                         Choice {
-                            label: "Stay on top"
+                            label: qsTr("Interface language")
+                            path: "general.language"
+                            values: ["auto", "en", "ru"]
+                            // Each language by its own name.
+                            texts: ({ "auto": qsTr("The system's"), "en": "English", "ru": "Русский" })
+                        }
+                        Choice {
+                            label: qsTr("Stay on top")
                             path: "on-top"
                             values: ["never", "always", "while-playing", "fullscreen-playing"]
-                            texts: ({ "never": "Never", "always": "Always", "while-playing": "While playing",
-                                      "fullscreen-playing": "While playing in fullscreen" })
+                            texts: ({ "never": qsTr("Never"), "always": qsTr("Always"), "while-playing": qsTr("While playing"),
+                                      "fullscreen-playing": qsTr("While playing in fullscreen") })
                         }
                         Choice {
-                            label: "When files are opened"
+                            label: qsTr("When files are opened")
                             path: "open.when-opened"
                             values: ["selected", "similar", "all"]
-                            texts: ({ "selected": "Add only the files opened", "similar": "Add similar files too",
-                                      "all": "Add every file of the folder" })
+                            texts: ({ "selected": qsTr("Add only the files opened"), "similar": qsTr("Add similar files too"),
+                                      "all": qsTr("Add every file of the folder") })
                         }
                         Choice {
-                            label: "Taskbar/Tray icon"
+                            label: qsTr("Taskbar/Tray icon")
                             path: "general.tray"
                             values: ["taskbar", "both", "minimize-to-tray"]
-                            texts: ({ "taskbar": "Taskbar only", "both": "Taskbar and tray",
-                                      "minimize-to-tray": "Tray while minimized" })
+                            texts: ({ "taskbar": qsTr("Taskbar only"), "both": qsTr("Taskbar and tray"),
+                                      "minimize-to-tray": qsTr("Tray while minimized") })
                         }
                         Choice {
-                            label: "Multiple instances"
+                            label: qsTr("Multiple instances")
                             path: "general.instances"
                             values: ["single", "multiple"]
-                            texts: ({ "single": "One instance: new files go to it", "multiple": "Each start opens its own window" })
+                            texts: ({ "single": qsTr("One instance: new files go to it"), "multiple": qsTr("Each start opens its own window") })
                         }
-                        Check { path: "general.cascade"; text: "Use non-overlapping multi instances" }
-                        Check { path: "general.hide-windows-minimized"; text: "Hide all windows when minimized" }
-                        Check { path: "general.pause-minimized"; text: "Pause playback when minimized" }
-                        Check { path: "general.pause-focus-lost"; text: "Pause playback when focus lost" }
-                        Check { path: "general.pause-screen-locked"; text: "Pause playback when screen locked" }
-                        Check { path: "general.resize-from-center"; text: "Resize the window based on the center" }
-                        Check { path: "open.recent"; text: "Store and show recent items" }
-                        Check { path: "general.no-focus-at-start"; text: "Don't get focus when started with a file" }
-                        Check { path: "general.drop-menu"; text: "Use advanced drag and drop interaction (dropped files ask what to do)" }
-                        Check { path: "general.hide-errors-when-playing"; text: "Ignore error messages if playback starts" }
-                        Check { path: "general.tooltips"; text: "Show tooltips" }
-                        Check { path: "general.snap"; text: "Snap to the screen's edges" }
-                        Check { path: "general.taskbar"; text: "Enable enhanced taskbar features (progress, buttons, jump list)" }
-                        Check { path: "general.media-controls"; text: "Use the system's media transport controls" }
-                        Check { path: "general.default-size-on-close"; text: "Default window size on closing file" }
-                        Check { path: "general.run-at-startup"; text: "Automatically run at system startup" }
-                        Check { path: "general.rotate-portrait-images"; text: "Auto rotate pictures based on their dimensions" }
+                        Check { path: "general.cascade"; text: qsTr("Use non-overlapping multi instances") }
+                        Check { path: "general.hide-windows-minimized"; text: qsTr("Hide all windows when minimized") }
+                        Check { path: "general.pause-minimized"; text: qsTr("Pause playback when minimized") }
+                        Check { path: "general.pause-focus-lost"; text: qsTr("Pause playback when focus lost") }
+                        Check { path: "general.pause-screen-locked"; text: qsTr("Pause playback when screen locked") }
+                        Check { path: "general.resize-from-center"; text: qsTr("Resize the window based on the center") }
+                        Check { path: "open.recent"; text: qsTr("Store and show recent items") }
+                        Check { path: "general.no-focus-at-start"; text: qsTr("Don't get focus when started with a file") }
+                        Check { path: "general.drop-menu"; text: qsTr("Use advanced drag and drop interaction (dropped files ask what to do)") }
+                        Check { path: "general.hide-errors-when-playing"; text: qsTr("Ignore error messages if playback starts") }
+                        Check { path: "general.tooltips"; text: qsTr("Show tooltips") }
+                        Check { path: "general.snap"; text: qsTr("Snap to the screen's edges") }
+                        Check { path: "general.taskbar"; text: qsTr("Enable enhanced taskbar features (progress, buttons, jump list)") }
+                        Check { path: "general.media-controls"; text: qsTr("Use the system's media transport controls") }
+                        Check { path: "general.default-size-on-close"; text: qsTr("Default window size on closing file") }
+                        Check { path: "general.run-at-startup"; text: qsTr("Automatically run at system startup") }
+                        Check { path: "general.rotate-portrait-images"; text: qsTr("Auto rotate pictures based on their dimensions") }
                     }
 
                     Page {
-                        Heading { text: "When starting" }
+                        Heading { text: qsTr("When starting") }
                         Choice {
-                            label: "Window position"
+                            label: qsTr("Window position")
                             path: "general.start.position"
                             values: ["last", "center", "custom"]
-                            texts: ({ "last": "Where it was last", "center": "Centered", "custom": "At this position" })
+                            texts: ({ "last": qsTr("Where it was last"), "center": qsTr("Centered"), "custom": qsTr("At this position") })
                         }
-                        Amount { label: "X"; path: "general.start.x"; from: 0; to: 7680; step: 10; unit: "px" }
-                        Amount { label: "Y"; path: "general.start.y"; from: 0; to: 4320; step: 10; unit: "px" }
+                        Amount { label: qsTr("X"); path: "general.start.x"; from: 0; to: 7680; step: 10; unit: "px" }
+                        Amount { label: qsTr("Y"); path: "general.start.y"; from: 0; to: 4320; step: 10; unit: "px" }
                         Choice {
-                            label: "Window size"
+                            label: qsTr("Window size")
                             path: "general.start.size"
                             values: ["last", "custom"]
-                            texts: ({ "last": "As it was last", "custom": "This size" })
+                            texts: ({ "last": qsTr("As it was last"), "custom": qsTr("This size") })
                         }
-                        Amount { label: "Width"; path: "general.start.width"; from: 200; to: 7680; step: 10; unit: "px" }
-                        Amount { label: "Height"; path: "general.start.height"; from: 120; to: 4320; step: 10; unit: "px" }
-                        Check { path: "general.start.restore-state"; text: "Restore the window to its last state (maximized or normal)" }
-                        Check { path: "reopen-last-file"; text: "Play the last played item" }
+                        Amount { label: qsTr("Width"); path: "general.start.width"; from: 200; to: 7680; step: 10; unit: "px" }
+                        Amount { label: qsTr("Height"); path: "general.start.height"; from: 120; to: 4320; step: 10; unit: "px" }
+                        Check { path: "general.start.restore-state"; text: qsTr("Restore the window to its last state (maximized or normal)") }
+                        Check { path: "reopen-last-file"; text: qsTr("Play the last played item") }
                     }
 
                     Page {
-                        Heading { text: "Dialog boxes" }
-                        Field { label: "Font"; path: "general.dialog.font"; placeholder: "Qt's font" }
-                        Amount { label: "Font size"; path: "general.dialog.font-size"; from: 0; to: 72; unit: "pt"; format: v => v === 0 ? "Qt's" : v + " pt" }
-                        Check { path: "general.dialog.on-top"; text: "Always keep modeless dialog boxes on top" }
-                        Check { path: "general.dialog.dpi-aware"; text: "Use DPI awareness (Qt scales the windows with the display; at the next start)" }
+                        Heading { text: qsTr("Dialog boxes") }
+                        Field { label: qsTr("Font"); path: "general.dialog.font"; placeholder: qsTr("Qt's font") }
+                        Amount { label: qsTr("Font size"); path: "general.dialog.font-size"; from: 0; to: 72; unit: "pt"; format: v => v === 0 ? "Qt's" : v + " pt" }
+                        Check { path: "general.dialog.on-top"; text: qsTr("Always keep modeless dialog boxes on top") }
+                        Check { path: "general.dialog.dpi-aware"; text: qsTr("Use DPI awareness (Qt scales the windows with the display; at the next start)") }
                     }
 
                     Page {
@@ -2542,7 +2558,7 @@ ApplicationWindow {
                         }
                         Component.onCompleted: refresh()
                         onVisibleChanged: if (visible) refresh()
-                        Heading { text: "Associations (for the current user)" }
+                        Heading { text: qsTr("Associations (for the current user)") }
                         ListView {
                             Layout.fillWidth: true
                             Layout.preferredHeight: 260
@@ -2568,14 +2584,14 @@ ApplicationWindow {
                         Flow {
                             Layout.fillWidth: true
                             spacing: 6
-                            Button { text: "Select Video Ext"; onClicked: associationPage.select(t => t.kind === "video", true) }
-                            Button { text: "Select Audio Ext"; onClicked: associationPage.select(t => t.kind === "audio", true) }
-                            Button { text: "Select Subtitle Ext"; onClicked: associationPage.select(t => t.kind === "subtitle", true) }
-                            Button { text: "Select Playlist Ext"; onClicked: associationPage.select(t => t.kind === "playlist", true) }
-                            Button { text: "Select All"; onClicked: associationPage.select(t => true, true) }
-                            Button { text: "Deselect All"; onClicked: associationPage.select(t => true, false) }
+                            Button { text: qsTr("Select Video Ext"); onClicked: associationPage.select(t => t.kind === "video", true) }
+                            Button { text: qsTr("Select Audio Ext"); onClicked: associationPage.select(t => t.kind === "audio", true) }
+                            Button { text: qsTr("Select Subtitle Ext"); onClicked: associationPage.select(t => t.kind === "subtitle", true) }
+                            Button { text: qsTr("Select Playlist Ext"); onClicked: associationPage.select(t => t.kind === "playlist", true) }
+                            Button { text: qsTr("Select All"); onClicked: associationPage.select(t => true, true) }
+                            Button { text: qsTr("Deselect All"); onClicked: associationPage.select(t => true, false) }
                             Button {
-                                text: "Restore to Default"
+                                text: qsTr("Restore to Default")
                                 onClicked: {
                                     win.set("associations.off", [])
                                     win.set("associations.extra", {})
@@ -2585,11 +2601,11 @@ ApplicationWindow {
                             }
                         }
                         RowLayout {
-                            TextField { id: newExtension; placeholderText: "Extension"; Layout.preferredWidth: 110 }
+                            TextField { id: newExtension; placeholderText: qsTr("Extension"); Layout.preferredWidth: 110 }
                             ComboBox { id: newKind; model: ["video", "audio", "subtitle", "playlist"] }
-                            TextField { id: newDescription; placeholderText: "Description"; Layout.fillWidth: true }
+                            TextField { id: newDescription; placeholderText: qsTr("Description"); Layout.fillWidth: true }
                             Button {
-                                text: "Add"
+                                text: qsTr("Add")
                                 onClicked: {
                                     const ext = newExtension.text.trim().replace(/^\./, "").toLowerCase()
                                     if (ext === "")
@@ -2606,7 +2622,7 @@ ApplicationWindow {
                                 }
                             }
                             Button {
-                                text: "Delete"
+                                text: qsTr("Delete")
                                 onClicked: {
                                     const ext = newExtension.text.trim().replace(/^\./, "").toLowerCase()
                                     const extra = Object.assign({}, win.value("associations.extra") || {})
@@ -2616,15 +2632,15 @@ ApplicationWindow {
                                 }
                             }
                         }
-                        Check { path: "associations.folder-menu"; text: "Add RVP to the folder context menu" }
-                        Check { path: "associations.add-menu"; text: "Add \"Add to\" to the file context menu" }
-                        Check { path: "associations.play-menu"; text: "Add \"Play with\" to the file context menu" }
+                        Check { path: "associations.folder-menu"; text: qsTr("Add RVP to the folder context menu") }
+                        Check { path: "associations.add-menu"; text: qsTr("Add \"Add to\" to the file context menu") }
+                        Check { path: "associations.play-menu"; text: qsTr("Add \"Play with\" to the file context menu") }
                         Field {
-                            label: "File Open dialog's extensions"
+                            label: qsTr("File Open dialog's extensions")
                             path: "associations.dialog-extensions"
-                            placeholder: "Every file (mkv mp4 ... to limit it)"
+                            placeholder: qsTr("Every file (mkv mp4 ... to limit it)")
                         }
-                        Heading { text: "AutoPlay" }
+                        Heading { text: qsTr("AutoPlay") }
                         Repeater {
                             model: [["video", "Video files"], ["audio", "Audio files"], ["cd", "Audio CD"], ["vcd", "VCD"],
                                     ["svcd", "SVCD"], ["dvd", "DVD"], ["bluray", "Blu-ray"]]
@@ -2644,47 +2660,47 @@ ApplicationWindow {
                         }
                         RowLayout {
                             Button {
-                                text: "Apply to System"
+                                text: qsTr("Apply to System")
                                 onClicked: {
                                     associationPage.result = win.player.apply_associations()
                                     associationPage.refresh()
                                 }
                             }
-                            Button { text: "Clear and Rebuild the Icon Cache"; onClicked: win.player.rebuild_icon_cache() }
+                            Button { text: qsTr("Clear and Rebuild the Icon Cache"); onClicked: win.player.rebuild_icon_cache() }
                             Button {
-                                text: "Default Programs…"
+                                text: qsTr("Default Programs…")
                                 onClicked: Qt.openUrlExternally("ms-settings:defaultapps?registeredAppUser=RVP")
                             }
                         }
                         Note { text: associationPage.result }
-                        Note { text: "RVP registers itself for these types and never makes itself their default: Windows' Default apps chooses that. RVP's files show RVP's icon." }
+                        Note { text: qsTr("RVP registers itself for these types and never makes itself their default: Windows' Default apps chooses that. RVP's files show RVP's icon.") }
                     }
 
                     Page {
-                        Heading { text: "Screen saver" }
+                        Heading { text: qsTr("Screen saver") }
                         Field {
-                            label: "Folder or file to play"
+                            label: qsTr("Folder or file to play")
                             path: "screensaver.media"
-                            placeholder: "RVP's logo"
+                            placeholder: qsTr("RVP's logo")
                             Button {
-                                text: "Browse…"
+                                text: qsTr("Browse…")
                                 onClicked: {
                                     folderChooser.target = "screensaver.media"
                                     folderChooser.open()
                                 }
                             }
                         }
-                        Check { path: "screensaver.shuffle"; text: "Shuffle" }
-                        Check { path: "screensaver.mute"; text: "Without sound" }
+                        Check { path: "screensaver.shuffle"; text: qsTr("Shuffle") }
+                        Check { path: "screensaver.mute"; text: qsTr("Without sound") }
                         RowLayout {
                             Button {
-                                text: "Set up…"
+                                text: qsTr("Set up…")
                                 onClicked: screenSaverResult.text = win.player.use_as_screensaver()
                             }
-                            Button { text: "Preview"; onClicked: Tools.run_self(["--screensaver"]) }
+                            Button { text: qsTr("Preview"); onClicked: Tools.run_self(["--screensaver"]) }
                         }
                         Note { id: screenSaverResult; text: "" }
-                        Note { text: "Set up makes RVP (rvp.scr beside rvp.exe) the current user's screen saver and opens Windows' screen saver settings for its wait. Windows' small preview there stays empty: RVP draws in its own window only." }
+                        Note { text: qsTr("Set up makes RVP (rvp.scr beside rvp.exe) the current user's screen saver and opens Windows' screen saver settings for its wait. Windows' small preview there stays empty: RVP draws in its own window only.") }
                     }
 
                     Page {
@@ -2705,7 +2721,7 @@ ApplicationWindow {
                             copy[selected - 1].conditions[name] = value
                             store(copy)
                         }
-                        Heading { text: "Configuration management" }
+                        Heading { text: qsTr("Configuration management") }
                         ListView {
                             Layout.fillWidth: true
                             Layout.preferredHeight: 140
@@ -2725,9 +2741,9 @@ ApplicationWindow {
                             }
                         }
                         RowLayout {
-                            TextField { id: presetName; placeholderText: "Name"; Layout.fillWidth: true }
+                            TextField { id: presetName; placeholderText: qsTr("Name"); Layout.fillWidth: true }
                             Button {
-                                text: "Add"
+                                text: qsTr("Add")
                                 onClicked: {
                                     const copy = presetPage.copyList()
                                     let name = presetName.text.trim()
@@ -2739,7 +2755,7 @@ ApplicationWindow {
                                 }
                             }
                             Button {
-                                text: "Duplicate"
+                                text: qsTr("Duplicate")
                                 enabled: presetPage.selected > 0
                                 onClicked: {
                                     const copy = presetPage.copyList()
@@ -2750,13 +2766,13 @@ ApplicationWindow {
                                 }
                             }
                             Button {
-                                text: "Activate"
+                                text: qsTr("Activate")
                                 onClicked: win.player.run_menu_command("p:" + presetPage.selected)
                             }
                         }
                         RowLayout {
                             Button {
-                                text: "Up"
+                                text: qsTr("Up")
                                 enabled: presetPage.selected > 1
                                 onClicked: {
                                     const copy = presetPage.copyList()
@@ -2767,7 +2783,7 @@ ApplicationWindow {
                                 }
                             }
                             Button {
-                                text: "Down"
+                                text: qsTr("Down")
                                 enabled: presetPage.selected > 0 && presetPage.selected < presetPage.list.length
                                 onClicked: {
                                     const copy = presetPage.copyList()
@@ -2778,7 +2794,7 @@ ApplicationWindow {
                                 }
                             }
                             Button {
-                                text: "Rename"
+                                text: qsTr("Rename")
                                 enabled: presetPage.selected > 0
                                 onClicked: {
                                     const name = presetName.text.trim()
@@ -2793,7 +2809,7 @@ ApplicationWindow {
                                 }
                             }
                             Button {
-                                text: "Delete"
+                                text: qsTr("Delete")
                                 enabled: presetPage.selected > 0
                                 onClicked: {
                                     const copy = presetPage.copyList()
@@ -2805,11 +2821,11 @@ ApplicationWindow {
                                 }
                             }
                         }
-                        Check { path: "presets.reopen"; text: "Reopen current item when preset is manually activated" }
-                        Check { path: "presets.copy-to-default"; text: "Copy preset values into default preset when preset is manually activated" }
-                        Check { path: "presets.return-at-end"; text: "Return to previous preset at playback end when preset is auto activated" }
-                        Check { path: "presets.default-at-start"; text: "Activate default preset at program start" }
-                        Heading { text: "Auto-Preset (the selected preset activates for files that meet every condition)" }
+                        Check { path: "presets.reopen"; text: qsTr("Reopen current item when preset is manually activated") }
+                        Check { path: "presets.copy-to-default"; text: qsTr("Copy preset values into default preset when preset is manually activated") }
+                        Check { path: "presets.return-at-end"; text: qsTr("Return to previous preset at playback end when preset is auto activated") }
+                        Check { path: "presets.default-at-start"; text: qsTr("Activate default preset at program start") }
+                        Heading { text: qsTr("Auto-Preset (the selected preset activates for files that meet every condition)") }
                         Repeater {
                             model: [["file-name", "File name (* and ?)", "text"], ["album", "Album name", "text"],
                                     ["power", "Power source (ac or battery)", "text"], ["duration", "File duration (sec)", "number"],
@@ -2852,13 +2868,13 @@ ApplicationWindow {
                             }
                         }
                         CheckBox {
-                            text: "If audio playback"
+                            text: qsTr("If audio playback")
                             enabled: presetPage.selected > 0
                             checked: presetPage.conditions["audio-only"] === true
                             onToggled: presetPage.condition("audio-only", checked)
                         }
                         CheckBox {
-                            text: "If subtitles exist"
+                            text: qsTr("If subtitles exist")
                             enabled: presetPage.selected > 0
                             checked: presetPage.conditions["subtitles"] === true
                             onToggled: presetPage.condition("subtitles", checked)
@@ -2873,63 +2889,63 @@ ApplicationWindow {
                             voices = JSON.parse(win.player.tts_voices_json())
                             outputs = JSON.parse(win.player.tts_outputs_json())
                         }
-                        Heading { text: "TTS (Text to Speech) setup" }
-                        Check { path: "accessibility.tts.messages"; text: "Read the messages displayed on the screen" }
-                        Check { path: "accessibility.tts.subtitles"; text: "Read the movie subtitles comprised of text" }
-                        Check { path: "accessibility.tts.tooltips"; text: "Read the tooltips displayed on mouse rollover of skin items" }
+                        Heading { text: qsTr("TTS (Text to Speech) setup") }
+                        Check { path: "accessibility.tts.messages"; text: qsTr("Read the messages displayed on the screen") }
+                        Check { path: "accessibility.tts.subtitles"; text: qsTr("Read the movie subtitles comprised of text") }
+                        Check { path: "accessibility.tts.tooltips"; text: qsTr("Read the tooltips displayed on mouse rollover of skin items") }
                         Choice {
-                            label: "Output device"
+                            label: qsTr("Output device")
                             path: "accessibility.output"
                             values: [""].concat(ttsPage.outputs)
-                            texts: ({ "": "Windows' default" })
+                            texts: ({ "": qsTr("Windows' default") })
                         }
                         Choice {
-                            label: "TTS engine (voice)"
+                            label: qsTr("TTS engine (voice)")
                             path: "accessibility.voice"
                             values: [""].concat(ttsPage.voices)
-                            texts: ({ "": "Windows' default" })
+                            texts: ({ "": qsTr("Windows' default") })
                         }
-                        Amount { label: "Speed"; path: "accessibility.rate"; from: -10; to: 10 }
-                        Amount { label: "Volume"; path: "accessibility.volume"; from: 0; to: 100; unit: "%" }
+                        Amount { label: qsTr("Speed"); path: "accessibility.rate"; from: -10; to: 10 }
+                        Amount { label: qsTr("Volume"); path: "accessibility.volume"; from: 0; to: 100; unit: "%" }
                         RowLayout {
-                            TextField { id: ttsTest; text: "RVP reads this aloud."; Layout.fillWidth: true }
-                            Button { text: "Test"; onClicked: win.player.speak(ttsTest.text) }
+                            TextField { id: ttsTest; text: qsTr("RVP reads this aloud."); Layout.fillWidth: true }
+                            Button { text: qsTr("Test"); onClicked: win.player.speak(ttsTest.text) }
                         }
-                        Note { text: "Windows' speech (SAPI) reads; on Linux there are no voices yet." }
-                        Heading { text: "UIA (User Interface Automation) setup for screen reader programs" }
-                        Check { path: "accessibility.screen-reader.messages"; text: "Read the messages displayed on the screen" }
-                        Check { path: "accessibility.screen-reader.subtitles"; text: "Read the movie subtitles comprised of text" }
-                        Check { path: "accessibility.screen-reader.tooltips"; text: "Read the tooltips displayed on mouse rollover of skin items" }
-                        Heading { text: "Window title setup" }
-                        Check { path: "accessibility.title.messages"; text: "Output the messages displayed on the screen as window titles" }
-                        Check { path: "accessibility.title.subtitles"; text: "Output the movie subtitles comprised of text as window titles" }
-                        Check { path: "accessibility.title.tooltips"; text: "Output the tooltips displayed on mouse rollover of skin items as window titles" }
+                        Note { text: qsTr("Windows' speech (SAPI) reads; on Linux there are no voices yet.") }
+                        Heading { text: qsTr("UIA (User Interface Automation) setup for screen reader programs") }
+                        Check { path: "accessibility.screen-reader.messages"; text: qsTr("Read the messages displayed on the screen") }
+                        Check { path: "accessibility.screen-reader.subtitles"; text: qsTr("Read the movie subtitles comprised of text") }
+                        Check { path: "accessibility.screen-reader.tooltips"; text: qsTr("Read the tooltips displayed on mouse rollover of skin items") }
+                        Heading { text: qsTr("Window title setup") }
+                        Check { path: "accessibility.title.messages"; text: qsTr("Output the messages displayed on the screen as window titles") }
+                        Check { path: "accessibility.title.subtitles"; text: qsTr("Output the movie subtitles comprised of text as window titles") }
+                        Check { path: "accessibility.title.tooltips"; text: qsTr("Output the tooltips displayed on mouse rollover of skin items as window titles") }
                     }
 
                     Page {
-                        Heading { text: "Touch settings" }
-                        Check { path: "accessibility.touch"; text: "Enable the touch feature" }
+                        Heading { text: qsTr("Touch settings") }
+                        Check { path: "accessibility.touch"; text: qsTr("Enable the touch feature") }
                         Choice {
-                            label: "Single finger swipe action"
+                            label: qsTr("Single finger swipe action")
                             path: "accessibility.swipe"
                             values: ["seek-volume", "seek", "volume", "none"]
-                            texts: ({ "seek-volume": "Sideways seeks, up and down changes the volume", "seek": "Seek",
-                                      "volume": "Volume", "none": "Nothing" })
+                            texts: ({ "seek-volume": qsTr("Sideways seeks, up and down changes the volume"), "seek": qsTr("Seek"),
+                                      "volume": qsTr("Volume"), "none": qsTr("Nothing") })
                         }
-                        Check { path: "accessibility.touch-skin"; text: "Use the skin's touch layout (skins that have one)" }
+                        Check { path: "accessibility.touch-skin"; text: qsTr("Use the skin's touch layout (skins that have one)") }
                     }
 
                     Page {
-                        Heading { text: "XInput (Xbox controller) settings" }
-                        Check { path: "accessibility.xinput"; text: "Enable XInput" }
-                        Check { path: "accessibility.xinput-focus-only"; text: "Operate only when RVP has the focus" }
+                        Heading { text: qsTr("XInput (Xbox controller) settings") }
+                        Check { path: "accessibility.xinput"; text: qsTr("Enable XInput") }
+                        Check { path: "accessibility.xinput-focus-only"; text: qsTr("Operate only when RVP has the focus") }
                         Choice {
-                            label: "Mouse emulation"
+                            label: qsTr("Mouse emulation")
                             path: "accessibility.xinput-mouse"
                             values: ["off", "left", "right"]
-                            texts: ({ "off": "Off", "left": "Left stick (A clicks)", "right": "Right stick (A clicks)" })
+                            texts: ({ "off": qsTr("Off"), "left": qsTr("Left stick (A clicks)"), "right": qsTr("Right stick (A clicks)") })
                         }
-                        Note { text: "A plays and pauses, B fullscreen, X mute, Y playback info, the shoulders previous and next, Back closes playback, Start plays and pauses, the pad's up and down the volume and left and right seek. Windows only; Linux's controllers come later." }
+                        Note { text: qsTr("A plays and pauses, B fullscreen, X mute, Y playback info, the shoulders previous and next, Back closes playback, Start plays and pauses, the pad's up and down the volume and left and right seek. Windows only; Linux's controllers come later.") }
                     }
                 }
             }
@@ -2950,15 +2966,15 @@ ApplicationWindow {
                 text: (win.view.portable ? "Portable: " : "") + (win.view.file || "")
             }
             Button {
-                text: "Import…"
+                text: qsTr("Import…")
                 onClicked: importChooser.open()
             }
             Button {
-                text: "Export…"
+                text: qsTr("Export…")
                 onClicked: exportChooser.open()
             }
             Button {
-                text: "Close"
+                text: qsTr("Close")
                 onClicked: win.close()
             }
         }

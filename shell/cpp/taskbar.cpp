@@ -2,7 +2,8 @@
 // progress and its thumbnail toolbar (previous, play/pause, next), the
 // jump list's recent files (Windows lists what SHAddToRecentDocs names for
 // the types RVP is registered for), the screen lock and unlock, and the
-// start with the user's session (the Run key). Elsewhere these do nothing
+// start with the user's session (the Run key), and the media keys taken
+// while another window has the keyboard. Elsewhere these do nothing
 // (Linux's start with the session is src/startup.rs's).
 
 #include "shell.h"
@@ -30,6 +31,10 @@ namespace {
 #ifdef Q_OS_WIN
 // The thumbnail buttons' command IDs: previous, play/pause, next.
 constexpr UINT firstButton = 100;
+// The media keys' hotkey IDs, in Tools::mediaKey's order.
+constexpr int firstHotKey = 0x5256;
+constexpr UINT mediaKeys[4] = {VK_MEDIA_PLAY_PAUSE, VK_MEDIA_STOP, VK_MEDIA_NEXT_TRACK,
+                               VK_MEDIA_PREV_TRACK};
 
 struct Taskbar
 {
@@ -140,6 +145,12 @@ public:
             const int button = static_cast<int>(LOWORD(msg->wParam)) - static_cast<int>(firstButton);
             if (button >= 0 && button < 3)
                 emit Tools::instance->taskbarButton(button);
+        } else if (msg->message == WM_HOTKEY && msg->hwnd == mainWindow()) {
+            const int key = static_cast<int>(msg->wParam) - firstHotKey;
+            if (key >= 0 && key < 4) {
+                emit Tools::instance->mediaKey(key);
+                return true;
+            }
         } else if (msg->message == WM_WTSSESSION_CHANGE) {
             if (msg->wParam == WTS_SESSION_LOCK)
                 emit Tools::instance->sessionLocked(true);
@@ -191,6 +202,26 @@ void rvp_taskbar_start(bool enabled)
         state.list->SetProgressState(window, TBPF_NOPROGRESS);
 #else
     (void)enabled;
+#endif
+}
+
+void rvp_global_media_keys(bool on)
+{
+#ifdef Q_OS_WIN
+    static bool registered = false;
+    const HWND window = mainWindow();
+    if (window == nullptr || on == registered)
+        return;
+    registered = on;
+    for (int i = 0; i < 4; ++i) {
+        // Another program may hold a key already: that key stays its.
+        if (on)
+            RegisterHotKey(window, firstHotKey + i, MOD_NOREPEAT, mediaKeys[i]);
+        else
+            UnregisterHotKey(window, firstHotKey + i);
+    }
+#else
+    (void)on;
 #endif
 }
 

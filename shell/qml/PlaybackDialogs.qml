@@ -105,7 +105,7 @@ Item {
         popupType: Tools.native_video ? Popup.Window : Popup.Item
         id: jumpDialog
         objectName: "jumpDialog"
-        title: "Jump to Specified Time/Frame"
+        title: qsTr("Jump to Specified Time/Frame")
         modal: true
         anchors.centerIn: parent
         standardButtons: Dialog.Ok | Dialog.Cancel
@@ -120,13 +120,13 @@ Item {
             RowLayout {
                 RadioButton {
                     id: jumpTime
-                    text: "Time (h:mm:ss.s, or +/- seconds)"
+                    text: qsTr("Time (h:mm:ss.s, or +/- seconds)")
                     checked: true
                     onToggled: jumpField.text = holder.clock(holder.data.time || 0)
                 }
                 RadioButton {
                     id: jumpFrames
-                    text: "Frame"
+                    text: qsTr("Frame")
                     enabled: (holder.data.fps || 0) > 0
                     onToggled: jumpField.text = String(Math.floor((holder.data.time || 0) * holder.data.fps))
                 }
@@ -138,7 +138,7 @@ Item {
                 onAccepted: jumpDialog.accept()
             }
             Label {
-                text: "Duration: " + holder.clock(holder.data.duration || 0)
+                text: qsTr("Duration: %1").arg(holder.clock(holder.data.duration || 0))
                       + ((holder.data.fps || 0) > 0 ? "  (" + holder.data.fps.toFixed(3) + " fps)" : "")
                 opacity: 0.7
             }
@@ -154,13 +154,13 @@ Item {
     Dialog {
         popupType: Tools.native_video ? Popup.Window : Popup.Item
         id: titleDialog
-        title: "Add Bookmark"
+        title: qsTr("Add Bookmark")
         modal: true
         anchors.centerIn: parent
         standardButtons: Dialog.Ok | Dialog.Cancel
         onAccepted: holder.player.add_bookmark(holder.data.time, titleField.text)
         contentItem: ColumnLayout {
-            Label { text: "Title:" }
+            Label { text: qsTr("Title:") }
             TextField {
                 id: titleField
                 Layout.preferredWidth: 320
@@ -199,7 +199,7 @@ Item {
         TextField {
             id: markTitle
             Layout.fillWidth: true
-            placeholderText: "Title"
+            placeholderText: qsTr("Title")
         }
     }
 
@@ -210,7 +210,7 @@ Item {
         popupType: Tools.native_video ? Popup.Window : Popup.Item
         id: bookmarksDialog
         objectName: "bookmarksDialog"
-        title: "Bookmarks"
+        title: qsTr("Bookmarks")
         modal: false
         anchors.centerIn: parent
         standardButtons: Dialog.Close
@@ -221,16 +221,16 @@ Item {
             }
             RowLayout {
                 Button {
-                    text: "Add Here"
+                    text: qsTr("Add Here")
                     onClicked: { holder.player.bookmark_edit("add", -1, ""); holder.reloadBookmarks() }
                 }
                 Button {
-                    text: "Jump"
+                    text: qsTr("Jump")
                     enabled: bookmarkList.index >= 0
                     onClicked: holder.player.bookmark_edit("jump", bookmarkList.index, "")
                 }
                 Button {
-                    text: "Rename"
+                    text: qsTr("Rename")
                     enabled: bookmarkList.index >= 0
                     onClicked: {
                         holder.player.bookmark_edit("rename", bookmarkList.index, bookmarkList.title)
@@ -238,7 +238,7 @@ Item {
                     }
                 }
                 Button {
-                    text: "Delete"
+                    text: qsTr("Delete")
                     enabled: bookmarkList.index >= 0
                     onClicked: {
                         holder.player.bookmark_edit("delete", bookmarkList.index, "")
@@ -256,7 +256,7 @@ Item {
         popupType: Tools.native_video ? Popup.Window : Popup.Item
         id: sectionsDialog
         objectName: "sectionsDialog"
-        title: "A-B Repeat List"
+        title: qsTr("A-B Repeat List")
         modal: false
         anchors.centerIn: parent
         standardButtons: Dialog.Close
@@ -267,19 +267,19 @@ Item {
             }
             RowLayout {
                 Button {
-                    text: "Add A-B"
+                    text: qsTr("Add A-B")
                     onClicked: {
                         holder.player.section_edit("add", -1, sectionList.title)
                         holder.reloadSections()
                     }
                 }
                 Button {
-                    text: "Repeat"
+                    text: qsTr("Repeat")
                     enabled: sectionList.index >= 0
                     onClicked: holder.player.section_edit("repeat", sectionList.index, "")
                 }
                 Button {
-                    text: "Rename"
+                    text: qsTr("Rename")
                     enabled: sectionList.index >= 0
                     onClicked: {
                         holder.player.section_edit("rename", sectionList.index, sectionList.title)
@@ -287,7 +287,7 @@ Item {
                     }
                 }
                 Button {
-                    text: "Delete"
+                    text: qsTr("Delete")
                     enabled: sectionList.index >= 0
                     onClicked: {
                         holder.player.section_edit("delete", sectionList.index, "")
@@ -304,7 +304,7 @@ Item {
         popupType: Tools.native_video ? Popup.Window : Popup.Item
         id: timerDialog
         objectName: "timerDialog"
-        title: "Shutdown Timer"
+        title: qsTr("Shutdown Timer")
         modal: true
         anchors.centerIn: parent
         standardButtons: Dialog.Ok | Dialog.Cancel
@@ -335,8 +335,8 @@ Item {
         }
         contentItem: ColumnLayout {
             RowLayout {
-                RadioButton { id: timerAt; text: "At (hh:mm)"; checked: true }
-                RadioButton { id: timerIn; text: "In (h:mm, or minutes)" }
+                RadioButton { id: timerAt; text: qsTr("At (hh:mm)"); checked: true }
+                RadioButton { id: timerIn; text: qsTr("In (h:mm, or minutes)") }
             }
             TextField {
                 id: timerField
@@ -345,7 +345,7 @@ Item {
             }
             CheckBox {
                 id: timerExit
-                text: "Only exit RVP (otherwise the computer does the When Playback Finished action)"
+                text: qsTr("Only exit RVP (otherwise the computer does the When Playback Finished action)")
             }
             Label {
                 id: timerError
@@ -360,7 +360,7 @@ Item {
         popupType: Tools.native_video ? Popup.Window : Popup.Item
         id: recycleDialog
         objectName: "recycleDialog"
-        title: "Send to the Recycle Bin"
+        title: qsTr("Send to the Recycle Bin")
         modal: true
         anchors.centerIn: parent
         standardButtons: Dialog.Yes | Dialog.No
@@ -374,7 +374,7 @@ Item {
         // its implicitWidth with an assigned contentItem here.
         ColumnLayout {
             Label {
-                text: "Send " + (holder.data.files || []).length + " file(s) to the Recycle Bin?"
+                text: qsTr("Send %1 file(s) to the Recycle Bin?").arg((holder.data.files || []).length)
                 font.bold: true
             }
             Repeater {
@@ -430,7 +430,7 @@ Item {
         contentItem: ColumnLayout {
             Label {
                 visible: holder.data.list === "url"
-                text: "Addresses, one a line:"
+                text: qsTr("Addresses, one a line:")
             }
             ScrollView {
                 Layout.preferredWidth: 520
@@ -450,13 +450,13 @@ Item {
     }
     Dialogs.FileDialog {
         id: playlistOpenDialog
-        title: "Open a playlist"
+        title: qsTr("Open a playlist")
         nameFilters: ["Playlists (*.m3u8 *.m3u *.pls *.dpl)", "All files (*)"]
         onAccepted: holder.player.list_dialog_answer("open", Tools.local_file(selectedFile))
     }
     Dialogs.FileDialog {
         id: playlistSaveDialog
-        title: "Save playlist as"
+        title: qsTr("Save playlist as")
         fileMode: Dialogs.FileDialog.SaveFile
         nameFilters: ["M3U8 (*.m3u8)", "M3U (*.m3u)", "PLS (*.pls)", "PotPlayer (*.dpl)"]
         onAccepted: holder.player.list_dialog_answer("save", Tools.local_file(selectedFile))
@@ -471,7 +471,7 @@ Item {
         popupType: Tools.native_video ? Popup.Window : Popup.Item
         id: deviceDialog
         objectName: "deviceDialog"
-        title: "Open Webcam/Other Device"
+        title: qsTr("Open Webcam/Other Device")
         modal: true
         anchors.centerIn: parent
         standardButtons: Dialog.Ok | Dialog.Cancel
@@ -510,7 +510,7 @@ Item {
     }
     Dialogs.FileDialog {
         id: audioDialog
-        title: "Load External Audio"
+        title: qsTr("Load External Audio")
         nameFilters: ["Audio (*.mp3 *.m4a *.aac *.ac3 *.dts *.flac *.mka *.ogg *.opus *.wav *.wma)",
                       "All files (*)"]
         onAccepted: holder.player.load_external_audio(Tools.local_file(selectedFile))
@@ -521,7 +521,7 @@ Item {
         popupType: Tools.native_video ? Popup.Window : Popup.Item
         id: favoritesDialog
         objectName: "favoritesDialog"
-        title: "Edit Favorites"
+        title: qsTr("Edit Favorites")
         modal: true
         anchors.centerIn: parent
         standardButtons: Dialog.Save | Dialog.Cancel
@@ -544,7 +544,7 @@ Item {
             }
             RowLayout {
                 Button {
-                    text: "Remove"
+                    text: qsTr("Remove")
                     enabled: favorites.currentIndex >= 0
                     onClicked: {
                         const list = favorites.model.slice()
@@ -553,7 +553,7 @@ Item {
                     }
                 }
                 Button {
-                    text: "Up"
+                    text: qsTr("Up")
                     enabled: favorites.currentIndex > 0
                     onClicked: {
                         const list = favorites.model.slice()
@@ -564,7 +564,7 @@ Item {
                     }
                 }
                 Button {
-                    text: "Down"
+                    text: qsTr("Down")
                     enabled: favorites.currentIndex >= 0 && favorites.currentIndex < favorites.count - 1
                     onClicked: {
                         const list = favorites.model.slice()

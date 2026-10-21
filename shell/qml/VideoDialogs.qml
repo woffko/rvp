@@ -115,7 +115,7 @@ Item {
         popupType: Tools.native_video ? Popup.Window : Popup.Item
         id: consecutiveDialog
         objectName: "consecutiveDialog"
-        title: "Capture Consecutive Images"
+        title: qsTr("Capture Consecutive Images")
         modal: true
         anchors.centerIn: parent
         standardButtons: Dialog.Ok | Dialog.Cancel
@@ -123,13 +123,13 @@ Item {
                                                     count: countBox.value }))
         GridLayout {
             columns: 2
-            Label { text: "Every (seconds)" }
+            Label { text: qsTr("Every (seconds)") }
             TextField {
                 id: intervalField
                 Layout.preferredWidth: 120
                 validator: DoubleValidator { bottom: 0.1; top: 3600; decimals: 2 }
             }
-            Label { text: "Images" }
+            Label { text: qsTr("Images") }
             SpinBox { id: countBox; from: 1; to: 10000; editable: true }
         }
     }
@@ -139,7 +139,7 @@ Item {
         popupType: Tools.native_video ? Popup.Window : Popup.Item
         id: sheetDialog
         objectName: "sheetDialog"
-        title: "Create Thumbnail Image"
+        title: qsTr("Create Thumbnail Image")
         modal: true
         anchors.centerIn: parent
         standardButtons: Dialog.Ok | Dialog.Cancel
@@ -148,15 +148,15 @@ Item {
             info: infoCheck.checked, times: timesCheck.checked, exact: exactCheck.checked }))
         GridLayout {
             columns: 2
-            Label { text: "Columns" }
+            Label { text: qsTr("Columns") }
             SpinBox { id: columnsBox; from: 1; to: 10; editable: true }
-            Label { text: "Rows" }
+            Label { text: qsTr("Rows") }
             SpinBox { id: rowsBox; from: 1; to: 20; editable: true }
-            Label { text: "Image width (pixels)" }
+            Label { text: qsTr("Image width (pixels)") }
             SpinBox { id: sheetWidthBox; from: 320; to: 7680; stepSize: 160; editable: true }
-            CheckBox { id: infoCheck; text: "File information above the pictures"; Layout.columnSpan: 2 }
-            CheckBox { id: timesCheck; text: "The time on each picture"; Layout.columnSpan: 2 }
-            CheckBox { id: exactCheck; text: "Exact frames (slower)"; Layout.columnSpan: 2 }
+            CheckBox { id: infoCheck; text: qsTr("File information above the pictures"); Layout.columnSpan: 2 }
+            CheckBox { id: timesCheck; text: qsTr("The time on each picture"); Layout.columnSpan: 2 }
+            CheckBox { id: exactCheck; text: qsTr("Exact frames (slower)"); Layout.columnSpan: 2 }
         }
     }
 
@@ -165,20 +165,20 @@ Item {
         popupType: Tools.native_video ? Popup.Window : Popup.Item
         id: windowDialog
         objectName: "windowDialog"
-        title: "Window Size Control"
+        title: qsTr("Window Size Control")
         modal: true
         anchors.centerIn: parent
         standardButtons: Dialog.Ok | Dialog.Cancel
         onAccepted: holder.window.placeWindow(widthBox.value, heightBox.value, leftBox.value, topBox.value)
         GridLayout {
             columns: 2
-            Label { text: "Width" }
+            Label { text: qsTr("Width") }
             SpinBox { id: widthBox; from: 160; to: 16384; editable: true }
-            Label { text: "Height" }
+            Label { text: qsTr("Height") }
             SpinBox { id: heightBox; from: 120; to: 16384; editable: true }
-            Label { text: "Left" }
+            Label { text: qsTr("Left") }
             SpinBox { id: leftBox; from: -32768; to: 32767; editable: true }
-            Label { text: "Top" }
+            Label { text: qsTr("Top") }
             SpinBox { id: topBox; from: -32768; to: 32767; editable: true }
         }
     }

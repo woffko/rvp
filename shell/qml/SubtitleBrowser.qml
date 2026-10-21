@@ -130,7 +130,7 @@ Item {
         height: 520
         minimumWidth: 420
         minimumHeight: 320
-        title: "Subtitle Browser" + (holder.data.name ? " - " + holder.data.name : "")
+        title: qsTr("Subtitle Browser%1").arg((holder.data.name ? " - " + holder.data.name : ""))
             + (holder.data.dirty ? " *" : "")
         opacity: (holder.settings.opacity || 100) / 100
 
@@ -205,24 +205,24 @@ Item {
                 GridLayout {
                     columns: 4
                     Layout.fillWidth: true
-                    Label { text: "Start" }
+                    Label { text: qsTr("Start") }
                     TextField { id: startField; objectName: "subtitleStartField"; Layout.preferredWidth: 130 }
                     Button {
-                        text: "Now"
+                        text: qsTr("Now")
                         enabled: holder.selected >= 0
                         onClicked: holder.edit("start-now", holder.selected, "")
                     }
                     Button {
-                        text: "Sync here"
+                        text: qsTr("Sync here")
                         enabled: holder.selected >= 0
                         ToolTip.visible: hovered
-                        ToolTip.text: "Move this subtitle and the later ones so that it starts now"
+                        ToolTip.text: qsTr("Move this subtitle and the later ones so that it starts now")
                         onClicked: holder.edit("sync-here", holder.selected, "")
                     }
-                    Label { text: "End" }
+                    Label { text: qsTr("End") }
                     TextField { id: endField; objectName: "subtitleEndField"; Layout.preferredWidth: 130 }
                     Button {
-                        text: "Now"
+                        text: qsTr("Now")
                         enabled: holder.selected >= 0
                         onClicked: holder.edit("end-now", holder.selected, "")
                     }
@@ -235,42 +235,42 @@ Item {
                         id: textArea
                         objectName: "subtitleTextArea"
                         wrapMode: TextEdit.Wrap
-                        placeholderText: "The chosen subtitle's text"
+                        placeholderText: qsTr("The chosen subtitle's text")
                     }
                 }
                 Flow {
                     Layout.fillWidth: true
                     spacing: 4
                     Button {
-                        text: "Apply"
+                        text: qsTr("Apply")
                         enabled: holder.selected >= 0
                         onClicked: holder.applyEditor()
                     }
-                    Button { text: "Insert"; onClicked: { holder.edit("insert", holder.selected, ""); holder.choose(holder.player.subtitle_cue_now()) } }
-                    Button { text: "Delete"; enabled: holder.selected >= 0; onClicked: holder.edit("delete", holder.selected, "") }
-                    Button { text: "Split"; enabled: holder.selected >= 0; onClicked: holder.edit("split", holder.selected, "") }
-                    Button { text: "Join"; enabled: holder.selected >= 0; onClicked: holder.edit("join", holder.selected, "") }
-                    Button { text: "Undo"; enabled: holder.data.undo === true; onClicked: holder.edit("undo", -1, "") }
-                    Button { text: "Redo"; enabled: holder.data.redo === true; onClicked: holder.edit("redo", -1, "") }
+                    Button { text: qsTr("Insert"); onClicked: { holder.edit("insert", holder.selected, ""); holder.choose(holder.player.subtitle_cue_now()) } }
+                    Button { text: qsTr("Delete"); enabled: holder.selected >= 0; onClicked: holder.edit("delete", holder.selected, "") }
+                    Button { text: qsTr("Split"); enabled: holder.selected >= 0; onClicked: holder.edit("split", holder.selected, "") }
+                    Button { text: qsTr("Join"); enabled: holder.selected >= 0; onClicked: holder.edit("join", holder.selected, "") }
+                    Button { text: qsTr("Undo"); enabled: holder.data.undo === true; onClicked: holder.edit("undo", -1, "") }
+                    Button { text: qsTr("Redo"); enabled: holder.data.redo === true; onClicked: holder.edit("redo", -1, "") }
                     TextField {
                         id: shiftField
                         width: 80
-                        placeholderText: "ms"
+                        placeholderText: qsTr("ms")
                         validator: IntValidator { bottom: -3600000; top: 3600000 }
                     }
                     Button {
-                        text: "Shift from here"
+                        text: qsTr("Shift from here")
                         enabled: holder.selected >= 0 && shiftField.acceptableInput
                         onClicked: holder.edit("shift", holder.selected, shiftField.text)
                     }
                     Button {
-                        text: "Save"
+                        text: qsTr("Save")
                         enabled: holder.data.cues.length > 0
                         ToolTip.visible: hovered
-                        ToolTip.text: "Save into the file, with the sync"
+                        ToolTip.text: qsTr("Save into the file, with the sync")
                         onClicked: holder.edit("save", -1, "")
                     }
-                    Button { text: "Save As…"; enabled: holder.data.cues.length > 0; onClicked: holder.edit("save-as", -1, "") }
+                    Button { text: qsTr("Save As…"); enabled: holder.data.cues.length > 0; onClicked: holder.edit("save-as", -1, "") }
                 }
             }
         }
@@ -285,7 +285,7 @@ Item {
         height: 200
         minimumWidth: 320
         minimumHeight: 160
-        title: "Input Subtitles"
+        title: qsTr("Input Subtitles")
 
         Page {
             anchors.fill: parent
@@ -295,7 +295,7 @@ Item {
                 Label {
                     Layout.fillWidth: true
                     wrapMode: Text.Wrap
-                    text: "Type a subtitle and press Enter: it shows from where you began typing. Shift+Enter starts a new line."
+                    text: qsTr("Type a subtitle and press Enter: it shows from where you began typing. Shift+Enter starts a new line.")
                 }
                 ScrollView {
                     Layout.fillWidth: true
@@ -327,10 +327,10 @@ Item {
                     }
                 }
                 RowLayout {
-                    Button { text: "Browse/Edit…"; onClicked: holder.ask(false) }
+                    Button { text: qsTr("Browse/Edit…"); onClicked: holder.ask(false) }
                     Item { Layout.fillWidth: true }
-                    Button { text: "Save"; onClicked: holder.player.subtitle_edit("save", -1, "") }
-                    Button { text: "Save As…"; onClicked: holder.player.subtitle_edit("save-as", -1, "") }
+                    Button { text: qsTr("Save"); onClicked: holder.player.subtitle_edit("save", -1, "") }
+                    Button { text: qsTr("Save As…"); onClicked: holder.player.subtitle_edit("save-as", -1, "") }
                 }
             }
         }

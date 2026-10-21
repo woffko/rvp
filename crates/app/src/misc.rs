@@ -96,6 +96,8 @@ pub enum MiscCommand {
     DragTitleOnly,
     /// Misc > Enable touch feature.
     Touch,
+    /// Misc > Interface Language: an index of `general::LANGUAGES`.
+    Language(u8),
 }
 
 impl App {
@@ -103,6 +105,12 @@ impl App {
     pub(crate) fn misc_command(&mut self, command: MiscCommand) -> Option<UiRequest> {
         if command == MiscCommand::Touch {
             return Some(self.toggle_touch());
+        }
+        if let MiscCommand::Language(index) = command {
+            let (code, _) = crate::general::LANGUAGES.get(usize::from(index))?;
+            (*code).clone_into(&mut self.settings.general.language);
+            self.save_settings();
+            return Some(UiRequest::Language((*code).to_owned()));
         }
         let settings = &mut self.settings.copy_time;
         let text = match command {
@@ -135,7 +143,7 @@ impl App {
                 self.bindings = bindings;
                 format!("Default hotkeys: {}", if off { "off" } else { "on" })
             }
-            MiscCommand::Touch => return None,
+            MiscCommand::Touch | MiscCommand::Language(_) => return None,
             MiscCommand::DragTitleOnly => {
                 let input = &mut self.settings.input;
                 input.drag_title_only = !input.drag_title_only;
@@ -164,6 +172,11 @@ impl App {
             MiscCommand::DefaultKeys => Some(self.settings.input.disable_default_keys),
             MiscCommand::DragTitleOnly => Some(self.settings.input.drag_title_only),
             MiscCommand::Touch => Some(self.settings.accessibility.touch),
+            MiscCommand::Language(index) => Some(
+                crate::general::LANGUAGES
+                    .get(usize::from(index))
+                    .is_some_and(|(code, _)| *code == self.settings.general.language),
+            ),
         }
     }
 }

@@ -70,6 +70,8 @@ impl qobject::Player {
             }
             UiRequest::ColorThemeDialog => self.ui_request(request::COLOR_THEME, 0),
             UiRequest::SystemInfo => self.ui_request(request::SYSTEM_INFO, 0),
+            // QML takes the language with the General page's look.
+            UiRequest::Language(_) => self.sync_general_look(),
             // A preset changed the settings as a whole (M14).
             UiRequest::SettingsChanged(text) => {
                 self.as_mut().settings_applied();
@@ -718,6 +720,7 @@ impl qobject::Player {
             core.desktop = None;
         }
         crate::ffi::bridge::rvp_taskbar_start(general.taskbar);
+        crate::ffi::bridge::rvp_global_media_keys(core.app.settings.input.global_media_keys);
         if core
             .look
             .startup
@@ -955,6 +958,7 @@ impl qobject::Player {
             "dialogFontSize": general.dialog.font_size,
             "noFocusAtStart": general.no_focus_at_start,
             "startCenter": general.start.position == "center",
+            "language": general.language,
             "startFiles": core.pending.as_ref().is_some_and(|request| !request.files.is_empty()),
         });
         let look = QString::from(&look.to_string());

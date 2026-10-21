@@ -297,6 +297,52 @@ Item {
                 setSetting("accessibility.touch-skin", false)
             break
         case 30:
+            // Interface language: RVP's Russian translation loads and its
+            // texts fit their controls in the settings window.
+            setSetting("general.language", "ru")
+            t.next()
+            break
+        case 31:
+            if (t.waitFor("m14_russian_loads", () => qsTranslate("Menu", "Open File(s)...") === "Открыть файл(ы)...",
+                          5000, () => qsTranslate("Menu", "Open File(s)...") + " " + Qt.uiLanguage)) {
+                player.run_action("preferences")
+            }
+            break
+        case 32: {
+            const settings = host.settingsWindow()
+            if (!settings || !settings.visible) {
+                if (Date.now() - t.stepStarted > 10000) {
+                    t.check("m14_russian_fits", false, "no settings window")
+                    t.next()
+                }
+                break
+            }
+            const overflow = []
+            const walk = (item, page) => {
+                for (const child of item.children || []) {
+                    if (!child.visible)
+                        continue
+                    if (child.text !== undefined && typeof child.text === "string" && child.text !== ""
+                            && child.width > 0 && (child.truncated === true
+                                || (child.wrapMode === Text.NoWrap && child.elide === Text.ElideNone
+                                    && child.implicitWidth > child.width + 2 && child.clip !== true)))
+                        overflow.push(page + ": " + child.text)
+                    walk(child, page)
+                }
+            }
+            for (let i = 0; i < settings.pages.length; i++) {
+                settings.showPage(i)
+                const page = settings.pageItem(i)
+                if (page)
+                    walk(page, settings.pages[i].key)
+            }
+            t.check("m14_russian_fits", overflow.length === 0, overflow.length + " " + overflow.slice(0, 40).join(" | "))
+            settings.close()
+            setSetting("general.language", "en")
+            t.next()
+            break
+        }
+        case 33:
             t.finish()
             break
         }

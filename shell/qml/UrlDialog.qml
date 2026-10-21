@@ -21,7 +21,7 @@ Item {
         // window of its own shows (D4).
         popupType: Tools.native_video ? Popup.Window : Popup.Item
         id: urlDialog
-        title: "Open URL"
+        title: qsTr("Open URL")
         modal: true
         anchors.centerIn: parent
         standardButtons: Dialog.Ok | Dialog.Cancel
@@ -31,7 +31,7 @@ Item {
                 holder.player.open_files(url, false)
         }
         contentItem: ColumnLayout {
-            Label { text: "Address (http, https, rtmp, ...):" }
+            Label { text: qsTr("Address (http, https, rtmp, ...):") }
             TextField {
                 id: urlField
                 Layout.preferredWidth: 420

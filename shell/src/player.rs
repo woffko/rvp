@@ -1044,6 +1044,7 @@ impl qobject::Player {
             }
         }
         crate::ffi::bridge::rvp_taskbar_start(core.app.settings.general.taskbar);
+        crate::ffi::bridge::rvp_global_media_keys(core.app.settings.input.global_media_keys);
         core.look.startup = Some(core.app.settings.general.run_at_startup);
         let plays = request.mode == rvp_app::instance::Mode::Play && !request.files.is_empty();
         if plays {

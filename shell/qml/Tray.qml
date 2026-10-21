@@ -41,25 +41,25 @@ Item {
         }
         menu: Platform.Menu {
             Platform.MenuItem {
-                text: "Show RVP"
+                text: qsTr("Show RVP")
                 onTriggered: tray.restore()
             }
             Platform.MenuSeparator {}
             Platform.MenuItem {
-                text: "Play/Pause"
+                text: qsTr("Play/Pause")
                 onTriggered: tray.player.run_action("play-pause")
             }
             Platform.MenuItem {
-                text: "Previous"
+                text: qsTr("Previous")
                 onTriggered: tray.player.run_action("previous")
             }
             Platform.MenuItem {
-                text: "Next"
+                text: qsTr("Next")
                 onTriggered: tray.player.run_action("next")
             }
             Platform.MenuSeparator {}
             Platform.MenuItem {
-                text: "Exit"
+                text: qsTr("Exit")
                 onTriggered: tray.player.run_action("exit")
             }
         }

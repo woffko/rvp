@@ -31,7 +31,7 @@ Item {
         standardButtons: Dialog.Ok | Dialog.Cancel
         onAccepted: holder.player.name_album(nameField.text, holder.rename)
         contentItem: ColumnLayout {
-            Label { text: "Album name:" }
+            Label { text: qsTr("Album name:") }
             TextField {
                 id: nameField
                 Layout.preferredWidth: 280

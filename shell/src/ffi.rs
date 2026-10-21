@@ -65,6 +65,10 @@ pub mod bridge {
         fn rvp_taskbar_start(enabled: bool);
         fn rvp_taskbar_state(state: i32, progress: f64);
         fn rvp_taskbar_recent(path: &str);
+        /// "Turn on global media control keys": Windows' hotkeys for the
+        /// media keys on RVP's main window (`Tools::mediaKey`). Nothing
+        /// elsewhere.
+        fn rvp_global_media_keys(on: bool);
         /// Windows' Run key for "Automatically run at system startup";
         /// false when it could not be changed (and outside Windows).
         fn rvp_run_at_startup(on: bool, command: &str) -> bool;

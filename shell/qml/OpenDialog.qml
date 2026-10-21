@@ -37,7 +37,7 @@ Item {
 
     FontDialog {
         id: fontDialog
-        title: "Subtitle Font"
+        title: qsTr("Subtitle Font")
         onAccepted: holder.player.apply_subtitle_font(selectedFont.family)
     }
 
@@ -50,7 +50,7 @@ Item {
 
     FileDialog {
         id: frameDialog
-        title: "Save Current Frame As"
+        title: qsTr("Save Current Frame As")
         fileMode: FileDialog.SaveFile
         nameFilters: ["Images (*.png *.jpg *.jpeg)", "All files (*)"]
         onAccepted: holder.player.save_frame_to(Tools.local_file(selectedFile))
@@ -65,7 +65,7 @@ Item {
 
     FileDialog {
         id: recordDialog
-        title: "Record Audio"
+        title: qsTr("Record Audio")
         fileMode: FileDialog.SaveFile
         nameFilters: ["WAV audio (*.wav)", "All files (*)"]
         onAccepted: holder.player.start_recording(Tools.local_file(selectedFile))
@@ -74,7 +74,7 @@ Item {
     FileDialog {
         id: subtitleDialog
         property bool combine: false
-        title: "Load Subtitle"
+        title: qsTr("Load Subtitle")
         nameFilters: ["Subtitles (*.srt *.ass *.ssa *.sub *.idx *.sup *.vtt *.smi)", "All files (*)"]
         onAccepted: {
             if (combine)
@@ -86,7 +86,7 @@ Item {
 
     FileDialog {
         id: fileDialog
-        title: "Open File(s)"
+        title: qsTr("Open File(s)")
         fileMode: FileDialog.OpenFiles
         onAccepted: {
             const paths = []

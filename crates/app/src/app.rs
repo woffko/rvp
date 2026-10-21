@@ -130,6 +130,9 @@ pub enum UiRequest {
     SettingsChanged(String),
     /// Dropped files ask what to do (M14's advanced drag and drop).
     DropMenu(Vec<String>),
+    /// The interface's language changed (M14): a code of
+    /// `general::LANGUAGES`.
+    Language(String),
     /// A change of the system's volume (the master volume).
     SystemVolume(crate::audio::commands::SystemVolume),
     /// The Adjust Audio Sync dialog, at this sync (seconds; then

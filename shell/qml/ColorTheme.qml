@@ -53,22 +53,22 @@ Item {
         popupType: Tools.native_video ? Popup.Window : Popup.Item
         id: themeDialog
         objectName: "colorThemeDialog"
-        title: "Customize Color Theme"
+        title: qsTr("Customize Color Theme")
         modal: false
         anchors.centerIn: parent
         standardButtons: Dialog.Apply | Dialog.Close
         onApplied: holder.apply()
         contentItem: ColumnLayout {
             RowLayout {
-                RadioButton { id: hsbBox; text: "HSB color theme" }
-                RadioButton { id: rgbBox; text: "RGB color theme" }
+                RadioButton { id: hsbBox; text: qsTr("HSB color theme") }
+                RadioButton { id: rgbBox; text: qsTr("RGB color theme") }
             }
-            Channel { id: hue; label: "Hue"; from: -128; to: 128; enabled: hsbBox.checked }
-            Channel { id: sat; label: "Saturation"; from: 0; to: 100; enabled: hsbBox.checked }
-            Channel { id: red; label: "Red"; from: -255; to: 255; enabled: rgbBox.checked }
-            Channel { id: green; label: "Green"; from: -255; to: 255; enabled: rgbBox.checked }
-            Channel { id: blue; label: "Blue"; from: -255; to: 255; enabled: rgbBox.checked }
-            Label { text: "HSB colours the skin with one hue; RGB shifts its colours." }
+            Channel { id: hue; label: qsTr("Hue"); from: -128; to: 128; enabled: hsbBox.checked }
+            Channel { id: sat; label: qsTr("Saturation"); from: 0; to: 100; enabled: hsbBox.checked }
+            Channel { id: red; label: qsTr("Red"); from: -255; to: 255; enabled: rgbBox.checked }
+            Channel { id: green; label: qsTr("Green"); from: -255; to: 255; enabled: rgbBox.checked }
+            Channel { id: blue; label: qsTr("Blue"); from: -255; to: 255; enabled: rgbBox.checked }
+            Label { text: qsTr("HSB colours the skin with one hue; RGB shifts its colours.") }
         }
     }
 }

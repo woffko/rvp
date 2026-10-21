@@ -44,6 +44,43 @@ fn build_look(out: &Path) -> PathBuf {
     qrc_path
 }
 
+/// Compiles RVP's translations (`i18n/*_ru.ts`, written for RVP) into
+/// `OUT_DIR/i18n/qml_ru.qm` with Qt's lrelease and lists it beside
+/// Main.qml, where the QML engine loads `i18n/qml_<language>.qm` as
+/// `Qt.uiLanguage` changes; returns the `.qrc` path.
+fn build_translations(out: &Path) -> PathBuf {
+    println!("cargo::rerun-if-changed=i18n");
+    println!("cargo::rerun-if-env-changed=QMAKE");
+    let qmake = std::env::var("QMAKE").unwrap_or_else(|_| "qmake".to_owned());
+    let bins = std::process::Command::new(&qmake)
+        .args(["-query", "QT_HOST_BINS"])
+        .output()
+        .ok()
+        .map(|output| String::from_utf8_lossy(&output.stdout).trim().to_owned())
+        .unwrap_or_default();
+    let lrelease = ["lrelease", "lrelease.exe"]
+        .iter()
+        .map(|name| Path::new(&bins).join(name))
+        .find(|path| path.is_file())
+        .unwrap_or_else(|| PathBuf::from("lrelease"));
+    let folder = out.join("i18n");
+    std::fs::create_dir_all(&folder).expect("create i18n folder");
+    let qm = folder.join("qml_ru.qm");
+    let status = std::process::Command::new(&lrelease)
+        .args(["-silent", "i18n/qml_ru.ts", "i18n/menu_ru.ts", "-qm"])
+        .arg(&qm)
+        .status()
+        .unwrap_or_else(|error| panic!("cannot run {}: {error}", lrelease.display()));
+    assert!(status.success(), "lrelease failed: {status}");
+    let qrc = format!(
+        "<RCC>\n  <qresource prefix=\"/qt/qml/Rvp\">\n    <file alias=\"qml/i18n/qml_ru.qm\">{}</file>\n  </qresource>\n</RCC>\n",
+        qm.display()
+    );
+    let qrc_path = out.join("i18n.qrc");
+    std::fs::write(&qrc_path, qrc).expect("write i18n.qrc");
+    qrc_path
+}
+
 fn main() {
     // cxx-qt-build 0.10 compiles the QML ahead of time (qmlcachegen) before
     // it writes this build's type information, so an incremental build used
@@ -54,6 +91,7 @@ fn main() {
     let out = PathBuf::from(std::env::var_os("OUT_DIR").expect("OUT_DIR"));
     let _ = std::fs::remove_file(out.join("qt-build-utils/qml_modules/Rvp/plugin.qmltypes"));
     let look_qrc = build_look(&out);
+    let i18n_qrc = build_translations(&out);
     let module = QmlModule::new("Rvp")
         .qml_file("qml/Main.qml")
         .qml_file("qml/Menus.qml")
@@ -104,6 +142,7 @@ fn main() {
         .cpp_file("cpp/tts.cpp")
         .cpp_file("cpp/xinput.cpp")
         .qrc(&look_qrc)
+        .qrc(&i18n_qrc)
         .build();
 
     // libmpv outside the default library path: `MPV_LIB_DIR` holds mpv.lib

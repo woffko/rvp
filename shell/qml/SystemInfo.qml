@@ -18,7 +18,7 @@ Window {
     height: 620
     minimumWidth: 360
     minimumHeight: 300
-    title: "Playback/System Info"
+    title: qsTr("Playback/System Info")
     transientParent: owner
     // Dialog Box: "Always keep modeless dialog boxes on top" (M14).
     flags: Qt.Dialog | (player.on_top || (player.general_look ? JSON.parse(player.general_look) : {}).dialogOnTop === true
@@ -104,11 +104,11 @@ Window {
         RowLayout {
             Layout.alignment: Qt.AlignRight
             Button {
-                text: "Copy"
+                text: qsTr("Copy")
                 onClicked: Tools.set_clipboard_text(info.asText())
             }
             Button {
-                text: "Close"
+                text: qsTr("Close")
                 onClicked: info.close()
             }
         }

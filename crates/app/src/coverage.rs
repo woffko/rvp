@@ -101,7 +101,10 @@ const CONTEXT_REASONS: &[(&str, &str)] = &[
     ),
     ("101_0_13", "DirectShow filters do not apply to libmpv"),
     ("101_0_15", "not in RVP yet"),
-    ("101_0_15_2", "RVP's interface is English"),
+    (
+        "101_0_15_2",
+        "RVP's interface speaks English and Russian, in RVP's own translations; it has no Korean",
+    ),
     (
         "101_0_19",
         "Desktop Mode puts the window into Explorer's desktop layer through an undocumented message, which Windows 11 24H2 changed, and leaves it no keyboard or mouse (docs/spikes/m12-studies.md)",
@@ -413,7 +416,10 @@ const RUNTIME_REASONS: &[(&str, &str)] = &[
         "Video > AviSynth",
         "PotPlayer's AviSynth processing needs a bridge RVP does not have (docs/spikes/m12-studies.md): its presets do not run; RVP opens .avs files and runs VapourSynth scripts",
     ),
-    ("Misc", "planned in M14 (goal P)"),
+    (
+        "Misc > Interface Language",
+        "RVP's own translations are English and Russian (Qt's .ts files written for RVP); PotPlayer's language files are PotPlayer's",
+    ),
     ("Skins", "planned in M14 (goal P)"),
 ];
 

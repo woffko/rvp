@@ -906,6 +906,7 @@ const ITEMS: &[(u32, u32, Status)] = &[
     (367, 3028, Setting("keys")),
     (367, 3022, Setting("keys")),
     (367, 3044, Setting("input.media-keys")),
+    (367, 3034, Setting("input.global-media-keys")),
     (367, 3040, Setting("input.volume-keys")),
     (367, 3041, Setting("input.navigation-keys")),
     (366, 3034, Setting("input.left-click-video-only")),
@@ -1015,6 +1016,7 @@ const ITEMS: &[(u32, u32, Status)] = &[
     (336, 3067, Setting("associations.autoplay")),
     (336, 3118, Setting("associations")),
     // General (354), When Starting (457) and Dialog Box (436), M14.
+    (354, 3004, Setting("general.language")),
     (354, 3003, Setting("on-top")),
     (354, 3005, Setting("open.when-opened")),
     (354, 3008, Setting("general.tray")),
@@ -1402,15 +1404,6 @@ const NO_DAUM_WINDOWS: &str = "RVP has no capture, broadcast or chat windows: Da
 /// The milestone or reason for whole pages, by the start of their place;
 /// the longest wins.
 const PAGES: &[(&str, &str)] = &[
-    ("General", "planned in M14 (goal P)"),
-    (
-        "General > Keyboard",
-        "RVP's Keys and Mouse page (M5); the rest in M14 (goal P)",
-    ),
-    (
-        "General > Mouse",
-        "RVP's Keys and Mouse page (M5); the rest in M14 (goal P)",
-    ),
     ("General > Playlist", "not in RVP"),
     ("General > Playlist > Color/View", NAVIGATOR),
     ("General > Navigation", "not in RVP"),
@@ -1571,16 +1564,13 @@ mod tests {
     }
 
     #[test]
-    fn the_audio_and_subtitle_pages_say_why_for_every_option_rvp_lacks() {
+    fn every_option_rvp_lacks_says_why() {
         for option in options() {
-            if (option.page == "Audio"
-                || option.page.starts_with("Audio >")
-                || option.page == "Subtitles"
-                || option.page.starts_with("Subtitles >"))
-                && let Missing(why) = status(&option)
-            {
+            if let Missing(why) = status(&option) {
                 assert!(
-                    !why.contains("not in RVP yet") && !why.starts_with("planned"),
+                    !why.contains("not in RVP yet")
+                        && !why.starts_with("planned")
+                        && !why.contains("in M14"),
                     "{} / {} ({}): {why}",
                     option.page,
                     option.text,

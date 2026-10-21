@@ -104,6 +104,11 @@ public:
     // RVP's windows' font (M14's Dialog Box page): `family` (empty: Qt's)
     // at `points` (0: Qt's size).
     Q_INVOKABLE void set_app_font(const QString &family, int points) const;
+    // A menu or action label in the interface's language (M14): its
+    // numbers stand aside as %1, %2... so that "30 Sec Backward" and "5 Sec
+    // Backward" share the "Menu" context's one translation; a label without
+    // one stays.
+    Q_INVOKABLE QString tr_menu(const QString &label) const;
     // D4's Direct3D 11 renderer (cpp/video_window.cpp): places mpv's
     // window. `place` is JSON in the main window's coordinates:
     // {"x", "y", "width", "height", "visible", "holes": [[x, y, w, h]...]}.
@@ -120,6 +125,9 @@ signals:
     void sessionLocked(bool locked);
     // An Xbox controller's button (M14, cpp/xinput.cpp).
     void gamepadButton(int button);
+    // A media key taken while another window has the keyboard (M14,
+    // cpp/taskbar.cpp): 0 play/pause, 1 stop, 2 next, 3 previous.
+    void mediaKey(int key);
 };
 
 // Called from Rust (declared in src/ffi.rs).
@@ -139,6 +147,7 @@ void rvp_crash_test();
 void rvp_set_env(rust::Str name, rust::Str value);
 void rvp_taskbar_install();
 void rvp_taskbar_start(bool enabled);
+void rvp_global_media_keys(bool on);
 void rvp_taskbar_state(std::int32_t state, double progress);
 void rvp_taskbar_recent(rust::Str path);
 bool rvp_run_at_startup(bool on, rust::Str command);

@@ -428,6 +428,9 @@ pub struct InputSettings {
     /// The keyboard's media keys act in RVP's window (Windows' media
     /// controls take them while RVP's window has no keyboard).
     pub media_keys: bool,
+    /// The media keys reach RVP while another window has the keyboard
+    /// (Windows' hotkeys; they win over the media controls).
+    pub global_media_keys: bool,
     /// The keyboard's volume keys change RVP's volume while its window has
     /// the keyboard.
     pub volume_keys: bool,
@@ -448,6 +451,7 @@ impl Default for InputSettings {
         Self {
             disable_default_keys: false,
             media_keys: true,
+            global_media_keys: false,
             volume_keys: false,
             navigation_keys: false,
             left_click_video_only: true,

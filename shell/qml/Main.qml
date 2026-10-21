@@ -110,7 +110,19 @@ Window {
     readonly property var generalLook: player.general_look ? JSON.parse(player.general_look) : ({})
     // While a start with files must not take the keyboard (M14).
     property bool startNoFocus: false
-    onGeneralLookChanged: Tools.set_app_font(generalLook.dialogFont || "", generalLook.dialogFontSize || 0)
+    onGeneralLookChanged: {
+        Tools.set_app_font(generalLook.dialogFont || "", generalLook.dialogFontSize || 0)
+        applyLanguage()
+    }
+    // General: "Interface language" (M14): RVP's own translations
+    // (i18n/qml_<language>.qm beside this file), which the engine loads
+    // when Qt.uiLanguage changes; "auto" takes the system's when RVP has it.
+    function applyLanguage() {
+        const wanted = generalLook.language || "auto"
+        const language = wanted === "auto" ? (Qt.locale().name.startsWith("ru") ? "ru" : "en") : wanted
+        if (Qt.uiLanguage !== language)
+            Qt.uiLanguage = language
+    }
 
     Component.onCompleted: {
         player.start()
@@ -242,6 +254,9 @@ Window {
         target: Tools
         function onTaskbarButton(button) {
             player.run_action(["previous", "play-pause", "next"][button])
+        }
+        function onMediaKey(key) {
+            player.run_action(["play-pause", "close-media", "next", "previous"][key])
         }
         function onSessionLocked(locked) {
             player.window_attention(2, locked)
@@ -1134,7 +1149,7 @@ Window {
             required property var modelData
             flags: Qt.FramelessWindowHint | Qt.WindowDoesNotAcceptFocus
             color: "black"
-            title: "RVP"
+            title: qsTr("RVP")
             x: modelData.virtualX
             y: modelData.virtualY
             width: modelData.width
@@ -1293,7 +1308,7 @@ Window {
             horizontalAlignment: Text.AlignHCenter
             color: "#f0f0f0"
             font.pixelSize: 16
-            text: player.power_notice + "\nin " + player.power_seconds + " seconds"
+            text: qsTr("%1\nin %2 seconds").arg(player.power_notice).arg(player.power_seconds)
         }
         Rectangle {
             id: cancelPower
@@ -1308,7 +1323,7 @@ Window {
             Text {
                 anchors.centerIn: parent
                 color: "#ffffff"
-                text: "Cancel"
+                text: qsTr("Cancel")
             }
             MouseArea {
                 id: cancelArea

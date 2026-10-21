@@ -496,6 +496,29 @@ bool Tools::show_file(const QString &path) const
 #endif
 }
 
+QString Tools::tr_menu(const QString &label) const
+{
+    static const QRegularExpression number(QStringLiteral("\\d+(?:[.,]\\d+)?"));
+    QStringList numbers;
+    QString key;
+    qsizetype last = 0;
+    for (auto match = number.globalMatch(label); match.hasNext();) {
+        const QRegularExpressionMatch found = match.next();
+        key += label.mid(last, found.capturedStart() - last);
+        numbers << found.captured();
+        key += QStringLiteral("%%1").arg(numbers.size());
+        last = found.capturedEnd();
+    }
+    key += label.mid(last);
+    const QByteArray source = key.toUtf8();
+    QString text = QCoreApplication::translate("Menu", source.constData());
+    if (text == key)
+        return label;
+    for (qsizetype i = 0; i < numbers.size(); ++i)
+        text.replace(QStringLiteral("%%1").arg(i + 1), numbers[i]);
+    return text;
+}
+
 void Tools::set_app_font(const QString &family, int points) const
 {
     // The first call keeps Qt's own font to go back to.
