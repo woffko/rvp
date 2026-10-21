@@ -6,7 +6,9 @@
 //!   file; `#NAME` in the included text is replaced by `value`.
 //! * `#if<Name==Value>`, `#if<Name!=Value>`, `#else`, `#endif` keep or drop
 //!   lines. Names are looked up in the variables given by the caller
-//!   (`SkinName`, for example) and compared case-insensitively.
+//!   (`SkinName`, for example, and `SkinType=Touch` for a skin's touch
+//!   layout, M14) and compared case-insensitively; a name not given
+//!   matches nothing.
 //!
 //! Everything else passes through unchanged.
 

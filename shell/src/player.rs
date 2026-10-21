@@ -128,6 +128,8 @@ struct SkinKey {
     source: SkinSource,
     file: String,
     tint: Option<rvp_skin::theme::Tint>,
+    /// The skin's touch layout (`SkinType=Touch`, M14).
+    touch: bool,
 }
 
 /// Every skin loaded so far. Each lives for the process (layouts and the
@@ -198,17 +200,19 @@ fn skin_variant(
     source: &SkinSource,
     file: Option<&str>,
     tint: Option<rvp_skin::theme::Tint>,
+    touch: bool,
 ) -> Result<&'static Skin, String> {
     let base_key = |file: &str| SkinKey {
         source: source.clone(),
         file: file.to_owned(),
         tint: None,
+        touch,
     };
     let base = if let Some(file) = file {
         if let Some(skin) = loaded_skin(&base_key(file)) {
             skin
         } else {
-            keep_skin(base_key(file), open_skin_file(source, Some(file))?)
+            keep_skin(base_key(file), open_skin_file(source, Some(file), touch)?)
         }
     } else {
         let found = LOADED.lock().ok().and_then(|loaded| {
@@ -217,6 +221,7 @@ fn skin_variant(
                 .find(|(key, _)| {
                     key.source == *source
                         && key.tint.is_none()
+                        && key.touch == touch
                         && rvp_skin::skin::VIDEO_SKIN_FILES.contains(&key.file.as_str())
                 })
                 .map(|(_, skin)| *skin)
@@ -224,7 +229,7 @@ fn skin_variant(
         if let Some(skin) = found {
             skin
         } else {
-            let skin = open_skin_file(source, None)?;
+            let skin = open_skin_file(source, None, touch)?;
             keep_skin(base_key(skin.file()), skin)
         }
     };
@@ -496,6 +501,8 @@ pub struct PlayerRust {
     pub(crate) osd_look: QString,
     pub(crate) misc_info: QString,
     pub(crate) general_look: QString,
+    pub(crate) accessibility_look: QString,
+    pub(crate) sub_text: QString,
     pub(crate) slideshow: QString,
     pub(crate) power_notice: QString,
     pub(crate) power_seconds: i32,
@@ -585,23 +592,27 @@ type SkinLoad = std::thread::JoinHandle<Result<Skin, String>>;
 /// The skin being loaded since the process started, and its source.
 static PRELOAD: Mutex<Option<(SkinSource, SkinLoad)>> = Mutex::new(None);
 
+/// The settings ask for the skin's touch layout (M14): the first skin
+/// loads as it.
+static TOUCH_AT_START: AtomicBool = AtomicBool::new(false);
+
 fn open_skin(source: &SkinSource) -> Result<Skin, String> {
-    open_skin_file(source, None)
+    open_skin_file(source, None, TOUCH_AT_START.load(Ordering::Relaxed))
 }
 
 /// A skin's `file` (`None`: its video skin) with RVP's logo (D10).
-fn open_skin_file(source: &SkinSource, file: Option<&str>) -> Result<Skin, String> {
+fn open_skin_file(source: &SkinSource, file: Option<&str>, touch: bool) -> Result<Skin, String> {
+    let variables: &[(&str, &str)] = if touch { &[("SkinType", "Touch")] } else { &[] };
     let mut skin = match (source, file) {
-        (SkinSource::File(path), None) => {
-            Skin::open(path).map_err(|error| format!("{}: {error}", path.display()))?
-        }
+        (SkinSource::File(path), None) => Skin::open_with(path, variables)
+            .map_err(|error| format!("{}: {error}", path.display()))?,
         (SkinSource::File(path), Some(file)) => SkinArchive::open(path)
-            .and_then(|archive| Skin::load(archive, file))
+            .and_then(|archive| Skin::load_with(archive, file, variables))
             .map_err(|error| format!("{}: {error}", path.display()))?,
         (SkinSource::Default, file) => {
             let archive = SkinArchive::from_zip_bytes(rvp_look::skin::NAME, DEFAULT_SKIN.to_vec())
                 .map_err(|error| format!("{}: {error}", rvp_look::skin::NAME))?;
-            Skin::load(archive, file.unwrap_or("VideoSkin.xml"))
+            Skin::load_with(archive, file.unwrap_or("VideoSkin.xml"), variables)
                 .map_err(|error| format!("{}: {error}", rvp_look::skin::NAME))?
         }
     };
@@ -656,6 +667,7 @@ pub fn preload_skin() -> Settings {
         .flatten()
         .unwrap_or_default();
     point_at_vapoursynth(&settings);
+    TOUCH_AT_START.store(settings.accessibility.touch_skin, Ordering::Relaxed);
     // Dialog Box: "Use DPI-Awareness" (M14), before Qt starts and before
     // any other thread does.
     if !settings.general.dialog.dpi_aware {
@@ -690,6 +702,7 @@ fn load_skin(source: &SkinSource) -> Result<&'static Skin, String> {
         source: source.clone(),
         file: skin.file().to_owned(),
         tint: None,
+        touch: TOUCH_AT_START.load(Ordering::Relaxed),
     };
     let skin = keep_skin(key, skin);
     show_skin(skin);
@@ -1127,7 +1140,7 @@ impl qobject::Player {
         let has_video = core.app.model.int(PropertyId::VideoWidth).is_some();
         let title = view::title(&core.app.model, core.app.library().lists());
         let requests = drained.requests;
-        self.as_mut().show_video(has_video);
+        self.as_mut().follow_model(has_video, drained.changes);
         self.as_mut().set_hide_pointer(hides_pointer);
         self.as_mut().set_center_window(center);
         self.as_mut().sync_window_settings();

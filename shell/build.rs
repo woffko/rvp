@@ -101,6 +101,8 @@ fn main() {
         .cpp_file("cpp/gpu_power.cpp")
         .cpp_file("cpp/taskbar.cpp")
         .cpp_file("cpp/registry.cpp")
+        .cpp_file("cpp/tts.cpp")
+        .cpp_file("cpp/xinput.cpp")
         .qrc(&look_qrc)
         .build();
 

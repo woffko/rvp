@@ -142,7 +142,6 @@ const ITEM_REASONS: &[(u32, &str)] = &[
         11025,
         "mpv converts YCgCo video from the file's tags itself",
     ),
-    (10809, "touch input is not planned"),
     (
         20009,
         "a submenu in PotPlayer's running menu: Skins > Opacity > Main Window lists the percentages (39600-39609)",

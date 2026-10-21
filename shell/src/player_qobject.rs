@@ -110,6 +110,11 @@ pub mod qobject {
         /// `hideWithOwner`, `resizeCenter`, `snap`, `dialogOnTop`,
         /// `dialogFont`, `dialogFontSize`, `noFocusAtStart`).
         #[qproperty(QString, general_look)]
+        /// The Accessibility pages' options for QML (M14, JSON:
+        /// `AccessibilitySettings::look`) and the text subtitle showing
+        /// now (read aloud, announced or shown as the title).
+        #[qproperty(QString, accessibility_look)]
+        #[qproperty(QString, sub_text)]
         /// The slideshow for audio files (JSON, `App::slideshow_json`).
         #[qproperty(QString, slideshow)]
         #[qproperty(QString, power_notice)]
@@ -283,6 +288,22 @@ pub mod qobject {
         /// Clear and Rebuild the Icon Cache (Windows' `ie4uinit -show`).
         #[qinvokable]
         fn rebuild_icon_cache(self: &Self) -> bool;
+
+        /// Reads `text` aloud with the Accessibility page's voice (Windows'
+        /// speech; nothing elsewhere).
+        #[qinvokable]
+        fn speak(self: &Self, text: &QString);
+
+        /// The voices and outputs Windows' speech offers (JSON lists).
+        #[qinvokable]
+        fn tts_voices_json(self: &Self) -> QString;
+        #[qinvokable]
+        fn tts_outputs_json(self: &Self) -> QString;
+
+        /// A finger swiped over the video by `dx`, `dy` (shares of its
+        /// width and height): seeks or changes the volume (M14's touch).
+        #[qinvokable]
+        fn touch_swipe(self: Pin<&mut Self>, dx: f64, dy: f64);
 
         /// Screen Saver > Set up: RVP's `rvp.scr` as the current user's
         /// screen saver and Windows' settings opened (Windows); the outcome

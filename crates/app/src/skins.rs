@@ -302,6 +302,8 @@ pub struct SkinWant {
     /// The audio skin rather than the video skin.
     pub audio: bool,
     pub theme: ThemeWant,
+    /// The skin's touch layout (Accessibility > Touch, M14).
+    pub touch: bool,
 }
 
 /// The colour theme the window should show.
@@ -569,6 +571,7 @@ impl App {
             path: self.chosen_skin(),
             audio: self.skin_mode_audio(),
             theme,
+            touch: self.settings.accessibility.touch_skin,
         }
     }
 

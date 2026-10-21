@@ -412,10 +412,14 @@ pub enum SettingsPage {
     ScreenSaver,
     /// Preferences > Configuration: the presets.
     Presets,
+    /// Accessibility.
+    Tts,
+    Touch,
+    Xinput,
 }
 
 impl SettingsPage {
-    pub const ALL: [SettingsPage; 44] = [
+    pub const ALL: [SettingsPage; 47] = [
         SettingsPage::Playback,
         SettingsPage::TimeJump,
         SettingsPage::Skip,
@@ -460,6 +464,9 @@ impl SettingsPage {
         SettingsPage::Association,
         SettingsPage::ScreenSaver,
         SettingsPage::Presets,
+        SettingsPage::Tts,
+        SettingsPage::Touch,
+        SettingsPage::Xinput,
     ];
 
     /// The page's key in the settings window (`shell/qml/Settings.qml`).
@@ -510,6 +517,9 @@ impl SettingsPage {
             SettingsPage::Association => "association",
             SettingsPage::ScreenSaver => "screensaver",
             SettingsPage::Presets => "presets",
+            SettingsPage::Tts => "tts",
+            SettingsPage::Touch => "touch",
+            SettingsPage::Xinput => "xinput",
         }
     }
 }
@@ -5496,6 +5506,14 @@ pub const ACTIONS: &[ActionInfo] = &[
         "Disable default hotkeys",
         None,
         &[10339],
+        &[],
+    ),
+    info(
+        Action::Misc(MiscCommand::Touch),
+        "touch",
+        "Enable touch feature",
+        None,
+        &[10809],
         &[],
     ),
     info(

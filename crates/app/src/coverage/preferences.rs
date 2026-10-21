@@ -958,6 +958,29 @@ const ITEMS: &[(u32, u32, Status)] = &[
     (377, 3040, Setting("presets.copy-to-default")),
     (377, 3083, Setting("presets.return-at-end")),
     (377, 3104, Setting("presets.default-at-start")),
+    // Accessibility: TTS (468), Touch (447), XInput (479), and the
+    // Skins page's touch feature (376), M14.
+    (468, 3057, Setting("accessibility.tts")),
+    (468, 3058, Setting("accessibility.tts")),
+    (468, 3059, Setting("accessibility.tts")),
+    (468, 3015, Setting("accessibility.output")),
+    (468, 3014, Setting("accessibility.voice")),
+    (468, 3098, Setting("accessibility.rate")),
+    (468, 3099, Setting("accessibility.volume")),
+    (468, 3069, Setting("accessibility.voice")),
+    (468, 3168, Setting("accessibility.voice")),
+    (468, 3063, Setting("accessibility.screen-reader")),
+    (468, 3064, Setting("accessibility.screen-reader")),
+    (468, 3065, Setting("accessibility.screen-reader")),
+    (468, 3061, Setting("accessibility.title")),
+    (468, 3060, Setting("accessibility.title")),
+    (468, 3062, Setting("accessibility.title")),
+    (447, 3035, Setting("accessibility.touch")),
+    (447, 3003, Setting("accessibility.swipe")),
+    (479, 3035, Setting("accessibility.xinput")),
+    (479, 3036, Setting("accessibility.xinput-focus-only")),
+    (479, 3003, Setting("accessibility.xinput-mouse")),
+    (376, 3007, Setting("accessibility.touch-skin")),
     // Screen Saver (485), M14.
     (485, 3021, Setting("screensaver")),
     (485, 3022, Setting("screensaver.media")),
@@ -1424,7 +1447,6 @@ const PAGES: &[(&str, &str)] = &[
         "Extensions",
         "PotPlayer's AngelScript extensions: with the deferred online subtitles (M13)",
     ),
-    ("Accessibility", "planned in M14 (goal P)"),
     ("Kakao TV", DAUM),
 ];
 

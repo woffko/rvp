@@ -104,7 +104,8 @@ impl qobject::Player {
             .map_or(SkinSource::Default, SkinSource::File);
         // The video skin first: its themes and whether it has an audio
         // skin decide the rest.
-        let base = match skin_variant(&source, None, None) {
+        let touch = want.touch;
+        let base = match skin_variant(&source, None, None, touch) {
             Ok(skin) => skin,
             Err(error) => {
                 // The skin cannot be shown: the one shown stays.
@@ -131,7 +132,7 @@ impl qobject::Player {
                 .map(|theme| theme.tint),
         };
         let file = want.audio.then_some("AudioSkin.xml");
-        let skin = match skin_variant(&source, file, tint) {
+        let skin = match skin_variant(&source, file, tint, touch) {
             Ok(skin) => skin,
             Err(error) => {
                 core.look.skin_want = Some(want);
@@ -730,11 +731,100 @@ impl qobject::Player {
     }
 
     /// The skin's themes, its audio skin and the theme to show, the
-    /// windows' opacity and the General page's window options.
+    /// windows' opacity, the General and Accessibility pages' options.
     pub(super) fn sync_look(mut self: Pin<&mut Self>) {
         self.as_mut().sync_skin();
         self.as_mut().sync_opacity();
-        self.sync_general_look();
+        self.as_mut().sync_general_look();
+        self.sync_accessibility();
+    }
+
+    /// The Accessibility pages' options for QML and the controller.
+    pub(super) fn sync_accessibility(mut self: Pin<&mut Self>) {
+        let Some(core) = self.core() else {
+            return;
+        };
+        let accessibility = &core.app.settings.accessibility;
+        let stick = match accessibility.xinput_mouse.as_str() {
+            "left" => 1,
+            "right" => 2,
+            _ => 0,
+        };
+        crate::ffi::bridge::rvp_xinput_start(
+            accessibility.xinput,
+            accessibility.xinput_focus_only,
+            stick,
+        );
+        let look = QString::from(&accessibility.look().to_string());
+        if *self.accessibility_look() != look {
+            self.as_mut().set_accessibility_look(look);
+        }
+    }
+
+    /// What the model says now (M14): whether a video shows, for "Auto
+    /// hide main skin", and the text subtitle, for Accessibility.
+    pub(super) fn follow_model(
+        mut self: Pin<&mut Self>,
+        has_video: bool,
+        changes: rvp_engine::Changes,
+    ) {
+        self.as_mut().show_video(has_video);
+        self.follow_subtitle(changes.contains(rvp_engine::PropertyId::SubText));
+    }
+
+    /// The text subtitle showing now, when it changed.
+    pub(super) fn follow_subtitle(mut self: Pin<&mut Self>, changed: bool) {
+        if !changed {
+            return;
+        }
+        let text = self
+            .core()
+            .and_then(|core| core.app.model.text(rvp_engine::PropertyId::SubText))
+            .map(QString::from)
+            .unwrap_or_default();
+        if *self.sub_text() != text {
+            self.as_mut().set_sub_text(text);
+        }
+    }
+
+    pub(crate) fn speak(&self, text: &QString) {
+        let Some(core) = self.core() else {
+            return;
+        };
+        let accessibility = &core.app.settings.accessibility;
+        crate::ffi::bridge::rvp_tts_speak(
+            &text.to_string(),
+            &accessibility.voice,
+            &accessibility.output,
+            i32::from(accessibility.rate),
+            i32::from(accessibility.volume),
+        );
+    }
+
+    // QML invokables, so methods even though they ask the system only.
+    #[allow(clippy::unused_self)]
+    pub(crate) fn tts_voices_json(&self) -> QString {
+        QString::from(&crate::ffi::bridge::rvp_tts_voices())
+    }
+
+    #[allow(clippy::unused_self)]
+    pub(crate) fn tts_outputs_json(&self) -> QString {
+        QString::from(&crate::ffi::bridge::rvp_tts_outputs())
+    }
+
+    pub(crate) fn touch_swipe(mut self: Pin<&mut Self>, dx: f64, dy: f64) {
+        use rvp_app::accessibility::{SwipeEffect, swipe_effect};
+        let Some(core) = self.as_mut().core_mut() else {
+            return;
+        };
+        let request = match swipe_effect(&core.app.settings.accessibility.swipe, dx, dy) {
+            Some(SwipeEffect::Seek(seconds)) => core.app.seek_by(core.engine, seconds),
+            Some(SwipeEffect::Volume(steps)) => core.app.volume_steps(core.engine, steps),
+            None => None,
+        };
+        if let Some(request) = request {
+            self.handle_request(request);
+        }
     }
 
     pub(crate) fn associations_json(&self) -> QString {

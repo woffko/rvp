@@ -52,12 +52,21 @@ impl Skin {
     /// # Errors
     /// Fails when the archive cannot be read or has no video skin file.
     pub fn open(path: &Path) -> Result<Self, SkinError> {
+        Self::open_with(path, &[])
+    }
+
+    /// [`Skin::open`] with preprocessor `variables` besides `SkinName`
+    /// (`SkinType=Touch` for the touch layout, M14).
+    ///
+    /// # Errors
+    /// As [`Skin::open`].
+    pub fn open_with(path: &Path, variables: &[(&str, &str)]) -> Result<Self, SkinError> {
         let archive = SkinArchive::open(path)?;
         let file = VIDEO_SKIN_FILES
             .iter()
             .find(|name| archive.get(name).is_some())
             .ok_or_else(|| SkinError::MissingFile(VIDEO_SKIN_FILES.join(" or ")))?;
-        Self::load(archive, file)
+        Self::load_with(archive, file, variables)
     }
 
     /// Loads `file` (for example `VideoSkin.xml`) from an archive.
@@ -68,12 +77,28 @@ impl Skin {
     /// # Errors
     /// Fails when `file` is not in the archive.
     pub fn load(archive: SkinArchive, file: &str) -> Result<Self, SkinError> {
+        Self::load_with(archive, file, &[])
+    }
+
+    /// [`Skin::load`] with preprocessor `variables` besides `SkinName`.
+    ///
+    /// # Errors
+    /// As [`Skin::load`].
+    pub fn load_with(
+        archive: SkinArchive,
+        file: &str,
+        variables: &[(&str, &str)],
+    ) -> Result<Self, SkinError> {
         if archive.get(file).is_none() {
             return Err(SkinError::MissingFile(file.to_owned()));
         }
         let stem = file.rsplit_once('.').map_or(file, |(stem, _)| stem);
+        let given = variables;
         let mut variables = BTreeMap::new();
         variables.insert("SkinName".to_owned(), stem.to_owned());
+        for (name, value) in given {
+            variables.insert((*name).to_owned(), (*value).to_owned());
+        }
         let expanded = expand(&archive, file, &variables);
         let root = parse_document(&expanded.text);
         let strings = StringTable::collect(&root);

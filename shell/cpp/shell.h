@@ -118,6 +118,8 @@ signals:
     void taskbarButton(int button);
     // The user's session was locked (`true`) or unlocked (Windows).
     void sessionLocked(bool locked);
+    // An Xbox controller's button (M14, cpp/xinput.cpp).
+    void gamepadButton(int button);
 };
 
 // Called from Rust (declared in src/ffi.rs).
@@ -145,6 +147,11 @@ bool rvp_registry_delete_value(rust::Str key, rust::Str name);
 bool rvp_registry_delete_key(rust::Str key);
 bool rvp_registry_has_key(rust::Str key);
 void rvp_associations_changed();
+rust::String rvp_tts_voices();
+rust::String rvp_tts_outputs();
+bool rvp_tts_speak(rust::Str text, rust::Str voiceName, rust::Str output, std::int32_t rate,
+                   std::int32_t volume);
+void rvp_xinput_start(bool enabled, bool focus_only, std::int32_t stick);
 std::size_t rvp_gl_get_proc_address(rust::Str name);
 void rvp_video_request_update();
 rust::String rvp_gpu_power_read(bool nvidia);

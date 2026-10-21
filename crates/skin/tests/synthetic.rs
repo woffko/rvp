@@ -734,3 +734,32 @@ fn menu_files_and_skin_menu_styles() {
     assert_eq!(style.line, SLIDER_THUMB);
     assert_eq!(skin.menu_style(true), None);
 }
+
+/// Preprocessor variables besides `SkinName`: `SkinType=Touch` takes a
+/// skin's touch layout (M14).
+#[test]
+fn the_touch_layout_comes_from_skin_type() {
+    let markup = "<Skin>
+#if<SkinType==Touch>
+<Marker Value='touch' />
+#else
+<Marker Value='mouse' />
+#endif
+</Skin>";
+    let load = |variables: &[(&str, &str)]| {
+        let archive = SkinArchive::from_files(
+            "Touch",
+            [
+                ("VideoSkin.xml", markup.as_bytes().to_vec()),
+                ("atlas.png", atlas()),
+            ],
+        );
+        let skin = Skin::load_with(archive, "VideoSkin.xml", variables).expect("load");
+        skin.root()
+            .find("Marker")
+            .and_then(|marker| marker.attrs.get("Value"))
+            .map(str::to_owned)
+    };
+    assert_eq!(load(&[]).as_deref(), Some("mouse"));
+    assert_eq!(load(&[("SkinType", "Touch")]).as_deref(), Some("touch"));
+}

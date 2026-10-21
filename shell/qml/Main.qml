@@ -18,7 +18,6 @@ Window {
     minimumHeight: player.min_height > 0 ? player.min_height : 200
     visible: false
     color: "black"
-    title: player.window_title
     flags: Qt.Window | Qt.FramelessWindowHint | (player.on_top ? Qt.WindowStaysOnTopHint : 0)
            | (root.startNoFocus ? Qt.WindowDoesNotAcceptFocus : 0)
     // Skins > Opacity (M14); 0 until the core starts.
@@ -187,6 +186,57 @@ Window {
                 player.fit_aspect()
         }
     }
+    // Accessibility (M14): notices, text subtitles and tooltips read aloud,
+    // announced to screen readers and shown as the window's title.
+    readonly property var accessibilityLook: player.accessibility_look ? JSON.parse(player.accessibility_look) : ({})
+    property string titleOverride: ""
+    title: titleOverride !== "" ? titleOverride : player.window_title
+    function present(kind, text) {
+        const look = root.accessibilityLook
+        if (text === "")
+            return
+        if (look.tts && look.tts[kind] === true)
+            player.speak(text)
+        if (look.screenReader && look.screenReader[kind] === true)
+            accessibleNotice.Accessible.announce(text)
+        if (look.title && look.title[kind] === true) {
+            root.titleOverride = text.replace(/\n/g, " ")
+            titleTimer.restart()
+        }
+    }
+    // Accessibility > Touch (M14): a finger's swipe over the video.
+    Item {
+        x: player.video_rect.x
+        y: player.video_rect.y
+        width: player.video_rect.width
+        height: player.video_rect.height
+        DragHandler {
+            target: null
+            enabled: root.accessibilityLook.touch === true
+            acceptedDevices: PointerDevice.TouchScreen
+            onActiveChanged: {
+                if (!active)
+                    player.touch_swipe(translation.x / Math.max(1, parent.width),
+                                       translation.y / Math.max(1, parent.height))
+            }
+        }
+    }
+    Item {
+        id: accessibleNotice
+        Accessible.role: Accessible.StaticText
+    }
+    Timer {
+        id: titleTimer
+        interval: 3000
+        onTriggered: root.titleOverride = ""
+    }
+    Connections {
+        target: player
+        function onOsdChanged() { root.present("messages", player.osd) }
+        function onSub_textChanged() { root.present("subtitles", player.sub_text) }
+        function onTooltipChanged() { root.present("tooltips", player.tooltip) }
+    }
+
     // Windows' taskbar buttons and the screen lock (M14's General page).
     Connections {
         target: Tools
@@ -195,6 +245,14 @@ Window {
         }
         function onSessionLocked(locked) {
             player.window_attention(2, locked)
+        }
+        // Accessibility > XInput (M14): RVP's buttons.
+        function onGamepadButton(button) {
+            const actions = ["play-pause", "toggle-fullscreen", "toggle-mute", "playback-info", "previous", "next",
+                             "close-media", "play-pause", "volume-up", "volume-down",
+                             "seek-backward-medium", "seek-forward-medium"]
+            if (button >= 0 && button < actions.length)
+                player.run_action(actions[button])
         }
     }
     // General: the tray icon (Qt's), loaded when the page asks for it.

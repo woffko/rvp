@@ -1655,7 +1655,7 @@ impl App {
 
     /// The volume keys and the wheel: RVP's volume, or the system's wave or
     /// master volume (the Volume Control page's method).
-    fn change_volume(&mut self, engine: &Engine, delta: f64) -> Option<UiRequest> {
+    pub(crate) fn change_volume(&mut self, engine: &Engine, delta: f64) -> Option<UiRequest> {
         match self.settings.audio.volume_method {
             crate::audio::VolumeMethod::Player => {
                 self.set_volume(engine, self.volume_percent() + delta)

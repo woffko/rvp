@@ -77,6 +77,17 @@ pub mod bridge {
         fn rvp_registry_delete_key(key: &str) -> bool;
         fn rvp_registry_has_key(key: &str) -> bool;
         fn rvp_associations_changed();
+        /// Windows' speech (`cpp/tts.cpp`, M14's Accessibility page): the
+        /// voices' and outputs' names (JSON lists, empty elsewhere), and
+        /// a text read aloud in place of the one being read (`rate` -10
+        /// to 10, `volume` 0 to 100); false when it cannot.
+        fn rvp_tts_voices() -> String;
+        fn rvp_tts_outputs() -> String;
+        fn rvp_tts_speak(text: &str, voice: &str, output: &str, rate: i32, volume: i32) -> bool;
+        /// The Xbox controller (`cpp/xinput.cpp`): polled while `enabled`,
+        /// only with RVP active when `focus_only`, the pointer moved by
+        /// `stick` (0 none, 1 left, 2 right).
+        fn rvp_xinput_start(enabled: bool, focus_only: bool, stick: i32);
         /// `QOpenGLContext::getProcAddress` of the current context.
         fn rvp_gl_get_proc_address(name: &str) -> usize;
         /// Schedules a video frame (mpv's render update callback; any

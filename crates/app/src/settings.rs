@@ -165,6 +165,8 @@ pub struct Settings {
     pub associations: crate::registration::AssociationSettings,
     /// M14: PotPlayer's Screen Saver page.
     pub screensaver: crate::general::ScreenSaverSettings,
+    /// M14: PotPlayer's Accessibility pages.
+    pub accessibility: crate::accessibility::AccessibilitySettings,
     /// M14: PotPlayer's presets (Configuration): the default is the rest of
     /// this file.
     pub presets: crate::presets::PresetsSettings,
@@ -233,6 +235,7 @@ impl Default for Settings {
             smoothing: crate::smoothing::SmoothingSettings::default(),
             subtitles: crate::subtitles::SubtitleSettings::default(),
             input: crate::input::InputSettings::default(),
+            accessibility: crate::accessibility::AccessibilitySettings::default(),
             presets: crate::presets::PresetsSettings::default(),
             screensaver: crate::general::ScreenSaverSettings::default(),
             associations: crate::registration::AssociationSettings::default(),

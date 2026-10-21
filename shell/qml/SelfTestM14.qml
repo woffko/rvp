@@ -273,7 +273,30 @@ Item {
                           () => "path " + s.path + " active " + view().settings.presets.active))
                 player.run_menu_command("p:0")
             break
-        case 28:
+        case 28: {
+            // Accessibility: notices as the window's title, a swipe that
+            // seeks, the voices (none outside Windows) and the skin's
+            // touch layout.
+            setSetting("accessibility.title.messages", true)
+            player.run_action("theme-none")
+            t.check("m14_messages_as_title", host.title.indexOf("Color theme") >= 0, host.title)
+            setSetting("accessibility.title.messages", false)
+            setSetting("accessibility.touch", true)
+            player.touch_swipe(0.25, 0.01)
+            t.check("m14_swipe_seeks", player.osd === "+30 s", player.osd)
+            setSetting("accessibility.touch", false)
+            const voices = JSON.parse(player.tts_voices_json())
+            t.check("m14_voices_list", Array.isArray(voices), JSON.stringify(voices))
+            baseId = s.skin_id
+            setSetting("accessibility.touch-skin", true)
+            t.next()
+            break
+        }
+        case 29:
+            if (t.waitFor("m14_touch_layout_loads", () => s.skin_id !== baseId, 5000, () => shown(s)))
+                setSetting("accessibility.touch-skin", false)
+            break
+        case 30:
             t.finish()
             break
         }

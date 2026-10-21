@@ -96,6 +96,8 @@ properties! {
     SubEnd = "sub-end", Double;
     Sid = "sid", Int;
     VideoRotation = "video-params/rotate", Int;
+    // M14: the subtitle's text, for reading it aloud.
+    SubText = "sub-text", Text;
 }
 
 impl PropertyId {

@@ -68,7 +68,10 @@ ApplicationWindow {
         { key: "dialogs", title: "Dialog Box" },
         { key: "association", title: "Association" },
         { key: "screensaver", title: "Screen Saver" },
-        { key: "presets", title: "Configuration" }
+        { key: "presets", title: "Configuration" },
+        { key: "tts", title: "TTS" },
+        { key: "touch", title: "Touch" },
+        { key: "xinput", title: "XInput" }
     ]
     // PotPlayer's tree: each group opens into its pages, and the selected
     // group's pages show as tabs over the page. `page` is the group's own
@@ -87,6 +90,7 @@ ApplicationWindow {
         { title: "Association", page: "association", pages: [] },
         { title: "Screen Saver", page: "screensaver", pages: [] },
         { title: "Configuration", page: "presets", pages: [] },
+        { title: "Accessibility", page: "", pages: ["tts", "touch", "xinput"] },
         { title: "Audio", page: "audio",
           pages: ["audio-volume", "equalizer", "normalizer", "audio-effects", "audio-sync"] }
     ]
@@ -2859,6 +2863,73 @@ ApplicationWindow {
                             checked: presetPage.conditions["subtitles"] === true
                             onToggled: presetPage.condition("subtitles", checked)
                         }
+                    }
+
+                    Page {
+                        id: ttsPage
+                        property var voices: []
+                        property var outputs: []
+                        onVisibleChanged: if (visible) {
+                            voices = JSON.parse(win.player.tts_voices_json())
+                            outputs = JSON.parse(win.player.tts_outputs_json())
+                        }
+                        Heading { text: "TTS (Text to Speech) setup" }
+                        Check { path: "accessibility.tts.messages"; text: "Read the messages displayed on the screen" }
+                        Check { path: "accessibility.tts.subtitles"; text: "Read the movie subtitles comprised of text" }
+                        Check { path: "accessibility.tts.tooltips"; text: "Read the tooltips displayed on mouse rollover of skin items" }
+                        Choice {
+                            label: "Output device"
+                            path: "accessibility.output"
+                            values: [""].concat(ttsPage.outputs)
+                            texts: ({ "": "Windows' default" })
+                        }
+                        Choice {
+                            label: "TTS engine (voice)"
+                            path: "accessibility.voice"
+                            values: [""].concat(ttsPage.voices)
+                            texts: ({ "": "Windows' default" })
+                        }
+                        Amount { label: "Speed"; path: "accessibility.rate"; from: -10; to: 10 }
+                        Amount { label: "Volume"; path: "accessibility.volume"; from: 0; to: 100; unit: "%" }
+                        RowLayout {
+                            TextField { id: ttsTest; text: "RVP reads this aloud."; Layout.fillWidth: true }
+                            Button { text: "Test"; onClicked: win.player.speak(ttsTest.text) }
+                        }
+                        Note { text: "Windows' speech (SAPI) reads; on Linux there are no voices yet." }
+                        Heading { text: "UIA (User Interface Automation) setup for screen reader programs" }
+                        Check { path: "accessibility.screen-reader.messages"; text: "Read the messages displayed on the screen" }
+                        Check { path: "accessibility.screen-reader.subtitles"; text: "Read the movie subtitles comprised of text" }
+                        Check { path: "accessibility.screen-reader.tooltips"; text: "Read the tooltips displayed on mouse rollover of skin items" }
+                        Heading { text: "Window title setup" }
+                        Check { path: "accessibility.title.messages"; text: "Output the messages displayed on the screen as window titles" }
+                        Check { path: "accessibility.title.subtitles"; text: "Output the movie subtitles comprised of text as window titles" }
+                        Check { path: "accessibility.title.tooltips"; text: "Output the tooltips displayed on mouse rollover of skin items as window titles" }
+                    }
+
+                    Page {
+                        Heading { text: "Touch settings" }
+                        Check { path: "accessibility.touch"; text: "Enable the touch feature" }
+                        Choice {
+                            label: "Single finger swipe action"
+                            path: "accessibility.swipe"
+                            values: ["seek-volume", "seek", "volume", "none"]
+                            texts: ({ "seek-volume": "Sideways seeks, up and down changes the volume", "seek": "Seek",
+                                      "volume": "Volume", "none": "Nothing" })
+                        }
+                        Check { path: "accessibility.touch-skin"; text: "Use the skin's touch layout (skins that have one)" }
+                    }
+
+                    Page {
+                        Heading { text: "XInput (Xbox controller) settings" }
+                        Check { path: "accessibility.xinput"; text: "Enable XInput" }
+                        Check { path: "accessibility.xinput-focus-only"; text: "Operate only when RVP has the focus" }
+                        Choice {
+                            label: "Mouse emulation"
+                            path: "accessibility.xinput-mouse"
+                            values: ["off", "left", "right"]
+                            texts: ({ "off": "Off", "left": "Left stick (A clicks)", "right": "Right stick (A clicks)" })
+                        }
+                        Note { text: "A plays and pauses, B fullscreen, X mute, Y playback info, the shoulders previous and next, Back closes playback, Start plays and pauses, the pad's up and down the volume and left and right seek. Windows only; Linux's controllers come later." }
                     }
                 }
             }

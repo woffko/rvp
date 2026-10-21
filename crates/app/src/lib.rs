@@ -7,6 +7,7 @@
 //! tests against the real engine. The shell only paints [`chrome::Frame`]s,
 //! forwards input and carries out [`UiRequest`]s.
 
+pub mod accessibility;
 mod action;
 pub mod albums;
 mod app;

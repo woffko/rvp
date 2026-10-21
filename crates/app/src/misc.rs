@@ -1,7 +1,8 @@
 //! M14: the Misc menu's own commands (goal P): the playback's elapsed or
 //! total time copied in the format the Format submenu sets (PotPlayer's
 //! "Time format", "To the end of time" and "Fill with zeros"), PotPlayer's
-//! default hotkeys off, and the window moved by its title bar only.
+//! default hotkeys off, the window moved by its title bar only, and touch
+//! (`crate::accessibility`).
 
 use serde::{Deserialize, Serialize};
 
@@ -93,11 +94,16 @@ pub enum MiscCommand {
     DefaultKeys,
     /// Only the title bar moves the window.
     DragTitleOnly,
+    /// Misc > Enable touch feature.
+    Touch,
 }
 
 impl App {
     /// Misc > Other's commands.
     pub(crate) fn misc_command(&mut self, command: MiscCommand) -> Option<UiRequest> {
+        if command == MiscCommand::Touch {
+            return Some(self.toggle_touch());
+        }
         let settings = &mut self.settings.copy_time;
         let text = match command {
             MiscCommand::CopyTime(total) => {
@@ -129,6 +135,7 @@ impl App {
                 self.bindings = bindings;
                 format!("Default hotkeys: {}", if off { "off" } else { "on" })
             }
+            MiscCommand::Touch => return None,
             MiscCommand::DragTitleOnly => {
                 let input = &mut self.settings.input;
                 input.drag_title_only = !input.drag_title_only;
@@ -156,6 +163,7 @@ impl App {
             MiscCommand::TimeZeros => Some(settings.zeros),
             MiscCommand::DefaultKeys => Some(self.settings.input.disable_default_keys),
             MiscCommand::DragTitleOnly => Some(self.settings.input.drag_title_only),
+            MiscCommand::Touch => Some(self.settings.accessibility.touch),
         }
     }
 }
