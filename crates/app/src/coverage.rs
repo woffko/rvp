@@ -28,7 +28,6 @@ pub(crate) const SUBTITLE_FADE: &str = "libass fades only ASS events that ask fo
 /// Why parts of PotPlayer's context menu (resource 101) are not in RVP, by
 /// submenu path; the longest matching path wins.
 const CONTEXT_REASONS: &[(&str, &str)] = &[
-    ("101_0", "not in RVP yet"),
     (
         "101_0_1",
         "TV tuners (WDM analog and BDA digital TV) are a non-goal: libmpv has no tuner input",
@@ -43,30 +42,30 @@ const CONTEXT_REASONS: &[(&str, &str)] = &[
     ),
     (
         "101_0_2",
-        "Daum's broadcast and chat services (discontinued) and PotPlayer's screen capture are not planned",
+        "Daum's broadcast and chat services are discontinued, and PotPlayer's broadcasting tools (capture areas, broadcast effects) served them: non-goals (PLAN.md section 1)",
     ),
     (
         "101_0_6",
         "Windows Media Player's visualization plugins and PotPlayer's floating ball are their programs' own; RVP shows FFmpeg's visualizations",
     ),
-    ("101_0_7", "TV devices are not planned"),
+    (
+        "101_0_7",
+        "TV tuners (WDM/BDA channels): FFmpeg cannot tune them (a non-goal, PLAN.md section 1); capture cards open as devices",
+    ),
     (
         "101_0_8",
         "DVD and Blu-ray menus are M16's (goal R); RVP plays a disc's titles, chapters and streams",
     ),
-    ("101_0_9", "not in RVP yet"),
     (
         "101_0_9_12",
         "seamless playback is not in RVP (docs/spikes/m11-studies.md): mpv preloads and joins files only inside its own playlist, and RVP's albums give mpv one entry at a time",
     ),
-    ("101_0_10", "not in RVP yet"),
     ("101_0_10_8", "mpv (libass) renders every subtitle"),
     (
         "101_0_10_12",
         "mpv draws subtitles once over the finished picture, not once for each eye (docs/spikes/m12-studies.md)",
     ),
     ("101_0_10_13", ONLINE_SUBTITLES),
-    ("101_0_11", "not in RVP yet"),
     (
         "101_0_11_1",
         "DirectShow's video renderers do not apply to libmpv: RVP's renderer (OpenGL in its window or Direct3D 11 in a window of its own, D4) is chosen in Preferences > Video and taken when RVP starts",
@@ -100,7 +99,6 @@ const CONTEXT_REASONS: &[(&str, &str)] = &[
         "PotPlayer's AviSynth processing needs a bridge RVP does not have (docs/spikes/m12-studies.md: avsw runs a 32-bit AviSynth in a second process, 8-bit video only); RVP opens .avs files, runs VapourSynth scripts and loads AviSynth plugins in them",
     ),
     ("101_0_13", "DirectShow filters do not apply to libmpv"),
-    ("101_0_15", "not in RVP yet"),
     (
         "101_0_15_2",
         "RVP's interface speaks English and Russian, in RVP's own translations; it has no Korean",
@@ -121,10 +119,6 @@ const OSC_METHODS: &str = "RVP draws the on-screen control one way, with Qt over
 /// Reasons for single items.
 const ITEM_REASONS: &[(u32, &str)] = &[
     (10187, "Daum's login, discontinued"),
-    (
-        10800,
-        "thumbnail images of the playlist's entries are M14's (goal P); RVP makes the playing file's (Video Capture > Create Thumbnail Image, Alt+N)",
-    ),
     (11096, ONLINE_SUBTITLES),
     (10220, "DirectShow output surfaces do not apply to libmpv"),
     (10221, "DirectShow output surfaces do not apply to libmpv"),
@@ -420,7 +414,6 @@ const RUNTIME_REASONS: &[(&str, &str)] = &[
         "Misc > Interface Language",
         "RVP's own translations are English and Russian (Qt's .ts files written for RVP); PotPlayer's language files are PotPlayer's",
     ),
-    ("Skins", "planned in M14 (goal P)"),
 ];
 
 /// One command of R1's live menu that the static tree lacks: its place and
@@ -615,7 +608,10 @@ const COMMAND_LINE: &[(&str, Result<&str, &str>)] = &[
         "/title=\"title\"",
         Ok("the first file's title (mpv's force-media-title)"),
     ),
-    ("config=\"name\"", Err("presets are M14's (goal P)")),
+    (
+        "config=\"name\"",
+        Ok("starts with that settings preset (Configuration)"),
+    ),
 ];
 
 /// What RVP does with a switch of R2's list; `None` for one RVP has not
@@ -765,31 +761,16 @@ pub fn skin_reason(command: &str) -> &'static str {
         return "Daum's broadcast and chat services, discontinued";
     }
     if starts(&["CMD_CAPTURE1ST", "CMD_CAPTURE2ND", "CMD_CAPTURE_PIP"]) {
-        return "PotPlayer's screen capture areas are not planned";
+        return "PotPlayer's capture areas are its broadcasting tools for Daum's discontinued service: non-goals (PLAN.md section 1)";
     }
     match command {
-        "ID_VIDEO_MARGIN" => "screen margins are not in RVP yet",
-        "ID_SKIN_AUTO_HIDE" => "the skin on/off (floating window) mode is not in RVP yet",
-        "ID_OPEN_DVD" => "DVD playback is not planned",
-        "ID_ETC_CLOSE_SYSTEM_FILE" | "ID_ETC_CLOSE_SYSTEM_LIST" => {
-            "shutting the computer down is not planned"
+        "ID_VIDEO_MARGIN" | "ID_ETC_RESTORE_POS" => {
+            "no skin RVP was checked with uses it and R1 did not record what it does"
         }
-        "ID_ETC_RESTORE_POS" => "its meaning is not confirmed",
-        "ID_VIDEO_IMAGE_THUMBNAIL" | "ID_VIDEO_ADV_CAPTURE" | "ID_VIDEO_CAPTURE_CAPTION" => {
-            "thumbnails and advanced capture are not in RVP yet"
-        }
-        "ID_PLAYLIST_SAVE" => "saving albums as playlist files is not in RVP yet",
-        "ID_CAPTION_MOVE_LEFT" | "ID_CAPTION_MOVE_RIGHT" => "mpv cannot move subtitles sideways",
         "CMD_POPUPMENU_CAPTION_FONT" => {
             "the subtitle font is chosen in a font dialog (subtitle-font, Alt+F), not from a menu"
         }
-        "CMD_POPUPMENU_AUDIO_CHANNEL" | "CMD_POPUPMENU_AUDIO_SAMPLE" => {
-            "output channels and resampling are mpv's (not in RVP yet)"
-        }
-        "CMD_POPUPMENU_CAPTION_MARGIN" | "CMD_POPUPMENU_CAPTION_PARA" => {
-            "subtitle margins and spacing are not in RVP yet"
-        }
-        _ => "not in RVP yet",
+        _ => "a command R1 did not record in PotPlayer, so RVP does not know what it does",
     }
 }
 

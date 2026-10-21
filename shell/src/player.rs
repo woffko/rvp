@@ -2433,6 +2433,25 @@ impl qobject::Player {
         settings_result(&notes, applied.restart, None)
     }
 
+    pub(crate) fn reset_settings(mut self: Pin<&mut Self>, paths: &QString) -> QString {
+        let Some(core) = self.as_mut().core_mut() else {
+            return settings_result(&[], false, Some("not started"));
+        };
+        let paths: Vec<String> = match serde_json::from_str(&paths.to_string()) {
+            Ok(paths) => paths,
+            Err(error) => return settings_result(&[], false, Some(&error.to_string())),
+        };
+        let (changed, mut notes) = match preferences::reset(&core.app.settings, &paths) {
+            Ok(changed) => changed,
+            Err(error) => return settings_result(&[], false, Some(&error)),
+        };
+        let applied = core.app.apply_settings(core.engine, changed);
+        notes.extend(applied.notes);
+        notes.dedup();
+        self.as_mut().settings_applied();
+        settings_result(&notes, applied.restart, None)
+    }
+
     pub(crate) fn import_settings(mut self: Pin<&mut Self>, path: &QString) -> QString {
         let Some(core) = self.as_mut().core_mut() else {
             return settings_result(&[], false, Some("not started"));

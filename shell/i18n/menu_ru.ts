@@ -636,6 +636,10 @@
         <translation>Исправлять пропорции при захвате</translation>
     </message>
     <message>
+        <source>Create Thumbnail Image(s)...</source>
+        <translation>Создать изображения миниатюр...</translation>
+    </message>
+    <message>
         <source>Create Thumbnail Image...</source>
         <translation>Создать изображение миниатюр...</translation>
     </message>

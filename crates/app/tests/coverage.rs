@@ -26,6 +26,11 @@ fn docs(name: &str) -> PathBuf {
 }
 
 fn check(name: &str, report: &str) {
+    // Goal P: every item RVP lacks says why it cannot be done, or names the
+    // later goal that brings it.
+    for pending in ["not in RVP yet", "planned in M14", "(goal P)"] {
+        assert!(!report.contains(pending), "{name} still says {pending:?}");
+    }
     let path = docs(name);
     if std::env::var_os("RVP_BLESS").is_some() {
         std::fs::create_dir_all(path.parent().expect("docs/coverage")).expect("create docs");

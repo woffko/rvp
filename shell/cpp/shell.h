@@ -109,6 +109,9 @@ public:
     // Backward" share the "Menu" context's one translation; a label without
     // one stays.
     Q_INVOKABLE QString tr_menu(const QString &label) const;
+    // Whether the current user's registry has a value (Windows; false
+    // elsewhere): the self-test's look at the Run key (M14).
+    Q_INVOKABLE bool registry_has_value(const QString &key, const QString &name) const;
     // D4's Direct3D 11 renderer (cpp/video_window.cpp): places mpv's
     // window. `place` is JSON in the main window's coordinates:
     // {"x", "y", "width", "height", "visible", "holes": [[x, y, w, h]...]}.

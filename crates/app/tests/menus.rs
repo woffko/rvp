@@ -475,6 +475,7 @@ fn blackspace_menus_build() {
             "Close Playback",
             "",
             "Open Folder...",
+            "Open DVD",
             "Open URL...",
             "Load Subtitle..."
         ]

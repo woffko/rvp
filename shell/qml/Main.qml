@@ -120,8 +120,12 @@ Window {
     function applyLanguage() {
         const wanted = generalLook.language || "auto"
         const language = wanted === "auto" ? (Qt.locale().name.startsWith("ru") ? "ru" : "en") : wanted
-        if (Qt.uiLanguage !== language)
-            Qt.uiLanguage = language
+        // English is the source text: the engine drops its translation only
+        // for an empty language (a language without a file keeps the last
+        // one, and at start it loads the system's).
+        const ui = language === "en" ? "" : language
+        if (Qt.uiLanguage !== ui)
+            Qt.uiLanguage = ui
     }
 
     Component.onCompleted: {

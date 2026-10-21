@@ -6,6 +6,7 @@ import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
 import Rvp
+import RvpNative
 
 Item {
     id: editor

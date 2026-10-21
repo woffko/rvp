@@ -235,6 +235,12 @@ pub mod qobject {
         #[qinvokable]
         fn set_setting(self: Pin<&mut Self>, path: &QString, value: &QString) -> QString;
 
+        /// Puts the settings a page shows (a JSON list of paths) back at
+        /// their defaults (`rvp_app::preferences::reset`) and applies them;
+        /// JSON as `set_setting`.
+        #[qinvokable]
+        fn reset_settings(self: Pin<&mut Self>, paths: &QString) -> QString;
+
         /// Imports a settings file and applies it; JSON as `set_setting`.
         #[qinvokable]
         fn import_settings(self: Pin<&mut Self>, path: &QString) -> QString;

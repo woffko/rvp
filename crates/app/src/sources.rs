@@ -929,13 +929,21 @@ impl App {
     }
 
     /// The command line's switch that opens something at once (after its
-    /// files): a dialog, a source or the last item.
+    /// files): a dialog, a source or the last item; before it, the preset
+    /// `/config` names.
     pub fn switch_action(
         &mut self,
         engine: &Engine,
         request: &crate::instance::Request,
     ) -> Option<UiRequest> {
-        match request.switches.open.as_deref()? {
+        let preset = request.switches.config.as_deref().map(|name| {
+            self.activate_preset(engine, name, false)
+                .unwrap_or_else(|| UiRequest::Osd(format!("No preset named {name:?}")))
+        });
+        let Some(open) = request.switches.open.as_deref() else {
+            return preset;
+        };
+        match open {
             "filedlg" => Some(UiRequest::OpenFileDialog),
             "urldlg" => Some(UiRequest::OpenUrlDialog),
             "folderdlg" => Some(UiRequest::OpenFolderDialog),

@@ -84,6 +84,21 @@ bool rvp_registry_has_key(rust::Str key)
 #endif
 }
 
+bool Tools::registry_has_value(const QString &key, const QString &name) const
+{
+#ifdef Q_OS_WIN
+    const std::wstring path = key.toStdWString();
+    const std::wstring field = name.toStdWString();
+    return RegGetValueW(HKEY_CURRENT_USER, path.c_str(), field.c_str(), RRF_RT_ANY, nullptr, nullptr,
+                        nullptr)
+        == ERROR_SUCCESS;
+#else
+    (void)key;
+    (void)name;
+    return false;
+#endif
+}
+
 void rvp_associations_changed()
 {
 #ifdef Q_OS_WIN

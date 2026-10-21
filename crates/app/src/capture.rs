@@ -14,7 +14,7 @@
 //! frames are the picture as shown (`window`: scaled, with subtitles and
 //! mpv's messages).
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, VecDeque};
 use std::fmt::Write;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -513,6 +513,10 @@ pub(crate) struct SheetJob {
 pub(crate) struct CaptureState {
     pub(crate) consecutive: Option<Consecutive>,
     pub(crate) sheet: Option<SheetJob>,
+    /// The album's entries (path, duration) waiting for their contact
+    /// sheets, made one after another (M14, the playlist's Create
+    /// Thumbnail Image(s)); empty: the sheet is the playing file's.
+    pub(crate) sheet_queue: VecDeque<(String, f64)>,
     /// The file the last capture went to (Delete the last saved frame).
     pub(crate) last_saved: Option<PathBuf>,
 }
@@ -659,6 +663,7 @@ impl App {
             }
             CaptureCommand::SheetDialog => {
                 self.model.loaded_path()?;
+                self.capture.sheet_queue.clear();
                 return Some(UiRequest::CaptureDialog("sheet"));
             }
             CaptureCommand::DeleteLast => {
@@ -777,7 +782,62 @@ impl App {
         let mut notes = Vec::new();
         self.settings.capture.validate(&mut notes);
         self.save_settings();
-        Some(UiRequest::Osd(self.start_sheet()))
+        if self.capture.sheet_queue.is_empty() {
+            return Some(UiRequest::Osd(self.start_sheet()));
+        }
+        let count = self.capture.sheet_queue.len();
+        self.next_queued_sheet();
+        Some(UiRequest::Osd(format!(
+            "Making {count} thumbnail image(s), one after another"
+        )))
+    }
+
+    /// The playlist's Create Thumbnail Image(s) for `targets` (entries of
+    /// the shown album): the local files whose duration is known get a
+    /// sheet each, with the dialog's settings.
+    pub(crate) fn sheets_for_entries(&mut self, targets: &[usize]) -> UiRequest {
+        let entries = &self.library().shown().entries;
+        let queue: VecDeque<(String, f64)> = targets
+            .iter()
+            .filter_map(|&index| entries.get(index))
+            .filter(|entry| !crate::playlist::is_url(&entry.path))
+            .filter_map(|entry| {
+                let duration = entry.duration.filter(|duration| *duration > 0.0)?;
+                Some((entry.path.clone(), duration))
+            })
+            .collect();
+        if queue.is_empty() {
+            return UiRequest::Osd(
+                "Thumbnail images need local files with known durations (Detect file durations)"
+                    .to_owned(),
+            );
+        }
+        self.capture.sheet_queue = queue;
+        UiRequest::CaptureDialog("sheet")
+    }
+
+    /// Starts the next queued entry's sheet, if any.
+    fn next_queued_sheet(&mut self) {
+        while let Some((path, duration)) = self.capture.sheet_queue.pop_front() {
+            if self.thumbs.core().is_none() {
+                self.capture.sheet_queue.clear();
+                return;
+            }
+            // An entry that is not a file any more is passed over.
+            if !Path::new(&path).is_file() {
+                continue;
+            }
+            let settings = self.settings.capture.sheet.clone();
+            let info = if settings.info {
+                file_lines(&path, duration)
+            } else {
+                Vec::new()
+            };
+            // The entry's shape is unknown until it is opened: 16:9 tiles,
+            // each picture centred in its own.
+            self.begin_sheet(&path, duration, 16.0 / 9.0, &info);
+            return;
+        }
     }
 
     /// Lays the sheet out and asks the thumbnail core for its pictures.
@@ -791,8 +851,7 @@ impl App {
         if self.thumbs.core().is_none() {
             return "The thumbnail image needs the thumbnail core, which is not running".to_owned();
         }
-        let settings = self.settings.capture.sheet.clone();
-        let info = if settings.info {
+        let info = if self.settings.capture.sheet.info {
             self.sheet_info(&path, duration)
         } else {
             Vec::new()
@@ -801,10 +860,17 @@ impl App {
             .model
             .double(PropertyId::VideoAspect)
             .unwrap_or(16.0 / 9.0);
+        self.begin_sheet(&path, duration, aspect, &info)
+    }
+
+    /// Lays out the sheet of `path` and asks the thumbnail core for its
+    /// pictures.
+    fn begin_sheet(&mut self, path: &str, duration: f64, aspect: f64, info: &[String]) -> String {
+        let settings = self.settings.capture.sheet.clone();
         let lines = u32::try_from(info.len()).unwrap_or(0);
         let layout = sheet_layout(&settings, aspect, duration, lines);
-        let texts = sheet_texts(&layout, &info, settings.times);
-        let stem = Path::new(crate::view::file_name(&path))
+        let texts = sheet_texts(&layout, info, settings.times);
+        let stem = Path::new(crate::view::file_name(path))
             .file_stem()
             .map_or_else(
                 || "thumbnails".to_owned(),
@@ -815,13 +881,25 @@ impl App {
             ImageFormat::Webp => ImageFormat::Png,
             other => other,
         };
-        let file = unused_path(&self.capture_folder(), &stem, extension(format));
+        // A queued entry's sheet goes beside it with "Store captured
+        // images into play folders", as the playing file's does.
+        let folder = match Path::new(path).parent() {
+            Some(folder)
+                if self.settings.capture.next_to_media
+                    && !crate::playlist::is_url(path)
+                    && folder.is_dir() =>
+            {
+                folder.to_path_buf()
+            }
+            _ => self.image_folder(),
+        };
+        let file = unused_path(&folder, &stem, extension(format));
         let mut tickets = BTreeMap::new();
         if let Some(core) = self.thumbs.core() {
             core.cancel(Group::Sheet);
             for (index, tile) in layout.tiles.iter().enumerate() {
                 let ticket = core.request(FrameRequest {
-                    path: path.clone(),
+                    path: path.to_owned(),
                     time: tile.time,
                     max_width: tile.width,
                     max_height: tile.height,
@@ -846,18 +924,7 @@ impl App {
     /// The header's lines: the file, its size and duration, its streams.
     fn sheet_info(&self, path: &str, duration: f64) -> Vec<String> {
         let model = &self.model;
-        let mut lines = vec![format!("File: {}", crate::view::file_name(path))];
-        let size = std::fs::metadata(path).map(|meta| meta.len()).ok();
-        lines.push(match size {
-            // A file size shown in MB.
-            #[allow(clippy::cast_precision_loss)]
-            Some(bytes) => format!(
-                "Size: {:.1} MB ({bytes} bytes), duration: {}",
-                bytes as f64 / 1_048_576.0,
-                clock(duration)
-            ),
-            None => format!("Duration: {}", clock(duration)),
-        });
+        let mut lines = file_lines(path, duration);
         if let (Some(width), Some(height)) = (
             model.int(PropertyId::VideoWidth),
             model.int(PropertyId::VideoHeight),
@@ -900,6 +967,7 @@ impl App {
         }
         let job = self.capture.sheet.take()?;
         let rgba = compose_sheet(&job.layout, &job.pictures);
+        self.next_queued_sheet();
         Some(SheetImage {
             path: job.path,
             width: job.layout.width,
@@ -909,6 +977,23 @@ impl App {
             quality: self.settings.capture.quality,
         })
     }
+}
+
+/// A sheet's first lines: the file, its size and its duration.
+fn file_lines(path: &str, duration: f64) -> Vec<String> {
+    let mut lines = vec![format!("File: {}", crate::view::file_name(path))];
+    let size = std::fs::metadata(path).map(|meta| meta.len()).ok();
+    lines.push(match size {
+        // A file size shown in MB.
+        #[allow(clippy::cast_precision_loss)]
+        Some(bytes) => format!(
+            "Size: {:.1} MB ({bytes} bytes), duration: {}",
+            bytes as f64 / 1_048_576.0,
+            clock(duration)
+        ),
+        None => format!("Duration: {}", clock(duration)),
+    });
+    lines
 }
 
 /// The header's lines and each picture's time, placed on the sheet.

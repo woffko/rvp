@@ -132,6 +132,10 @@ ApplicationWindow {
         requestActivate()
     }
     function showPage(index) {
+        if (resetPending) {
+            resetPending = false
+            notice = ""
+        }
         current = index
         const group = groupOf(pages[index].key)
         if (expanded[group.title] !== true)
@@ -165,6 +169,76 @@ ApplicationWindow {
     }
     // The page item at an index (self-test: every page loads).
     function pageItem(index) { return stack.children[index] }
+
+    // Search (M14): every option's text and every heading of every page,
+    // gathered when a search starts; `found` holds the matches.
+    property string searchText: ""
+    property var searchIndex: []
+    readonly property var found: {
+        const words = searchText.toLowerCase().split(/\s+/).filter(w => w !== "")
+        if (words.length === 0)
+            return []
+        return searchIndex.filter(entry => {
+            const text = (entry.text + " " + pages[entry.page].title).toLowerCase()
+            return words.every(word => text.indexOf(word) >= 0)
+        }).slice(0, 200)
+    }
+    // The items of a page that name a setting (`path`) or head a group.
+    function pageEntries(item, page, out) {
+        for (const child of item.children || []) {
+            const named = typeof child.path === "string" && child.path !== ""
+            const text = named ? (child.label !== undefined && child.label !== "" ? child.label : child.text)
+                               : child.objectName === "heading" ? child.text : undefined
+            if (typeof text === "string" && text !== "")
+                out.push({ page: page, text: text, item: child, heading: !named })
+            pageEntries(child, page, out)
+        }
+        return out
+    }
+    function search(text) {
+        if (searchText === "" && text !== "") {
+            let index = []
+            for (let i = 0; i < pages.length; i++)
+                index = index.concat(pageEntries(stack.children[i], i, []))
+            searchIndex = index
+        }
+        searchText = text
+    }
+    // Shows a match: its page, scrolled to it, and marks it a moment.
+    function openFound(entry) {
+        showPage(entry.page)
+        Qt.callLater(() => {
+            const page = stack.children[entry.page]
+            const flick = page.contentItem
+            if (flick && flick.contentY !== undefined) {
+                const at = entry.item.mapToItem(flick.contentItem, 0, 0)
+                flick.contentY = Math.max(0, Math.min(at.y - 24, flick.contentHeight - flick.height))
+            }
+            const spot = entry.item.mapToItem(win.contentItem, 0, 0)
+            mark.x = spot.x - 4
+            mark.y = spot.y - 2
+            mark.width = Math.min(entry.item.width + 8, win.width - mark.x)
+            mark.height = entry.item.height + 4
+            mark.opacity = 1
+            markFade.restart()
+        })
+    }
+    // Reset page (M14): the settings the shown page names go back to
+    // RVP's defaults once confirmed.
+    property bool resetPending: false
+    function pagePaths(index) {
+        const paths = []
+        for (const entry of pageEntries(stack.children[index], index, []))
+            if (!entry.heading && paths.indexOf(entry.item.path) < 0)
+                paths.push(entry.item.path)
+        return paths
+    }
+    function resetPage() {
+        const paths = pagePaths(current)
+        resetPending = false
+        if (paths.length > 0)
+            report(player.reset_settings(JSON.stringify(paths)), qsTr("The page's options are RVP's defaults again."))
+    }
     // `devices`: read the audio devices too (only when the window opens:
     // asking the system for them can cost video frames).
     function reload(devices) {
@@ -195,7 +269,7 @@ ApplicationWindow {
         reload()
     }
     function set(path, newValue) {
-        report(player.set_setting(path, JSON.stringify(newValue)), "Applied.")
+        report(player.set_setting(path, JSON.stringify(newValue)), qsTr("Applied."))
     }
     // The slider of a setting (self-test).
     function amount(path) {
@@ -254,6 +328,7 @@ ApplicationWindow {
     }
 
     component Heading: Label {
+        objectName: "heading"
         font.bold: true
         topPadding: 10
     }
@@ -278,16 +353,16 @@ ApplicationWindow {
     function gpuPowerText() {
         const gpu = gpuPower
         if (gpu.on !== true)
-            return "Off: RVP does not read the card's power."
+            return qsTr("Off: RVP does not read the card's power.")
         if (!gpu.cards || gpu.cards.length === 0)
-            return gpu.reading ? "No NVIDIA or AMD card's power can be read."
-                               : "Read while a file plays."
-        let text = "Now: " + gpu.cards.map(c => c.unit === "%"
-                                           ? c.name + " " + Math.round(c.draw) + " % of its power"
-                                           : c.name + " " + Math.round(c.draw) + " W of " + Math.round(c.rated)
-                                             + " W (" + Math.round(100 * c.draw / c.rated) + " %)").join(", ")
+            return gpu.reading ? qsTr("No NVIDIA or AMD card's power can be read.")
+                               : qsTr("Read while a file plays.")
+        let text = qsTr("Now: %1").arg(gpu.cards.map(c => c.unit === "%"
+                                           ? qsTr("%1 %2 % of its power").arg(c.name).arg(Math.round(c.draw))
+                                           : qsTr("%1 %2 W of %3 W (%4 %)").arg(c.name).arg(Math.round(c.draw))
+                                             .arg(Math.round(c.rated)).arg(Math.round(100 * c.draw / c.rated))).join(", "))
         if (gpu.taken.length > 0)
-            text += ". Lightened: " + gpu.taken.join(", ") + "."
+            text += qsTr(". Lightened: %1.").arg(gpu.taken.join(", "))
         return text
     }
     // Seconds as the seek and sync steps show them.
@@ -606,6 +681,28 @@ ApplicationWindow {
         }
     }
 
+    // A search match's place, marked a moment after it is shown.
+    Rectangle {
+        id: mark
+        z: 100
+        opacity: 0
+        color: "transparent"
+        border.width: 2
+        border.color: markColors.highlight
+        radius: 3
+        SystemPalette {
+            id: markColors
+        }
+        NumberAnimation on opacity {
+            id: markFade
+            running: false
+            from: 1
+            to: 0
+            duration: 1800
+            easing.type: Easing.InQuad
+        }
+    }
+
     // Context Menu Items (M14): the top-level items of RVP's context menu,
     // each shown or hidden (skins.menu-hidden).
     Dialog {
@@ -698,22 +795,22 @@ ApplicationWindow {
     Dialogs.FileDialog {
         id: skinChooser
         title: qsTr("PotPlayer skin")
-        nameFilters: ["PotPlayer skins (*.dsf)", "All files (*)"]
+        nameFilters: [qsTr("PotPlayer skins (*.dsf)"), qsTr("All files (*)")]
         onAccepted: win.set("skin", Tools.local_file(selectedFile))
     }
     Dialogs.FileDialog {
         id: importChooser
         title: qsTr("Import Settings")
-        nameFilters: ["Settings (*.json)", "All files (*)"]
-        onAccepted: win.report(win.player.import_settings(Tools.local_file(selectedFile)), "Imported.")
+        nameFilters: [qsTr("Settings (*.json)"), qsTr("All files (*)")]
+        onAccepted: win.report(win.player.import_settings(Tools.local_file(selectedFile)), qsTr("Imported."))
     }
     Dialogs.FileDialog {
         id: exportChooser
         title: qsTr("Export Settings")
         fileMode: Dialogs.FileDialog.SaveFile
         defaultSuffix: "json"
-        nameFilters: ["Settings (*.json)"]
-        onAccepted: win.report(win.player.export_settings(Tools.local_file(selectedFile)), "Exported.")
+        nameFilters: [qsTr("Settings (*.json)")]
+        onAccepted: win.report(win.player.export_settings(Tools.local_file(selectedFile)), qsTr("Exported."))
     }
 
     ColumnLayout {
@@ -726,33 +823,92 @@ ApplicationWindow {
             Layout.fillHeight: true
             spacing: 10
 
-            // The tree: a group's row shows its own page (or its first
-            // one) and opens it; the sign beside it opens or closes it.
-            ListView {
-                id: pageTree
+            ColumnLayout {
                 Layout.preferredWidth: 200
+                Layout.maximumWidth: 200
                 Layout.fillHeight: true
-                model: win.rows
-                clip: true
-                delegate: ItemDelegate {
-                    id: row
-                    required property var modelData
-                    width: pageTree.width
-                    leftPadding: 8 + modelData.depth * 18 + 16
-                    text: modelData.title
-                    font.bold: modelData.depth === 0
-                    highlighted: modelData.depth === 0 ? modelData.own && modelData.key === win.currentKey
-                                                       : modelData.key === win.currentKey
-                    onClicked: win.showKey(modelData.key)
+                spacing: 4
+
+                TextField {
+                    id: searchField
+                    objectName: "settingsSearch"
+                    Layout.fillWidth: true
+                    placeholderText: qsTr("Find an option")
+                    selectByMouse: true
+                    onTextChanged: win.search(text)
+                    Keys.onEscapePressed: text = ""
+                }
+
+                // The matches while a search runs: the page and the option.
+                ListView {
+                    id: foundList
+                    objectName: "settingsFound"
+                    visible: win.searchText !== ""
+                    Layout.fillWidth: true
+                    Layout.fillHeight: true
+                    model: win.found
+                    clip: true
+                    ScrollBar.vertical: ScrollBar {}
+                    delegate: ItemDelegate {
+                        required property var modelData
+                        width: foundList.width
+                        contentItem: ColumnLayout {
+                            spacing: 0
+                            Label {
+                                Layout.fillWidth: true
+                                text: win.pages[modelData.page].title
+                                opacity: 0.6
+                                font.pointSize: Math.max(7, Qt.application.font.pointSize - 1)
+                                elide: Text.ElideRight
+                            }
+                            Label {
+                                Layout.fillWidth: true
+                                text: modelData.text
+                                font.bold: modelData.heading
+                                wrapMode: Text.WordWrap
+                                maximumLineCount: 3
+                                elide: Text.ElideRight
+                            }
+                        }
+                        onClicked: win.openFound(modelData)
+                    }
                     Label {
-                        x: 8 + row.modelData.depth * 18
-                        anchors.verticalCenter: parent.verticalCenter
-                        visible: row.modelData.children
-                        text: win.expanded[row.modelData.group] === true ? "\u2212" : "+"
-                        MouseArea {
-                            anchors.fill: parent
-                            anchors.margins: -4
-                            onClicked: win.toggleGroup(row.modelData.group)
+                        anchors.centerIn: parent
+                        visible: win.found.length === 0
+                        text: qsTr("Nothing found")
+                        opacity: 0.6
+                    }
+                }
+
+                // The tree: a group's row shows its own page (or its first
+                // one) and opens it; the sign beside it opens or closes it.
+                ListView {
+                    id: pageTree
+                    visible: win.searchText === ""
+                    Layout.fillWidth: true
+                    Layout.fillHeight: true
+                    model: win.rows
+                    clip: true
+                    delegate: ItemDelegate {
+                        id: row
+                        required property var modelData
+                        width: pageTree.width
+                        leftPadding: 8 + modelData.depth * 18 + 16
+                        text: modelData.title
+                        font.bold: modelData.depth === 0
+                        highlighted: modelData.depth === 0 ? modelData.own && modelData.key === win.currentKey
+                                                           : modelData.key === win.currentKey
+                        onClicked: win.showKey(modelData.key)
+                        Label {
+                            x: 8 + row.modelData.depth * 18
+                            anchors.verticalCenter: parent.verticalCenter
+                            visible: row.modelData.children
+                            text: win.expanded[row.modelData.group] === true ? "\u2212" : "+"
+                            MouseArea {
+                                anchors.fill: parent
+                                anchors.margins: -4
+                                onClicked: win.toggleGroup(row.modelData.group)
+                            }
                         }
                     }
                 }
@@ -2033,6 +2189,7 @@ ApplicationWindow {
                         }
                         Note { text: qsTr("Real time makes 30 s pieces from the playback position on, two ahead of it, and again from where a seek lands.") }
                         Heading { text: qsTr("Engines and models") }
+                        Field { label: qsTr("Models folder"); path: "speech.model-folder"; optional: true; placeholder: "whisper-models" }
                         RowLayout {
                             Label { text: qsTr("Models: %1").arg(((win.view.speech || {}).model_folder || "")); Layout.fillWidth: true; wrapMode: Text.WrapAnywhere }
                             Button { text: qsTr("Open"); onClicked: win.player.run_action("speech-model-folder") }
@@ -2951,10 +3108,26 @@ ApplicationWindow {
             }
         }
 
-        Label {
+        RowLayout {
             Layout.fillWidth: true
-            text: win.notice + (win.restartNeeded ? (win.notice !== "" ? "  " : "") + "Restart RVP to apply it." : "")
-            wrapMode: Text.Wrap
+            Label {
+                Layout.fillWidth: true
+                text: win.notice + (win.restartNeeded ? (win.notice !== "" ? "  " : "") + qsTr("Restart RVP to apply it.") : "")
+                wrapMode: Text.Wrap
+            }
+            Button {
+                visible: win.resetPending
+                text: qsTr("Reset")
+                onClicked: win.resetPage()
+            }
+            Button {
+                visible: win.resetPending
+                text: qsTr("Keep")
+                onClicked: {
+                    win.resetPending = false
+                    win.notice = qsTr("Unchanged.")
+                }
+            }
         }
 
         RowLayout {
@@ -2963,7 +3136,16 @@ ApplicationWindow {
                 Layout.fillWidth: true
                 elide: Text.ElideMiddle
                 opacity: 0.7
-                text: (win.view.portable ? "Portable: " : "") + (win.view.file || "")
+                text: (win.view.portable ? qsTr("Portable: %1") : "%1").arg(win.view.file || "")
+            }
+            Button {
+                objectName: "resetPage"
+                text: qsTr("Reset Page")
+                enabled: win.visible && win.pagePaths(win.current).length > 0
+                onClicked: {
+                    win.resetPending = true
+                    win.notice = qsTr("Put the options of “%1” back to RVP's defaults?").arg(win.pages[win.current].title)
+                }
             }
             Button {
                 text: qsTr("Import…")

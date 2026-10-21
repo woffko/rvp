@@ -1,6 +1,7 @@
 // M14's self-test (`rvp --selftest=m14`), loaded by Main.qml's self-test:
 // the skin, its colour themes, the windows' opacity and the audio skin
-// switched while RVP runs, and the Misc menu's copied times. Input goes
+// switched while RVP runs, the Misc menu's copied times, the interface
+// in Russian, and the settings window's search and Reset Page. Input goes
 // through Player's handlers, as in the functional check.
 //
 // Files: testdata/media/fixture-60s.mkv, then fixture-tone.ogg (no video:
@@ -19,6 +20,7 @@ Item {
     property var baseId: null
     property string firstSkin: ""
     property int videoHeight: 0
+    property var rememberBefore: true
 
     function view() { return JSON.parse(player.settings_view(false)) }
     function setSetting(path, value) {
@@ -343,6 +345,102 @@ Item {
             break
         }
         case 33:
+            // The settings window's search and Reset Page: the volume
+            // page's step goes back to its default, another page's option
+            // stays.
+            rememberBefore = view().settings["remember-positions"]
+            setSetting("volume-step", 7)
+            setSetting("remember-positions", !rememberBefore)
+            player.run_action("preferences")
+            t.next()
+            break
+        case 34: {
+            const settings = host.settingsWindow()
+            const ready = settings && settings.visible
+            let match = undefined
+            if (ready) {
+                settings.search("")
+                settings.search("volume step")
+                match = settings.found.find(entry => entry.item.path === "volume-step")
+            }
+            if (t.waitFor("m14_settings_search", () => match !== undefined, 10000,
+                          () => ready ? settings.found.length + " found of " + settings.searchIndex.length + ", "
+                                        + settings.searchIndex.slice(0, 3).map(e => e.text).join(" | ")
+                                        + " " + Qt.uiLanguage
+                                      : "no settings window") && match) {
+                settings.openFound(match)
+                settings.search("")
+                const page = settings.currentKey
+                settings.resetPage()
+                const now = view().settings
+                t.check("m14_reset_page", page === settings.pages[match.page].key && now["volume-step"] === 1
+                        && now["remember-positions"] === !rememberBefore,
+                        page + " step " + now["volume-step"] + " remember " + now["remember-positions"])
+                setSetting("remember-positions", rememberBefore)
+                settings.close()
+            }
+            break
+        }
+        case 35:
+            // The playlist's Create Thumbnail Image(s): a sheet for each
+            // selected entry, one after another.
+            setSetting("image-folder", t.outDir + "/m14-images")
+            player.run_list_action("select-all")
+            player.run_list_action("thumbnail-images")
+            t.next()
+            break
+        case 36: {
+            const dialogs = host.videoDialogs()
+            if (t.waitFor("m14_entry_thumbnails_dialog", () => dialogs.current
+                              && dialogs.current.objectName === "sheetDialog" && dialogs.current.opened,
+                          3000)) {
+                dialogs.current.close()
+                dialogs.answer(JSON.stringify({ columns: 2, rows: 2, width: 320, info: true,
+                                                times: true, exact: false }))
+            }
+            break
+        }
+        case 37: {
+            const images = () => JSON.parse(Tools.list_files(t.outDir + "/m14-images"))
+            t.waitFor("m14_entry_thumbnail_images", () => images().length === 2, 30000,
+                      () => images().join(", ") + " osd " + s.osd)
+            break
+        }
+        case 38: {
+            // Windows, with --registry-check (the test VM's m14-all.ps1):
+            // the start with the session (the Run key) and the file types
+            // (HKCU\Software\Classes), each put back after.
+            if (Qt.platform.os !== "windows" || !player.has_option("registry-check")) {
+                t.check("m14_run_at_startup", true, "SKIPPED: Windows with --registry-check only")
+                t.check("m14_associations", true, "SKIPPED: Windows with --registry-check only")
+                t.next()
+                break
+            }
+            const run = "Software\\Microsoft\\Windows\\CurrentVersion\\Run"
+            setSetting("general.run-at-startup", true)
+            const added = Tools.registry_has_value(run, "RVP")
+            setSetting("general.run-at-startup", false)
+            const removed = !Tools.registry_has_value(run, "RVP")
+            t.check("m14_run_at_startup", added && removed, "added " + added + " removed " + removed)
+            // An installed copy's types stay as they are.
+            if (JSON.parse(player.associations_json()).some(type => type.registered)) {
+                t.check("m14_associations", true, "SKIPPED: RVP's types are registered already")
+                t.next()
+                break
+            }
+            player.apply_associations()
+            const types = JSON.parse(player.associations_json())
+            const registered = types.filter(type => type.registered).length
+            setSetting("associations.off", types.map(type => type.extension))
+            player.apply_associations()
+            const left = JSON.parse(player.associations_json()).filter(type => type.registered).length
+            setSetting("associations.off", [])
+            t.check("m14_associations", types.length > 0 && registered === types.length && left === 0,
+                    registered + " of " + types.length + " registered, " + left + " left after")
+            t.next()
+            break
+        }
+        case 39:
             t.finish()
             break
         }

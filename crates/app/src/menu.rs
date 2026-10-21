@@ -267,8 +267,16 @@ pub fn popup_source(command: &str) -> Option<PopupSource> {
         "CMD_POPUPMENU_DVD" => PopupSource::Context("101_0_8"),
         "CMD_POPUPMENU_AUDIO_FILTER" => PopupSource::Context("101_0_12_18"),
         "CMD_POPUPMENU_CAPTION" => PopupSource::Context("101_0_10"),
-        "CMD_POPUPMENU_CAPTION_POS" => PopupSource::Context("101_0_10_9"),
+        // Subtitle Style holds PotPlayer's position and paragraph
+        // (alignment) items.
+        "CMD_POPUPMENU_CAPTION_POS" | "CMD_POPUPMENU_CAPTION_PARA" => {
+            PopupSource::Context("101_0_10_9")
+        }
         "CMD_POPUPMENU_CAPTION_SYNC" => PopupSource::Context("101_0_10_10"),
+        // The bottom margin kept for subtitles.
+        "CMD_POPUPMENU_CAPTION_MARGIN" => PopupSource::Context("101_0_18_23"),
+        "CMD_POPUPMENU_AUDIO_CHANNEL" => PopupSource::Live(&["Audio", "Output Speakers"]),
+        "CMD_POPUPMENU_AUDIO_SAMPLE" => PopupSource::Live(&["Audio", "Output Format/Resample"]),
         "ID_CAPTION_SELECT_MENU" => PopupSource::Context("101_0_10_0"),
         "CMD_POPUPMENU_CAPTION_LANG" => PopupSource::Tracks(TrackKind::Subtitle),
         "ID_AUDIO_SELECT_MENU" => PopupSource::Tracks(TrackKind::Audio),

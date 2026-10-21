@@ -78,8 +78,8 @@ fn atlas() -> Vec<u8> {
 /// `< >` tooltip separator, an include with a macro, `#if`/`#else`, docking
 /// order, negative coordinates and sizes, centring, `ConstSize`, paired
 /// commands, `State` pages, `VisParentMinWidth`, a skin menu on a right
-/// click (`AltUserMenuName`, the `<Menu>` section) and a control panel area
-/// with a vertical slider.
+/// click (`AltUserMenuName`, the `<Menu>` section), a control panel area
+/// with a vertical slider, and two colour themes with an excluded area.
 const VIDEO_SKIN: &str = "<?XML version='1.0' ?>
 <Skin Version='1.0'>
 <MainSkinArea Image='Atlas.png'>
@@ -126,6 +126,11 @@ const VIDEO_SKIN: &str = "<?XML version='1.0' ?>
 #else
 <Marker Value='other' />
 #endif
+<ColorTheme>
+ <ColorThemeRGB Name='Warm' Red='40' Green='-20' Blue='-20'/>
+ <ColorThemeYUV Name='Blue' Hue='64' Sat='60'/>
+</ColorTheme>
+<ExcludeColorThemeArea Name='Atlas.png' Left='26' Top='0' Width='4' Height='10' />
 </Skin>
 ";
 
@@ -762,4 +767,37 @@ fn the_touch_layout_comes_from_skin_type() {
     };
     assert_eq!(load(&[]).as_deref(), Some("mouse"));
     assert_eq!(load(&[("SkinType", "Touch")]).as_deref(), Some("touch"));
+}
+
+#[test]
+fn color_themes_tint_the_render_but_excluded_parts() {
+    use rvp_skin::theme::{Tint, tint_pixel};
+    let skin = skin();
+    let themes = skin.color_themes();
+    let names: Vec<&str> = themes.iter().map(|theme| theme.name.as_str()).collect();
+    assert_eq!(names, ["Warm", "Blue"]);
+    assert_eq!(themes[0].tint, Tint::Rgb([40, -20, -20]));
+    assert_eq!(themes[1].tint, Tint::Hsb { hue: 64, sat: 60 });
+    let state = UiState::default();
+    let plain = render(&skin, &state);
+    for theme in &themes {
+        let tinted_skin = skin.tinted(theme.tint);
+        assert_ne!(tinted_skin.id(), skin.id(), "{}", theme.name);
+        let tinted = render(&tinted_skin, &state);
+        // Every pixel of the render is the theme's colour of the plain
+        // one: the title's left and middle parts, the buttons.
+        for (x, y) in [(0, 5), (50, 5), (35, 52)] {
+            let [r, g, b, a] = plain.pixel(x, y);
+            let [tr, tg, tb] = tint_pixel(theme.tint, [r, g, b]);
+            assert_eq!(
+                tinted.pixel(x, y),
+                [tr, tg, tb, a],
+                "{} at {x},{y}",
+                theme.name
+            );
+        }
+        assert_ne!(tinted.pixel(50, 5), plain.pixel(50, 5), "{}", theme.name);
+        // The title's right end lies in the excluded area of the atlas.
+        assert_eq!(tinted.pixel(98, 5), TITLE_RIGHT, "{}", theme.name);
+    }
 }

@@ -1,7 +1,8 @@
 //! RVP Default as RVP draws it: the archive loads without warnings, its
 //! layout matches the geometry snapshots, and its renders match the golden
-//! images at three window sizes, for the control panel's pages and for the
-//! fullscreen bars. The art is RVP's own, so the snapshots and golden
+//! images at three window sizes, for the control panel's pages, for the
+//! fullscreen bars and in two colour themes of Skins > Color Themes >
+//! Customize (M14). The art is RVP's own, so the snapshots and golden
 //! images are committed (`tests/snapshots`, `tests/golden`); `RVP_BLESS=1`
 //! rewrites them after a deliberate change. Renders carry no text: they
 //! use no fonts, so they do not depend on the fonts of the machine.
@@ -11,6 +12,7 @@ use std::path::PathBuf;
 use rvp_look::skin;
 use rvp_skin::compare::flatten;
 use rvp_skin::demo::{self, Demo};
+use rvp_skin::theme::Tint;
 use rvp_skin::{Fonts, Image, Skin, SkinArchive, layout, render_area};
 
 const SIZES: [(i32, i32); 3] = [(960, 540), (1280, 720), (1920, 1080)];
@@ -134,27 +136,57 @@ fn renders_match_the_golden_images() {
             &mut fonts,
         )
         .expect(area);
-        let file = path("golden", &format!("{name}.png"));
-        if bless() {
-            std::fs::create_dir_all(file.parent().expect("folder")).expect("golden folder");
-            std::fs::write(&file, image.encode_png().expect("encode")).expect("write golden");
-        }
-        let bytes = std::fs::read(&file)
-            .unwrap_or_else(|_| panic!("{} is missing; run with RVP_BLESS=1", file.display()));
-        let golden = Image::decode(&name, &bytes).expect("decode golden");
-        assert_eq!(
-            (golden.width(), golden.height()),
-            (image.width(), image.height()),
-            "{name}"
-        );
-        let (actual, expected) = (flatten(&image, [0, 0, 0]), flatten(&golden, [0, 0, 0]));
-        let worst = actual
-            .data()
-            .iter()
-            .zip(expected.data())
-            .map(|(a, b)| a.abs_diff(*b))
-            .max()
-            .unwrap_or(0);
-        assert!(worst <= TOLERANCE, "{name}: a channel differs by {worst}");
+        matches_golden(&name, &image);
+    }
+}
+
+/// The render `name` is its golden image (written instead with
+/// `RVP_BLESS`).
+fn matches_golden(name: &str, image: &Image) {
+    let file = path("golden", &format!("{name}.png"));
+    if bless() {
+        std::fs::create_dir_all(file.parent().expect("folder")).expect("golden folder");
+        std::fs::write(&file, image.encode_png().expect("encode")).expect("write golden");
+    }
+    let bytes = std::fs::read(&file)
+        .unwrap_or_else(|_| panic!("{} is missing; run with RVP_BLESS=1", file.display()));
+    let golden = Image::decode(name, &bytes).expect("decode golden");
+    assert_eq!(
+        (golden.width(), golden.height()),
+        (image.width(), image.height()),
+        "{name}"
+    );
+    let (actual, expected) = (flatten(image, [0, 0, 0]), flatten(&golden, [0, 0, 0]));
+    let worst = actual
+        .data()
+        .iter()
+        .zip(expected.data())
+        .map(|(a, b)| a.abs_diff(*b))
+        .max()
+        .unwrap_or(0);
+    assert!(worst <= TOLERANCE, "{name}: a channel differs by {worst}");
+}
+
+#[test]
+fn colour_themes_match_the_golden_images() {
+    let skin = built();
+    let preview = preview();
+    let mut fonts = Fonts::new(Vec::new());
+    for (name, tint) in [
+        ("theme-hsb-1280x720", Tint::Hsb { hue: 64, sat: 60 }),
+        ("theme-rgb-1280x720", Tint::Rgb([40, -20, -20])),
+    ] {
+        let tinted = skin.tinted(tint);
+        let image = render_area(
+            &tinted,
+            "MainSkinArea",
+            1280,
+            720,
+            &preview.state,
+            &preview.data,
+            &mut fonts,
+        )
+        .expect("MainSkinArea");
+        matches_golden(name, &image);
     }
 }

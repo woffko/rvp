@@ -73,10 +73,13 @@ pub struct Switches {
     pub open: Option<String>,
     /// `/cd:D`: the drive.
     pub drive: Option<String>,
+    /// `/config="name"`: the settings preset to use (M14's Configuration).
+    #[serde(default)]
+    pub config: Option<String>,
 }
 
 /// PotPlayer's switches RVP reads (as options: `/add` is the flag `add`).
-/// `simple`, `atv`, `dtv` and `config` are read to say why they do nothing.
+/// `simple`, `atv` and `dtv` are read to say why they do nothing.
 pub const SWITCHES: &[&str] = &[
     "add",
     "insert",
@@ -139,6 +142,7 @@ impl Switches {
                 .find(|name| cli.flag(name))
                 .map(|name| (*name).to_owned()),
             drive: text("cd"),
+            config: text("config"),
         }
     }
 }

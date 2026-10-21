@@ -1654,7 +1654,7 @@ pub const ACTIONS: &[ActionInfo] = &[
         "Move Left",
         None,
         &[10130],
-        &[],
+        &["ID_CAPTION_MOVE_LEFT"],
     ),
     info(
         Action::Subtitles(SubtitleCommand::MoveRight),
@@ -1662,7 +1662,7 @@ pub const ACTIONS: &[ActionInfo] = &[
         "Move Right",
         None,
         &[10131],
-        &[],
+        &["ID_CAPTION_MOVE_RIGHT"],
     ),
     info(
         Action::Subtitles(SubtitleCommand::Wider),
@@ -3151,7 +3151,7 @@ pub const ACTIONS: &[ActionInfo] = &[
         "Include message and subtitles in image",
         None,
         &[10305],
-        &[],
+        &["ID_VIDEO_CAPTURE_CAPTION"],
     ),
     info(
         Action::Capture(crate::capture::CaptureCommand::ToggleAspect),
@@ -3167,7 +3167,7 @@ pub const ACTIONS: &[ActionInfo] = &[
         "Capture Consecutive Images...",
         Some("Ctrl+G"),
         &[10222],
-        &[],
+        &["ID_VIDEO_ADV_CAPTURE"],
     ),
     info(
         Action::Capture(crate::capture::CaptureCommand::ConsecutiveToggle),
@@ -3337,7 +3337,7 @@ pub const ACTIONS: &[ActionInfo] = &[
         "Create Thumbnail Image...",
         Some("Alt+N"),
         &[10353],
-        &[],
+        &["ID_VIDEO_IMAGE_THUMBNAIL"],
     ),
     info(
         Action::OpenImageFolder,
@@ -5145,7 +5145,7 @@ pub const ACTIONS: &[ActionInfo] = &[
         "Perform the action when playback ends",
         None,
         &[10118],
-        &[],
+        &["ID_ETC_CLOSE_SYSTEM_FILE"],
     ),
     info(
         Action::SetAfterPlayback(AfterPlayback::PowerAfterList),
@@ -5153,7 +5153,7 @@ pub const ACTIONS: &[ActionInfo] = &[
         "Perform the action when playlist ends",
         None,
         &[10119],
-        &[],
+        &["ID_ETC_CLOSE_SYSTEM_LIST"],
     ),
     info(
         Action::SetPowerAction(PowerAction::Shutdown),
@@ -5282,7 +5282,7 @@ pub const ACTIONS: &[ActionInfo] = &[
         "Open DVD",
         Some("Ctrl+D"),
         &[10165],
-        &[],
+        &["ID_OPEN_DVD"],
     ),
     info(
         Action::Open(Source::DvdFiles),
@@ -5882,7 +5882,7 @@ pub const ACTIONS: &[ActionInfo] = &[
         "Auto hide main skin while video screen is active",
         None,
         &[10369],
-        &[],
+        &["ID_SKIN_AUTO_HIDE"],
     ),
     info(
         Action::Skins(SkinCommand::FullscreenResize),
@@ -6294,6 +6294,8 @@ pub enum ListAction {
     ToggleWideThumbnails,
     DetectDurations,
     FileInfo,
+    /// A contact sheet of each selected entry (Create Thumbnail Image).
+    ThumbnailImages,
     MoveTopOfPage,
     MoveBottomOfPage,
     MoveBelowPlaying,
@@ -6547,6 +6549,11 @@ const LIST_NAMES: &[(ListAction, &str, &str)] = &[
     ),
     (ListAction::FileInfo, "file-info", "File information..."),
     (
+        ListAction::ThumbnailImages,
+        "thumbnail-images",
+        "Create Thumbnail Image(s)...",
+    ),
+    (
         ListAction::MoveTopOfPage,
         "move-top-of-page",
         "Move selected items to top of page",
@@ -6661,6 +6668,7 @@ impl ListAction {
             11075 => ListAction::ToggleWideThumbnails,
             10640 => ListAction::DetectDurations,
             10505 => ListAction::FileInfo,
+            10800 => ListAction::ThumbnailImages,
             27026 => ListAction::MoveTopOfPage,
             27027 => ListAction::MoveBottomOfPage,
             27025 => ListAction::MoveBelowPlaying,
@@ -6678,6 +6686,7 @@ impl ListAction {
             "CMD_PLAYLIST_BOTTOM" => ListAction::MoveBottom,
             "CMD_PLAYLIST_ADD" => ListAction::AddFiles,
             "CMD_PLAYLIST_DEL" => ListAction::RemoveSelected,
+            "ID_PLAYLIST_SAVE" => ListAction::SavePlaylist,
             _ => return None,
         })
     }

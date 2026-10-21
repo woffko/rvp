@@ -221,11 +221,7 @@ const ITEMS: &[(u32, u32, Status)] = &[
         3077,
         Missing("RVP keeps its albums in its state folder (Open playlist storage folder)"),
     ),
-    (
-        443,
-        3078,
-        Missing("speech recognition (Whisper) is not planned"),
-    ),
+    (443, 3078, Setting("speech.model-folder")),
     (443, 3079, Missing("RVP has no web view")),
     (443, 3070, Setting("image-folder")),
     (443, 3034, Setting("capture.next-to-media")),
@@ -1399,7 +1395,7 @@ const NO_UPDATES: &str = "RVP is private and has no website or update service";
 
 /// PotPlayer's windows for its screen capture and Daum's broadcast and chat
 /// services, which RVP does not have.
-const NO_DAUM_WINDOWS: &str = "RVP has no capture, broadcast or chat windows: Daum's broadcast and chat services are discontinued and PotPlayer's screen capture is not planned";
+const NO_DAUM_WINDOWS: &str = "RVP has no capture, broadcast or chat windows: Daum's broadcast and chat services are discontinued, and PotPlayer's capture areas were their broadcasting tools (non-goals, PLAN.md section 1)";
 
 /// The milestone or reason for whole pages, by the start of their place;
 /// the longest wins.
@@ -1423,17 +1419,20 @@ const PAGES: &[(&str, &str)] = &[
     ("Device", "not in RVP"),
     (
         "Device > Analog TV (WDM)",
-        "TV tuners are not planned (non-goals)",
+        "TV tuners: FFmpeg cannot tune them (a non-goal, PLAN.md section 1)",
     ),
     (
         "Device > Digital TV (BDA)",
-        "TV tuners are not planned (non-goals)",
+        "TV tuners: FFmpeg cannot tune them (a non-goal, PLAN.md section 1)",
     ),
     (
         "Device > TV Channels",
-        "TV tuners are not planned (non-goals)",
+        "TV tuners: FFmpeg cannot tune them (a non-goal, PLAN.md section 1)",
     ),
-    ("Device > EPG", "TV tuners are not planned (non-goals)"),
+    (
+        "Device > EPG",
+        "TV tuners: FFmpeg cannot tune them (a non-goal, PLAN.md section 1)",
+    ),
     ("Filter Control", DIRECTSHOW),
     ("Video", RENDERER),
     (

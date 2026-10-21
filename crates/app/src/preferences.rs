@@ -357,6 +357,32 @@ pub fn change(
     Ok((changed, notes))
 }
 
+/// The settings with the options at `paths` (as [`change`] names them)
+/// back at RVP's defaults: a settings page's Reset (M14). A path the
+/// defaults lack, such as a list's item, is left alone.
+///
+/// # Errors
+/// Fails when the result is not valid settings.
+pub fn reset(settings: &Settings, paths: &[String]) -> Result<(Settings, Vec<String>), String> {
+    let defaults = serde_json::to_value(Settings::default()).map_err(|e| e.to_string())?;
+    let mut root = serde_json::to_value(settings).map_err(|e| e.to_string())?;
+    for path in paths {
+        // A JSON pointer, its parts escaped as RFC 6901 says.
+        let mut pointer = String::new();
+        for part in path.split('.') {
+            pointer.push('/');
+            pointer.push_str(&part.replace('~', "~0").replace('/', "~1"));
+        }
+        if let (Some(value), Some(slot)) = (defaults.pointer(&pointer), root.pointer_mut(&pointer))
+        {
+            value.clone_into(slot);
+        }
+    }
+    let mut changed: Settings = serde_json::from_value(root).map_err(|error| error.to_string())?;
+    let notes = changed.validate();
+    Ok((changed, notes))
+}
+
 /// Field names of a JSON object that `known` lacks, with their paths.
 fn unknown_fields(value: &Value, known: &Value, place: &str, out: &mut Vec<String>) {
     let (Value::Object(map), Value::Object(known_map)) = (value, known) else {
@@ -748,6 +774,31 @@ fn taken_at_start(old: &Settings, new: &Settings) -> bool {
 mod tests {
     use super::*;
     use serde_json::json;
+
+    #[test]
+    fn a_reset_puts_back_only_the_pages_options() {
+        let settings = Settings {
+            volume_step: 7.0,
+            volume_max: 150.0,
+            ..Settings::default()
+        };
+        let mut general = settings.general.clone();
+        general.language = "ru".to_owned();
+        let settings = Settings {
+            general,
+            ..settings
+        };
+        let paths = [
+            "volume-step".to_owned(),
+            "general.language".to_owned(),
+            "no.such.path".to_owned(),
+        ];
+        let (reset, notes) = reset(&settings, &paths).expect("reset");
+        assert!(notes.is_empty(), "{notes:?}");
+        assert!((reset.volume_step - Settings::default().volume_step).abs() < 1e-9);
+        assert_eq!(reset.general.language, "auto");
+        assert!((reset.volume_max - 150.0).abs() < 1e-9);
+    }
 
     #[test]
     fn values_out_of_range_are_repaired() {

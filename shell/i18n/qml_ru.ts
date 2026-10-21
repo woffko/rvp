@@ -552,6 +552,38 @@ in %2 seconds</source>
             <translation>Специальные возможности</translation>
         </message>
         <message>
+            <source>The page's options are RVP's defaults again.</source>
+            <translation>Параметры страницы снова по умолчанию RVP.</translation>
+        </message>
+        <message>
+            <source>Applied.</source>
+            <translation>Применено.</translation>
+        </message>
+        <message>
+            <source>Off: RVP does not read the card's power.</source>
+            <translation>Выключено: RVP не читает мощность видеокарты.</translation>
+        </message>
+        <message>
+            <source>No NVIDIA or AMD card's power can be read.</source>
+            <translation>Мощность видеокарт NVIDIA и AMD прочитать не удаётся.</translation>
+        </message>
+        <message>
+            <source>Read while a file plays.</source>
+            <translation>Читается во время воспроизведения.</translation>
+        </message>
+        <message>
+            <source>%1 %2 % of its power</source>
+            <translation>%1: %2 % мощности</translation>
+        </message>
+        <message>
+            <source>%1 %2 W of %3 W (%4 %)</source>
+            <translation>%1: %2 Вт из %3 Вт (%4 %)</translation>
+        </message>
+        <message>
+            <source>. Lightened: %1.</source>
+            <translation>. Облегчено: %1.</translation>
+        </message>
+        <message>
             <source>Default</source>
             <translation>По умолчанию</translation>
         </message>
@@ -596,12 +628,40 @@ in %2 seconds</source>
             <translation>Скин PotPlayer</translation>
         </message>
         <message>
+            <source>PotPlayer skins (*.dsf)</source>
+            <translation>Скины PotPlayer (*.dsf)</translation>
+        </message>
+        <message>
+            <source>All files (*)</source>
+            <translation>Все файлы (*)</translation>
+        </message>
+        <message>
             <source>Import Settings</source>
             <translation>Импорт настроек</translation>
         </message>
         <message>
+            <source>Settings (*.json)</source>
+            <translation>Настройки (*.json)</translation>
+        </message>
+        <message>
+            <source>Imported.</source>
+            <translation>Импортировано.</translation>
+        </message>
+        <message>
             <source>Export Settings</source>
             <translation>Экспорт настроек</translation>
+        </message>
+        <message>
+            <source>Exported.</source>
+            <translation>Экспортировано.</translation>
+        </message>
+        <message>
+            <source>Find an option</source>
+            <translation>Найти параметр</translation>
+        </message>
+        <message>
+            <source>Nothing found</source>
+            <translation>Ничего не найдено</translation>
         </message>
         <message>
             <source>Resume</source>
@@ -3080,6 +3140,10 @@ in %2 seconds</source>
             <translation>Движки и модели</translation>
         </message>
         <message>
+            <source>Models folder</source>
+            <translation>Папка моделей</translation>
+        </message>
+        <message>
             <source>Models: %1</source>
             <translation>Модели: %1</translation>
         </message>
@@ -4318,6 +4382,34 @@ in %2 seconds</source>
         <message>
             <source>A plays and pauses, B fullscreen, X mute, Y playback info, the shoulders previous and next, Back closes playback, Start plays and pauses, the pad's up and down the volume and left and right seek. Windows only; Linux's controllers come later.</source>
             <translation>A — воспроизведение/пауза, B — полный экран, X — без звука, Y — информация, бамперы — предыдущий и следующий, Back закрывает воспроизведение, Start — воспроизведение/пауза, крестовина вверх и вниз — громкость, влево и вправо — перемотка. Только Windows; геймпады в Linux появятся позже.</translation>
+        </message>
+        <message>
+            <source>Restart RVP to apply it.</source>
+            <translation>Перезапустите RVP, чтобы применить.</translation>
+        </message>
+        <message>
+            <source>Reset</source>
+            <translation>Сбросить</translation>
+        </message>
+        <message>
+            <source>Keep</source>
+            <translation>Оставить</translation>
+        </message>
+        <message>
+            <source>Unchanged.</source>
+            <translation>Без изменений.</translation>
+        </message>
+        <message>
+            <source>Portable: %1</source>
+            <translation>Портативный: %1</translation>
+        </message>
+        <message>
+            <source>Reset Page</source>
+            <translation>Сбросить страницу</translation>
+        </message>
+        <message>
+            <source>Put the options of “%1” back to RVP's defaults?</source>
+            <translation>Вернуть параметрам «%1» значения RVP по умолчанию?</translation>
         </message>
         <message>
             <source>Import…</source>

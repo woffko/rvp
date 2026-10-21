@@ -233,7 +233,8 @@ impl App {
             | ListAction::MoveRelated
             | ListAction::CopyFiles
             | ListAction::CopyRelated
-            | ListAction::FileInfo => self.album_file_command(engine, action),
+            | ListAction::FileInfo
+            | ListAction::ThumbnailImages => self.album_file_command(engine, action),
             ListAction::ToggleInstantAlbums
             | ListAction::ToggleRememberDefault
             | ListAction::View(_)
@@ -306,6 +307,7 @@ impl App {
                     text: self.file_info(engine, index),
                 })
             }
+            ListAction::ThumbnailImages => Some(self.sheets_for_entries(&targets)),
             _ => None,
         }
     }

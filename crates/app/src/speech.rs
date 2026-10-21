@@ -236,6 +236,9 @@ pub struct SpeechSettings {
     /// One of [`REALTIME_MODES`].
     pub realtime: String,
     pub realtime_recognizer: Recognizer,
+    /// The models' folder (PotPlayer's Whisper Model home folder);
+    /// unset: `whisper-models` beside the settings.
+    pub model_folder: Option<PathBuf>,
 }
 
 impl Default for SpeechSettings {
@@ -251,6 +254,7 @@ impl Default for SpeechSettings {
                 model: "base".to_owned(),
                 ..Recognizer::default()
             },
+            model_folder: None,
         }
     }
 }
@@ -299,6 +303,15 @@ impl SpeechSettings {
         }
         choose(&mut self.auto, AUTO_MODES, "off", "auto", notes);
         choose(&mut self.realtime, REALTIME_MODES, "off", "realtime", notes);
+        if let Some(folder) = &self.model_folder
+            && !folder.is_absolute()
+        {
+            notes.push(format!(
+                "speech.model-folder {} is not a full path: the folder beside the settings",
+                folder.display()
+            ));
+            self.model_folder = None;
+        }
     }
 }
 
@@ -740,15 +753,15 @@ impl App {
             .map_or_else(|| self.state_dir().to_path_buf(), Path::to_path_buf)
     }
 
-    /// The folder of whisper.cpp's models.
+    /// The folder of whisper.cpp's models: `RVP_WHISPER_MODELS` (tests),
+    /// the setting, or `whisper-models` beside the settings.
     #[must_use]
     pub fn model_folder(&self) -> PathBuf {
         std::env::var_os("RVP_WHISPER_MODELS")
             .filter(|value| !value.is_empty())
-            .map_or_else(
-                || self.settings_folder().join("whisper-models"),
-                PathBuf::from,
-            )
+            .map(PathBuf::from)
+            .or_else(|| self.settings.speech.model_folder.clone())
+            .unwrap_or_else(|| self.settings_folder().join("whisper-models"))
     }
 
     /// The folder of the user's engines.
