@@ -30,6 +30,7 @@ pub mod logos;
 pub mod marks;
 pub mod media;
 pub mod menu;
+pub mod menu_design;
 pub mod misc;
 pub mod normalizer;
 pub mod panel;

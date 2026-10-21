@@ -22,6 +22,19 @@
 //! [`commands`] lists every command the skin's live elements use (`CmdID`,
 //! `AltCmdID` and menu items; lines disabled by deleting `<` are not
 //! elements), for the dispatcher's coverage report.
+//!
+//! PotPlayer's `Menus` folder holds whole context menus in the same items
+//! ([`menu_file`], M14's Context Menu Design): `<Menu Title>` with
+//! `<MenuItem>`s and `<SubMenu Name>` sections. A title's `{$CP0=...$}`
+//! part is its English text, and a submenu named `$MENU_VIEW` reads
+//! "View".
+//!
+//! A skin styles context menus with `<CustomPopupMenuDef>` (PotPlayer's
+//! "Style #1 (defined in skin)") and `<CustomPopupMenuAlt>` ("Style #2"):
+//! points of its main picture give the colours (`TextColorX`/`Y`,
+//! `SelTextColor`, `SelColor`, `DimTextColor`, `LineColor`), and the
+//! frame's (`FrameX`, `FrameY`, `FrameW`, `FrameH`) middle and left edge
+//! the background and border ([`crate::Skin::menu_style`]).
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -66,6 +79,97 @@ pub fn user_menus(root: &Element) -> Vec<UserMenu> {
         });
     });
     menus
+}
+
+/// A skin's context menu colours (`Skin::menu_style`), RGBA.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct MenuStyle {
+    pub back: [u8; 4],
+    pub border: [u8; 4],
+    pub text: [u8; 4],
+    pub selected_text: [u8; 4],
+    pub selected_back: [u8; 4],
+    pub dim_text: [u8; 4],
+    pub line: [u8; 4],
+}
+
+/// A context menu file (PotPlayer's `Menus` folder, M14's Context Menu
+/// Design): `<Menu Title>` holds `<MenuItem CmdID>` entries, as a skin's
+/// `<UserMenu>` does, and `<SubMenu Name>` sections with more of them.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MenuFile {
+    /// The `{$CP0=...$}` part of `Title` (its English text), or the whole
+    /// title.
+    pub title: String,
+    pub items: Vec<MenuFileItem>,
+}
+
+/// One entry of a [`MenuFile`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum MenuFileItem {
+    /// A command or, with an empty command, a separator.
+    Item(UserMenuItem),
+    /// A submenu: `Name='$MENU_VIEW'` reads "View".
+    Sub {
+        name: String,
+        items: Vec<MenuFileItem>,
+    },
+}
+
+/// Reads a menu file's text; `None` without a `<Menu>`.
+#[must_use]
+pub fn menu_file(text: &str) -> Option<MenuFile> {
+    let root = crate::markup::parse_document(text);
+    let menu = root.find("Menu")?;
+    Some(MenuFile {
+        title: english(menu.attrs.get("Title").unwrap_or("")),
+        items: file_items(menu),
+    })
+}
+
+fn file_items(element: &Element) -> Vec<MenuFileItem> {
+    element
+        .children
+        .iter()
+        .filter_map(|child| {
+            if child.is("MenuItem") {
+                Some(MenuFileItem::Item(UserMenuItem {
+                    command: child.attrs.get("CmdID").unwrap_or("").trim().to_owned(),
+                    inline: child.attrs.flag("NoSubMenu"),
+                }))
+            } else if child.is("SubMenu") {
+                Some(MenuFileItem::Sub {
+                    name: submenu_name(child.attrs.get("Name").unwrap_or("")),
+                    items: file_items(child),
+                })
+            } else {
+                None
+            }
+        })
+        .collect()
+}
+
+/// `{$CP949=...$}{$CP0=Simple popup menu$}` reads "Simple popup menu".
+fn english(title: &str) -> String {
+    title
+        .split("{$")
+        .find_map(|part| part.strip_prefix("CP0="))
+        .map_or(title, |text| text.split("$}").next().unwrap_or(text))
+        .trim()
+        .to_owned()
+}
+
+/// `$MENU_VIEW` reads "View"; other names stay.
+fn submenu_name(name: &str) -> String {
+    let Some(key) = name.trim().strip_prefix("$MENU_") else {
+        return name.trim().to_owned();
+    };
+    let lower = key.replace('_', " ").to_lowercase();
+    let mut chars = lower.chars();
+    chars
+        .next()
+        .map(|first| first.to_uppercase().chain(chars).collect())
+        .unwrap_or_default()
 }
 
 /// Where a command appears.

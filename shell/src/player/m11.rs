@@ -77,8 +77,8 @@ impl qobject::Player {
         if let Some(tip) = core.app.seek_hover(hover) {
             let preview = tip.preview.is_some();
             self.as_mut().set_seek_tip(QString::from(&tip.text));
-            self.as_mut().set_seek_tip_x(tip.x);
-            self.as_mut().set_seek_tip_y(tip.top);
+            self.as_mut().set_seek_tip_x(super::window_length(tip.x));
+            self.as_mut().set_seek_tip_y(super::window_length(tip.top));
             if !preview {
                 self.as_mut().set_preview_width(0);
             }
@@ -534,7 +534,7 @@ impl qobject::Player {
             .and_then(|placed| placed.find_command(&command.to_string()))
             .map(|node| node.rect)
             .unwrap_or_default();
-        super::to_rectf(rect)
+        super::to_window(rect)
     }
 
     pub(crate) fn favorites_json(&self) -> QString {

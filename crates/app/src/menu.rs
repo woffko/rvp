@@ -84,6 +84,9 @@ const LIVE_COLOR_THEMES: u32 = 3_020_852;
 /// starts.
 const LIVE_IDLE_LOGOS: u32 = 2_170_038;
 const LIVE_START_LOGOS: u32 = 1_311_826;
+/// The live Context Menu Design submenu (M14): RVP's menu files in place
+/// of PotPlayer's (38212 on).
+const LIVE_MENU_DESIGN: u32 = 1_382_002;
 
 /// One item of a PotPlayer menu as R1 recorded it.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -239,6 +242,16 @@ pub enum PopupSource {
 pub fn popup_source(command: &str) -> Option<PopupSource> {
     Some(match command {
         "CMD_POPUPMENU_ETC" => PopupSource::Context("101_0_15"),
+        // The context menu's other submenus, for menu files (M14).
+        "CMD_POPUPMENU_OPEN" => PopupSource::Context("101_0_1"),
+        "CMD_POPUPMENU_VISUAL" => PopupSource::Context("101_0_6"),
+        "CMD_POPUPMENU_TV" => PopupSource::Context("101_0_7"),
+        "CMD_POPUPMENU_PLAY" => PopupSource::Context("101_0_9"),
+        "CMD_POPUPMENU_VIDEO" => PopupSource::Context("101_0_11"),
+        "CMD_POPUPMENU_AUDIO" => PopupSource::Context("101_0_12"),
+        "CMD_POPUPMENU_SKIN" => PopupSource::Context("101_0_14"),
+        "CMD_POPUPMENU_PANSCAN" => PopupSource::Context("101_0_17"),
+        "CMD_POPUPMENU_RATIO" => PopupSource::Context("101_0_18"),
         // PotPlayer's keys J, K and S (M12): RVP's names.
         MenuPopup::THREE_D => PopupSource::Live(&["Video", "3D Video Mode"]),
         MenuPopup::CAPTURE => PopupSource::Live(&["Video", "Video Capture"]),
@@ -637,12 +650,46 @@ impl App {
     /// PotPlayer's context menu, limited to what RVP has.
     #[must_use]
     pub fn context_menu(&self, live: &Live) -> Vec<MenuItem> {
+        // A menu file RVP has nothing of gives RVP's whole menu.
+        let items = self
+            .menu_design_file()
+            .map(|file| self.file_menu(&file.items, live))
+            .filter(|items| !items.is_empty())
+            .unwrap_or_else(|| self.full_context_menu(live));
+        let hidden = &self.settings.skins.menu_hidden;
+        tidy(
+            items
+                .into_iter()
+                .filter(|item| item.separator || !hidden.contains(&item.label))
+                .collect(),
+        )
+    }
+
+    /// RVP's whole context menu (M14's Context Menu Items lists its top
+    /// level).
+    #[must_use]
+    pub fn full_context_menu(&self, live: &Live) -> Vec<MenuItem> {
         tidy(
             context_tree()
                 .iter()
                 .filter_map(|node| self.convert(node, live))
                 .collect(),
         )
+    }
+
+    /// A menu file's items (M14's Context Menu Design), as a skin menu's.
+    fn file_menu(&self, items: &[rvp_skin::menu::MenuFileItem], live: &Live) -> Vec<MenuItem> {
+        use rvp_skin::menu::MenuFileItem;
+        let mut out = Vec::new();
+        for item in items {
+            match item {
+                MenuFileItem::Item(item) => self.user_item(item, live, &mut out),
+                MenuFileItem::Sub { name, items } => {
+                    out.extend(MenuItem::submenu(name, self.file_menu(items, live)));
+                }
+            }
+        }
+        tidy(out)
     }
 
     /// PotPlayer's playlist menu, limited to what RVP has, plus RVP's undo,
@@ -667,19 +714,7 @@ impl App {
     pub fn skin_menu(&self, menu: &rvp_skin::menu::UserMenu, live: &Live) -> Vec<MenuItem> {
         let mut items = Vec::new();
         for item in &menu.items {
-            if item.command.is_empty() {
-                items.push(MenuItem::separator());
-            } else if let Some((title, children)) = self.popup(&item.command, live) {
-                if item.inline {
-                    items.extend(children);
-                } else {
-                    items.extend(MenuItem::submenu(&title, children));
-                }
-            } else if let Some(action) = Action::from_skin_command(&item.command) {
-                items.push(self.window_item(action, None));
-            } else if let Some(action) = ListAction::from_skin_command(&item.command) {
-                items.push(self.list_item(action, action.label()));
-            }
+            self.user_item(item, live, &mut items);
         }
         let items = tidy(items);
         if items.is_empty() {
@@ -689,6 +724,24 @@ impl App {
             }];
         }
         items
+    }
+
+    /// One item of a skin menu or menu file: a separator, a built-in
+    /// submenu (or its items in place), or a command RVP has.
+    fn user_item(&self, item: &rvp_skin::menu::UserMenuItem, live: &Live, out: &mut Vec<MenuItem>) {
+        if item.command.is_empty() {
+            out.push(MenuItem::separator());
+        } else if let Some((title, children)) = self.popup(&item.command, live) {
+            if item.inline {
+                out.extend(children);
+            } else {
+                out.extend(MenuItem::submenu(&title, children));
+            }
+        } else if let Some(action) = Action::from_skin_command(&item.command) {
+            out.push(self.window_item(action, None));
+        } else if let Some(action) = ListAction::from_skin_command(&item.command) {
+            out.push(self.list_item(action, action.label()));
+        }
     }
 
     /// The menu a skin's built-in submenu command shows, with its title;
@@ -993,11 +1046,40 @@ impl App {
             LIVE_IDLE_LOGOS | LIVE_START_LOGOS => {
                 Some(self.logo_menu(node, live, node.id == LIVE_START_LOGOS))
             }
+            LIVE_MENU_DESIGN => Some(self.menu_design_menu(node, live)),
             LIVE_PRE_SHADERS | LIVE_POST_SHADERS => {
                 Some(self.shader_menu(node, live, node.id == LIVE_POST_SHADERS))
             }
             _ => self.speech_menu(node, live),
         }
+    }
+
+    /// The Context Menu Design submenu (M14): PotPlayer's own items with
+    /// RVP's menu files in place of PotPlayer's.
+    fn menu_design_menu(&self, node: &Recorded, live: &Live) -> Vec<MenuItem> {
+        use crate::skins::SkinChoice;
+        let mut items: Vec<MenuItem> = node
+            .children
+            .iter()
+            .filter(|child| !(38_212..38_300).contains(&child.id))
+            .filter_map(|child| self.convert(child, live))
+            .collect();
+        for (index, path) in self.menu_files().iter().enumerate() {
+            let choice = SkinChoice::MenuFile(index);
+            let title = std::fs::read(path)
+                .ok()
+                .and_then(|bytes| rvp_skin::menu::menu_file(&rvp_skin::text::decode(&bytes)))
+                .map(|file| file.title)
+                .filter(|title| !title.is_empty());
+            items.push(MenuItem {
+                label: title
+                    .unwrap_or_else(|| crate::view::file_name(&path.to_string_lossy()).to_owned()),
+                command: Some(Command::Skin(choice)),
+                checked: Some(self.skin_choice_checked(choice)),
+                ..MenuItem::default()
+            });
+        }
+        items
     }
 
     /// A Logo submenu (M14): PotPlayer's own items with RVP's logo

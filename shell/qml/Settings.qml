@@ -580,6 +580,40 @@ ApplicationWindow {
         }
     }
 
+    // Context Menu Items (M14): the top-level items of RVP's context menu,
+    // each shown or hidden (skins.menu-hidden).
+    Dialog {
+        id: menuItems
+        title: "Context Menu Items"
+        modal: true
+        anchors.centerIn: parent
+        width: Math.min(win.width - 40, 420)
+        height: Math.min(win.height - 40, 560)
+        standardButtons: Dialog.Close
+        property var labels: []
+        function begin() {
+            labels = JSON.parse(win.player.menu_json("context-all"))
+                .filter(item => !item.separator).map(item => item.label)
+            open()
+        }
+        ListView {
+            anchors.fill: parent
+            clip: true
+            model: menuItems.labels
+            delegate: CheckBox {
+                required property string modelData
+                text: modelData.replace(/&/g, "&&")
+                checked: (win.value("skins.menu-hidden") || []).indexOf(modelData) < 0
+                onToggled: {
+                    const hidden = (win.value("skins.menu-hidden") || []).filter(label => label !== modelData)
+                    if (!checked)
+                        hidden.push(modelData)
+                    win.set("skins.menu-hidden", hidden)
+                }
+            }
+        }
+    }
+
     // Folder and file choosers; `target` is the setting they fill.
     // Qualified: Rvp's own FolderDialog.qml has the same name.
     Dialogs.FolderDialog {
@@ -2042,6 +2076,31 @@ ApplicationWindow {
                         Check { path: "skins.auto-hide"; text: "Auto hide the main window's skin while a video shows (its bars come over the video)" }
                         Check { path: "skins.fullscreen-resize"; text: "In fullscreen the video makes room for the bars while they show" }
                         Check { path: "skins.animations"; text: "Enable window animations (the bars and the control panel fade)" }
+                        Heading { text: "Context menu" }
+                        Choice {
+                            label: "Context menu design"
+                            path: "skins.menu-design"
+                            values: ["skin", "default"].concat(win.view.menu_files || [])
+                            texts: ({ "skin": "Skin defined/Default (recommended)", "default": "Default" })
+                        }
+                        RowLayout {
+                            Button {
+                                text: "Open Menu Folder"
+                                onClicked: Qt.openUrlExternally(win.player.settings_folder_url("menus"))
+                            }
+                            Button { text: "Context Menu Items…"; onClicked: menuItems.begin() }
+                        }
+                        Choice {
+                            label: "Context menu style"
+                            path: "skins.menu-style"
+                            values: ["auto", "system", "skin-1", "skin-2"]
+                            texts: ({ "auto": "Auto select", "system": "System default",
+                                      "skin-1": "Style #1 (defined in skin)", "skin-2": "Style #2 (defined in skin)" })
+                        }
+                        Check { path: "skins.menu-dark"; text: "System dark mode (dark menus while the system is dark)" }
+                        Amount { label: "Transparency of the menus"; path: "skins.menu-transparency"; from: 0; to: 90; step: 10; unit: "%" }
+                        Amount { label: "Size of the menus"; path: "skins.menu-size"; from: 80; to: 200; step: 10; unit: "%" }
+                        Note { text: "Menu files hold PotPlayer's menu items (its Menus folder's format), in RVP's menus folder (" + (win.view.menus_folder || "") + ") and, on Windows, PotPlayer's. The system's menus are Windows' own; elsewhere RVP draws them." }
                         Heading { text: "Times in the skin" }
                         Check { path: "skins.reverse-times"; text: "Reverse the elapsed and remaining times" }
                         Check { path: "skins.speed-times"; text: "Correct the times according to the playback speed" }
@@ -2095,6 +2154,10 @@ ApplicationWindow {
                         }
                         Check { path: "skins.osc-keep-while-over"; text: "Disable auto hide of the bars while the mouse pointer is over them" }
                         Amount { label: "Opacity"; path: "skins.osc-opacity"; from: 10; to: 100; step: 5; unit: "%" }
+                        Heading { text: "Zoom skinned windows" }
+                        Amount { label: "Main window"; path: "skins.zoom"; from: 100; to: 300; step: 25; unit: "%" }
+                        Amount { label: "Control panel"; path: "skins.panel-zoom"; from: 100; to: 300; step: 25; unit: "%" }
+                        Note { text: "RVP's playlist is the main window's attached panel: it zooms with it." }
                         Heading { text: "Color themes" }
                         Choice {
                             label: "Color theme"

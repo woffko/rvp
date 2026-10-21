@@ -100,6 +100,8 @@ pub mod bridge {
             clip: [i32; 4],
         );
         fn rvp_paint_translate(painter: Pin<&mut QPainter>, dx: i32, dy: i32);
+        /// Draws larger by `factor` from here (M14's skin zoom).
+        fn rvp_paint_scale(painter: Pin<&mut QPainter>, factor: f64);
         fn rvp_paint_fill(painter: Pin<&mut QPainter>, rect: [i32; 4], rgba: u32);
         /// Draws a text: `align` is horizontal 0/1/2 (left, centre, right)
         /// plus 3 times vertical 0/1/2 (top, centre, bottom).

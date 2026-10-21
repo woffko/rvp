@@ -11,7 +11,7 @@
 use std::fmt::Write as _;
 use std::path::{Path, PathBuf};
 use std::pin::Pin;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::{Arc, Mutex, OnceLock, RwLock};
 use std::time::Instant;
 
@@ -236,6 +236,57 @@ static PANEL_FRAME: Mutex<Option<Arc<Frame>>> = Mutex::new(None);
 
 pub fn panel_frame() -> Option<Arc<Frame>> {
     PANEL_FRAME.lock().ok().and_then(|frame| frame.clone())
+}
+
+/// The main window's and the control panel's skin zoom in percent (M14,
+/// Zoom Skinned Windows): their chromes lay out at the window's size over
+/// it, their painters scale by it, and their coordinates cross it.
+static ZOOM: AtomicU32 = AtomicU32::new(100);
+static PANEL_ZOOM: AtomicU32 = AtomicU32::new(100);
+
+pub fn zoom() -> f64 {
+    f64::from(ZOOM.load(Ordering::Relaxed).max(10)) / 100.0
+}
+
+pub fn panel_zoom() -> f64 {
+    f64::from(PANEL_ZOOM.load(Ordering::Relaxed).max(10)) / 100.0
+}
+
+/// A main window chrome rectangle in the window's coordinates.
+fn to_window(rect: rvp_skin::Rect) -> QRectF {
+    let zoom = zoom();
+    QRectF::new(
+        f64::from(rect.x) * zoom,
+        f64::from(rect.y) * zoom,
+        f64::from(rect.w) * zoom,
+        f64::from(rect.h) * zoom,
+    )
+}
+
+/// A window coordinate in the chrome's (`zoom`: the main window's or the
+/// panel's).
+fn chrome_pixel(value: f64, zoom: f64) -> i32 {
+    pixel(value / zoom)
+}
+
+/// A window size in the chrome's pixels.
+fn chrome_size(width: i32, height: i32) -> (i32, i32) {
+    let zoom = zoom();
+    let scale = |value: i32| {
+        // Window sizes are far inside i32.
+        #[allow(clippy::cast_possible_truncation)]
+        let scaled = (f64::from(value) / zoom).round() as i32;
+        scaled
+    };
+    (scale(width), scale(height))
+}
+
+/// A chrome length in the window's pixels.
+fn window_length(value: i32) -> i32 {
+    // Chrome lengths are far inside i32.
+    #[allow(clippy::cast_possible_truncation)]
+    let scaled = (f64::from(value) * zoom()).round() as i32;
+    scaled
 }
 
 /// The frame of the skin's logo (M14).
@@ -1152,6 +1203,12 @@ impl qobject::Player {
             .panel
             .as_ref()
             .map_or((0, 0), |panel| panel.chrome.size());
+        // The panel's zoom (M14).
+        #[allow(clippy::cast_possible_truncation)]
+        let (width, height) = (
+            (f64::from(width) * panel_zoom()).round() as i32,
+            (f64::from(height) * panel_zoom()).round() as i32,
+        );
         self.as_mut().set_panel_width(width);
         self.as_mut().set_panel_height(height);
         self.as_mut().set_panel_shown(shown);
@@ -1170,7 +1227,7 @@ impl qobject::Player {
             return;
         };
         let ctx = Self::panel_context(panel);
-        let (x, y) = (pixel(x), pixel(y));
+        let (x, y) = (chrome_pixel(x, panel_zoom()), chrome_pixel(y, panel_zoom()));
         let bindings = &core.app.bindings;
         let effects = match phase {
             0 => panel.pointer.press(&mut panel.chrome, ctx, x, y, button),
@@ -1231,9 +1288,12 @@ impl qobject::Player {
             return;
         };
         let ctx = Self::panel_context(panel);
-        let effects = panel
-            .pointer
-            .moved(&mut panel.chrome, ctx, pixel(x), pixel(y));
+        let effects = panel.pointer.moved(
+            &mut panel.chrome,
+            ctx,
+            chrome_pixel(x, panel_zoom()),
+            chrome_pixel(y, panel_zoom()),
+        );
         let tooltip = panel.pointer.tooltip.unwrap_or("");
         self.as_mut().set_panel_tooltip(QString::from(tooltip));
         self.as_mut().apply_panel_effects(&effects);
@@ -1272,7 +1332,16 @@ impl qobject::Player {
                         && page.is_none_or(|page| node.element.attrs.int("PageIndex") == Some(page))
                 })
             })
-            .map_or_else(QRectF::default, |node| to_rectf(node.rect))
+            .map_or_else(QRectF::default, |node| {
+                let zoom = panel_zoom();
+                let rect = node.rect;
+                QRectF::new(
+                    f64::from(rect.x) * zoom,
+                    f64::from(rect.y) * zoom,
+                    f64::from(rect.w) * zoom,
+                    f64::from(rect.h) * zoom,
+                )
+            })
     }
 
     pub(crate) fn apply_subtitle_font(mut self: Pin<&mut Self>, family: &QString) {
@@ -1320,7 +1389,10 @@ impl qobject::Player {
         let bars = chrome
             .bars()
             .iter()
-            .map(|bar| format!("[{},{},{},{}]", bar.x, bar.y, bar.w, bar.h))
+            .map(|bar| {
+                let bar = to_window(*bar);
+                format!("[{},{},{},{}]", bar.x(), bar.y(), bar.width(), bar.height())
+            })
             .collect::<Vec<_>>()
             .join(",");
         if damage.regions_changed {
@@ -1330,7 +1402,7 @@ impl qobject::Player {
         }
         self.as_mut()
             .set_chrome_bars(QString::from(&format!("[{bars}]")));
-        self.as_mut().set_video_rect(to_rectf(video));
+        self.as_mut().set_video_rect(to_window(video));
         let regions = damage
             .regions
             .iter()
@@ -1357,7 +1429,8 @@ impl qobject::Player {
         } else {
             Mode::Window
         };
-        let damage = match chrome.resize(mode, width, height) {
+        let (chrome_width, chrome_height) = chrome_size(width, height);
+        let damage = match chrome.resize(mode, chrome_width, chrome_height) {
             Ok(damage) => damage,
             Err(error) => {
                 let text = format!("skin layout failed: {error}");
@@ -1381,7 +1454,7 @@ impl qobject::Player {
             && core
                 .chrome
                 .as_ref()
-                .is_some_and(|c| c.size() == (width, height))
+                .is_some_and(|c| c.size() == chrome_size(width, height))
         {
             return;
         }
@@ -1456,9 +1529,11 @@ impl qobject::Player {
     fn pointer_context(&self, modifiers: Modifiers) -> Option<Context> {
         let core = self.core()?;
         let fullscreen = *self.fullscreen();
+        // The chrome's size: the window's over the skin's zoom.
+        let (width, height) = chrome_size(core.width, core.height);
         Some(Context {
-            width: core.width,
-            height: core.height,
+            width,
+            height,
             movable: !fullscreen && !core.maximized,
             chrome_shown: core.chrome.is_some() && (!*self.overlay() || *self.chrome_shown()),
             panel: false,
@@ -1509,7 +1584,7 @@ impl qobject::Player {
         let Some(core) = self.as_mut().core_mut() else {
             return;
         };
-        let (x, y) = (pixel(x), pixel(y));
+        let (x, y) = (chrome_pixel(x, zoom()), chrome_pixel(y, zoom()));
         let effects = match (core.chrome.as_mut(), phase) {
             (Some(chrome), 0) => core.pointer.press(chrome, ctx, x, y, button),
             (Some(chrome), 1) => {
@@ -1693,7 +1768,7 @@ impl qobject::Player {
         let Some(core) = self.as_mut().core_mut() else {
             return;
         };
-        let (x, y) = (pixel(x), pixel(y));
+        let (x, y) = (chrome_pixel(x, zoom()), chrome_pixel(y, zoom()));
         let Some(chrome) = core.chrome.as_mut() else {
             return;
         };
@@ -1723,10 +1798,13 @@ impl qobject::Player {
             return;
         };
         let effects = match core.chrome.as_ref() {
-            Some(chrome) => {
-                core.pointer
-                    .wheel(chrome, &core.app.bindings, ctx, (pixel(x), pixel(y)), delta)
-            }
+            Some(chrome) => core.pointer.wheel(
+                chrome,
+                &core.app.bindings,
+                ctx,
+                (chrome_pixel(x, zoom()), chrome_pixel(y, zoom())),
+                delta,
+            ),
             // Without a skin the whole window is video.
             None => core
                 .app
@@ -2172,6 +2250,8 @@ impl qobject::Player {
         };
         let items = match kind.to_string().as_str() {
             "context" => Some(core.app.context_menu(&live)),
+            // Context Menu Items (M14): RVP's whole menu.
+            "context-all" => Some(core.app.full_context_menu(&live)),
             "playlist" => Some(core.app.playlist_menu(&live)),
             "skin" => match core.popup {
                 Some(("CMD_POPUP_USER_MENU", Some(name))) => skin().and_then(|skin| {
@@ -2480,7 +2560,9 @@ impl qobject::Player {
             return;
         }
         let window = (core.width, core.height);
-        let fitted = rvp_app::chrome::fit_aspect(window, chrome.chrome_size(), aspect);
+        let (bars_width, bars_height) = chrome.chrome_size();
+        let bars = (window_length(bars_width), window_length(bars_height));
+        let fitted = rvp_app::chrome::fit_aspect(window, bars, aspect);
         if fitted != window {
             self.as_mut().fit_window(fitted.0, fitted.1);
         }
@@ -2690,7 +2772,7 @@ impl qobject::Player {
                     .and_then(|frame| frame.regions.get(index).copied())
             })
             .unwrap_or_default();
-        to_rectf(rect)
+        to_window(rect)
     }
 
     pub(crate) fn list_rect(&self, what: &QString, index: i32) -> QRectF {
@@ -2707,7 +2789,7 @@ impl qobject::Player {
             "area" => geometry.area,
             _ => rvp_skin::Rect::default(),
         };
-        to_rectf(rect)
+        to_window(rect)
     }
 
     pub(crate) fn tick(mut self: Pin<&mut Self>) {

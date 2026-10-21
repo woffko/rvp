@@ -768,6 +768,12 @@ void rvp_paint_translate(QPainter &painter, std::int32_t dx, std::int32_t dy)
     painter.translate(dx, dy);
 }
 
+void rvp_paint_scale(QPainter &painter, double factor)
+{
+    painter.scale(factor, factor);
+    painter.setRenderHint(QPainter::SmoothPixmapTransform, factor != 1.0);
+}
+
 void rvp_paint_fill(QPainter &painter, std::array<std::int32_t, 4> rect, std::uint32_t rgba)
 {
     painter.fillRect(toRect(rect), colorFromRgba(rgba));

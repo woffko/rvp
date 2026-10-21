@@ -607,7 +607,7 @@ impl App {
             .iter()
             .map(|path| path.display().to_string())
             .collect();
-        serde_json::json!({
+        let mut view = serde_json::json!({
             "settings": self.settings,
             "choices": {
                 "hwdec": HWDEC,
@@ -686,16 +686,31 @@ impl App {
                 .and_then(std::path::Path::parent)
                 .map(|dir| dir.join("fonts").display().to_string()),
             "speech": self.speech_view(),
-            "skin_themes": self.skin_themes(),
-            "skin_shown": self.chosen_skin().map(|path| path.display().to_string()),
-            "skins_folder": self.skins_folder().display().to_string(),
-            "logo_list": self
-                .logo_list()
+        });
+        // M14's skins, logos and menus.
+        if let (Some(view), Value::Object(skins)) = (view.as_object_mut(), self.skins_view()) {
+            view.extend(skins);
+        }
+        view
+    }
+
+    /// The settings window's lists for the Skins pages (M14).
+    fn skins_view(&self) -> Value {
+        let names = |paths: Vec<std::path::PathBuf>| -> Vec<String> {
+            paths
                 .iter()
                 .filter_map(|path| path.file_name())
                 .map(|name| name.to_string_lossy().into_owned())
-                .collect::<Vec<_>>(),
+                .collect()
+        };
+        serde_json::json!({
+            "skin_themes": self.skin_themes(),
+            "skin_shown": self.chosen_skin().map(|path| path.display().to_string()),
+            "skins_folder": self.skins_folder().display().to_string(),
+            "logo_list": names(self.logo_list()),
             "logos_folder": self.logos_folder().display().to_string(),
+            "menu_files": names(self.menu_files()),
+            "menus_folder": self.menus_folder().display().to_string(),
         })
     }
 

@@ -681,3 +681,56 @@ fn logo_pictures_keep_their_shape() {
     assert_ne!(image.pixel(1, 10)[3], 0);
     assert_eq!(image.pixel(1, 7)[3], 0, "above the shrunk picture");
 }
+
+/// A context menu file: its English title, items, separators and
+/// submenus; and a skin's menu style, coloured from its picture.
+#[test]
+fn menu_files_and_skin_menu_styles() {
+    use rvp_skin::menu::{MenuFileItem, menu_file};
+    let file = menu_file(
+        "<?XML version='1.0' ?>
+<Menu Title=\"{$CP949=x$}{$CP0=Short menu$}\">
+\t<MenuItem CmdID='ID_PLAY_PAUSE' />
+\t<MenuItem CmdID='' />
+\t<SubMenu Name='$MENU_VIEW'>
+\t\t<MenuItem CmdID='CMD_POPUPMENU_SKIN' NoSubMenu='1' />
+\t</SubMenu>
+</Menu>",
+    )
+    .expect("a menu");
+    assert_eq!(file.title, "Short menu");
+    assert_eq!(file.items.len(), 3);
+    let MenuFileItem::Item(first) = &file.items[0] else {
+        panic!("{:?}", file.items[0]);
+    };
+    assert_eq!(first.command, "ID_PLAY_PAUSE");
+    let MenuFileItem::Sub { name, items } = &file.items[2] else {
+        panic!("{:?}", file.items[2]);
+    };
+    assert_eq!(name, "View");
+    assert!(matches!(&items[0], MenuFileItem::Item(item) if item.inline));
+    assert_eq!(menu_file("<Skin />"), None);
+
+    // The frame's middle is the background; the points give the colours.
+    let markup = "<Skin><MainSkinArea Image='Atlas.png'><Control /></MainSkinArea>
+<Menu><CustomPopupMenuDef FrameX='0' FrameY='10' FrameW='16' FrameH='8' TextColorX='60' TextColorY='60'
+ SelTextColorX='0' SelTextColorY='30' SelColorX='0' SelColorY='32' DimTextColorX='0' DimTextColorY='34'
+ LineColorX='12' LineColorY='30' /></Menu></Skin>";
+    let archive = SkinArchive::from_files(
+        "Menus",
+        [
+            ("VideoSkin.xml", markup.as_bytes().to_vec()),
+            ("atlas.png", atlas()),
+        ],
+    );
+    let skin = Skin::load(archive, "VideoSkin.xml").expect("load");
+    let style = skin.menu_style(false).expect("a style");
+    assert_eq!(style.back, BUTTON_STATES[1]);
+    assert_eq!(style.border, BUTTON_STATES[0]);
+    assert_eq!(style.text, LABEL_COLOR);
+    assert_eq!(style.selected_text, SLIDER_BACK);
+    assert_eq!(style.selected_back, SLIDER_FILL);
+    assert_eq!(style.dim_text, SLIDER_DISABLED);
+    assert_eq!(style.line, SLIDER_THUMB);
+    assert_eq!(skin.menu_style(true), None);
+}

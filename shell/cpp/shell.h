@@ -137,6 +137,7 @@ rust::String rvp_local_time();
 void rvp_paint_atlas(QPainter &painter, rust::Str name, std::array<std::int32_t, 4> src,
                      std::array<std::int32_t, 4> dst, std::array<std::int32_t, 4> clip);
 void rvp_paint_translate(QPainter &painter, std::int32_t dx, std::int32_t dy);
+void rvp_paint_scale(QPainter &painter, double factor);
 void rvp_paint_fill(QPainter &painter, std::array<std::int32_t, 4> rect, std::uint32_t rgba);
 void rvp_paint_text(QPainter &painter, rust::Str text, rust::Str trailing, rust::Str family,
                     std::int32_t pixel_size, bool bold, std::uint32_t rgba,

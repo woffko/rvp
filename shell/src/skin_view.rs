@@ -12,8 +12,8 @@ use rvp_skin::Skin;
 use rvp_skin::paint::{HAlign, Op, VAlign};
 
 use crate::ffi::bridge::{
-    rvp_atlas_contains, rvp_atlas_insert, rvp_paint_atlas, rvp_paint_fill, rvp_paint_text,
-    rvp_paint_translate,
+    rvp_atlas_contains, rvp_atlas_insert, rvp_paint_atlas, rvp_paint_fill, rvp_paint_scale,
+    rvp_paint_text, rvp_paint_translate,
 };
 use crate::skin_view_qobject::qobject;
 
@@ -105,6 +105,10 @@ fn paint_frame(mut painter: Pin<&mut qobject::QPainter>, frame: &Frame, region: 
     let Some(skin) = crate::player::skin() else {
         return;
     };
+    let zoom = crate::player::zoom();
+    if (zoom - 1.0).abs() > f64::EPSILON {
+        rvp_paint_scale(painter.as_mut(), zoom);
+    }
     if let Some(index) = region {
         let Some(area) = frame.regions.get(index) else {
             return;
@@ -116,11 +120,15 @@ fn paint_frame(mut painter: Pin<&mut qobject::QPainter>, frame: &Frame, region: 
     }
 }
 
-/// Paints every operation of `frame` (the control panel).
-fn paint_all(mut painter: Pin<&mut qobject::QPainter>, frame: &Frame) {
+/// Paints every operation of `frame` (the control panel, the logo) at
+/// `zoom`.
+fn paint_all(mut painter: Pin<&mut qobject::QPainter>, frame: &Frame, zoom: f64) {
     let Some(skin) = crate::player::skin() else {
         return;
     };
+    if (zoom - 1.0).abs() > f64::EPSILON {
+        rvp_paint_scale(painter.as_mut(), zoom);
+    }
     for op in &frame.list.ops {
         draw(painter.as_mut(), skin, op);
     }
@@ -144,13 +152,13 @@ impl qobject::SkinView {
         let painter = unsafe { Pin::new_unchecked(painter) };
         if *self.surface() == 1 {
             if let Some(frame) = crate::player::panel_frame() {
-                paint_all(painter, &frame);
+                paint_all(painter, &frame, crate::player::panel_zoom());
             }
             return;
         }
         if *self.surface() == 2 {
             if let Some(frame) = crate::player::logo_frame() {
-                paint_all(painter, &frame);
+                paint_all(painter, &frame, 1.0);
             }
             return;
         }

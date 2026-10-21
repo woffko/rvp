@@ -74,12 +74,6 @@ impl App {
         self.skins_folder().with_file_name("logos")
     }
 
-    /// RVP's folder of context menu files (Skins > Context Menu Design).
-    #[must_use]
-    pub fn menus_folder(&self) -> PathBuf {
-        self.skins_folder().with_file_name("menus")
-    }
-
     /// The pictures to choose from, by file name.
     #[must_use]
     pub fn logo_list(&self) -> Vec<PathBuf> {

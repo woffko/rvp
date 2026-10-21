@@ -363,6 +363,10 @@ const RUNTIME_LISTS: &[(&str, &str)] = &[
         "Skins > Logo (while starting playback)",
         "the pictures of RVP's logo folders, for the start logo",
     ),
+    (
+        "Skins > Context Menu Design",
+        "the menu files of RVP's menus folder and PotPlayer's",
+    ),
 ];
 
 /// Run-time lists by their IDs, where their place holds other items too.

@@ -214,6 +214,36 @@ impl Skin {
         area.attrs.get("Image").unwrap_or("")
     }
 
+    /// The skin's context menu style: `<CustomPopupMenuDef>` (`alt`
+    /// false) or `<CustomPopupMenuAlt>`, coloured from points of the main
+    /// window's picture (`crate::menu`).
+    #[must_use]
+    pub fn menu_style(&self, alt: bool) -> Option<crate::menu::MenuStyle> {
+        let name = if alt {
+            "CustomPopupMenuAlt"
+        } else {
+            "CustomPopupMenuDef"
+        };
+        let element = self.root.find(name)?;
+        let atlas = self
+            .area("MainSkinArea")
+            .map_or("", |area| self.area_atlas(area));
+        let attrs = &element.attrs;
+        let point =
+            |x: &str, y: &str| self.atlas_color(atlas, attrs.int_or(x, 0), attrs.int_or(y, 0));
+        let (x, y) = (attrs.int_or("FrameX", 0), attrs.int_or("FrameY", 0));
+        let (width, height) = (attrs.int_or("FrameW", 0), attrs.int_or("FrameH", 0));
+        Some(crate::menu::MenuStyle {
+            back: self.atlas_color(atlas, x + width / 2, y + height / 2),
+            border: self.atlas_color(atlas, x, y + height / 2),
+            text: point("TextColorX", "TextColorY"),
+            selected_text: point("SelTextColorX", "SelTextColorY"),
+            selected_back: point("SelColorX", "SelColorY"),
+            dim_text: point("DimTextColorX", "DimTextColorY"),
+            line: point("LineColorX", "LineColorY"),
+        })
+    }
+
     /// Whether the skin's `<Logo>` section draws an idle logo (a part
     /// shown in state `CMD_DEFAULT_LOGO`) and one for a starting file
     /// (`CMD_LOADING_LOGO`). Flash logos (`<Logo IdleFileName='Logo.swf'>`)

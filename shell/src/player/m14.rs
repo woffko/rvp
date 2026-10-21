@@ -15,7 +15,10 @@ use rvp_app::window::WindowRequest;
 use rvp_app::chrome::Chrome;
 use rvp_app::logos::Logo;
 
-use super::{LOGO_FRAME, SkinSource, file_url, request, show_skin, skin_variant, to_rectf};
+use super::{
+    LOGO_FRAME, PANEL_ZOOM, SkinSource, ZOOM, file_url, request, show_skin, skin_variant,
+    to_window, window_length,
+};
 use crate::player_qobject::qobject;
 
 /// M14's part of the player's core.
@@ -215,8 +218,8 @@ impl qobject::Player {
             (0, true) => 1,
             (limit, _) => limit,
         };
-        let width = base(limits.width, limits.force_width, 320).max(bars_width);
-        let height = base(limits.height, limits.force_height, 200).max(bars_height);
+        let width = window_length(base(limits.width, limits.force_width, 320).max(bars_width));
+        let height = window_length(base(limits.height, limits.force_height, 200).max(bars_height));
         if *self.min_width() != width {
             self.as_mut().set_min_width(width);
         }
@@ -325,11 +328,31 @@ impl qobject::Player {
 
     /// After a settings change: the bars' look over the video, and a new
     /// layout when the overlay comes or goes.
-    pub(super) fn refresh_overlay(self: Pin<&mut Self>) {
-        if *self.overlay() == self.overlay_wanted() {
+    pub(super) fn refresh_overlay(mut self: Pin<&mut Self>) {
+        let zooms = |core: &super::Core| {
+            (
+                core.app.settings.skins.zoom,
+                core.app.settings.skins.panel_zoom,
+            )
+        };
+        let shown = (
+            ZOOM.load(std::sync::atomic::Ordering::Relaxed),
+            PANEL_ZOOM.load(std::sync::atomic::Ordering::Relaxed),
+        );
+        let wanted = self.core().map(zooms);
+        let zoomed =
+            wanted.is_some_and(|(zoom, panel)| (u32::from(zoom), u32::from(panel)) != shown);
+        if *self.overlay() == self.overlay_wanted() && !zoomed {
             self.sync_overlay();
-        } else {
-            self.relayout();
+            return;
+        }
+        self.as_mut().relayout();
+        // The control panel comes back at its zoom.
+        if zoomed && *self.panel_shown() {
+            if let Some(core) = self.as_mut().core_mut() {
+                core.panel = None;
+            }
+            self.show_panel(true);
         }
     }
 
@@ -342,6 +365,11 @@ impl qobject::Player {
         };
         let skins = &core.app.settings.skins;
         let (opacity, animations) = (f64::from(skins.osc_opacity) / 100.0, skins.animations);
+        ZOOM.store(u32::from(skins.zoom), std::sync::atomic::Ordering::Relaxed);
+        PANEL_ZOOM.store(
+            u32::from(skins.panel_zoom),
+            std::sync::atomic::Ordering::Relaxed,
+        );
         if *self.overlay() != overlay {
             self.as_mut().set_chrome_shown(false);
             self.as_mut().set_overlay(overlay);
@@ -372,7 +400,7 @@ impl qobject::Player {
         };
         if chrome.set_video_in_slot(room) {
             let video = chrome.video_rect();
-            self.set_video_rect(to_rectf(video));
+            self.set_video_rect(to_window(video));
         }
     }
 
@@ -391,6 +419,44 @@ impl qobject::Player {
         if !core.app.settings.skins.osc_keep_while_over && rested && !core.pointer.dragging() {
             self.as_mut().show_bars(false);
         }
+    }
+
+    pub(crate) fn menu_look_json(&self) -> QString {
+        let Some(core) = self.core() else {
+            return QString::from("{}");
+        };
+        let skins = &core.app.settings.skins;
+        let style = |alt: bool| {
+            core.chrome
+                .as_ref()
+                .and_then(|chrome| chrome.skin().menu_style(alt))
+        };
+        let style = match skins.menu_style.as_str() {
+            "system" => None,
+            "skin-2" => style(true).or_else(|| style(false)),
+            // "auto" and "skin-1".
+            _ => style(false),
+        };
+        let hex = |[r, g, b, _]: [u8; 4]| format!("#{r:02x}{g:02x}{b:02x}");
+        let colors = style.map(|style| {
+            serde_json::json!({
+                "back": hex(style.back),
+                "border": hex(style.border),
+                "text": hex(style.text),
+                "selectedText": hex(style.selected_text),
+                "selectedBack": hex(style.selected_back),
+                "dimText": hex(style.dim_text),
+                "line": hex(style.line),
+            })
+        });
+        let look = serde_json::json!({
+            "native": skins.menu_style == "system",
+            "dark": skins.menu_dark,
+            "opacity": 1.0 - f64::from(skins.menu_transparency) / 100.0,
+            "scale": f64::from(skins.menu_size) / 100.0,
+            "colors": colors,
+        });
+        QString::from(&look.to_string())
     }
 
     pub(crate) fn settings_folder_url(&self, kind: &QString) -> QString {

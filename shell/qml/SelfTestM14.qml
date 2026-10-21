@@ -160,6 +160,42 @@ Item {
         case 18: {
             const copied = Tools.clipboard_text()
             t.check("m14_copy_elapsed_time", /^\d+:\d\d$/.test(copied), copied)
+            t.next()
+            break
+        }
+        case 19: {
+            // Context Menu Design: a menu file of RVP's menus folder, in
+            // PotPlayer's format; Context Menu Items hides a top-level one.
+            const folder = Tools.local_file(player.settings_folder_url("menus"))
+            Tools.write_file(folder + "/rvp-test.xml", "<Menu Title=\"{$CP0=Test menu$}\">"
+                             + "<MenuItem CmdID='ID_PLAY_PAUSE' /><MenuItem CmdID='' />"
+                             + "<SubMenu Name='$MENU_VIEW'><MenuItem CmdID='CMD_POPUPMENU_SKIN' /></SubMenu></Menu>")
+            setSetting("skins.menu-design", "rvp-test.xml")
+            const top = () => JSON.parse(player.menu_json("context")).filter(item => !item.separator)
+            let items = top()
+            t.check("m14_menu_file", items.length === 2 && items[1].label === "View",
+                    items.map(item => item.label).join(", "))
+            setSetting("skins.menu-hidden", ["View"])
+            items = top()
+            t.check("m14_menu_items_hidden", items.length === 1, items.map(item => item.label).join(", "))
+            setSetting("skins.menu-design", "skin")
+            setSetting("skins.menu-hidden", [])
+            t.check("m14_menu_back_to_rvps", top().length > 10, top().length + " items")
+            // Context Menu Style: the system's menus at 70 % opacity.
+            setSetting("skins.menu-style", "system")
+            setSetting("skins.menu-transparency", 30)
+            const look = JSON.parse(player.menu_look_json())
+            t.check("m14_menu_look", look.native === true && Math.abs(look.opacity - 0.7) < 0.01,
+                    JSON.stringify(look))
+            setSetting("skins.menu-style", "auto")
+            setSetting("skins.menu-transparency", 0)
+            // Zoom Skinned Windows: the skin draws half as large again.
+            const bar = player.control_rect("CMD_TIMEBAR_CTRL")
+            setSetting("skins.zoom", 150)
+            const zoomed = player.control_rect("CMD_TIMEBAR_CTRL")
+            t.check("m14_skin_zoom", bar.height > 0 && Math.abs(zoomed.height - bar.height * 1.5) <= 1,
+                    bar.height + " -> " + zoomed.height)
+            setSetting("skins.zoom", 100)
             t.finish()
             break
         }

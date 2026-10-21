@@ -239,6 +239,11 @@ pub mod qobject {
         #[qinvokable]
         fn settings_folder_url(self: &Self, kind: &QString) -> QString;
 
+        /// How the menus look (M14, Skins > Context Menu Style): JSON with
+        /// `native`, `dark`, `opacity`, `scale` and the skin's `colors`.
+        #[qinvokable]
+        fn menu_look_json(self: &Self) -> QString;
+
         /// Loads a subtitle file for the playing video.
         #[qinvokable]
         fn load_subtitle(self: Pin<&mut Self>, path: &QString);

@@ -13,7 +13,8 @@
 //! * Colour themes (`rvp_skin::theme`): none, a random one of the skin's
 //!   (picked once per start), a custom one from the Customize dialog (HSB
 //!   or RGB), or one the skin names.
-//! * Logos: `crate::logos`.
+//! * Logos: `crate::logos`; the context menu's design and look:
+//!   `crate::menu_design`.
 //! * On Screen Control: the skin's bars over the video in fullscreen
 //!   (`MainSkinAreaOscInside`) can be turned off, made translucent, and
 //!   kept or hidden while the pointer rests on them. "Auto hide main skin
@@ -31,6 +32,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::app::{App, UiRequest};
 use crate::logos::{LOGO_DEFAULT, LOGO_POSITIONS, LOGO_SAME, LOGO_SKIN};
+use crate::menu_design::{MENU_DEFAULT, MENU_SKIN, MENU_STYLES};
 
 /// Theme choices that are not a skin's theme names.
 pub const THEME_NONE: &str = "";
@@ -117,6 +119,10 @@ pub struct SkinsSettings {
     pub osc_keep_while_over: bool,
     /// The bars' opacity over the video, in percent.
     pub osc_opacity: u8,
+    /// The main window's skin and the control panel drawn larger, in
+    /// percent (Zoom Skinned Windows; 100 to 300).
+    pub zoom: u16,
+    pub panel_zoom: u16,
     /// While a video shows in the window, the skin hides and its bars show
     /// over the video when the pointer comes, as in fullscreen.
     pub auto_hide: bool,
@@ -128,6 +134,19 @@ pub struct SkinsSettings {
     pub reverse_times: bool,
     /// The skin's times run at the playback speed (real time).
     pub speed_times: bool,
+    /// The context menu: [`MENU_SKIN`], [`MENU_DEFAULT`] or a menu file's
+    /// name (`crate::menu_design`).
+    pub menu_design: String,
+    /// One of [`MENU_STYLES`].
+    pub menu_style: String,
+    /// Dark menus while the system is dark.
+    pub menu_dark: bool,
+    /// The menus' transparency in percent (0 to 90).
+    pub menu_transparency: u8,
+    /// The menus' text size in percent (80 to 200).
+    pub menu_size: u16,
+    /// Top-level items of the context menu the user hid, by their text.
+    pub menu_hidden: Vec<String>,
 }
 
 /// How long the bars stay while the pointer rests on them when they do not
@@ -152,11 +171,19 @@ impl Default for SkinsSettings {
             osc: true,
             osc_keep_while_over: true,
             osc_opacity: 100,
+            zoom: 100,
+            panel_zoom: 100,
             auto_hide: false,
             fullscreen_resize: false,
             animations: true,
             reverse_times: false,
             speed_times: false,
+            menu_design: MENU_SKIN.to_owned(),
+            menu_style: "auto".to_owned(),
+            menu_dark: false,
+            menu_transparency: 0,
+            menu_size: 100,
+            menu_hidden: Vec::new(),
         }
     }
 }
@@ -188,6 +215,40 @@ impl SkinsSettings {
         if self.start_logo.trim().is_empty() {
             notes.push("skins.start-logo is empty: same".to_owned());
             LOGO_SAME.clone_into(&mut self.start_logo);
+        }
+        if self.menu_design.trim().is_empty() {
+            notes.push("skins.menu-design is empty: skin".to_owned());
+            MENU_SKIN.clone_into(&mut self.menu_design);
+        }
+        if !MENU_STYLES.contains(&self.menu_style.as_str()) {
+            notes.push(format!(
+                "skins.menu-style {:?} is none of {MENU_STYLES:?}: auto",
+                self.menu_style
+            ));
+            "auto".clone_into(&mut self.menu_style);
+        }
+        if self.menu_transparency > 90 {
+            notes.push(format!(
+                "skins.menu-transparency {} is out of 0 to 90: 90",
+                self.menu_transparency
+            ));
+            self.menu_transparency = 90;
+        }
+        for (name, value) in [
+            ("zoom", &mut self.zoom),
+            ("panel-zoom", &mut self.panel_zoom),
+        ] {
+            if !(100..=300).contains(value) {
+                notes.push(format!("skins.{name} {value} is out of 100 to 300: 100"));
+                *value = 100;
+            }
+        }
+        if !(80..=200).contains(&self.menu_size) {
+            notes.push(format!(
+                "skins.menu-size {} is out of 80 to 200: 100",
+                self.menu_size
+            ));
+            self.menu_size = 100;
         }
         if !LOGO_POSITIONS.contains(&self.logo_position.as_str()) {
             notes.push(format!(
@@ -277,6 +338,12 @@ pub enum SkinCommand {
     Osc(bool),
     AutoHide,
     FullscreenResize,
+    /// Context Menu Design: the skin's (0) or RVP's (1), both RVP's whole
+    /// menu.
+    MenuDesign(u8),
+    /// Context Menu Style: an index of [`MENU_STYLES`].
+    MenuStyle(u8),
+    MenuDark,
 }
 
 /// A run-time list choice of the Skins menu.
@@ -289,6 +356,8 @@ pub enum SkinChoice {
     /// A picture of [`App::logo_list`] as the idle or the start logo.
     IdleLogo(usize),
     StartLogo(usize),
+    /// A file of [`App::menu_files`] as the context menu.
+    MenuFile(usize),
 }
 
 impl SkinChoice {
@@ -300,6 +369,7 @@ impl SkinChoice {
             Self::Theme(index) => format!("t{index}"),
             Self::IdleLogo(index) => format!("i{index}"),
             Self::StartLogo(index) => format!("l{index}"),
+            Self::MenuFile(index) => format!("m{index}"),
         }
     }
 
@@ -312,9 +382,16 @@ impl SkinChoice {
             "t" => Some(Self::Theme(index)),
             "i" => Some(Self::IdleLogo(index)),
             "l" => Some(Self::StartLogo(index)),
+            "m" => Some(Self::MenuFile(index)),
             _ => None,
         }
     }
+}
+
+/// Flips `flag` and says so.
+fn toggle(flag: &mut bool, what: &str) -> String {
+    *flag = !*flag;
+    format!("{what}: {}", if *flag { "on" } else { "off" })
 }
 
 /// The `.dsf` files in `folder`.
@@ -546,33 +623,11 @@ impl App {
                 )
             }
             SkinCommand::VideoSkinAtStart => {
-                skins.video_skin_at_start = !skins.video_skin_at_start;
-                format!(
-                    "Video skin at start: {}",
-                    if skins.video_skin_at_start {
-                        "on"
-                    } else {
-                        "off"
-                    }
-                )
+                toggle(&mut skins.video_skin_at_start, "Video skin at start")
             }
-            SkinCommand::LockMode => {
-                skins.lock_mode = !skins.lock_mode;
-                format!(
-                    "Switching between skin modes: {}",
-                    if skins.lock_mode { "off" } else { "on" }
-                )
-            }
+            SkinCommand::LockMode => toggle(&mut skins.lock_mode, "One skin mode for every file"),
             SkinCommand::RememberModeWindow => {
-                skins.remember_mode_window = !skins.remember_mode_window;
-                format!(
-                    "Window per skin mode: {}",
-                    if skins.remember_mode_window {
-                        "on"
-                    } else {
-                        "off"
-                    }
-                )
+                toggle(&mut skins.remember_mode_window, "Window per skin mode")
             }
             SkinCommand::IdleLogo(choice) => {
                 skins.random_logo = false;
@@ -589,19 +644,21 @@ impl App {
                 format!("On screen control: {}", if on { "on" } else { "off" })
             }
             SkinCommand::AutoHide => {
-                skins.auto_hide = !skins.auto_hide;
-                format!(
-                    "Auto hide the skin over the video: {}",
-                    if skins.auto_hide { "on" } else { "off" }
-                )
+                toggle(&mut skins.auto_hide, "Auto hide the skin over the video")
             }
-            SkinCommand::FullscreenResize => {
-                skins.fullscreen_resize = !skins.fullscreen_resize;
-                format!(
-                    "Room for the bars in fullscreen: {}",
-                    if skins.fullscreen_resize { "on" } else { "off" }
-                )
+            SkinCommand::FullscreenResize => toggle(
+                &mut skins.fullscreen_resize,
+                "Room for the bars in fullscreen",
+            ),
+            SkinCommand::MenuDesign(choice) => {
+                return self.set_menu_design(if choice == 0 { MENU_SKIN } else { MENU_DEFAULT });
             }
+            SkinCommand::MenuStyle(index) => {
+                let style = MENU_STYLES.get(usize::from(index)).unwrap_or(&"auto");
+                (*style).clone_into(&mut skins.menu_style);
+                format!("Context menu style: {style}")
+            }
+            SkinCommand::MenuDark => toggle(&mut skins.menu_dark, "Dark menus with a dark system"),
         };
         self.save_settings();
         UiRequest::SkinChanged(text)
@@ -638,6 +695,13 @@ impl App {
             SkinCommand::Osc(on) => Some(skins.osc == on),
             SkinCommand::AutoHide => Some(skins.auto_hide),
             SkinCommand::FullscreenResize => Some(skins.fullscreen_resize),
+            SkinCommand::MenuDesign(choice) => {
+                Some(skins.menu_design == if choice == 0 { MENU_SKIN } else { MENU_DEFAULT })
+            }
+            SkinCommand::MenuStyle(index) => {
+                Some(MENU_STYLES.get(usize::from(index)) == Some(&skins.menu_style.as_str()))
+            }
+            SkinCommand::MenuDark => Some(skins.menu_dark),
         }
     }
 
@@ -665,6 +729,11 @@ impl App {
                 self.settings.skins.random_logo = false;
                 return Some(self.set_logo(matches!(choice, SkinChoice::StartLogo(_)), &name));
             }
+            SkinChoice::MenuFile(index) => {
+                let path = self.menu_files().get(index)?.clone();
+                let name = path.file_name()?.to_string_lossy().into_owned();
+                return Some(self.set_menu_design(&name));
+            }
         };
         self.save_settings();
         Some(UiRequest::SkinChanged(text))
@@ -683,6 +752,12 @@ impl App {
                 .themes
                 .get(index)
                 .is_some_and(|name| *name == self.settings.skins.color_theme),
+            SkinChoice::MenuFile(index) => self.menu_files().get(index).is_some_and(|path| {
+                path.file_name().is_some_and(|name| {
+                    name.to_string_lossy()
+                        .eq_ignore_ascii_case(&self.settings.skins.menu_design)
+                })
+            }),
             SkinChoice::IdleLogo(index) | SkinChoice::StartLogo(index) => {
                 self.logo_list().get(index).is_some_and(|path| {
                     path.file_name().is_some_and(|name| {
