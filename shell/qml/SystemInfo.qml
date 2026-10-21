@@ -20,7 +20,9 @@ Window {
     minimumHeight: 300
     title: "Playback/System Info"
     transientParent: owner
-    flags: Qt.Dialog | (player.on_top ? Qt.WindowStaysOnTopHint : 0)
+    // Dialog Box: "Always keep modeless dialog boxes on top" (M14).
+    flags: Qt.Dialog | (player.on_top || (player.general_look ? JSON.parse(player.general_look) : {}).dialogOnTop === true
+                        ? Qt.WindowStaysOnTopHint : 0)
     color: palette.window
 
     function begin() {

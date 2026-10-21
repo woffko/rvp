@@ -5,6 +5,7 @@
 
 use std::pin::Pin;
 
+use cxx_qt::Threading;
 use cxx_qt_lib::QString;
 use rvp_app::UiRequest;
 use rvp_app::chrome::Mode;
@@ -33,6 +34,9 @@ pub(super) struct Look {
     /// When the pointer last moved while the bars show over the video
     /// (Skins > On Screen Control's auto hide).
     pub(super) bars_moved: Option<std::time::Instant>,
+    /// "Automatically run at system startup" as last applied (or found at
+    /// start).
+    pub(super) startup: Option<bool>,
 }
 
 /// RVP's own logo (`crates/look`), from the shell's resources.
@@ -583,6 +587,157 @@ impl qobject::Player {
             system_section(text("mpv-version").as_deref(), text("ffmpeg-version").as_deref()),
         ]);
         QString::from(&sections.to_string())
+    }
+
+    pub(crate) fn window_attention(mut self: Pin<&mut Self>, kind: i32, on: bool) {
+        use rvp_app::general::Attention;
+        let Some(core) = self.as_mut().core_mut() else {
+            return;
+        };
+        let attention = match kind {
+            0 => Attention::Minimized(on),
+            1 => Attention::Focus(on),
+            _ => Attention::ScreenLocked(on),
+        };
+        core.app.window_attention(core.engine, attention);
+    }
+
+    pub(crate) fn drop_choice(mut self: Pin<&mut Self>, choice: i32, paths: &QString) {
+        match choice {
+            0 | 1 => self.open_files(paths, choice == 1),
+            _ => {
+                for path in paths.to_string().lines().filter(|line| !line.is_empty()) {
+                    self.as_mut().load_subtitle(&QString::from(path));
+                }
+            }
+        }
+    }
+
+    /// A file started: Windows' jump list lists it, and error messages go
+    /// when the General page says so (M14).
+    pub(super) fn file_started(mut self: Pin<&mut Self>) {
+        let Some(core) = self.core() else {
+            return;
+        };
+        let general = &core.app.settings.general;
+        if let Some(path) = core.app.model.loaded_path()
+            && general.taskbar
+            && core.app.settings.open.recent
+            && !path.contains("://")
+        {
+            crate::ffi::bridge::rvp_taskbar_recent(path);
+        }
+        if general.hide_errors_when_playing && core.app.model.media_loaded() {
+            self.as_mut().set_message(QString::default());
+        }
+    }
+
+    /// Playback closed (RVP idles): "Default window size on closing file"
+    /// gives the window its starting size again (M14).
+    pub(super) fn file_closed(mut self: Pin<&mut Self>) {
+        let fullscreen = *self.fullscreen();
+        let (width, height) = (*self.restore_width(), *self.restore_height());
+        let Some(core) = self.core() else {
+            return;
+        };
+        let idle = core.app.model.flag(rvp_engine::PropertyId::IdleActive) == Some(true);
+        if idle
+            && !fullscreen
+            && !core.maximized
+            && core.app.settings.general.default_size_on_close
+            && width > 0
+            && height > 0
+        {
+            self.as_mut()
+                .window_request(&WindowRequest::Size { width, height });
+        }
+    }
+
+    /// The taskbar button's progress (Windows), once a second.
+    pub(super) fn tick_taskbar(self: Pin<&mut Self>) {
+        let Some(core) = self.core() else {
+            return;
+        };
+        let model = &core.app.model;
+        let state = if !model.media_loaded() {
+            0
+        } else if model.playing() {
+            1
+        } else {
+            2
+        };
+        let progress = match (
+            model.double(rvp_engine::PropertyId::TimePos),
+            model.double(rvp_engine::PropertyId::Duration),
+        ) {
+            (Some(time), Some(duration)) if duration > 0.0 => time / duration,
+            _ => -1.0,
+        };
+        crate::ffi::bridge::rvp_taskbar_state(state, progress);
+    }
+
+    /// After a settings change: the media controls, the taskbar and the
+    /// start with the session follow the General page.
+    pub(super) fn apply_general(mut self: Pin<&mut Self>) {
+        let thread = self.qt_thread();
+        let Some(core) = self.as_mut().core_mut() else {
+            return;
+        };
+        let general = core.app.settings.general.clone();
+        if general.media_controls && core.desktop.is_none() && core.look.startup.is_some() {
+            match crate::desktop::Integration::start(
+                thread,
+                crate::ffi::bridge::rvp_main_window_id(),
+            ) {
+                Ok(desktop) => core.desktop = Some(desktop),
+                Err(error) => eprintln!("rvp: {error}"),
+            }
+        } else if !general.media_controls {
+            core.desktop = None;
+        }
+        crate::ffi::bridge::rvp_taskbar_start(general.taskbar);
+        if core
+            .look
+            .startup
+            .is_some_and(|applied| applied != general.run_at_startup)
+        {
+            core.look.startup = Some(general.run_at_startup);
+            if let Err(error) = crate::startup::apply(general.run_at_startup) {
+                self.show_message(&format!("Run at system startup: {error}"));
+            }
+        }
+    }
+
+    /// The skin's themes, its audio skin and the theme to show, the
+    /// windows' opacity and the General page's window options.
+    pub(super) fn sync_look(mut self: Pin<&mut Self>) {
+        self.as_mut().sync_skin();
+        self.as_mut().sync_opacity();
+        self.sync_general_look();
+    }
+
+    /// The General page's window options for QML.
+    pub(super) fn sync_general_look(mut self: Pin<&mut Self>) {
+        let Some(core) = self.core() else {
+            return;
+        };
+        let general = &core.app.settings.general;
+        let look = serde_json::json!({
+            "tray": general.tray,
+            "hideWithOwner": general.hide_windows_minimized,
+            "resizeCenter": general.resize_from_center,
+            "snap": general.snap,
+            "dialogOnTop": general.dialog.on_top,
+            "dialogFont": general.dialog.font,
+            "dialogFontSize": general.dialog.font_size,
+            "noFocusAtStart": general.no_focus_at_start,
+            "startCenter": general.start.position == "center",
+            "startFiles": core.pending.as_ref().is_some_and(|request| !request.files.is_empty()),
+        });
+        let look = QString::from(&look.to_string());
+        if *self.general_look() != look {
+            self.as_mut().set_general_look(look);
+        }
     }
 
     pub(crate) fn settings_folder_url(&self, kind: &QString) -> QString {

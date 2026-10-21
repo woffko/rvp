@@ -140,6 +140,7 @@ impl Settings {
         self.speech.validate(&mut notes);
         self.copy_time.validate(&mut notes);
         self.osd.validate(&mut notes);
+        self.general.validate(&mut notes);
         self.skins.validate(&mut notes);
         notes
     }
@@ -411,6 +412,7 @@ pub fn import(path: &Path) -> Result<(Settings, Vec<String>), String> {
                             | "copy-time"
                             | "skins"
                             | "osd"
+                            | "general"
                     ) {
                         value.clone()
                     } else if value.is_object() {
@@ -724,12 +726,15 @@ impl App {
 }
 
 /// True when a change waits for RVP's next start: VapourSynth's
-/// library, the process priority, the renderer and its swapchain format.
+/// library, the process priority, the renderer and its swapchain format,
+/// Qt's DPI scaling and the instance mode (M14).
 fn taken_at_start(old: &Settings, new: &Settings) -> bool {
     old.vapoursynth.library != new.vapoursynth.library
         || old.playback.priority != new.playback.priority
         || old.render.renderer != new.render.renderer
         || old.render.ten_bit != new.render.ten_bit
+        || old.general.dialog.dpi_aware != new.general.dialog.dpi_aware
+        || old.general.instances != new.general.instances
 }
 
 #[cfg(test)]

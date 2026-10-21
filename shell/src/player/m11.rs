@@ -513,6 +513,16 @@ impl qobject::Player {
     }
 
     pub(crate) fn drop_files(mut self: Pin<&mut Self>, paths: &QString) {
+        // The General page's advanced drag and drop asks first (M14).
+        let request = self.core().and_then(|core| {
+            core.app
+                .drop_request(paths.to_string().lines().map(str::to_owned).collect())
+        });
+        if let Some(rvp_app::UiRequest::DropMenu(_)) = request {
+            self.as_mut().set_dialog(paths.clone());
+            self.ui_request(super::request::DROP_MENU, 0);
+            return;
+        }
         let sort = self
             .core()
             .is_some_and(|core| core.app.settings.playlist.sort_dropped);

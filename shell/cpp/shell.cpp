@@ -496,6 +496,18 @@ bool Tools::show_file(const QString &path) const
 #endif
 }
 
+void Tools::set_app_font(const QString &family, int points) const
+{
+    // The first call keeps Qt's own font to go back to.
+    static const QFont original = QGuiApplication::font();
+    QFont font = original;
+    if (!family.isEmpty())
+        font.setFamily(family);
+    if (points > 0)
+        font.setPointSize(points);
+    QGuiApplication::setFont(font);
+}
+
 bool rvp_instance_send(rust::Str name, rust::Str message)
 {
     QLocalSocket socket;
@@ -512,6 +524,15 @@ bool rvp_instance_send(rust::Str name, rust::Str message)
             return false;
     }
     return socket.readLine().trimmed() == "ok";
+}
+
+bool rvp_instance_running(rust::Str name)
+{
+    QLocalSocket socket;
+    socket.connectToServer(fromStr(name));
+    const bool running = socket.waitForConnected(500);
+    socket.abort();
+    return running;
 }
 
 bool rvp_instance_listen(rust::Str name)
@@ -542,10 +563,14 @@ void rvp_setup_graphics()
     QQuickWindow::setGraphicsApi(QSGRendererInterface::OpenGL);
 }
 
+Tools *Tools::instance = nullptr;
+
 void rvp_register_native_types()
 {
     qmlRegisterType<MpvItem>("RvpNative", 1, 0, "MpvItem");
-    qmlRegisterSingletonInstance("RvpNative", 1, 0, "Tools", new Tools());
+    Tools::instance = new Tools();
+    qmlRegisterSingletonInstance("RvpNative", 1, 0, "Tools", Tools::instance);
+    rvp_taskbar_install();
 }
 
 bool rvp_has_windows()

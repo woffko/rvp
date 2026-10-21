@@ -35,6 +35,7 @@ mod recorder;
 mod recycle;
 mod skin_view;
 mod skin_view_qobject;
+mod startup;
 mod system_volume;
 mod thumb_view;
 mod thumb_view_qobject;
@@ -52,14 +53,14 @@ fn main() {
     metrics::start();
     let cli = Cli::parse(std::env::args().skip(1));
     install_crash_logs(&cli);
-    player::preload_skin();
+    let settings = player::preload_skin();
     ffi::bridge::rvp_setup_graphics();
     let mut app = QGuiApplication::new();
     metrics::mark("gui_application_ms");
     // The window's app ID: the desktop finds rvp.desktop (its icon, MPRIS's
     // DesktopEntry) by it.
     QGuiApplication::set_desktop_file_name(&QString::from("rvp"));
-    single_instance(&cli);
+    single_instance(&cli, &settings);
     ffi::bridge::rvp_set_c_numeric_locale();
     ffi::bridge::rvp_set_window_icon();
     ffi::bridge::rvp_register_native_types();
@@ -106,11 +107,21 @@ fn install_crash_logs(cli: &Cli) {
 }
 
 /// Hands the command line to a running instance and exits, or becomes the
-/// instance others hand theirs to.
-fn single_instance(cli: &Cli) {
+/// instance others hand theirs to. With the General page's "Multiple
+/// instances" each start runs on its own (M14).
+fn single_instance(cli: &Cli, settings: &rvp_app::Settings) {
     let Some(channel) = instance::channel(cli) else {
         return;
     };
+    if settings.general.instances == "multiple" && instance::forwards(cli) {
+        player::OTHER_INSTANCE.store(
+            ffi::bridge::rvp_instance_running(&channel),
+            std::sync::atomic::Ordering::Relaxed,
+        );
+        // The first one keeps the channel; the others run on their own.
+        let _ = ffi::bridge::rvp_instance_listen(&channel);
+        return;
+    }
     // `/new` runs on its own and leaves the channel to the running one.
     if !instance::forwards(cli) {
         return;

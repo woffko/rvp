@@ -106,6 +106,10 @@ pub mod qobject {
         /// the misc info line (Scroll Lock), refreshed each second.
         #[qproperty(QString, osd_look)]
         #[qproperty(QString, misc_info)]
+        /// The General page's window options for QML (M14, JSON: `tray`,
+        /// `hideWithOwner`, `resizeCenter`, `snap`, `dialogOnTop`,
+        /// `dialogFont`, `dialogFontSize`, `noFocusAtStart`).
+        #[qproperty(QString, general_look)]
         /// The slideshow for audio files (JSON, `App::slideshow_json`).
         #[qproperty(QString, slideshow)]
         #[qproperty(QString, power_notice)]
@@ -253,6 +257,17 @@ pub mod qobject {
         /// mpv now (once a second while the window shows).
         #[qinvokable]
         fn system_info_json(self: &Self) -> QString;
+
+        /// The window was minimized (`kind` 0), got or lost the focus (1;
+        /// `on`: focused) or the screen was locked (2): RVP pauses or plays
+        /// on as the General page says (M14).
+        #[qinvokable]
+        fn window_attention(self: Pin<&mut Self>, kind: i32, on: bool);
+
+        /// The choice of the dropped files' menu (M14): play them (0), add
+        /// them to the album (1) or load them as subtitles (2).
+        #[qinvokable]
+        fn drop_choice(self: Pin<&mut Self>, choice: i32, paths: &QString);
 
         /// Loads a subtitle file for the playing video.
         #[qinvokable]

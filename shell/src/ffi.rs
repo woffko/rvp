@@ -31,6 +31,8 @@ pub mod bridge {
         fn rvp_instance_send(name: &str, message: &str) -> bool;
         /// Listens for other instances on `name`; false when that failed.
         fn rvp_instance_listen(name: &str) -> bool;
+        /// Whether an instance listens on `name` (connects and leaves).
+        fn rvp_instance_running(name: &str) -> bool;
         /// libmpv needs `LC_NUMERIC=C`; Qt sets the user locale on Unix.
         fn rvp_set_c_numeric_locale();
         /// Gives every window RVP's icon (`QGuiApplication::setWindowIcon`).
@@ -54,6 +56,18 @@ pub mod bridge {
         /// Sets an environment variable (`qputenv`); only while no other
         /// thread runs.
         fn rvp_set_env(name: &str, value: &str);
+        /// Windows' taskbar (M14's General page, `cpp/taskbar.cpp`): its
+        /// thumbnail buttons and the screen lock notices (once the main
+        /// window exists; `enabled`: "Enable enhanced taskbar features"),
+        /// the progress (`state` 0 idle, 1 playing, 2 paused; `progress`
+        /// 0 to 1, below 0 for none), the jump list's recent files.
+        /// Nothing elsewhere.
+        fn rvp_taskbar_start(enabled: bool);
+        fn rvp_taskbar_state(state: i32, progress: f64);
+        fn rvp_taskbar_recent(path: &str);
+        /// Windows' Run key for "Automatically run at system startup";
+        /// false when it could not be changed (and outside Windows).
+        fn rvp_run_at_startup(on: bool, command: &str) -> bool;
         /// `QOpenGLContext::getProcAddress` of the current context.
         fn rvp_gl_get_proc_address(name: &str) -> usize;
         /// Schedules a video frame (mpv's render update callback; any

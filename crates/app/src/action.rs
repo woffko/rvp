@@ -400,14 +400,18 @@ pub enum SettingsPage {
     SubtitleBrowser,
     /// Create Subtitles from Audio.
     Speech,
-    // M14: General > Skins' pages, and OSD Messages.
+    // M14: General > Skins' pages, OSD Messages, and General's own, When
+    // Starting and Dialog Box.
     Logo,
     Osc,
     Osd,
+    General,
+    Start,
+    Dialogs,
 }
 
 impl SettingsPage {
-    pub const ALL: [SettingsPage; 38] = [
+    pub const ALL: [SettingsPage; 41] = [
         SettingsPage::Playback,
         SettingsPage::TimeJump,
         SettingsPage::Skip,
@@ -446,6 +450,9 @@ impl SettingsPage {
         SettingsPage::Capture,
         SettingsPage::Visualization,
         SettingsPage::Decoders,
+        SettingsPage::General,
+        SettingsPage::Start,
+        SettingsPage::Dialogs,
     ];
 
     /// The page's key in the settings window (`shell/qml/Settings.qml`).
@@ -490,6 +497,9 @@ impl SettingsPage {
             SettingsPage::Logo => "logo",
             SettingsPage::Osc => "osc",
             SettingsPage::Osd => "osd",
+            SettingsPage::General => "general",
+            SettingsPage::Start => "start",
+            SettingsPage::Dialogs => "dialogs",
         }
     }
 }

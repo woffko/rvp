@@ -125,6 +125,8 @@ pub enum UiRequest {
     Info(String),
     /// The Playback/System Info window (Ctrl+F1, M14).
     SystemInfo,
+    /// Dropped files ask what to do (M14's advanced drag and drop).
+    DropMenu(Vec<String>),
     /// A change of the system's volume (the master volume).
     SystemVolume(crate::audio::commands::SystemVolume),
     /// The Adjust Audio Sync dialog, at this sync (seconds; then
@@ -417,6 +419,9 @@ pub struct App {
     pub(crate) random_theme: Option<usize>,
     /// "Change logo randomly on each loading": this file's pick.
     pub(crate) random_logo: Option<usize>,
+    /// What paused playback for the window (M14's General page): bits of
+    /// minimized, focus lost and screen locked.
+    pub(crate) attention_holds: u8,
     /// The skin the command line or `RVP_SKIN` chose (`Some(None)`: RVP
     /// Default) until the user picks one.
     pub(crate) skin_override: crate::skins::SkinOverride,
@@ -521,6 +526,7 @@ impl App {
             skin_info: crate::skins::SkinInfo::default(),
             random_theme: None,
             random_logo: None,
+            attention_holds: 0,
             skin_override: crate::skins::SkinOverride::Off,
             audio_only: false,
         };
@@ -1110,6 +1116,7 @@ impl App {
                 return Some(self.normalizer_notice());
             }
             Action::PlayPause => {
+                self.forget_attention();
                 if !self.model.media_loaded() {
                     return self.play_shown(engine);
                 }

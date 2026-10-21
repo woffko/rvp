@@ -54,6 +54,8 @@ class Tools : public QObject
     Q_PROPERTY(bool native_video READ native_video CONSTANT)
 public:
     using QObject::QObject;
+    // The QML singleton, for the native event filter's signals.
+    static Tools *instance;
     bool native_video() const;
     // Repaints `item` now, or with the next video frame when `synced`.
     Q_INVOKABLE void repaint(QQuickItem *item, bool synced) const;
@@ -99,6 +101,9 @@ public:
     // Shows a file in the system's file manager: selected in Explorer on
     // Windows, its folder elsewhere.
     Q_INVOKABLE bool show_file(const QString &path) const;
+    // RVP's windows' font (M14's Dialog Box page): `family` (empty: Qt's)
+    // at `points` (0: Qt's size).
+    Q_INVOKABLE void set_app_font(const QString &family, int points) const;
     // D4's Direct3D 11 renderer (cpp/video_window.cpp): places mpv's
     // window. `place` is JSON in the main window's coordinates:
     // {"x", "y", "width", "height", "visible", "holes": [[x, y, w, h]...]}.
@@ -106,6 +111,13 @@ public:
     // The video window as Windows has it (JSON; `exists` false without
     // one), for the self-test.
     Q_INVOKABLE QString video_window_json() const;
+
+signals:
+    // A taskbar thumbnail button (M14, cpp/taskbar.cpp): 0 previous, 1
+    // play/pause, 2 next.
+    void taskbarButton(int button);
+    // The user's session was locked (`true`) or unlocked (Windows).
+    void sessionLocked(bool locked);
 };
 
 // Called from Rust (declared in src/ffi.rs).
@@ -114,6 +126,7 @@ void rvp_register_native_types();
 bool rvp_has_windows();
 bool rvp_instance_send(rust::Str name, rust::Str message);
 bool rvp_instance_listen(rust::Str name);
+bool rvp_instance_running(rust::Str name);
 void rvp_set_c_numeric_locale();
 void rvp_set_window_icon();
 std::size_t rvp_main_window_id();
@@ -122,6 +135,11 @@ void rvp_video_window_close();
 void rvp_confine_cursor(bool on);
 void rvp_crash_test();
 void rvp_set_env(rust::Str name, rust::Str value);
+void rvp_taskbar_install();
+void rvp_taskbar_start(bool enabled);
+void rvp_taskbar_state(std::int32_t state, double progress);
+void rvp_taskbar_recent(rust::Str path);
+bool rvp_run_at_startup(bool on, rust::Str command);
 std::size_t rvp_gl_get_proc_address(rust::Str name);
 void rvp_video_request_update();
 rust::String rvp_gpu_power_read(bool nvidia);

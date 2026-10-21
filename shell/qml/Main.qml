@@ -20,6 +20,7 @@ Window {
     color: "black"
     title: player.window_title
     flags: Qt.Window | Qt.FramelessWindowHint | (player.on_top ? Qt.WindowStaysOnTopHint : 0)
+           | (root.startNoFocus ? Qt.WindowDoesNotAcceptFocus : 0)
     // Skins > Opacity (M14); 0 until the core starts.
     opacity: player.window_opacity > 0 ? player.window_opacity : 1
 
@@ -54,6 +55,7 @@ Window {
     readonly property int requestSubtitleEditor: 38
     readonly property int requestColorTheme: 39
     readonly property int requestSystemInfo: 40
+    readonly property int requestDropMenu: 41
     readonly property int requestRecordAs: 27
     readonly property int requestRecordFolder: 28
     readonly property int requestDialog: 29
@@ -84,6 +86,12 @@ Window {
         onFitWindow: (width, height) => root.fit(width, height)
     }
 
+    // The General page's window options (M14).
+    readonly property var generalLook: player.general_look ? JSON.parse(player.general_look) : ({})
+    // While a start with files must not take the keyboard (M14).
+    property bool startNoFocus: false
+    onGeneralLookChanged: Tools.set_app_font(generalLook.dialogFont || "", generalLook.dialogFontSize || 0)
+
     Component.onCompleted: {
         player.start()
         // Requests from other instances (rvp /add ...) go to the player.
@@ -95,6 +103,13 @@ Window {
         if (player.restore_position && root.onScreen(player.restore_x, player.restore_y)) {
             x = player.restore_x
             y = player.restore_y
+        } else if (generalLook.startCenter === true && root.screen) {
+            x = root.screen.virtualX + Math.round((root.screen.desktopAvailableWidth - width) / 2)
+            y = root.screen.virtualY + Math.round((root.screen.desktopAvailableHeight - height) / 2)
+        }
+        if (generalLook.noFocusAtStart === true && generalLook.startFiles === true) {
+            startNoFocus = true
+            noFocusTimer.start()
         }
         if (player.restore_maximized)
             showMaximized()
@@ -142,7 +157,32 @@ Window {
                 player.fit_aspect()
         }
     }
+    // Windows' taskbar buttons and the screen lock (M14's General page).
+    Connections {
+        target: Tools
+        function onTaskbarButton(button) {
+            player.run_action(["previous", "play-pause", "next"][button])
+        }
+        function onSessionLocked(locked) {
+            player.window_attention(2, locked)
+        }
+    }
+    // General: the tray icon (Qt's), loaded when the page asks for it.
+    Loader {
+        id: trayLoader
+        active: root.generalLook.tray === "both" || root.generalLook.tray === "minimize-to-tray"
+        Component.onCompleted: setSource("Tray.qml", { player: player, owner: root })
+    }
+
+    // A start with files leaves the keyboard where it was for a moment.
+    Timer {
+        id: noFocusTimer
+        interval: 1500
+        onTriggered: root.startNoFocus = false
+    }
     onVisibilityChanged: {
+        // General: pause while minimized (M14).
+        player.window_attention(0, root.visibility === Window.Minimized)
         player.window_state(root.visibility === Window.Maximized, root.active)
         if (Date.now() - root.stateRequested < 2000)
             stateCheck.restart()
@@ -151,19 +191,49 @@ Window {
             player.window_fullscreen(root.isFullscreen)
     }
     onActiveChanged: {
+        // General: pause while the focus is elsewhere (M14).
+        player.window_attention(1, root.active)
         player.window_state(root.visibility === Window.Maximized, root.active)
         player.confine_cursor(root.isFullscreen && root.active)
     }
     onIsFullscreenChanged: player.confine_cursor(root.isFullscreen && root.active)
     onXChanged: {
         geometryTimer.restart()
+        snapTimer.restart()
         if (logGeometry)
             Tools.log("window_place=" + x + "," + y)
     }
     onYChanged: {
         geometryTimer.restart()
+        snapTimer.restart()
         if (logGeometry)
             Tools.log("window_place=" + x + "," + y)
+    }
+
+    // General: a moved window snaps to the screen's edges (M14).
+    Timer {
+        id: snapTimer
+        interval: 400
+        onTriggered: root.snapToEdges()
+    }
+    function snapToEdges() {
+        if (root.generalLook.snap !== true || root.visibility !== Window.Windowed
+                || Qt.platform.pluginName === "wayland")
+            return
+        const area = root.screenArea()
+        const reach = 16
+        let x = root.x
+        let y = root.y
+        if (Math.abs(x - area.x) < reach)
+            x = area.x
+        else if (Math.abs(area.x + area.width - x - root.width) < reach)
+            x = area.x + area.width - root.width
+        if (Math.abs(y - area.y) < reach)
+            y = area.y
+        else if (Math.abs(area.y + area.height - y - root.height) < reach)
+            y = area.y + area.height - root.height
+        if (x !== root.x || y !== root.y)
+            root.setWindowGeometry(x, y, root.width, root.height, "snap")
     }
 
     // Saves the normal geometry shortly after it settles.
@@ -278,6 +348,10 @@ Window {
         case requestSystemInfo:
             systemInfoLoader.active = true
             systemInfoLoader.item.begin()
+            break
+        case requestDropMenu:
+            dropMenuLoader.active = true
+            dropMenuLoader.item.ask(player.dialog)
             break
         case requestRecordAs:
             dialogLoader.active = true
@@ -400,7 +474,8 @@ Window {
             root.boxWindow(root.width * r.factor, root.height * r.factor, area, "center")
             break
         case "size":
-            root.resizeWindow(r.width, r.height, area, "corner")
+            // General: "Resize window based on the center" (M14).
+            root.resizeWindow(r.width, r.height, area, root.generalLook.resizeCenter === true ? "center" : "corner")
             break
         case "place":
             if (r.x === null || r.y === null || !root.onScreen(r.x, r.y))
@@ -601,8 +676,9 @@ Window {
                                (maxHeight - chromeHeight) / videoHeight)
         const width = Math.round(videoWidth * scale + chromeWidth)
         const height = Math.round(videoHeight * scale + chromeHeight)
-        let x = root.x
-        let y = root.y
+        // General: "Resize window based on the center" (M14).
+        let x = root.generalLook.resizeCenter === true ? root.x + Math.round((root.width - width) / 2) : root.x
+        let y = root.generalLook.resizeCenter === true ? root.y + Math.round((root.height - height) / 2) : root.y
         if (screen) {
             // "Start playback in centered window" (M11).
             if (player.center_window) {
@@ -916,6 +992,16 @@ Window {
         active: false
         Component.onCompleted: setSource("ColorTheme.qml", { player: player })
     }
+    // General: "Use advanced drag and drop interaction" (M14): dropped
+    // files ask what to do.
+    Loader {
+        id: dropMenuLoader
+        anchors.fill: parent
+        z: 30
+        active: false
+        Component.onCompleted: setSource("DropMenu.qml", { player: player })
+    }
+
     // Playback/System Info (Ctrl+F1, M14): a window of its own.
     Loader {
         id: systemInfoLoader

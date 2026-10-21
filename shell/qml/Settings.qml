@@ -14,6 +14,9 @@ ApplicationWindow {
     id: win
     required property Player player
     title: "Settings"
+    // Dialog Box: "Always keep modeless dialog boxes on top" (M14).
+    flags: Qt.Window | ((win.player.general_look ? JSON.parse(win.player.general_look) : {}).dialogOnTop === true
+                        ? Qt.WindowStaysOnTopHint : 0)
     width: 860
     height: 640
     minimumWidth: 640
@@ -59,13 +62,17 @@ ApplicationWindow {
         { key: "fullscreen-mode", title: "Fullscreen Mode" },
         { key: "capture", title: "Video Capture" },
         { key: "visualization", title: "Visualization" },
-        { key: "decoders", title: "Decoders" }
+        { key: "decoders", title: "Decoders" },
+        { key: "general", title: "General" },
+        { key: "start", title: "When Starting" },
+        { key: "dialogs", title: "Dialog Box" }
     ]
     // PotPlayer's tree: each group opens into its pages, and the selected
     // group's pages show as tabs over the page. `page` is the group's own
     // page (General has none yet: M14 brings PotPlayer's general options).
     readonly property var tree: [
-        { title: "General", page: "", pages: ["input", "input-options", "skins", "logo", "osc", "visualization", "osd", "playlist"] },
+        { title: "General", page: "general",
+          pages: ["start", "input", "input-options", "skins", "logo", "osc", "visualization", "osd", "dialogs", "playlist"] },
         { title: "Playback", page: "playback",
           pages: ["time-jump", "skip", "section-repeat", "scene-browser", "window-size", "fullscreen-mode"] },
         { title: "Subtitles", page: "subtitles", pages: ["subtitle-style", "subtitle-location", "subtitle-sync", "subtitle-browser", "speech"] },
@@ -2422,6 +2429,84 @@ ApplicationWindow {
                         }
                         Amount { label: "Decoder threads"; path: "decoders.threads"; from: 0; to: 32; format: v => v === 0 ? "automatic" : String(v) }
                         Note { text: "PotPlayer's DirectShow filters, splitters and their priorities have no place in RVP: libmpv decodes and splits with FFmpeg." }
+                    }
+
+                    Page {
+                        Heading { text: "General settings" }
+                        Choice {
+                            label: "Stay on top"
+                            path: "on-top"
+                            values: ["never", "always", "while-playing", "fullscreen-playing"]
+                            texts: ({ "never": "Never", "always": "Always", "while-playing": "While playing",
+                                      "fullscreen-playing": "While playing in fullscreen" })
+                        }
+                        Choice {
+                            label: "When files are opened"
+                            path: "open.when-opened"
+                            values: ["selected", "similar", "all"]
+                            texts: ({ "selected": "Add only the files opened", "similar": "Add similar files too",
+                                      "all": "Add every file of the folder" })
+                        }
+                        Choice {
+                            label: "Taskbar/Tray icon"
+                            path: "general.tray"
+                            values: ["taskbar", "both", "minimize-to-tray"]
+                            texts: ({ "taskbar": "Taskbar only", "both": "Taskbar and tray",
+                                      "minimize-to-tray": "Tray while minimized" })
+                        }
+                        Choice {
+                            label: "Multiple instances"
+                            path: "general.instances"
+                            values: ["single", "multiple"]
+                            texts: ({ "single": "One instance: new files go to it", "multiple": "Each start opens its own window" })
+                        }
+                        Check { path: "general.cascade"; text: "Use non-overlapping multi instances" }
+                        Check { path: "general.hide-windows-minimized"; text: "Hide all windows when minimized" }
+                        Check { path: "general.pause-minimized"; text: "Pause playback when minimized" }
+                        Check { path: "general.pause-focus-lost"; text: "Pause playback when focus lost" }
+                        Check { path: "general.pause-screen-locked"; text: "Pause playback when screen locked" }
+                        Check { path: "general.resize-from-center"; text: "Resize the window based on the center" }
+                        Check { path: "open.recent"; text: "Store and show recent items" }
+                        Check { path: "general.no-focus-at-start"; text: "Don't get focus when started with a file" }
+                        Check { path: "general.drop-menu"; text: "Use advanced drag and drop interaction (dropped files ask what to do)" }
+                        Check { path: "general.hide-errors-when-playing"; text: "Ignore error messages if playback starts" }
+                        Check { path: "general.tooltips"; text: "Show tooltips" }
+                        Check { path: "general.snap"; text: "Snap to the screen's edges" }
+                        Check { path: "general.taskbar"; text: "Enable enhanced taskbar features (progress, buttons, jump list)" }
+                        Check { path: "general.media-controls"; text: "Use the system's media transport controls" }
+                        Check { path: "general.default-size-on-close"; text: "Default window size on closing file" }
+                        Check { path: "general.run-at-startup"; text: "Automatically run at system startup" }
+                        Check { path: "general.rotate-portrait-images"; text: "Auto rotate pictures based on their dimensions" }
+                    }
+
+                    Page {
+                        Heading { text: "When starting" }
+                        Choice {
+                            label: "Window position"
+                            path: "general.start.position"
+                            values: ["last", "center", "custom"]
+                            texts: ({ "last": "Where it was last", "center": "Centered", "custom": "At this position" })
+                        }
+                        Amount { label: "X"; path: "general.start.x"; from: 0; to: 7680; step: 10; unit: "px" }
+                        Amount { label: "Y"; path: "general.start.y"; from: 0; to: 4320; step: 10; unit: "px" }
+                        Choice {
+                            label: "Window size"
+                            path: "general.start.size"
+                            values: ["last", "custom"]
+                            texts: ({ "last": "As it was last", "custom": "This size" })
+                        }
+                        Amount { label: "Width"; path: "general.start.width"; from: 200; to: 7680; step: 10; unit: "px" }
+                        Amount { label: "Height"; path: "general.start.height"; from: 120; to: 4320; step: 10; unit: "px" }
+                        Check { path: "general.start.restore-state"; text: "Restore the window to its last state (maximized or normal)" }
+                        Check { path: "reopen-last-file"; text: "Play the last played item" }
+                    }
+
+                    Page {
+                        Heading { text: "Dialog boxes" }
+                        Field { label: "Font"; path: "general.dialog.font"; placeholder: "Qt's font" }
+                        Amount { label: "Font size"; path: "general.dialog.font-size"; from: 0; to: 72; unit: "pt"; format: v => v === 0 ? "Qt's" : v + " pt" }
+                        Check { path: "general.dialog.on-top"; text: "Always keep modeless dialog boxes on top" }
+                        Check { path: "general.dialog.dpi-aware"; text: "Use DPI awareness (Qt scales the windows with the display; at the next start)" }
                     }
                 }
             }

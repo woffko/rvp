@@ -22,6 +22,7 @@ pub mod crash;
 pub mod decoders;
 pub mod dpl;
 pub mod equalizer;
+pub mod general;
 pub mod gpu_power;
 pub mod hlsl;
 mod input;

@@ -27,7 +27,9 @@ Window {
     minimumHeight: height
     maximumHeight: height
     flags: Qt.Tool | Qt.FramelessWindowHint | (player.on_top ? Qt.WindowStaysOnTopHint : 0)
-    transientParent: owner
+    // General: "Hide all windows when minimized" (M14): an owned window
+    // hides with its owner.
+    transientParent: (player.general_look ? JSON.parse(player.general_look) : {}).hideWithOwner === false ? null : owner
     title: "Control Panel"
     color: "black"
     visible: player.panel_shown

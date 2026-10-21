@@ -113,6 +113,8 @@ pub mod request {
     pub const COLOR_THEME: i32 = 39;
     /// The Playback/System Info window (M14, `SystemInfo.qml`).
     pub const SYSTEM_INFO: i32 = 40;
+    /// The dropped files' menu (M14); `dialog` holds the paths.
+    pub const DROP_MENU: i32 = 41;
 }
 
 /// The skin the main window shows (the painters read it on the render
@@ -239,6 +241,10 @@ static PANEL_FRAME: Mutex<Option<Arc<Frame>>> = Mutex::new(None);
 pub fn panel_frame() -> Option<Arc<Frame>> {
     PANEL_FRAME.lock().ok().and_then(|frame| frame.clone())
 }
+
+/// Another RVP ran when this one started with "Multiple instances" (M14):
+/// with "Use non-overlapping multi instances" its window moves aside.
+pub static OTHER_INSTANCE: AtomicBool = AtomicBool::new(false);
 
 /// The main window's and the control panel's skin zoom in percent (M14,
 /// Zoom Skinned Windows): their chromes lay out at the window's size over
@@ -476,6 +482,7 @@ pub struct PlayerRust {
     pub(crate) animations: bool,
     pub(crate) osd_look: QString,
     pub(crate) misc_info: QString,
+    pub(crate) general_look: QString,
     pub(crate) slideshow: QString,
     pub(crate) power_notice: QString,
     pub(crate) power_seconds: i32,
@@ -628,7 +635,7 @@ fn point_at_vapoursynth(settings: &Settings) {
 /// Points libmpv at VapourSynth and starts loading the skin on a thread
 /// while Qt and QML start (called first in `main`). The settings are read
 /// here and again in `start`; both are cheap.
-pub fn preload_skin() {
+pub fn preload_skin() -> Settings {
     let cli = Cli::parse(std::env::args().skip(1));
     let settings = Dirs::from_env()
         .ok()
@@ -636,6 +643,11 @@ pub fn preload_skin() {
         .flatten()
         .unwrap_or_default();
     point_at_vapoursynth(&settings);
+    // Dialog Box: "Use DPI-Awareness" (M14), before Qt starts and before
+    // any other thread does.
+    if !settings.general.dialog.dpi_aware {
+        crate::ffi::bridge::rvp_set_env("QT_ENABLE_HIGHDPI_SCALING", "0");
+    }
     let source = skin_source(&cli, &settings);
     let thread_source = source.clone();
     let spawned = std::thread::Builder::new()
@@ -644,6 +656,7 @@ pub fn preload_skin() {
     if let (Ok(handle), Ok(mut slot)) = (spawned, PRELOAD.lock()) {
         *slot = Some((source, handle));
     }
+    settings
 }
 
 fn load_skin(source: &SkinSource) -> Result<&'static Skin, String> {
@@ -814,9 +827,44 @@ impl qobject::Player {
         self.as_mut().set_message(QString::from(text));
     }
 
-    /// The window's and the control panel's saved places.
+    /// The window's and the control panel's saved places; When Starting's
+    /// place and size override the window's (M14).
     fn restore_places(mut self: Pin<&mut Self>, app: &App) {
-        if let Some(window) = app.store().state().window {
+        let rvp_app::general::StartWindow {
+            position,
+            size,
+            restore_state,
+        } = app.start_window();
+        let saved = app.store().state().window;
+        let window = if position.is_none() && size.is_none() {
+            saved
+        } else {
+            let mut window = saved.unwrap_or(WindowGeometry {
+                x: None,
+                y: None,
+                width: 960,
+                height: 600,
+                maximized: false,
+            });
+            if let Some((width, height)) = size {
+                window.width = i32::try_from(width).unwrap_or(960);
+                window.height = i32::try_from(height).unwrap_or(600);
+            }
+            if let Some((x, y)) = position {
+                (window.x, window.y) = (Some(x), Some(y));
+            }
+            Some(window)
+        };
+        if let Some(mut window) = window {
+            window.maximized &= restore_state;
+            if app.settings.general.start.position == "center" {
+                (window.x, window.y) = (None, None);
+            }
+            // "Use non-overlapping multi instances": aside from the other.
+            if app.settings.general.cascade && OTHER_INSTANCE.load(Ordering::Relaxed) {
+                window.x = window.x.map(|x| x + 48);
+                window.y = window.y.map(|y| y + 48);
+            }
             self.as_mut().restore_window(window);
         }
         if let Some((x, y)) = app.panel_position() {
@@ -925,9 +973,7 @@ impl qobject::Player {
             gpu_readings: GpuReadings::Off,
             look: m14::Look::default(),
         });
-        // The skin's themes, its audio skin and the theme to show (M14).
-        self.as_mut().sync_skin();
-        self.as_mut().sync_opacity();
+        self.as_mut().sync_look();
         if let Some(message) = messages.first() {
             self.as_mut().show_message(message);
         }
@@ -959,11 +1005,20 @@ impl qobject::Player {
         };
         // PotPlayer's switches (M11): the files' order and options first.
         core.app.prepare_switches(&mut request);
-        // The desktop's media controls follow the application from here.
-        match crate::desktop::Integration::start(thread, crate::ffi::bridge::rvp_main_window_id()) {
-            Ok(desktop) => core.desktop = Some(desktop),
-            Err(error) => eprintln!("rvp: {error}"),
+        // The desktop's media controls follow the application from here,
+        // unless the General page turns them off; the taskbar's buttons
+        // and progress (M14).
+        if core.app.settings.general.media_controls {
+            match crate::desktop::Integration::start(
+                thread,
+                crate::ffi::bridge::rvp_main_window_id(),
+            ) {
+                Ok(desktop) => core.desktop = Some(desktop),
+                Err(error) => eprintln!("rvp: {error}"),
+            }
         }
+        crate::ffi::bridge::rvp_taskbar_start(core.app.settings.general.taskbar);
+        core.look.startup = Some(core.app.settings.general.run_at_startup);
         let plays = request.mode == rvp_app::instance::Mode::Play && !request.files.is_empty();
         if plays {
             core.request_fit();
@@ -1075,6 +1130,8 @@ impl qobject::Player {
         // A file with or without video: the audio or video skin (M14).
         if file_changed {
             self.as_mut().sync_skin();
+            self.as_mut().file_started();
+            self.as_mut().file_closed();
         }
         if let Some(request) = fit
             && !*self.fullscreen()
@@ -1782,6 +1839,12 @@ impl qobject::Player {
         let cursor = cursor_shape(core.pointer.cursor);
         let dragging = core.pointer.dragging();
         let osc = core.app.settings.skins.osc;
+        // General: "Show tooltips" (M14).
+        let tooltip = if core.app.settings.general.tooltips {
+            tooltip
+        } else {
+            ""
+        };
         core.look.bars_moved = Some(Instant::now());
         self.as_mut().set_tooltip(QString::from(tooltip));
         self.as_mut().set_cursor_shape(cursor);
@@ -2380,11 +2443,11 @@ impl qobject::Player {
         }
         self.as_mut().sync_window_settings();
         // Another skin, mode or theme, the windows' opacity, the bars
-        // over the video and the logo (M14).
-        self.as_mut().sync_skin();
-        self.as_mut().sync_opacity();
+        // over the video, the logo and the General page (M14).
+        self.as_mut().sync_look();
         self.as_mut().refresh_overlay();
         self.as_mut().tick_misc_info();
+        self.as_mut().apply_general();
         self.sync_chrome();
     }
 
@@ -2824,6 +2887,7 @@ impl qobject::Player {
         self.as_mut().tick_m11();
         self.as_mut().tick_bars();
         self.as_mut().tick_misc_info();
+        self.as_mut().tick_taskbar();
         self.as_mut().tick_gpu_power();
         self.check_native_video();
     }

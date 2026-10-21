@@ -217,7 +217,34 @@ Item {
             t.waitFor("m14_system_info_window", () => Tools.windows_json().indexOf("Playback/System Info") >= 0,
                       5000, () => Tools.windows_json())
             break
-        case 21:
+        case 21: {
+            // General: pause while minimized or without the focus, and play
+            // on when that ends (only what the window paused).
+            setSetting("general.pause-minimized", true)
+            setSetting("general.pause-focus-lost", true)
+            player.window_attention(0, true)
+            t.next()
+            break
+        }
+        case 22:
+            if (t.waitFor("m14_pause_when_minimized", () => s.pause === true, 3000, () => "pause " + s.pause))
+                player.window_attention(0, false)
+            break
+        case 23:
+            if (t.waitFor("m14_play_on_when_restored", () => s.pause === false, 3000, () => "pause " + s.pause))
+                player.window_attention(1, false)
+            break
+        case 24:
+            if (t.waitFor("m14_pause_when_focus_lost", () => s.pause === true, 3000, () => "pause " + s.pause))
+                player.window_attention(1, true)
+            break
+        case 25:
+            if (t.waitFor("m14_play_on_with_focus", () => s.pause === false, 3000, () => "pause " + s.pause)) {
+                setSetting("general.pause-minimized", false)
+                setSetting("general.pause-focus-lost", false)
+            }
+            break
+        case 26:
             t.finish()
             break
         }

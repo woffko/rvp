@@ -1044,12 +1044,12 @@ impl App {
             .double(PropertyId::VideoAspect)
             .unwrap_or(16.0 / 9.0);
         let rotation = self.model.int(PropertyId::VideoRotation).unwrap_or(0);
-        let angle = auto_rotation(
-            self.settings.picture.auto_rotate,
-            aspect,
-            rotation,
-            self.picture.screen.pixels(),
-        );
+        // Pictures turn the same way with the General page's option (M14).
+        let mode = match self.settings.picture.auto_rotate {
+            AutoRotate::Off if self.turns_pictures() => AutoRotate::Quarter,
+            mode => mode,
+        };
+        let angle = auto_rotation(mode, aspect, rotation, self.picture.screen.pixels());
         let changed = angle != self.picture.auto_rotation;
         self.picture.auto_rotation = angle;
         changed

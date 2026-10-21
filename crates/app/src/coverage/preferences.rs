@@ -913,6 +913,85 @@ const ITEMS: &[(u32, u32, Status)] = &[
     (366, 3035, Setting("input.drag-picture")),
     (366, 3036, Setting("input.drag-subtitles")),
     (366, 3037, Setting("input.x-wheel")),
+    // General (354), When Starting (457) and Dialog Box (436), M14.
+    (354, 3003, Setting("on-top")),
+    (354, 3005, Setting("open.when-opened")),
+    (354, 3008, Setting("general.tray")),
+    (354, 3011, Setting("general.instances")),
+    (354, 3010, Missing(NO_UPDATES)),
+    (354, 3128, Missing(NO_UPDATES)),
+    (
+        354,
+        3129,
+        Missing(
+            "Windows and the desktops give a minimized window back where it was; RVP keeps no other place for it",
+        ),
+    ),
+    (354, 3094, Setting("general.hide-windows-minimized")),
+    (354, 3110, Setting("general.pause-minimized")),
+    (354, 3066, Setting("general.pause-focus-lost")),
+    (354, 3130, Setting("general.pause-screen-locked")),
+    (354, 3126, Setting("general.resize-from-center")),
+    (354, 3127, Setting("open.recent")),
+    (354, 3338, Setting("general.no-focus-at-start")),
+    (354, 3340, Setting("general.drop-menu")),
+    (354, 3341, Setting("general.hide-errors-when-playing")),
+    (
+        354,
+        3083,
+        Missing(
+            "RVP keeps its settings in settings.json, in the user's settings folder or, with rvp.portable, beside the program (portable mode); there is no registry copy to choose between",
+        ),
+    ),
+    (
+        354,
+        3084,
+        Missing("RVP writes every settings change at once (and the playback state while it plays)"),
+    ),
+    (354, 3072, Setting("general.tooltips")),
+    (354, 3073, Setting("general.snap")),
+    (354, 3336, Setting("general.taskbar")),
+    (354, 3337, Setting("general.media-controls")),
+    (354, 3123, Setting("general.default-size-on-close")),
+    (354, 3339, Setting("general.cascade")),
+    (354, 3116, Setting("general.run-at-startup")),
+    (
+        354,
+        3064,
+        Missing("Daum's chat and its browsers are discontinued"),
+    ),
+    (354, 3065, Setting("general.rotate-portrait-images")),
+    (457, 3007, Setting("general.start.position")),
+    (457, 3274, Setting("general.start.x")),
+    (457, 3276, Setting("general.start.y")),
+    (457, 3006, Setting("general.start.size")),
+    (457, 3273, Setting("general.start.width")),
+    (457, 3275, Setting("general.start.height")),
+    (457, 3131, Setting("general.start.restore-state")),
+    (457, 3132, Setting("reopen-last-file")),
+    (436, 3058, Setting("general.dialog.font")),
+    (436, 3021, Setting("general.dialog.font")),
+    (436, 3057, Setting("general.dialog.font-size")),
+    (436, 3088, Setting("general.dialog.font-size")),
+    (
+        436,
+        3017,
+        Missing("Qt draws Unicode text: there is no character set to choose"),
+    ),
+    (436, 3060, Missing(DAUM)),
+    (436, 3022, Missing(DAUM)),
+    (436, 3059, Missing(DAUM)),
+    (436, 3089, Missing(DAUM)),
+    (436, 3018, Missing(DAUM)),
+    (436, 3062, Setting("general.dialog.dpi-aware")),
+    (
+        436,
+        3061,
+        Missing(
+            "gdipp is a GDI font renderer for PotPlayer's own drawing; Qt draws RVP's text itself (DirectWrite on Windows)",
+        ),
+    ),
+    (436, 3063, Setting("general.dialog.on-top")),
     // General > OSD Messages (375), M14.
     (375, 3057, Setting("osd.messages")),
     (375, 3014, Setting("osd.output")),
@@ -1208,6 +1287,9 @@ const ITEMS: &[(u32, u32, Status)] = &[
         Missing("mpv (libass) always shows overlapping subtitles together, one above the other"),
     ),
 ];
+
+/// PotPlayer's update checks.
+const NO_UPDATES: &str = "RVP is private and has no website or update service";
 
 /// PotPlayer's windows for its screen capture and Daum's broadcast and chat
 /// services, which RVP does not have.
