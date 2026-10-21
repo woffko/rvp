@@ -34,6 +34,8 @@ private = { ignore = true }
 allow = [
     "0BSD",
     "Apache-2.0",
+    # encoding_rs's WHATWG index data (M13's subtitle reader).
+    "BSD-3-Clause",
     "MIT",
     "Unicode-3.0",
     "Unlicense",

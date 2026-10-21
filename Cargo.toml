@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["crates/skin", "crates/look", "crates/engine", "crates/app", "crates/platform", "shell", "xtask"]
+members = ["crates/skin", "crates/look", "crates/engine", "crates/app", "crates/platform", "crates/subtitle", "shell", "xtask"]
 # Throwaway goal B spikes (their own workspace with relaxed lints) and the
 # patched libmpv2 (used through [patch.crates-io] below).
 exclude = ["spikes", "vendor"]
@@ -31,6 +31,10 @@ swash = "=0.2.10"
 # in the tree as swash's glyph rasterizer.
 zeno = "=0.3.3"
 zip = { version = "=9.0.3", default-features = false, features = ["deflate-flate2"] }
+# The legacy code pages of subtitle files (CP949, Shift_JIS, GBK, Big5,
+# Windows-125x) for RVP's subtitle reader (M13, crates/subtitle); MIT or
+# Apache-2.0, with BSD-3-Clause for the WHATWG index data.
+encoding_rs = "=0.8.35"
 # D-Bus for MPRIS and idle inhibit on Linux (M8, crates/platform): pure Rust,
 # so the packages need no libdbus; MIT.
 zbus = "=5.19.0"
