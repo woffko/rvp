@@ -110,6 +110,7 @@ fn blackspace_control_panel() {
         panel: true,
         turn_view: false,
         modifiers: Modifiers::default(),
+        options: rvp_app::pointer::PointerOptions::default(),
     };
     let mut pointer = Pointer::default();
     let mut renders = vec![audio_page(&mut chrome, &mut pointer, ctx)];

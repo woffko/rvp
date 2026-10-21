@@ -223,6 +223,7 @@ impl App {
             Action::Subtitle(style) => self.subtitle_style(engine, style),
             Action::Subtitles(command) => self.subtitle_command(engine, command),
             Action::Speech(command) => self.speech_command(engine, command),
+            Action::Misc(command) => self.misc_command(command),
             Action::Preferences => Some(UiRequest::Preferences(None)),
             Action::KeysAndMouse => Some(UiRequest::Preferences(Some("input"))),
             Action::Settings(page) => Some(UiRequest::Preferences(Some(page.key()))),

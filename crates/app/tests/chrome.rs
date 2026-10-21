@@ -145,6 +145,7 @@ fn window() -> Context {
         panel: false,
         turn_view: false,
         modifiers: Modifiers::default(),
+        options: rvp_app::pointer::PointerOptions::default(),
     }
 }
 
@@ -500,6 +501,109 @@ fn title_bar_and_video_drag_move_the_window() {
     };
     pointer.press(&mut chrome, maximized, 100, 50, Button::Left);
     assert!(pointer.moved(&mut chrome, maximized, 110, 50).is_empty());
+}
+
+/// M14's Mouse page options: only the title bar moves the window, drags
+/// with modifiers adjust the picture or the subtitles, and the wheel with
+/// X1 held is a gesture of its own whose button click is left out.
+#[test]
+fn mouse_page_options_change_drags_and_the_wheel() {
+    use rvp_app::pointer::{DragKind, Modifiers, PointerOptions};
+    let mut chrome = chrome();
+    let mut bindings = Bindings::potplayer_defaults();
+    let mut pointer = Pointer::default();
+    let options = PointerOptions {
+        drag_title_only: true,
+        drag_picture: true,
+        drag_subtitles: true,
+        x_wheel: true,
+    };
+    let ctx = Context {
+        options,
+        ..window()
+    };
+    // The video no longer moves the window; the title bar still does.
+    pointer.press(&mut chrome, ctx, 100, 50, Button::Left);
+    assert!(pointer.moved(&mut chrome, ctx, 110, 50).is_empty());
+    pointer.release(&mut chrome, &bindings, ctx, 110, 50, Button::Left);
+    let (x, y) = center(&chrome, "CMD_TITLE_MESSAGE");
+    pointer.press(&mut chrome, ctx, x, y, Button::Left);
+    assert_eq!(
+        pointer.moved(&mut chrome, ctx, x + 10, y),
+        vec![Effect::StartMove]
+    );
+    pointer.release(&mut chrome, &bindings, ctx, x + 10, y, Button::Left);
+    // Alt pans, Ctrl zooms, Shift stretches, Ctrl+Alt moves subtitles.
+    for (modifiers, kind) in [
+        (
+            Modifiers {
+                alt: true,
+                ..Modifiers::default()
+            },
+            DragKind::Pan,
+        ),
+        (
+            Modifiers {
+                ctrl: true,
+                ..Modifiers::default()
+            },
+            DragKind::Zoom,
+        ),
+        (
+            Modifiers {
+                shift: true,
+                ..Modifiers::default()
+            },
+            DragKind::Stretch,
+        ),
+        (
+            Modifiers {
+                ctrl: true,
+                alt: true,
+                ..Modifiers::default()
+            },
+            DragKind::Subtitles,
+        ),
+    ] {
+        let held = Context { modifiers, ..ctx };
+        pointer.press(&mut chrome, held, 100, 50, Button::Left);
+        let effects = pointer.moved(&mut chrome, held, 110, 40);
+        assert_eq!(effects.len(), 1, "{kind:?}");
+        let Effect::Adjust { kind: got, dx, dy } = effects[0] else {
+            panic!("{effects:?}");
+        };
+        assert_eq!(got, kind);
+        assert!(dx > 0.0 && dy < 0.0, "{dx} {dy}");
+        // Not a click when it ends.
+        assert!(
+            pointer
+                .release(&mut chrome, &bindings, held, 110, 40, Button::Left)
+                .is_empty()
+        );
+    }
+    // The wheel with X1 held: its own gesture, and no X1 click after it.
+    bindings.mouse.insert(
+        rvp_app::MouseGesture::X1WheelUp,
+        Action::SeekForward(rvp_app::SeekStep::Short),
+    );
+    pointer.press(&mut chrome, ctx, 100, 50, Button::Back);
+    assert_eq!(
+        pointer.wheel(&chrome, &bindings, ctx, (100, 50), 120),
+        vec![Effect::Action(Action::SeekForward(
+            rvp_app::SeekStep::Short
+        ))]
+    );
+    assert!(
+        pointer
+            .release(&mut chrome, &bindings, ctx, 100, 50, Button::Back)
+            .is_empty()
+    );
+    // Without the option the wheel is the plain one.
+    pointer.press(&mut chrome, window(), 100, 50, Button::Back);
+    assert_eq!(
+        pointer.wheel(&chrome, &bindings, window(), (100, 50), 120),
+        vec![Effect::Action(Action::VolumeUp)]
+    );
 }
 
 #[test]

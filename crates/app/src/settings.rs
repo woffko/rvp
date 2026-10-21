@@ -151,6 +151,10 @@ pub struct Settings {
     pub smoothing: crate::smoothing::SmoothingSettings,
     /// M13's subtitle options (PotPlayer's Subtitles pages).
     pub subtitles: crate::subtitles::SubtitleSettings,
+    /// M14: PotPlayer's Keyboard and Mouse page options.
+    pub input: crate::input::InputSettings,
+    /// M14: how Misc > Other copies times.
+    pub copy_time: crate::misc::CopyTimeSettings,
     /// M13's subtitles made from the audio (Create Subtitles from Audio).
     pub speech: crate::speech::SpeechSettings,
 }
@@ -215,6 +219,8 @@ impl Default for Settings {
             decoders: crate::decoders::DecoderSettings::default(),
             smoothing: crate::smoothing::SmoothingSettings::default(),
             subtitles: crate::subtitles::SubtitleSettings::default(),
+            input: crate::input::InputSettings::default(),
+            copy_time: crate::misc::CopyTimeSettings::default(),
             speech: crate::speech::SpeechSettings::default(),
         }
     }
@@ -236,7 +242,7 @@ impl Settings {
     /// Unknown keys, gestures and action names are returned as warnings.
     #[must_use]
     pub fn bindings(&self) -> (Bindings, Vec<String>) {
-        let mut bindings = Bindings::potplayer_defaults();
+        let mut bindings = Bindings::with_options(&self.input);
         let mut warnings = Vec::new();
         for (key, name) in &self.keys {
             let Some(chord) = KeyChord::parse(key) else {

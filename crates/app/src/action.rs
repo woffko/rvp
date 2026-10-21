@@ -14,6 +14,7 @@ use serde::{Deserialize, Serialize};
 use crate::audio::commands::AudioCommand;
 use crate::audio::{StereoChannel, Stretch, SyncKeep, VolumeMethod};
 use crate::hlsl::Stage;
+use crate::misc::MiscCommand;
 use crate::shaders::ShaderCommand;
 use crate::smoothing::{Engine as SmoothingEngine, Preset as SmoothingPreset, SmoothingCommand};
 use crate::speech::SpeechCommand;
@@ -601,6 +602,8 @@ pub enum Action {
     Subtitles(crate::subtitles::SubtitleCommand),
     /// M13's Create Subtitles from Audio.
     Speech(crate::speech::SpeechCommand),
+    /// M14's Misc menu commands.
+    Misc(crate::misc::MiscCommand),
     /// Save the current frame under a chosen name.
     SaveFrameAs,
     /// M12's Video Capture commands.
@@ -5343,6 +5346,102 @@ pub const ACTIONS: &[ActionInfo] = &[
         "Copy current item's path & name to clipboard",
         None,
         &[10928],
+        &[],
+    ),
+    info(
+        Action::Misc(MiscCommand::CopyTime(false)),
+        "copy-elapsed-time",
+        "Copy current playback elapsed time to clipboard",
+        None,
+        &[10924],
+        &[],
+    ),
+    info(
+        Action::Misc(MiscCommand::CopyTime(true)),
+        "copy-total-time",
+        "Copy current playback total time to clipboard",
+        None,
+        &[10925],
+        &[],
+    ),
+    info(
+        Action::Misc(MiscCommand::TimeFormat(0)),
+        "copy-time-auto",
+        "Time format : Auto",
+        None,
+        &[10929],
+        &[],
+    ),
+    info(
+        Action::Misc(MiscCommand::TimeFormat(1)),
+        "copy-time-minutes",
+        "Minute:Second",
+        None,
+        &[10930],
+        &[],
+    ),
+    info(
+        Action::Misc(MiscCommand::TimeFormat(2)),
+        "copy-time-hours",
+        "Hour:Minute:Second",
+        None,
+        &[10931],
+        &[],
+    ),
+    info(
+        Action::Misc(MiscCommand::TimeDecimals(0)),
+        "copy-time-decimals-0",
+        "To the end of time : Add nothing",
+        None,
+        &[10932],
+        &[],
+    ),
+    info(
+        Action::Misc(MiscCommand::TimeDecimals(1)),
+        "copy-time-decimals-1",
+        "Add 1 second (in decimal)",
+        None,
+        &[10933],
+        &[],
+    ),
+    info(
+        Action::Misc(MiscCommand::TimeDecimals(2)),
+        "copy-time-decimals-2",
+        "Add 2 seconds (in decimal)",
+        None,
+        &[10934],
+        &[],
+    ),
+    info(
+        Action::Misc(MiscCommand::TimeDecimals(3)),
+        "copy-time-decimals-3",
+        "Add 3 milliseconds (in decimal)",
+        None,
+        &[10935],
+        &[],
+    ),
+    info(
+        Action::Misc(MiscCommand::TimeZeros),
+        "copy-time-zeros",
+        "Fill with zeros",
+        None,
+        &[10938],
+        &[],
+    ),
+    info(
+        Action::Misc(MiscCommand::DefaultKeys),
+        "disable-default-keys",
+        "Disable default hotkeys",
+        None,
+        &[10339],
+        &[],
+    ),
+    info(
+        Action::Misc(MiscCommand::DragTitleOnly),
+        "drag-title-only",
+        "Prevent window from being dragged outside of title bar",
+        None,
+        &[10810],
         &[],
     ),
     info(

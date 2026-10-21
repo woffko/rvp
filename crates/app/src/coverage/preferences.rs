@@ -897,6 +897,22 @@ const ITEMS: &[(u32, u32, Status)] = &[
     // Filter Control > Video and Audio Decoder (360, 361).
     (360, 3110, Setting("decoders")),
     (361, 3110, Setting("audio.passthrough-device")),
+    // General > Keyboard (367) and Mouse (366), M14.
+    (367, 3242, Setting("keys")),
+    (367, 3119, Setting("input.disable-default-keys")),
+    (367, 3021, Setting("keys")),
+    (367, 3024, Setting("keys")),
+    (367, 3027, Setting("keys")),
+    (367, 3028, Setting("keys")),
+    (367, 3022, Setting("keys")),
+    (367, 3044, Setting("input.media-keys")),
+    (367, 3040, Setting("input.volume-keys")),
+    (367, 3041, Setting("input.navigation-keys")),
+    (366, 3034, Setting("input.left-click-video-only")),
+    (366, 3038, Setting("input.drag-title-only")),
+    (366, 3035, Setting("input.drag-picture")),
+    (366, 3036, Setting("input.drag-subtitles")),
+    (366, 3037, Setting("input.x-wheel")),
     // Subtitles (353).
     (
         353,

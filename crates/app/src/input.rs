@@ -53,6 +53,9 @@ pub enum Key {
     VolumeUp,
     VolumeDown,
     VolumeMute,
+    /// The keyboard's browser back and forward keys.
+    BrowserBack,
+    BrowserForward,
     /// A Windows virtual-key code without a name here (`VK_17`).
     Other(u16),
 }
@@ -168,6 +171,8 @@ fn qt_special_key(key: i32) -> Option<Key> {
         0x0100_0081 => Key::MediaStop,
         0x0100_0082 => Key::MediaPrevious,
         0x0100_0083 => Key::MediaNext,
+        0x0100_0061 => Key::BrowserBack,
+        0x0100_0062 => Key::BrowserForward,
         // F1..F24 (Qt numbers F1 as 0x01000030).
         f if (0x0100_0030..0x0100_0030 + 24).contains(&f) => {
             Key::F(u8::try_from(f - 0x0100_0030 + 1).ok()?)
@@ -290,6 +295,8 @@ fn parse_key(name: &str) -> Option<Key> {
         "VolumeUp" => Key::VolumeUp,
         "VolumeDown" => Key::VolumeDown,
         "VolumeMute" => Key::VolumeMute,
+        "BrowserBack" => Key::BrowserBack,
+        "BrowserForward" => Key::BrowserForward,
         _ => return None,
     })
 }
@@ -344,6 +351,12 @@ pub enum MouseGesture {
     WheelDown,
     WheelLeft,
     WheelRight,
+    /// The wheel while X1 or X2 is held ("Operate mouse wheel while X
+    /// button is pressed down", M14).
+    X1WheelUp,
+    X1WheelDown,
+    X2WheelUp,
+    X2WheelDown,
 }
 
 const GESTURE_NAMES: &[(MouseGesture, &str)] = &[
@@ -361,6 +374,10 @@ const GESTURE_NAMES: &[(MouseGesture, &str)] = &[
     (MouseGesture::WheelDown, "wheel-down"),
     (MouseGesture::WheelLeft, "wheel-left"),
     (MouseGesture::WheelRight, "wheel-right"),
+    (MouseGesture::X1WheelUp, "x1-wheel-up"),
+    (MouseGesture::X1WheelDown, "x1-wheel-down"),
+    (MouseGesture::X2WheelUp, "x2-wheel-up"),
+    (MouseGesture::X2WheelDown, "x2-wheel-down"),
 ];
 
 impl MouseGesture {
@@ -399,10 +416,115 @@ pub struct Bindings {
     pub left_click_video_only: bool,
 }
 
+/// PotPlayer's Keyboard and Mouse page options (`input` in settings.json,
+/// M14).
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(default, rename_all = "kebab-case")]
+// Independent options of two settings pages.
+#[allow(clippy::struct_excessive_bools)]
+pub struct InputSettings {
+    /// Only the user's own keys: PotPlayer's default hotkeys are off.
+    pub disable_default_keys: bool,
+    /// The keyboard's media keys act in RVP's window (Windows' media
+    /// controls take them while RVP's window has no keyboard).
+    pub media_keys: bool,
+    /// The keyboard's volume keys change RVP's volume while its window has
+    /// the keyboard.
+    pub volume_keys: bool,
+    /// The keyboard's back and forward keys go to the previous and next
+    /// entry.
+    pub navigation_keys: bool,
+    /// The left click acts in the video area only.
+    pub left_click_video_only: bool,
+    /// See [`crate::pointer::PointerOptions`].
+    pub drag_title_only: bool,
+    pub drag_picture: bool,
+    pub drag_subtitles: bool,
+    pub x_wheel: bool,
+}
+
+impl Default for InputSettings {
+    fn default() -> Self {
+        Self {
+            disable_default_keys: false,
+            media_keys: true,
+            volume_keys: false,
+            navigation_keys: false,
+            left_click_video_only: true,
+            drag_title_only: false,
+            drag_picture: false,
+            drag_subtitles: false,
+            x_wheel: false,
+        }
+    }
+}
+
+impl InputSettings {
+    /// The pointer's options.
+    #[must_use]
+    pub fn pointer(&self) -> crate::pointer::PointerOptions {
+        crate::pointer::PointerOptions {
+            drag_title_only: self.drag_title_only,
+            drag_picture: self.drag_picture,
+            drag_subtitles: self.drag_subtitles,
+            x_wheel: self.x_wheel,
+        }
+    }
+
+    /// The keys these options add over PotPlayer's table (the user's own
+    /// keys still win).
+    fn extra_keys(&self) -> Vec<(KeyChord, Action)> {
+        let mut keys = Vec::new();
+        let plain = |key| KeyChord {
+            key,
+            ctrl: false,
+            alt: false,
+            shift: false,
+        };
+        if self.media_keys {
+            keys.extend([
+                (plain(Key::MediaPlayPause), Action::PlayPause),
+                (plain(Key::MediaStop), Action::CloseMedia),
+                (plain(Key::MediaNext), Action::Next),
+                (plain(Key::MediaPrevious), Action::Previous),
+            ]);
+        }
+        if self.volume_keys {
+            keys.extend([
+                (plain(Key::VolumeUp), Action::VolumeUp),
+                (plain(Key::VolumeDown), Action::VolumeDown),
+                (plain(Key::VolumeMute), Action::ToggleMute),
+            ]);
+        }
+        if self.navigation_keys {
+            keys.extend([
+                (plain(Key::BrowserBack), Action::Previous),
+                (plain(Key::BrowserForward), Action::Next),
+            ]);
+        }
+        keys
+    }
+}
+
 /// PotPlayer's default hotkey table (R1).
 const HOTKEYS: &str = include_str!("../../../docs/r1/hotkeys.tsv");
 
 impl Bindings {
+    /// PotPlayer's defaults with the Keyboard and Mouse pages' options
+    /// applied (see [`InputSettings`]).
+    #[must_use]
+    pub fn with_options(input: &InputSettings) -> Self {
+        let mut bindings = Self::potplayer_defaults();
+        if input.disable_default_keys {
+            bindings.keys.clear();
+        }
+        for (chord, action) in input.extra_keys() {
+            bindings.keys.entry(chord).or_insert(action);
+        }
+        bindings.left_click_video_only = input.left_click_video_only;
+        bindings
+    }
+
     /// PotPlayer's defaults: the main-window accelerators that have an
     /// action in RVP, and the owner's mouse page.
     #[must_use]
@@ -514,6 +636,8 @@ impl Bindings {
                         | Key::VolumeUp
                         | Key::VolumeDown
                         | Key::VolumeMute
+                        | Key::BrowserBack
+                        | Key::BrowserForward
                         | Key::Other(_)
                 );
                 let modifiers = u8::from(chord.ctrl) + u8::from(chord.alt) + u8::from(chord.shift);

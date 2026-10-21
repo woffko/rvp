@@ -56,11 +56,13 @@ pub struct Editor {
 }
 
 impl Editor {
+    /// Edits `current`; resets go back to `defaults` (PotPlayer's, with
+    /// the Keyboard and Mouse pages' options, `Bindings::with_options`).
     #[must_use]
-    pub fn new(current: &Bindings) -> Self {
+    pub fn new(current: &Bindings, defaults: &Bindings) -> Self {
         Self {
             bindings: current.clone(),
-            defaults: Bindings::potplayer_defaults(),
+            defaults: defaults.clone(),
         }
     }
 
@@ -272,7 +274,10 @@ mod tests {
 
     #[test]
     fn conflicts_are_reported_and_resolved() {
-        let mut editor = Editor::new(&Bindings::potplayer_defaults());
+        let mut editor = Editor::new(
+            &Bindings::potplayer_defaults(),
+            &Bindings::potplayer_defaults(),
+        );
         assert_eq!(
             editor.key_owner(Scope::Window, &chord("Space")),
             Some("play-pause")
@@ -320,8 +325,8 @@ mod tests {
 
     #[test]
     fn overrides_round_trip_through_settings() {
-        let defaults = Bindings::potplayer_defaults();
-        let mut editor = Editor::new(&defaults);
+        let defaults = Bindings::with_options(&crate::input::InputSettings::default());
+        let mut editor = Editor::new(&defaults, &defaults);
         editor.bind_key(Scope::Window, "next", chord("Space"));
         editor.unbind_key(Scope::Window, &chord("M"));
         editor.bind_key(Scope::Playlist, "undo", chord("Ctrl+U"));

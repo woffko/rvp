@@ -140,7 +140,6 @@ const ITEM_REASONS: &[(u32, &str)] = &[
         "mpv converts YCgCo video from the file's tags itself",
     ),
     (10644, "presets are not in RVP yet"),
-    (10339, "RVP's keys are all editable (Keys and Mouse)"),
     (10809, "touch input is not planned"),
     (10442, "other on-screen information is not in RVP yet"),
     (10449, "other on-screen information is not in RVP yet"),

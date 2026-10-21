@@ -399,6 +399,8 @@ pub struct App {
     pub(crate) subtitle_editor: Option<crate::subtitle_editor::OpenSubtitle>,
     /// Subtitles made from the audio (`crate::speech`).
     pub(crate) speech: crate::speech::Speech,
+    /// A Ctrl+Alt drag's sideways travel not yet turned into a step (M14).
+    pub(crate) subtitle_drag_x: f64,
 }
 
 impl App {
@@ -488,6 +490,7 @@ impl App {
             subtitle_files: Vec::new(),
             subtitle_editor: None,
             speech: crate::speech::Speech::default(),
+            subtitle_drag_x: 0.0,
         };
         app.start_picture();
         Ok(app)
@@ -934,6 +937,7 @@ impl App {
             Action::Smoothing(command) => Some(self.smoothing_checked(command)),
             Action::Subtitles(command) => self.subtitle_checked(command),
             Action::Speech(command) => self.speech_checked(command),
+            Action::Misc(command) => self.misc_checked(command),
             Action::ControlPanel => Some(self.session.control_panel),
             Action::Audio(command) => self.audio_checked(command),
             other => self
@@ -1574,7 +1578,7 @@ impl App {
     /// Replaces the bindings (from the key and mouse editor) and saves them
     /// as changes over PotPlayer's defaults.
     pub fn set_bindings(&mut self, bindings: Bindings) {
-        let defaults = Bindings::potplayer_defaults();
+        let defaults = Bindings::with_options(&self.settings.input);
         let (keys, list_keys, mouse) = crate::binding_editor::overrides(&defaults, &bindings);
         self.settings.keys = keys;
         self.settings.playlist_keys = list_keys;

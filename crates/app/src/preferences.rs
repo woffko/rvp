@@ -137,6 +137,7 @@ impl Settings {
         self.smoothing.validate(&mut notes);
         self.subtitles.validate(&mut notes);
         self.speech.validate(&mut notes);
+        self.copy_time.validate(&mut notes);
         notes
     }
 
@@ -403,6 +404,8 @@ pub fn import(path: &Path) -> Result<(Settings, Vec<String>), String> {
                             | "smoothing"
                             | "subtitles"
                             | "speech"
+                            | "input"
+                            | "copy-time"
                     ) {
                         value.clone()
                     } else if value.is_object() {
@@ -502,8 +505,8 @@ impl App {
         } else if old.normalizer != new.normalizer {
             self.configure_normalizer();
         }
-        if (&old.keys, &old.mouse, &old.playlist_keys)
-            != (&new.keys, &new.mouse, &new.playlist_keys)
+        if (&old.keys, &old.mouse, &old.playlist_keys, &old.input)
+            != (&new.keys, &new.mouse, &new.playlist_keys, &new.input)
         {
             let (bindings, warnings) = new.bindings();
             self.bindings = bindings;

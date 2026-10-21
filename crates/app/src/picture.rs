@@ -1099,6 +1099,48 @@ impl App {
         }
     }
 
+    /// A drag with modifiers on the video (PotPlayer's Mouse page, M14):
+    /// `dx` and `dy` are fractions of the window's size since the last
+    /// move. Alt pans, Ctrl zooms (up is larger), Shift stretches (right
+    /// is wider, up is taller), Ctrl+Alt moves the subtitles.
+    pub fn drag_adjust(
+        &mut self,
+        engine: &Engine,
+        kind: crate::pointer::DragKind,
+        dx: f64,
+        dy: f64,
+    ) -> Option<UiRequest> {
+        use crate::pointer::DragKind;
+        if !self.model.media_loaded() {
+            return None;
+        }
+        let session = &mut self.session;
+        let text = match kind {
+            DragKind::Pan => {
+                session.pan_x = (session.pan_x + dx).clamp(-3.0, 3.0);
+                session.pan_y = (session.pan_y + dy).clamp(-3.0, 3.0);
+                format!("Position: {:+.2}, {:+.2}", session.pan_x, session.pan_y)
+            }
+            DragKind::Zoom => {
+                session.zoom = (session.zoom - 2.0 * dy).clamp(-3.0, 3.0);
+                format!("Zoom: {:.0} %", 2f64.powf(session.zoom) * 100.0)
+            }
+            DragKind::Stretch => {
+                session.scale_x = (session.scale_x * 2f64.powf(2.0 * dx)).clamp(0.1, 10.0);
+                session.scale_y = (session.scale_y * 2f64.powf(-2.0 * dy)).clamp(0.1, 10.0);
+                format!(
+                    "Stretch: {:.0} % x {:.0} %",
+                    session.scale_x * 100.0,
+                    session.scale_y * 100.0
+                )
+            }
+            DragKind::Subtitles => return Some(self.drag_subtitles(engine, dx, dy)),
+        };
+        drop(self.apply_picture(engine));
+        self.remember_frame();
+        Some(UiRequest::Osd(text))
+    }
+
     /// Keeps the frame for the next file when it is remembered.
     pub(crate) fn remember_frame(&mut self) {
         if !self.settings.picture.remember_frame {

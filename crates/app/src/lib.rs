@@ -29,6 +29,7 @@ pub mod instance;
 pub mod marks;
 pub mod media;
 pub mod menu;
+pub mod misc;
 pub mod normalizer;
 pub mod panel;
 pub mod picture;

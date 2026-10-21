@@ -50,6 +50,7 @@ ApplicationWindow {
         { key: "subtitle-browser", title: "Subtitle Browser" },
         { key: "speech", title: "Subtitles from Audio" },
         { key: "input", title: "Keys and Mouse" },
+        { key: "input-options", title: "Keyboard and Mouse Options" },
         { key: "skins", title: "Skins" },
         { key: "window-size", title: "Window Size" },
         { key: "fullscreen-mode", title: "Fullscreen Mode" },
@@ -61,7 +62,7 @@ ApplicationWindow {
     // group's pages show as tabs over the page. `page` is the group's own
     // page (General has none yet: M14 brings PotPlayer's general options).
     readonly property var tree: [
-        { title: "General", page: "", pages: ["input", "skins", "visualization", "playlist"] },
+        { title: "General", page: "", pages: ["input", "input-options", "skins", "visualization", "playlist"] },
         { title: "Playback", page: "playback",
           pages: ["time-jump", "skip", "section-repeat", "scene-browser", "window-size", "fullscreen-mode"] },
         { title: "Subtitles", page: "subtitles", pages: ["subtitle-style", "subtitle-location", "subtitle-sync", "subtitle-browser", "speech"] },
@@ -1984,6 +1985,21 @@ ApplicationWindow {
                     Loader {
                         id: keysPage
                         Component.onCompleted: setSource("KeysAndMouse.qml", { player: win.player })
+                    }
+
+                    Page {
+                        Heading { text: "Keyboard" }
+                        Check { path: "input.disable-default-keys"; text: "Disable default hotkeys (your own keys stay)" }
+                        Check { path: "input.media-keys"; text: "Support the keyboard's media keys in RVP's window" }
+                        Check { path: "input.volume-keys"; text: "The keyboard's volume keys change RVP's volume" }
+                        Check { path: "input.navigation-keys"; text: "The keyboard's back and forward keys go to the previous and next item" }
+                        Note { text: "While RVP's window has no keyboard, Windows' media controls take the media keys (General: system media transport controls)." }
+                        Heading { text: "Mouse" }
+                        Check { path: "input.left-click-video-only"; text: "Operate the left click in the video area only" }
+                        Check { path: "input.drag-title-only"; text: "Prevent the window from being dragged outside of the title bar" }
+                        Check { path: "input.drag-picture"; text: "Alt, Ctrl and Shift with a drag on the video pan, zoom and stretch the picture" }
+                        Check { path: "input.drag-subtitles"; text: "Ctrl+Alt with a drag on the video moves the subtitles" }
+                        Check { path: "input.x-wheel"; text: "Operate the wheel while X1 or X2 is held (X1/X2 Wheel gestures on the Keys and Mouse page)" }
                     }
 
                     Page {

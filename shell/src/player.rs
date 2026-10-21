@@ -345,6 +345,7 @@ fn to_rectf(rect: rvp_skin::Rect) -> QRectF {
 /// `Qt::KeyboardModifier` bits.
 const QT_SHIFT: i32 = 0x0200_0000;
 const QT_CONTROL: i32 = 0x0400_0000;
+const QT_ALT: i32 = 0x0800_0000;
 
 /// Window coordinates from QML (fractional on scaled screens) to pixels.
 fn pixel(value: f64) -> i32 {
@@ -1045,6 +1046,7 @@ impl qobject::Player {
             panel: true,
             turn_view: false,
             modifiers: Modifiers::default(),
+            options: rvp_app::pointer::PointerOptions::default(),
         }
     }
 
@@ -1310,6 +1312,7 @@ impl qobject::Player {
             panel: false,
             turn_view: core.app.vr_active(),
             modifiers,
+            options: core.app.settings.input.pointer(),
         })
     }
 
@@ -1323,6 +1326,7 @@ impl qobject::Player {
         let modifiers = Modifiers {
             ctrl: modifiers & QT_CONTROL != 0,
             shift: modifiers & QT_SHIFT != 0,
+            alt: modifiers & QT_ALT != 0,
         };
         self.pointer_event(x, y, button_value, 0, modifiers);
     }
@@ -1442,6 +1446,15 @@ impl qobject::Player {
                 Effect::TurnView { dx, dy } => {
                     if let Some(core) = self.as_mut().core_mut() {
                         core.app.turn_vr(core.engine, f64::from(dx), f64::from(dy));
+                    }
+                }
+                Effect::Adjust { kind, dx, dy } => {
+                    let request = self
+                        .as_mut()
+                        .core_mut()
+                        .and_then(|core| core.app.drag_adjust(core.engine, kind, dx, dy));
+                    if let Some(request) = request {
+                        self.as_mut().handle_request(request);
                     }
                 }
             }
@@ -2312,7 +2325,10 @@ impl qobject::Player {
 
     pub(crate) fn editor_open(mut self: Pin<&mut Self>) {
         if let Some(core) = self.as_mut().core_mut() {
-            core.editor = Some(Editor::new(&core.app.bindings));
+            core.editor = Some(Editor::new(
+                &core.app.bindings,
+                &rvp_app::Bindings::with_options(&core.app.settings.input),
+            ));
         }
     }
 

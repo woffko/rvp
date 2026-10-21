@@ -22,9 +22,16 @@
 //!   2026-10-15: the bar shows where it is wanted, not where the video
 //!   already is).
 //! * The frame edges resize the window; dragging the title bar, an empty
-//!   skin area or the video moves it ("prevent window from being dragged
-//!   outside of the title bar" is off). The move starts once the pointer
+//!   skin area or the video moves it; with "prevent window from being
+//!   dragged outside of title bar" ([`PointerOptions::drag_title_only`],
+//!   M14) only the title bar does. The move starts once the pointer
 //!   travels a few pixels, so clicks and double clicks stay clicks.
+//! * With [`PointerOptions::drag_picture`] a drag on the video with Alt
+//!   pans the picture, with Ctrl zooms it and with Shift stretches it; with
+//!   [`PointerOptions::drag_subtitles`] one with Ctrl+Alt moves the
+//!   subtitles ([`Effect::Adjust`]). With [`PointerOptions::x_wheel`] the
+//!   wheel turned while X1 or X2 is held is a gesture of its own, and that
+//!   button's click is left out.
 //! * In the playlist panel a click selects (Ctrl adds, Shift extends), a
 //!   double click plays, dragging selected rows moves them (a line marks
 //!   where they land), the wheel scrolls, tabs switch albums and the mark on
@@ -122,6 +129,43 @@ pub enum Effect {
         dx: i32,
         dy: i32,
     },
+    /// A drag with modifiers on the video moved by these fractions of the
+    /// window's size (M14).
+    Adjust {
+        kind: DragKind,
+        dx: f64,
+        dy: f64,
+    },
+}
+
+/// What a drag with modifiers on the video changes (PotPlayer's Mouse
+/// page).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DragKind {
+    /// Alt: the picture's place.
+    Pan,
+    /// Ctrl: its size.
+    Zoom,
+    /// Shift: its width and height apart.
+    Stretch,
+    /// Ctrl+Alt: the subtitles' place.
+    Subtitles,
+}
+
+/// PotPlayer's Mouse page options the pointer follows (from
+/// `crate::input::InputSettings`).
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+// Independent options of one settings page.
+#[allow(clippy::struct_excessive_bools)]
+pub struct PointerOptions {
+    /// Only the title bar moves the window.
+    pub drag_title_only: bool,
+    /// Alt, Ctrl and Shift with a drag pan, zoom and stretch the picture.
+    pub drag_picture: bool,
+    /// Ctrl+Alt with a drag moves the subtitles.
+    pub drag_subtitles: bool,
+    /// The wheel while X1 or X2 is held is a gesture of its own.
+    pub x_wheel: bool,
 }
 
 /// What the playlist panel does.
@@ -169,8 +213,9 @@ pub struct Context {
     pub panel: bool,
     /// 360° video plays: a drag on the video turns the view (M12).
     pub turn_view: bool,
-    /// Modifiers held with the button (playlist selection).
+    /// Modifiers held with the button (playlist selection, drags).
     pub modifiers: Modifiers,
+    pub options: PointerOptions,
 }
 
 /// Keyboard modifiers held with a mouse button.
@@ -178,6 +223,7 @@ pub struct Context {
 pub struct Modifiers {
     pub ctrl: bool,
     pub shift: bool,
+    pub alt: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -193,12 +239,19 @@ enum Drag {
         node: usize,
         command: &'static str,
     },
-    /// A press in the video area (`click`), on the title bar or on an empty
-    /// skin area; it moves the window once the pointer travels.
+    /// A press in the video area (`click`), on the title bar (`title`) or
+    /// on an empty skin area; it moves the window once the pointer travels.
     Press {
         x: i32,
         y: i32,
         click: bool,
+        title: bool,
+    },
+    /// A drag with modifiers on the video, last at this place.
+    Adjust {
+        kind: DragKind,
+        x: i32,
+        y: i32,
     },
     /// A drag over 360° video, last at this place.
     Turn {
@@ -232,6 +285,9 @@ pub struct Pointer {
     pub cursor: Cursor,
     /// The pointer was over the seek bar at the last move.
     over_seek_bar: bool,
+    /// X1 or X2 is held, and whether the wheel turned since.
+    x_held: Option<Button>,
+    x_wheeled: bool,
 }
 
 impl Default for Pointer {
@@ -243,7 +299,54 @@ impl Default for Pointer {
             tooltip: None,
             cursor: Cursor::Arrow,
             over_seek_bar: false,
+            x_held: None,
+            x_wheeled: false,
         }
+    }
+}
+
+/// Rows held since a press were let go at `y`: moved where they were
+/// dragged, or this row selected alone.
+fn release_rows(
+    chrome: &Chrome,
+    index: usize,
+    moving: bool,
+    select_on_release: bool,
+    y: i32,
+) -> Vec<Effect> {
+    if moving {
+        let total = chrome.data.playlist.entries.len();
+        let to = chrome
+            .list_geometry()
+            .map_or(index, |geometry| geometry.insertion_index(y, total));
+        vec![
+            Effect::List(ListEffect::DropMarker(None)),
+            Effect::List(ListEffect::MoveBefore(to)),
+        ]
+    } else if select_on_release {
+        vec![Effect::List(ListEffect::Select {
+            index,
+            how: Select::Only,
+        })]
+    } else {
+        Vec::new()
+    }
+}
+
+/// What a drag on the video with these modifiers changes, if anything.
+fn drag_kind(ctx: Context) -> Option<DragKind> {
+    let m = ctx.modifiers;
+    if ctx.options.drag_subtitles && m.ctrl && m.alt && !m.shift {
+        return Some(DragKind::Subtitles);
+    }
+    if !ctx.options.drag_picture {
+        return None;
+    }
+    match (m.alt, m.ctrl, m.shift) {
+        (true, false, false) => Some(DragKind::Pan),
+        (false, true, false) => Some(DragKind::Zoom),
+        (false, false, true) => Some(DragKind::Stretch),
+        _ => None,
     }
 }
 
@@ -433,14 +536,23 @@ impl Pointer {
     ) -> Vec<Effect> {
         self.swallow_release = false;
         if button != Button::Left {
+            if matches!(button, Button::Back | Button::Forward) {
+                self.x_held = Some(button);
+                self.x_wheeled = false;
+            }
             return Vec::new();
         }
         match target(chrome, ctx, x, y) {
             Target::Edge(edges) => vec![Effect::StartResize(edges)],
             // The window moves once the pointer travels, so a double click
             // on the title bar is not taken for a move.
-            Target::TitleBar | Target::Background => {
-                self.drag = Drag::Press { x, y, click: false };
+            target @ (Target::TitleBar | Target::Background) => {
+                self.drag = Drag::Press {
+                    x,
+                    y,
+                    click: false,
+                    title: matches!(target, Target::TitleBar),
+                };
                 Vec::new()
             }
             Target::Control(Hit::Control {
@@ -476,7 +588,15 @@ impl Pointer {
             }
             Target::Control(_) => Vec::new(),
             Target::Video => {
-                self.drag = Drag::Press { x, y, click: true };
+                self.drag = match drag_kind(ctx) {
+                    Some(kind) => Drag::Adjust { kind, x, y },
+                    None => Drag::Press {
+                        x,
+                        y,
+                        click: true,
+                        title: false,
+                    },
+                };
                 vec![Effect::Focus(Focus::Window)]
             }
             Target::List(hit) => {
@@ -639,10 +759,20 @@ impl Pointer {
                 chrome.state.pressed = over.then_some(element);
                 return Vec::new();
             }
+            Drag::Adjust { kind, x: x0, y: y0 } => {
+                self.drag = Drag::Adjust { kind, x, y };
+                let fraction = |delta: i32, size: i32| f64::from(delta) / f64::from(size.max(1));
+                return vec![Effect::Adjust {
+                    kind,
+                    dx: fraction(x - x0, ctx.width),
+                    dy: fraction(y - y0, ctx.height),
+                }];
+            }
             Drag::Press {
                 x: x0,
                 y: y0,
                 click,
+                title,
             } => {
                 if (x - x0).abs() + (y - y0).abs() >= DRAG_DISTANCE {
                     // A drag on 360° video turns the view instead.
@@ -654,7 +784,7 @@ impl Pointer {
                         }];
                     }
                     self.drag = Drag::Idle;
-                    if ctx.movable {
+                    if ctx.movable && (title || !ctx.options.drag_title_only) {
                         return vec![Effect::StartMove];
                     }
                 }
@@ -700,6 +830,16 @@ impl Pointer {
         }
     }
 
+    /// X1 or X2 went up: whether the wheel turned while it was held (no
+    /// click for it then).
+    fn x_wheeled_while_held(&mut self, button: Button) -> bool {
+        if matches!(button, Button::Back | Button::Forward) && self.x_held == Some(button) {
+            self.x_held = None;
+            return std::mem::take(&mut self.x_wheeled);
+        }
+        false
+    }
+
     /// A button went up.
     pub fn release(
         &mut self,
@@ -713,6 +853,9 @@ impl Pointer {
         let drag = std::mem::replace(&mut self.drag, Drag::Idle);
         chrome.state.pressed = None;
         if std::mem::take(&mut self.swallow_release) {
+            return Vec::new();
+        }
+        if self.x_wheeled_while_held(button) {
             return Vec::new();
         }
         match button {
@@ -746,25 +889,7 @@ impl Pointer {
                     moving,
                     select_on_release,
                     ..
-                } => {
-                    if moving {
-                        let total = chrome.data.playlist.entries.len();
-                        let to = chrome
-                            .list_geometry()
-                            .map_or(index, |geometry| geometry.insertion_index(y, total));
-                        vec![
-                            Effect::List(ListEffect::DropMarker(None)),
-                            Effect::List(ListEffect::MoveBefore(to)),
-                        ]
-                    } else if select_on_release {
-                        vec![Effect::List(ListEffect::Select {
-                            index,
-                            how: Select::Only,
-                        })]
-                    } else {
-                        Vec::new()
-                    }
-                }
+                } => release_rows(chrome, index, moving, select_on_release, y),
                 Drag::Slider { node, command } => slider_effect(chrome, node, command, x, y, true)
                     .into_iter()
                     .collect(),
@@ -774,6 +899,7 @@ impl Pointer {
                     action.map(Effect::Action).into_iter().collect()
                 }
                 Drag::Press { click: false, .. }
+                | Drag::Adjust { .. }
                 | Drag::Turn { .. }
                 | Drag::Thumb { .. }
                 | Drag::Idle => Vec::new(),
@@ -832,9 +958,8 @@ impl Pointer {
 
     /// The wheel turned at `(x, y)`; `delta` is positive away from the
     /// user. Over the playlist it scrolls the list.
-    #[must_use]
     pub fn wheel(
-        &self,
+        &mut self,
         chrome: &Chrome,
         bindings: &Bindings,
         ctx: Context,
@@ -847,9 +972,17 @@ impl Pointer {
         if ctx.panel {
             return Vec::new();
         }
-        let gesture = match delta.signum() {
-            1 => MouseGesture::WheelUp,
-            -1 => MouseGesture::WheelDown,
+        let held = self.x_held.filter(|_| ctx.options.x_wheel);
+        if held.is_some() && delta != 0 {
+            self.x_wheeled = true;
+        }
+        let gesture = match (delta.signum(), held) {
+            (1, Some(Button::Back)) => MouseGesture::X1WheelUp,
+            (-1, Some(Button::Back)) => MouseGesture::X1WheelDown,
+            (1, Some(_)) => MouseGesture::X2WheelUp,
+            (-1, Some(_)) => MouseGesture::X2WheelDown,
+            (1, None) => MouseGesture::WheelUp,
+            (-1, None) => MouseGesture::WheelDown,
             _ => return Vec::new(),
         };
         bindings

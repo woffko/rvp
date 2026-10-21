@@ -1010,6 +1010,44 @@ impl App {
         Some(text)
     }
 
+    /// Ctrl+Alt with a drag on the video (M14): up and down move the
+    /// subtitles' position (`sub-pos`); left and right their margin from
+    /// the edge they sit at, through the centre ([`horizontal_step`]).
+    pub(crate) fn drag_subtitles(&mut self, engine: &Engine, dx: f64, dy: f64) -> UiRequest {
+        let default_margin = self.subtitle_defaults.margin_x.parse::<i64>().unwrap_or(25);
+        let subtitles = &mut self.settings.subtitles;
+        let position = subtitles.position.unwrap_or(100.0);
+        subtitles.position = Some((position + dy * 100.0).clamp(0.0, 150.0));
+        // A step for each twentieth of the window's width.
+        self.subtitle_drag_x += dx;
+        while self.subtitle_drag_x.abs() >= 0.05 {
+            let right = self.subtitle_drag_x > 0.0;
+            self.subtitle_drag_x -= 0.05_f64.copysign(self.subtitle_drag_x);
+            let subtitles = &mut self.settings.subtitles;
+            let (align, margin) = horizontal_step(
+                &subtitles.align,
+                subtitles.margin_x.unwrap_or(default_margin),
+                right,
+            );
+            align.clone_into(&mut subtitles.align);
+            subtitles.margin_x = (align != "center").then_some(margin);
+        }
+        self.save_settings();
+        self.apply_subtitles(engine);
+        let subtitles = &self.settings.subtitles;
+        UiRequest::Osd(format!(
+            "Subtitle position: {:.0} %, {}",
+            subtitles.position.unwrap_or(100.0),
+            match subtitles.align.as_str() {
+                "center" => "centred".to_owned(),
+                side => format!(
+                    "{} from the {side} edge",
+                    subtitles.margin_x.unwrap_or(default_margin)
+                ),
+            }
+        ))
+    }
+
     /// The check marks of the Subtitles menu's toggles.
     pub(crate) fn subtitle_checked(&self, command: SubtitleCommand) -> Option<bool> {
         let subtitles = &self.settings.subtitles;
