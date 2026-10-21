@@ -142,11 +142,16 @@ fn keyframe_steps_and_the_jump_dialog_land_where_asked() {
     });
     h.app.dispatch(&h.engine, Action::PlayPause);
     h.wait("paused", |app| !app.model.playing());
+    // There, and done seeking: a relative keyframe step sent while mpv
+    // still finishes the seek before it went to the file's end once on
+    // CI's runner.
     let near = |wanted: f64| {
         move |app: &App| {
-            app.model
-                .double(PropertyId::TimePos)
-                .is_some_and(|time| (time - wanted).abs() < 0.05)
+            app.model.flag(PropertyId::Seeking) == Some(false)
+                && app
+                    .model
+                    .double(PropertyId::TimePos)
+                    .is_some_and(|time| (time - wanted).abs() < 0.05)
         }
     };
     h.app

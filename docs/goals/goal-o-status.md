@@ -234,7 +234,11 @@ the hosted runner `m8-smtc.ps1` saw RVP's first file still `Opened`, with
 Pause and Next off, after its 10 s waits. The media controls are the same
 code as before; goal T saw the same once (690a502). The waits are now
 30 s (the check is about the controls, not about how fast a file starts),
-in the commit of this file.
+in the commit of this file. That commit's CI then passed
+`package-windows` but failed M11's keyframe test on Ubuntu once (a
+relative keyframe step sent while mpv still finished the seek before
+went to the file's end); the test now waits for each seek to end, in
+the commit after it.
 
 ## Open
 
