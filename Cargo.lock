@@ -934,6 +934,7 @@ dependencies = [
  "rvp-engine",
  "rvp-look",
  "rvp-skin",
+ "rvp-subtitle",
  "serde",
  "serde_json",
 ]

@@ -648,6 +648,7 @@ impl App {
                 "subtitles.ass-override": crate::subtitles::ASS_OVERRIDE,
                 "subtitles.border-style": crate::subtitles::BORDER_STYLE,
                 "subtitles.align": crate::subtitles::ALIGN,
+                "subtitles.browser.times": crate::subtitle_editor::BROWSER_TIMES,
             },
             "file": self.settings_path().map(|path| path.display().to_string()),
             "portable": portable,

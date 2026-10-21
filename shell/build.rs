@@ -67,6 +67,7 @@ fn main() {
         .qml_file("qml/About.qml")
         .qml_file("qml/AudioSync.qml")
         .qml_file("qml/SubtitleSync.qml")
+        .qml_file("qml/SubtitleBrowser.qml")
         .qml_file("qml/ControlPanel.qml")
         .qml_file("qml/PlaybackDialogs.qml")
         .qml_file("qml/VideoDialogs.qml")
@@ -75,7 +76,8 @@ fn main() {
         .qml_file("qml/SceneBrowser.qml")
         .qml_file("qml/SelfTestM11.qml")
         .qml_file("qml/SelfTestGpu.qml")
-        .qml_file("qml/SelfTestSmoothing.qml");
+        .qml_file("qml/SelfTestSmoothing.qml")
+        .qml_file("qml/SelfTestM13.qml");
     CxxQtBuilder::new_qml_module(module)
         .qt_module("Gui")
         .qt_module("Qml")

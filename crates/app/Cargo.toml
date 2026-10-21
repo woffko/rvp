@@ -11,6 +11,7 @@ publish.workspace = true
 [dependencies]
 rvp-engine = { path = "../engine" }
 rvp-skin = { path = "../skin" }
+rvp-subtitle = { path = "../subtitle" }
 serde.workspace = true
 serde_json.workspace = true
 

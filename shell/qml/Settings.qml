@@ -47,6 +47,7 @@ ApplicationWindow {
         { key: "subtitle-style", title: "Font Style" },
         { key: "subtitle-location", title: "Fade/3D/Location" },
         { key: "subtitle-sync", title: "Language/Sync/Other" },
+        { key: "subtitle-browser", title: "Subtitle Browser" },
         { key: "input", title: "Keys and Mouse" },
         { key: "skins", title: "Skins" },
         { key: "window-size", title: "Window Size" },
@@ -62,7 +63,7 @@ ApplicationWindow {
         { title: "General", page: "", pages: ["input", "skins", "visualization", "playlist"] },
         { title: "Playback", page: "playback",
           pages: ["time-jump", "skip", "section-repeat", "scene-browser", "window-size", "fullscreen-mode"] },
-        { title: "Subtitles", page: "subtitles", pages: ["subtitle-style", "subtitle-location", "subtitle-sync"] },
+        { title: "Subtitles", page: "subtitles", pages: ["subtitle-style", "subtitle-location", "subtitle-sync", "subtitle-browser"] },
         { title: "Device", page: "devices", pages: [] },
         { title: "Filter Control", page: "decoders", pages: [] },
         { title: "Video", page: "video",
@@ -1877,6 +1878,24 @@ ApplicationWindow {
                         Amount { label: "Sync step (Ctrl+< and Ctrl+>)"; path: "subtitles.sync-step-2"; values: [0.01, 0.05, 0.1, 0.2, 0.25, 0.5, 1, 2, 5, 10, 30, 60]; format: win.seconds }
                         Amount { label: "Sync step (Alt+< and Alt+>)"; path: "subtitles.sync-step-3"; values: [0.01, 0.05, 0.1, 0.2, 0.25, 0.5, 1, 2, 5, 10, 30, 60]; format: win.seconds }
                         Check { path: "subtitles.keep-sync"; text: "Keep subtitle sync changes for the next files" }
+                        Check { path: "subtitles.sync-from-next"; text: "Sync changes move only the subtitles after the current one (subtitle files RVP edits: SRT, ASS, WebVTT)" }
+                    }
+
+                    Page {
+                        Heading { text: "Subtitle browser (Alt+E)" }
+                        Choice {
+                            label: "Times"
+                            path: "subtitles.browser.times"
+                            values: win.view.choices["subtitles.browser.times"] || []
+                            texts: ({ "start-end": "Start and end", "start": "Start", "none": "None" })
+                        }
+                        Check { path: "subtitles.browser.synced-times"; text: "Show the times as they play (with the sync)" }
+                        Amount { label: "Opacity"; path: "subtitles.browser.opacity"; unit: "%"; from: 20; to: 100; step: 5 }
+                        Field { label: "Font"; path: "subtitles.browser.font"; placeholder: "The window's font" }
+                        Amount { label: "Font size"; path: "subtitles.browser.font-size"; from: 6; to: 48; step: 1 }
+                        Amount { label: "Lines of each subtitle"; path: "subtitles.browser.lines"; from: 1; to: 5; step: 1 }
+                        Check { path: "subtitles.browser.follow"; text: "Follow the subtitle that shows" }
+                        Note { text: "The browser edits subtitle files (SRT, ASS, WebVTT): edits show at once and Save writes them into the file with the sync. libmpv gives no access to the subtitles inside a video." }
                     }
 
                     Loader {

@@ -48,6 +48,7 @@ Window {
     readonly property int requestSubtitleFont: 25
     readonly property int requestAudioSync: 26
     readonly property int requestSubtitleSync: 37
+    readonly property int requestSubtitleEditor: 38
     readonly property int requestRecordAs: 27
     readonly property int requestRecordFolder: 28
     readonly property int requestDialog: 29
@@ -260,6 +261,10 @@ Window {
         case requestSubtitleSync:
             subtitleSyncLoader.active = true
             subtitleSyncLoader.item.ask(argument)
+            break
+        case requestSubtitleEditor:
+            subtitleEditorLoader.active = true
+            subtitleEditorLoader.item.ask(argument === 1)
             break
         case requestRecordAs:
             dialogLoader.active = true
@@ -837,6 +842,11 @@ Window {
         Component.onCompleted: setSource("SubtitleSync.qml", { player: player })
     }
     Loader {
+        id: subtitleEditorLoader
+        active: false
+        Component.onCompleted: setSource("SubtitleBrowser.qml", { player: player })
+    }
+    Loader {
         id: albumLoader
         anchors.fill: parent
         z: 30
@@ -1171,6 +1181,12 @@ Window {
     //                         rate (Blend without a runtime that has it),
     //                         the engines and presets, its settings page;
     //                         the file: fixture-60s.mkv
+    //   --selftest=m13        M13's subtitles (SelfTestM13.qml): bold, the
+    //                         browser's edits shown at once, Input
+    //                         Subtitles, saving elsewhere (--out), the sync
+    //                         dialog, syncing to the next subtitle, Combine
+    //                         Subtitle and the Subtitles settings pages;
+    //                         the file: fixture-chapters.mkv with its .srt
     //   --selftest=resume     expects the last file reopened paused within
     //                         --expect-tolerance (default 2.5) seconds of
     //                         --expect-time=SECONDS; with --expect-entry=I
@@ -1287,7 +1303,23 @@ Window {
             return gpuTick()
         if (selftest.mode === "smoothing")
             return smoothingTick()
+        if (selftest.mode === "m13")
+            return m13Tick()
         functionalTick()
+    }
+
+    // --selftest=m13: M13's subtitles (SelfTestM13.qml).
+    Loader {
+        id: m13Loader
+        active: false
+        Component.onCompleted: setSource("SelfTestM13.qml", { player: player, t: selftest, host: root })
+    }
+    function m13Tick() {
+        if (!m13Loader.item) {
+            m13Loader.active = true
+            return
+        }
+        m13Loader.item.tick()
     }
 
     // --selftest=smoothing: M18's motion smoothing (SelfTestSmoothing.qml).
@@ -1353,6 +1385,9 @@ Window {
     // M11's dialogs and scene browser, for the self-test.
     function playbackDialogs() { return playbackLoader.item }
     function videoDialogs() { return videoDialogLoader.item }
+    // M13's subtitle browser and Input Subtitles, and the sync dialog.
+    function subtitleEditor() { return subtitleEditorLoader.item }
+    function subtitleSync() { return subtitleSyncLoader.item }
     // The output device's aspect and the rotation by aspect ratio follow
     // the screen the window is on.
     onScreenChanged: player.set_screen(Tools.screen_json(root))

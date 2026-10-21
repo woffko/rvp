@@ -49,6 +49,7 @@ pub mod sources;
 pub mod speakers;
 pub mod stereo;
 mod storage;
+pub mod subtitle_editor;
 pub mod subtitles;
 pub mod svp;
 pub mod thumbs;

@@ -234,6 +234,18 @@ pub mod qobject {
         #[qinvokable]
         fn combine_subtitle(self: Pin<&mut Self>, path: &QString);
 
+        // M13.
+        /// The subtitle browser's data (JSON, `App::subtitle_browser_json`).
+        #[qinvokable]
+        fn subtitle_browser_json(self: Pin<&mut Self>) -> QString;
+        /// The cue that shows now, or the next (-1: none).
+        #[qinvokable]
+        fn subtitle_cue_now(self: &Player) -> i32;
+        /// An edit of the subtitle browser or Input Subtitles
+        /// (`App::subtitle_edit`).
+        #[qinvokable]
+        fn subtitle_edit(self: Pin<&mut Self>, op: &QString, index: i32, text: &QString);
+
         /// Records what RVP plays into the file the save dialog chose.
         #[qinvokable]
         fn start_recording(self: Pin<&mut Self>, path: &QString);

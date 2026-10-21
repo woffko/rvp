@@ -1095,6 +1095,22 @@ const ITEMS: &[(u32, u32, Status)] = &[
     (442, 3115, Missing(SHOWING_PERIOD)),
     (442, 3321, Missing(SHOWING_PERIOD)),
     (442, 3319, Missing(SHOWING_PERIOD)),
+    // Subtitles > Subtitle Browser (478).
+    (478, 3004, Setting("subtitles.browser.times")),
+    (478, 3003, Setting("subtitles.browser.synced-times")),
+    (478, 3008, Setting("subtitles.browser.opacity")),
+    (478, 3021, Setting("subtitles.browser.font")),
+    (478, 3088, Setting("subtitles.browser.font-size")),
+    (478, 3005, Setting("subtitles.browser.lines")),
+    (
+        478,
+        3046,
+        Missing(
+            "a window with a frame is see-through only as a whole (Qt's window opacity, \
+             subtitles.browser.opacity)",
+        ),
+    ),
+    (478, 3036, Setting("subtitles.browser.follow")),
     (
         442,
         3385,

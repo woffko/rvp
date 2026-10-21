@@ -1127,6 +1127,25 @@ impl Harness {
             Action::Subtitles(SubtitleCommand::SyncPrevious) => {
                 self.osd(action, "No previous subtitle to sync");
             }
+            Action::Subtitles(command @ (SubtitleCommand::Browser | SubtitleCommand::Input)) => {
+                assert_eq!(
+                    self.dispatch(action),
+                    Some(UiRequest::SubtitleEditor {
+                        input: command == SubtitleCommand::Input
+                    })
+                );
+            }
+            Action::Subtitles(
+                SubtitleCommand::ApplySync
+                | SubtitleCommand::SaveAsVideoName
+                | SubtitleCommand::SaveAs,
+            ) => {
+                // The fixture shows no subtitle file to save.
+                assert_eq!(
+                    self.dispatch(action),
+                    Some(UiRequest::Message("No subtitle shows".to_owned()))
+                );
+            }
             _ => panic!("{action:?} has no check"),
         }
     }

@@ -130,6 +130,14 @@ pub enum UiRequest {
     SubtitleSyncDialog(f64),
     /// The file dialog for a second subtitle (Combine Subtitle).
     CombineSubtitleDialog,
+    /// The subtitle browser and editor, or Input Subtitles (`input`; then
+    /// `App::subtitle_browser_json` and `App::subtitle_edit`).
+    SubtitleEditor {
+        input: bool,
+    },
+    /// The save dialog for the open subtitles, suggesting this file (then
+    /// `App::save_subtitle_as`).
+    SaveSubtitleDialog(PathBuf),
     /// A save dialog for an audio recording, suggesting this file.
     RecordDialog(PathBuf),
     /// Start or stop recording what RVP plays.
@@ -386,6 +394,9 @@ pub struct App {
     pub(crate) subtitle_fps: Option<f64>,
     /// The external subtitle files watched for changes.
     pub(crate) subtitle_files: Vec<crate::subtitles::WatchedFile>,
+    /// The subtitle file the browser, the editor and Input Subtitles work
+    /// on (`crate::subtitle_editor`).
+    pub(crate) subtitle_editor: Option<crate::subtitle_editor::OpenSubtitle>,
 }
 
 impl App {
@@ -473,6 +484,7 @@ impl App {
             applied_subtitle_options: std::collections::BTreeMap::new(),
             subtitle_fps: None,
             subtitle_files: Vec::new(),
+            subtitle_editor: None,
         };
         app.start_picture();
         Ok(app)
@@ -1749,6 +1761,7 @@ impl App {
                 }
                 EngineEvent::FileLoaded { path } => {
                     self.media_track += 1;
+                    requests.extend(self.close_subtitle_editor());
                     self.file_loaded(engine, path, now);
                     save_now = true;
                 }
@@ -2078,6 +2091,8 @@ impl App {
     /// # Errors
     /// Fails on I/O errors.
     pub fn shutdown(&mut self, engine: &Engine, now: Instant) -> io::Result<()> {
+        // Subtitle edits not saved stay in RVP's folder.
+        drop(self.close_subtitle_editor());
         self.stop_second();
         drop(engine.stop());
         self.writer.flush();

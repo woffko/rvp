@@ -35,6 +35,7 @@ use crate::video::ENGINE;
 
 mod m11;
 mod m12;
+mod m13;
 
 /// `ui_request` kinds.
 pub mod request {
@@ -105,6 +106,8 @@ pub mod request {
     pub const SLIDE: i32 = 36;
     /// The Adjust Subtitle Sync dialog (argument: the sync in ms).
     pub const SUBTITLE_SYNC: i32 = 37;
+    /// The subtitle browser (argument 0) or Input Subtitles (1).
+    pub const SUBTITLE_EDITOR: i32 = 38;
 }
 
 /// The skin, loaded once for the process (the painters read it on the
@@ -2941,6 +2944,12 @@ impl qobject::Player {
             ("gamma", count("gamma")),
             ("width", count("video-params/w")),
             ("height", count("video-params/h")),
+            // M13's subtitles.
+            ("sid", text("sid")),
+            ("secondary_sid", text("secondary-sid")),
+            ("sub_text", text("sub-text")),
+            ("sub_delay", float("sub-delay")),
+            ("sub_bold", text("sub-bold")),
         ];
         let body: Vec<String> = fields
             .iter()

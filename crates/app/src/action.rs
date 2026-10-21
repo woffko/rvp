@@ -394,10 +394,11 @@ pub enum SettingsPage {
     SubtitleStyle,
     SubtitleLocation,
     SubtitleSync,
+    SubtitleBrowser,
 }
 
 impl SettingsPage {
-    pub const ALL: [SettingsPage; 33] = [
+    pub const ALL: [SettingsPage; 34] = [
         SettingsPage::Playback,
         SettingsPage::TimeJump,
         SettingsPage::Skip,
@@ -423,6 +424,7 @@ impl SettingsPage {
         SettingsPage::SubtitleStyle,
         SettingsPage::SubtitleLocation,
         SettingsPage::SubtitleSync,
+        SettingsPage::SubtitleBrowser,
         SettingsPage::Input,
         SettingsPage::Skins,
         SettingsPage::Shaders,
@@ -470,6 +472,7 @@ impl SettingsPage {
             SettingsPage::SubtitleStyle => "subtitle-style",
             SettingsPage::SubtitleLocation => "subtitle-location",
             SettingsPage::SubtitleSync => "subtitle-sync",
+            SettingsPage::SubtitleBrowser => "subtitle-browser",
         }
     }
 }
@@ -1809,6 +1812,54 @@ pub const ACTIONS: &[ActionInfo] = &[
         "Subtitle Language/Sync/Other Settings...",
         None,
         &[10762],
+        &[],
+    ),
+    info(
+        Action::Subtitles(SubtitleCommand::SyncFromNext),
+        "subtitle-sync-from-next",
+        "Apply sync changes starting from next position",
+        None,
+        &[10958],
+        &[],
+    ),
+    info(
+        Action::Subtitles(SubtitleCommand::Browser),
+        "subtitle-browser",
+        "Browse/Edit/Sync Subtitles...",
+        Some("Alt+E"),
+        &[10228],
+        &[],
+    ),
+    info(
+        Action::Subtitles(SubtitleCommand::Input),
+        "input-subtitles",
+        "Input Subtitles...",
+        Some("Alt+P"),
+        &[10266],
+        &[],
+    ),
+    info(
+        Action::Subtitles(SubtitleCommand::ApplySync),
+        "apply-subtitle-sync",
+        "Apply subtitle sync",
+        Some("Alt+S"),
+        &[10401],
+        &[],
+    ),
+    info(
+        Action::Subtitles(SubtitleCommand::SaveAsVideoName),
+        "save-subtitle-video-name",
+        "Save subtitle as video filename",
+        Some("Ctrl+Shift+S"),
+        &[10485],
+        &[],
+    ),
+    info(
+        Action::Subtitles(SubtitleCommand::SaveAs),
+        "save-subtitle-as",
+        "Save subtitle as...",
+        Some("Ctrl+Alt+S"),
+        &[10362],
         &[],
     ),
     info(

@@ -56,7 +56,6 @@ const CONTEXT_REASONS: &[(&str, &str)] = &[
     ),
     ("101_0_10", "not in RVP yet"),
     ("101_0_10_8", "mpv (libass) renders every subtitle"),
-    ("101_0_10_11", "planned in M13 (goal O)"),
     (
         "101_0_10_12",
         "mpv draws subtitles once over the finished picture, not once for each eye (docs/spikes/m12-studies.md)",
@@ -115,8 +114,6 @@ const ITEM_REASONS: &[(u32, &str)] = &[
         10800,
         "thumbnail images of the playlist's entries are M14's (goal P); RVP makes the playing file's (Video Capture > Create Thumbnail Image, Alt+N)",
     ),
-    (10228, "planned in M13 (goal O)"),
-    (10266, "planned in M13 (goal O)"),
     (11096, ONLINE_SUBTITLES),
     (10220, "DirectShow output surfaces do not apply to libmpv"),
     (10221, "DirectShow output surfaces do not apply to libmpv"),

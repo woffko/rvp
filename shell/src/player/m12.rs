@@ -82,7 +82,7 @@ fn run_capture(job: &CaptureJob) -> Captured {
 
 impl qobject::Player {
     /// Opens a dialog of `VideoDialogs.qml` with its data.
-    fn open_video_dialog(mut self: Pin<&mut Self>, data: &Value) {
+    pub(super) fn open_video_dialog(mut self: Pin<&mut Self>, data: &Value) {
         self.as_mut().set_dialog(QString::from(&data.to_string()));
         self.ui_request(request::VIDEO_DIALOG, 0);
     }
@@ -254,7 +254,7 @@ impl qobject::Player {
                     "value": value,
                 }));
             }
-            other => eprintln!("rvp: unhandled request {other:?}"),
+            other => self.m13_request(other),
         }
     }
 
@@ -308,6 +308,10 @@ impl qobject::Player {
                 None
             }
             "sheet" => core.app.sheet_answer(&text.to_string()),
+            "save-subtitle" => Some(
+                core.app
+                    .save_subtitle_as(core.engine, std::path::Path::new(&text.to_string())),
+            ),
             _ => None,
         };
         if let Some(request) = request {

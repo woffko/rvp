@@ -141,6 +141,12 @@ pub struct SubtitleSettings {
     pub keep_sync: bool,
     /// Extra folders to look in for subtitle files (`sub-file-paths`).
     pub folders: Vec<String>,
+    /// Sync steps move only the subtitles after the playback position
+    /// (PotPlayer's "Apply sync changes starting from next position";
+    /// subtitle files RVP edits only, `crate::subtitle_editor`).
+    pub sync_from_next: bool,
+    /// The subtitle browser's settings.
+    pub browser: crate::subtitle_editor::BrowserSettings,
 }
 
 impl Default for SubtitleSettings {
@@ -184,6 +190,8 @@ impl Default for SubtitleSettings {
             sync_step_3: 10.0,
             keep_sync: false,
             folders: Vec::new(),
+            sync_from_next: false,
+            browser: crate::subtitle_editor::BrowserSettings::default(),
         }
     }
 }
@@ -257,6 +265,7 @@ impl SubtitleSettings {
         }
         self.validate_numbers(notes);
         self.folders.retain(|folder| !folder.trim().is_empty());
+        self.browser.validate(notes);
     }
 
     /// The numbers' and languages' part of [`SubtitleSettings::validate`].
@@ -655,6 +664,16 @@ pub enum SubtitleCommand {
     Copy,
     /// A second subtitle file shown with the first.
     Combine,
+    /// The subtitle browser and editor (Alt+E) and Input Subtitles (Alt+P).
+    Browser,
+    Input,
+    /// Subtitle Saving: the sync written into the file that shows, the
+    /// file named after the video, and the save dialog.
+    ApplySync,
+    SaveAsVideoName,
+    SaveAs,
+    /// Sync steps move only the subtitles after the playback position.
+    SyncFromNext,
 }
 
 /// The margin step of sideways moves and their widest margin, in mpv's
@@ -798,6 +817,14 @@ impl App {
                 } else {
                     subtitles.sync_step_2
                 };
+                let signed = if delay == crate::action::Delay::Earlier {
+                    -step
+                } else {
+                    step
+                };
+                if let Some(request) = self.sync_from_next(engine, signed) {
+                    return Some(request);
+                }
                 self.delay(engine, "sub-delay", PropertyId::SubDelay, delay, step)
                     .map(|value| {
                         UiRequest::Osd(format!(
@@ -830,6 +857,11 @@ impl App {
                 Some(self.set_subtitle_fps(engine, (!same).then_some(fps)))
             }
             SubtitleCommand::Copy => Some(Self::copy_subtitle(engine)),
+            SubtitleCommand::Browser => Some(UiRequest::SubtitleEditor { input: false }),
+            SubtitleCommand::Input => Some(UiRequest::SubtitleEditor { input: true }),
+            SubtitleCommand::ApplySync => Some(self.apply_subtitle_sync(engine)),
+            SubtitleCommand::SaveAsVideoName => Some(self.save_subtitle_as_video_name(engine)),
+            SubtitleCommand::SaveAs => Some(self.save_subtitle_dialog(engine)),
             SubtitleCommand::Combine => Some(if self.model.media_loaded() {
                 UiRequest::CombineSubtitleDialog
             } else {
@@ -933,6 +965,13 @@ impl App {
                     on_off(subtitles.keep_sync)
                 )
             }
+            SubtitleCommand::SyncFromNext => {
+                subtitles.sync_from_next = !subtitles.sync_from_next;
+                format!(
+                    "Sync changes from the next subtitle on: {}",
+                    on_off(subtitles.sync_from_next)
+                )
+            }
             _ => return None,
         };
         Some(text)
@@ -948,6 +987,7 @@ impl App {
             SubtitleCommand::BitmapOutside => Some(subtitles.bitmap_outside),
             SubtitleCommand::UnderVideo => Some(subtitles.under_video),
             SubtitleCommand::KeepSync => Some(subtitles.keep_sync),
+            SubtitleCommand::SyncFromNext => Some(subtitles.sync_from_next),
             SubtitleCommand::Fps(index) => {
                 let fps = FPS_CHOICES.get(usize::from(index)).copied()?;
                 Some(

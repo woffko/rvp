@@ -97,12 +97,19 @@ const STRETCH_STEP: f64 = 0.05;
 const PAN_STEP: f64 = 0.01;
 const SUBTITLE_SCALE_STEP: f64 = 0.1;
 
-/// `+0.5 s`, `-50 ms`.
+/// `+1.5 s`, `+1.25 s`, `-50 ms`: to the millisecond, with one decimal at
+/// least.
 pub(crate) fn signed_seconds(seconds: f64) -> String {
     if seconds.abs() < 1.0 && seconds != 0.0 {
         format!("{:+.0} ms", seconds * 1000.0)
     } else {
-        format!("{seconds:+.1} s")
+        let text = format!("{seconds:+.3}");
+        let text = text.trim_end_matches('0');
+        if text.ends_with('.') {
+            format!("{text}0 s")
+        } else {
+            format!("{text} s")
+        }
     }
 }
 
@@ -212,13 +219,7 @@ impl App {
                 )))
             }
             Action::Audio(command) => self.audio_command(engine, command),
-            Action::SubtitleDelay(delay) => {
-                let step = self.settings.subtitle_delay_step;
-                self.delay(engine, "sub-delay", PropertyId::SubDelay, delay, step)
-                    .map(|value| {
-                        UiRequest::Osd(format!("Subtitle sync: {}", signed_seconds(value)))
-                    })
-            }
+            Action::SubtitleDelay(delay) => self.subtitle_delay(engine, delay),
             Action::Subtitle(style) => self.subtitle_style(engine, style),
             Action::Subtitles(command) => self.subtitle_command(engine, command),
             Action::Preferences => Some(UiRequest::Preferences(None)),
@@ -632,6 +633,22 @@ impl App {
         if kind == TrackKind::Subtitle {
             self.subtitle_tracks_chosen(engine);
         }
+    }
+
+    /// The first sync step (< and >): the whole track, or with "Apply sync
+    /// changes starting from next position" the subtitles after now.
+    fn subtitle_delay(&mut self, engine: &Engine, delay: Delay) -> Option<UiRequest> {
+        let step = self.settings.subtitle_delay_step;
+        let signed = match delay {
+            Delay::Earlier => Some(-step),
+            Delay::Later => Some(step),
+            Delay::Reset => None,
+        };
+        if let Some(request) = signed.and_then(|signed| self.sync_from_next(engine, signed)) {
+            return Some(request);
+        }
+        self.delay(engine, "sub-delay", PropertyId::SubDelay, delay, step)
+            .map(|value| UiRequest::Osd(format!("Subtitle sync: {}", signed_seconds(value))))
     }
 
     pub(crate) fn delay(
