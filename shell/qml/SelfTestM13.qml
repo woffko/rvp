@@ -3,8 +3,9 @@
 // Input Subtitles, saving the subtitles elsewhere (into --out, never the
 // fixture's file), the Adjust Subtitle Sync dialog, syncing to the next
 // subtitle, Combine Subtitle and the Subtitles group of the settings
-// window. Input goes through Player's handlers, as in the functional
-// check.
+// window; with --speech-check also subtitles made from the audio (the CPU
+// engine, the tiny model in RVP_WHISPER_MODELS). Input goes through
+// Player's handlers, as in the functional check.
 //
 // Files: testdata/media/fixture-chapters.mkv with its .srt (lines at 1, 6,
 // 11 and 16 s).
@@ -26,6 +27,9 @@ Item {
                + " time " + s.time + " osd " + (s.osd || "")
     }
     function editor() { return host.subtitleEditor() }
+    function setSetting(path, value) {
+        return JSON.parse(player.set_setting(path, JSON.stringify(value)))
+    }
     function outFile(name) { return t.outDir + "/" + name }
 
     function tick() {
@@ -140,16 +144,36 @@ Item {
         case 20:
             editor().browser.close()
             editor().input.close()
+            // With --speech-check: subtitles from the audio with the CPU
+            // engine and the tiny model (RVP_WHISPER_MODELS), into the
+            // state folder.
+            if (player.has_option("speech-check")) {
+                setSetting("speech.beside-video", false)
+                setSetting("speech.file.engine", "cpu")
+                setSetting("speech.file.model", "tiny")
+                player.run_action("speech-start")
+            }
+            t.next()
+            break
+        case 21:
+            if (!player.has_option("speech-check")) {
+                t.next()
+                break
+            }
+            t.waitFor("m13_speech_makes_subtitles", () => /^Subtitles from audio: (\d+ lines in |no speech found)/.test(t.status().osd || ""),
+                      180000, () => shown(t.status()))
+            break
+        case 22:
             player.key(Qt.Key_F5, 0)
             t.next()
             break
-        case 21: {
+        case 23: {
             const loader = host.settingsWindow()
             if (!t.waitFor("m13_settings_open", () => loader && loader.visible, 3000))
                 break
             loader.showKey("subtitle-browser")
             t.check("m13_settings_subtitle_pages", loader.currentGroup.title === "Subtitles"
-                        && ["subtitle-style", "subtitle-location", "subtitle-sync", "subtitle-browser"]
+                        && ["subtitle-style", "subtitle-location", "subtitle-sync", "subtitle-browser", "speech"]
                             .every(key => loader.tabKeys.indexOf(key) >= 0),
                     loader.currentGroup.title + ": " + loader.tabKeys.join(","))
             loader.close()

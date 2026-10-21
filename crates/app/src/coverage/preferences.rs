@@ -1087,6 +1087,7 @@ const ITEMS: &[(u32, u32, Status)] = &[
     (442, 3061, Missing(SAMI)),
     (442, 3062, Setting("subtitles.second-auto")),
     (442, 3063, Setting("subtitles.remember-tracks")),
+    (442, 3064, Setting("speech.show")),
     (442, 3111, Setting("subtitle-delay-step")),
     (442, 3112, Setting("subtitles.sync-step-2")),
     (442, 3113, Setting("subtitles.sync-step-3")),
@@ -1134,7 +1135,6 @@ const PAGES: &[(&str, &str)] = &[
     ("General > Playlist > Color/View", NAVIGATOR),
     ("General > Navigation", "not in RVP"),
     ("Playback", "not in RVP"),
-    ("Subtitles", "planned in M13 (goal O)"),
     (
         "Subtitles > Online Subtitle Database",
         crate::coverage::ONLINE_SUBTITLES,
@@ -1298,9 +1298,12 @@ mod tests {
     }
 
     #[test]
-    fn the_audio_pages_say_why_for_every_option_rvp_lacks() {
+    fn the_audio_and_subtitle_pages_say_why_for_every_option_rvp_lacks() {
         for option in options() {
-            if (option.page == "Audio" || option.page.starts_with("Audio >"))
+            if (option.page == "Audio"
+                || option.page.starts_with("Audio >")
+                || option.page == "Subtitles"
+                || option.page.starts_with("Subtitles >"))
                 && let Missing(why) = status(&option)
             {
                 assert!(

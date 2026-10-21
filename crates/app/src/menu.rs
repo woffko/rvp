@@ -46,6 +46,7 @@ const LIVE_TSV: &str = include_str!("../../../docs/r1/menu-runtime.tsv");
 /// presets, 360° Video Mode and more): the static submenu's path and the
 /// titles that lead to the live one.
 const LIVE_SUBMENUS: &[(&str, &[&str])] = &[
+    ("101_0_10", &["Subtitles"]),
     ("101_0_11", &["Video"]),
     ("101_0_17", &["Frame Size"]),
     ("101_0_18", &["Aspect Ratio"]),
@@ -53,9 +54,10 @@ const LIVE_SUBMENUS: &[(&str, &[&str])] = &[
 ];
 
 /// Static items the live menu lacks, kept in front of a live submenu's
-/// items: Select Video Stream (R1's live menu was recorded without a
-/// file).
-const KEPT_STATIC: &[&str] = &["101_0_11_0"];
+/// items (a live submenu of the same title is left out): Select Video
+/// Stream and Add/Select Subtitles with its Load Subtitle (R1's live menu
+/// was recorded without a file), with RVP's track lists.
+const KEPT_STATIC: &[&str] = &["101_0_11_0", "101_0_10_0"];
 
 /// The live Frame Size > Presets submenu: RVP lists its own presets there.
 const LIVE_FRAME_PRESETS: u32 = 1_383_396;
@@ -67,6 +69,12 @@ const LIVE_POST_SHADERS: u32 = 269_761;
 /// The live Video > VapourSynth submenu: RVP's script slots in place of
 /// PotPlayer's presets (38400 on).
 const LIVE_VAPOURSYNTH: u32 = 531_020;
+/// The live Create Subtitles from Audio submenus whose choices RVP lists
+/// (M13): the engines, models and languages, ahead of time and in real
+/// time.
+const LIVE_SPEECH_ENGINES: [u32; 2] = [530_766, 2_561_986];
+const LIVE_SPEECH_MODELS: [u32; 2] = [6_751_510, 1_186_868];
+const LIVE_SPEECH_LANGUAGES: [u32; 2] = [11_408_618, 4_263_276];
 
 /// One item of a PotPlayer menu as R1 recorded it.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -310,6 +318,8 @@ pub enum Command {
     DiscTitle(usize),
     /// Show a DVD angle (DVD Control > Angle Option).
     DiscAngle(u8),
+    /// A choice of Create Subtitles from Audio's lists (M13).
+    Speech(crate::speech::SpeechChoice),
 }
 
 /// An audio output choice of the Audio menu's lists.
@@ -438,6 +448,7 @@ impl Command {
             Command::Script(index) => format!("y:{index}"),
             Command::DiscTitle(title) => format!("t:{title}"),
             Command::DiscAngle(angle) => format!("g:{angle}"),
+            Command::Speech(choice) => format!("z:{}", choice.id()),
         }
     }
 
@@ -469,6 +480,7 @@ impl Command {
             "f" => value.parse().ok().map(Command::Favorite),
             "r" => value.parse().ok().map(Command::Recent),
             "y" => value.parse().ok().map(Command::Script),
+            "z" => crate::speech::SpeechChoice::parse(value).map(Command::Speech),
             "h" => {
                 if let Some(index) = value.strip_prefix("post") {
                     index.parse().ok().map(|index| Command::Shader(true, index))
@@ -743,6 +755,7 @@ impl App {
             }
             Command::DiscTitle(index) => self.play_disc_title(engine, index),
             Command::DiscAngle(angle) => self.set_disc_angle(engine, angle),
+            Command::Speech(choice) => self.speech_choice(choice),
             Command::EqualizerPreset(index) => self.set_equalizer_preset(engine, index),
             Command::Speakers(index) => self.set_speakers(engine, index),
             Command::Audio(choice) => self.audio_choice(engine, choice),
@@ -760,6 +773,9 @@ impl App {
             if node.id == LIVE_VAPOURSYNTH {
                 return MenuItem::submenu(&node.text, self.script_menu(node, live));
             }
+            if let Some(items) = self.speech_menu(node, live) {
+                return MenuItem::submenu(&node.text, items);
+            }
             if node.id == LIVE_PRE_SHADERS || node.id == LIVE_POST_SHADERS {
                 let post = node.id == LIVE_POST_SHADERS;
                 return MenuItem::submenu(&node.text, self.shader_menu(node, live, post));
@@ -769,12 +785,17 @@ impl App {
                 .find(|(path, _)| *path == node.path)
                 .and_then(|(_, titles)| find_live(titles));
             let sources: Vec<&Recorded> = match live_children {
-                Some(live_node) => node
-                    .children
-                    .iter()
-                    .filter(|child| KEPT_STATIC.contains(&child.path.as_str()))
-                    .chain(&live_node.children)
-                    .collect(),
+                Some(live_node) => {
+                    let kept: Vec<&Recorded> = node
+                        .children
+                        .iter()
+                        .filter(|child| KEPT_STATIC.contains(&child.path.as_str()))
+                        .collect();
+                    let live_items = live_node.children.iter().filter(|child| {
+                        !(child.submenu && kept.iter().any(|kept| kept.text == child.text))
+                    });
+                    kept.iter().copied().chain(live_items).collect()
+                }
                 None => node.children.iter().collect(),
             };
             let mut children: Vec<MenuItem> = sources
@@ -890,6 +911,67 @@ impl App {
             });
         }
         items
+    }
+
+    /// Create Subtitles from Audio's engines, models and languages (M13):
+    /// RVP's lists, with PotPlayer's other items (the folders) after them.
+    /// `None` for other submenus.
+    fn speech_menu(&self, node: &Recorded, live: &Live) -> Option<Vec<MenuItem>> {
+        use crate::speech::{ENGINES, LANGUAGES, MODELS, SpeechChoice};
+        let realtime = |ids: [u32; 2]| ids.iter().position(|id| *id == node.id).map(|at| at == 1);
+        let choices: Vec<(SpeechChoice, String)> =
+            if let Some(realtime) = realtime(LIVE_SPEECH_ENGINES) {
+                ENGINES
+                    .iter()
+                    .enumerate()
+                    .map(|(index, (_, label))| {
+                        (SpeechChoice::Engine(realtime, index), (*label).to_owned())
+                    })
+                    .collect()
+            } else if let Some(realtime) = realtime(LIVE_SPEECH_MODELS) {
+                MODELS
+                    .iter()
+                    .enumerate()
+                    .map(|(index, name)| (SpeechChoice::Model(realtime, index), (*name).to_owned()))
+                    .collect()
+            } else {
+                let realtime = realtime(LIVE_SPEECH_LANGUAGES)?;
+                LANGUAGES
+                    .iter()
+                    .enumerate()
+                    .map(|(index, (_, name))| {
+                        (SpeechChoice::Language(realtime, index), (*name).to_owned())
+                    })
+                    .collect()
+            };
+        let mut items: Vec<MenuItem> = choices
+            .into_iter()
+            .map(|(choice, label)| {
+                let (chosen, present) = self.speech_choice_state(choice);
+                let label = match (present, choice) {
+                    (false, SpeechChoice::Engine(..)) => format!("{label} (not installed)"),
+                    (false, _) => format!("{label} (not downloaded)"),
+                    (true, _) => label,
+                };
+                MenuItem {
+                    label,
+                    command: Some(Command::Speech(choice)),
+                    checked: Some(chosen),
+                    ..MenuItem::default()
+                }
+            })
+            .collect();
+        let rest: Vec<MenuItem> = node
+            .children
+            .iter()
+            .filter(|child| child.separator || Action::from_potplayer_id(child.id).is_some())
+            .filter_map(|child| self.convert(child, live))
+            .collect();
+        if rest.iter().any(|item| !item.separator) {
+            items.push(MenuItem::separator());
+            items.extend(rest);
+        }
+        Some(items)
     }
 
     /// RVP's own Video > Motion Smoothing (M18): on or off, the engines,

@@ -16,6 +16,11 @@ use crate::menu::{PopupSource, Recorded, context_tree, playlist_tree, popup_sour
 /// The owner's decision (2026-10-16) on M13's online part.
 pub(crate) const ONLINE_SUBTITLES: &str = "online subtitles: deferred by the owner (2026-10-16)";
 
+/// Why RVP has none of Purfview's faster-whisper builds.
+const FASTER_WHISPER: &str = "Purfview's faster-whisper builds come without a licence, as 1.4 GB \
+     bundles for NVIDIA's CUDA or the CPU that fetch their models online; whisper.cpp's CUDA, \
+     Vulkan and CPU engines run the same models offline (docs/spikes/m13-whisper.md)";
+
 /// Why RVP has no fade for subtitles.
 pub(crate) const SUBTITLE_FADE: &str = "libass fades only ASS events that ask for it (\\fad); mpv \
      gives other subtitles no fade, and an ASS copy of a file would lose RVP's style settings";
@@ -120,6 +125,12 @@ const ITEM_REASONS: &[(u32, &str)] = &[
     (10828, "DirectShow output surfaces do not apply to libmpv"),
     (10825, "mpv (libass) always animates ASS subtitles"),
     (10827, SUBTITLE_FADE),
+    (
+        11384,
+        "Const-me's Whisper (DirectCompute, Windows only, MPL-2.0) has had no release since 2023 and reads only older whisper.cpp models; whisper.cpp's Vulkan engine runs on every GPU (docs/spikes/m13-whisper.md)",
+    ),
+    (11385, FASTER_WHISPER),
+    (11386, FASTER_WHISPER),
     (
         10454,
         "DirectShow filters do not apply to libmpv (its functions are FFmpeg's filters in RVP's chain)",
@@ -307,6 +318,30 @@ const RUNTIME_LISTS: &[(&str, &str)] = &[
         "RVP's shaders: its own set, PotPlayer's translated and the user's",
     ),
     ("Video > VapourSynth", "RVP's VapourSynth script slots"),
+    (
+        "Subtitles > Create subtitles from audio > Whisper AI engine",
+        "RVP's whisper.cpp engines (CPU, BLAS, Vulkan, CUDA)",
+    ),
+    (
+        "Subtitles > Create subtitles from audio > Whisper AI model",
+        "whisper.cpp's models (ggml-*.bin in RVP's model folder)",
+    ),
+    (
+        "Subtitles > Create subtitles from audio > Whisper AI language",
+        "whisper's languages",
+    ),
+    (
+        "Subtitles > Create subtitles from audio(Real-time) > Whisper AI engine",
+        "RVP's whisper.cpp engines (CPU, BLAS, Vulkan, CUDA)",
+    ),
+    (
+        "Subtitles > Create subtitles from audio(Real-time) > Whisper AI model",
+        "whisper.cpp's models (ggml-*.bin in RVP's model folder)",
+    ),
+    (
+        "Subtitles > Create subtitles from audio(Real-time) > Whisper AI language",
+        "whisper's languages",
+    ),
     ("Frame Size > Presets", "RVP's frame size presets"),
 ];
 
@@ -320,7 +355,6 @@ const RUNTIME_REASONS: &[(&str, &str)] = &[
         "Playback > Chapter/Bookmark",
         "RVP keeps bookmarks in its state folder (marks.json); PotPlayer's .pbf format was not recorded (R1)",
     ),
-    ("Subtitles", "planned in M13 (goal O)"),
     ("Subtitles > Subtitle Translation", ONLINE_SUBTITLES),
     ("Subtitles > Subtitle Searching", ONLINE_SUBTITLES),
     (

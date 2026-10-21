@@ -2538,11 +2538,12 @@ impl qobject::Player {
         core.app.tick_second(core.engine, Instant::now());
         let watched = core.app.smoothing_watch(core.engine, Instant::now());
         let reloaded = core.app.watch_subtitle_files(core.engine);
+        let speech = core.app.speech_tick(core.engine, Instant::now());
         if let Err(error) = core.app.tick(Instant::now()) {
             let text = format!("cannot save the playback state: {error}");
             self.as_mut().show_message(&text);
         }
-        for request in [watched, reloaded].into_iter().flatten() {
+        for request in [watched, reloaded].into_iter().flatten().chain(speech) {
             self.as_mut().handle_request(request);
         }
         self.as_mut().tick_m11();

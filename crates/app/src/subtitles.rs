@@ -23,7 +23,8 @@
 //!   (`secondary-sub-pos`), remembering the chosen tracks per file, the
 //!   three sync steps and keeping a sync change for the next files.
 //! * The Fade/3D/Location page: the extra folders to look in for subtitle
-//!   files (`sub-file-paths`).
+//!   files (`sub-file-paths`), and the text encoding of files that are not
+//!   UTF-8 (`sub-codepage`, which RVP's own reader follows).
 //!
 //! RVP sets these after libmpv starts (`App::apply_subtitles`), never as
 //! start options: libmpv refuses to start with an option it lacks, and
@@ -54,6 +55,33 @@ pub const ALIGN: &[&str] = &["left", "center", "right"];
 
 /// The frame rates of PotPlayer's Convert Subtitle FPS items.
 pub const FPS_CHOICES: &[f64] = &[12.0, 15.0, 23.976, 24.0, 25.0, 29.97, 30.0];
+
+/// The text encodings of subtitle files without a BOM that are not UTF-8
+/// (`sub-codepage`; RVP's own reader takes the same names); `auto`: mpv
+/// and RVP guess.
+pub const ENCODINGS: &[&str] = &[
+    "auto",
+    "utf-8",
+    "windows-1250",
+    "windows-1251",
+    "windows-1252",
+    "windows-1253",
+    "windows-1254",
+    "windows-1255",
+    "windows-1256",
+    "windows-1257",
+    "windows-1258",
+    "iso-8859-2",
+    "iso-8859-5",
+    "iso-8859-7",
+    "koi8-r",
+    "koi8-u",
+    "shift_jis",
+    "euc-jp",
+    "euc-kr",
+    "gb18030",
+    "big5",
+];
 
 /// PotPlayer's subtitle options (`subtitles` in `settings.json`; the older
 /// `subtitle-*` keys keep the languages, loading, size, font and first sync
@@ -141,6 +169,8 @@ pub struct SubtitleSettings {
     pub keep_sync: bool,
     /// Extra folders to look in for subtitle files (`sub-file-paths`).
     pub folders: Vec<String>,
+    /// One of [`ENCODINGS`].
+    pub encoding: String,
     /// Sync steps move only the subtitles after the playback position
     /// (PotPlayer's "Apply sync changes starting from next position";
     /// subtitle files RVP edits only, `crate::subtitle_editor`).
@@ -190,6 +220,7 @@ impl Default for SubtitleSettings {
             sync_step_3: 10.0,
             keep_sync: false,
             folders: Vec::new(),
+            encoding: "auto".to_owned(),
             sync_from_next: false,
             browser: crate::subtitle_editor::BrowserSettings::default(),
         }
@@ -249,6 +280,7 @@ impl SubtitleSettings {
             notes,
         );
         choose(&mut self.align, ALIGN, "center", "align", notes);
+        choose(&mut self.encoding, ENCODINGS, "auto", "encoding", notes);
         for (name, color) in [
             ("color", &mut self.color),
             ("outline-color", &mut self.outline_color),
@@ -461,6 +493,7 @@ impl SubtitleSettings {
                 number(self.second_position, &defaults.second_position),
             ),
             (&["sub-file-paths"], paths.join(",")),
+            (&["sub-codepage"], self.encoding.clone()),
         ]
     }
 }

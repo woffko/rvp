@@ -5,8 +5,10 @@
 # lists go into that root, never into the system; the work folder and this
 # checkout (read-only) are mounted inside at their own paths.
 #
-# usage: tools/libmpv/rootless.sh [ROOT [WORK]]
-#        (default ~/rvp-deps/mpv-root and ~/rvp-deps/mpv-build)
+# usage: tools/libmpv/rootless.sh [ROOT [WORK [SCRIPT]]]
+#        (default ~/rvp-deps/mpv-root, ~/rvp-deps/mpv-build and
+#        tools/libmpv/build.sh; tools/whisper/build.sh also runs here, with
+#        the work folder's toolchain)
 set -euo pipefail
 
 BASE=ubuntu-base-24.04.5-base-amd64.tar.gz
@@ -15,6 +17,7 @@ ROOT=${1:-$HOME/rvp-deps/mpv-root}
 WORK=${2:-$HOME/rvp-deps/mpv-build}
 HERE=$(cd "$(dirname "$0")" && pwd)
 CHECKOUT=$(cd "$HERE/../.." && pwd)
+SCRIPT=$(realpath "${3:-$HERE/build.sh}")
 PACKAGES="build-essential bison flex gettext git mercurial subversion ninja-build gyp cmake yasm nasm
     automake autoconf pkgconf libtool libtool-bin gcc-multilib g++-multilib clang lld libc++-dev libc++abi-dev
     libgmp-dev libmpfr-dev libmpc-dev libgcrypt20-dev gperf ragel texinfo autopoint re2c asciidoc
@@ -63,4 +66,4 @@ fi
 if [ ! -f "$ROOT/root/.gitconfig" ]; then
     printf '[user]\n\tname = RVP libmpv build\n\temail = libmpv-build@localhost\n' > "$ROOT/root/.gitconfig"
 fi
-inroot /bin/bash -c "CCACHE_DIR=$WORK/ccache $CHECKOUT/tools/libmpv/build.sh $WORK"
+inroot /bin/bash -c "CCACHE_DIR=$WORK/ccache $SCRIPT $WORK"

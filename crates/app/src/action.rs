@@ -16,6 +16,7 @@ use crate::audio::{StereoChannel, Stretch, SyncKeep, VolumeMethod};
 use crate::hlsl::Stage;
 use crate::shaders::ShaderCommand;
 use crate::smoothing::{Engine as SmoothingEngine, Preset as SmoothingPreset, SmoothingCommand};
+use crate::speech::SpeechCommand;
 use crate::subtitles::SubtitleCommand;
 use crate::video::{ColorChange, ColorKind, Deinterlace, Rotation, VideoEffect};
 
@@ -395,10 +396,12 @@ pub enum SettingsPage {
     SubtitleLocation,
     SubtitleSync,
     SubtitleBrowser,
+    /// Create Subtitles from Audio.
+    Speech,
 }
 
 impl SettingsPage {
-    pub const ALL: [SettingsPage; 34] = [
+    pub const ALL: [SettingsPage; 35] = [
         SettingsPage::Playback,
         SettingsPage::TimeJump,
         SettingsPage::Skip,
@@ -425,6 +428,7 @@ impl SettingsPage {
         SettingsPage::SubtitleLocation,
         SettingsPage::SubtitleSync,
         SettingsPage::SubtitleBrowser,
+        SettingsPage::Speech,
         SettingsPage::Input,
         SettingsPage::Skins,
         SettingsPage::Shaders,
@@ -473,6 +477,7 @@ impl SettingsPage {
             SettingsPage::SubtitleLocation => "subtitle-location",
             SettingsPage::SubtitleSync => "subtitle-sync",
             SettingsPage::SubtitleBrowser => "subtitle-browser",
+            SettingsPage::Speech => "speech",
         }
     }
 }
@@ -594,6 +599,8 @@ pub enum Action {
     Smoothing(crate::smoothing::SmoothingCommand),
     /// M13's subtitle commands.
     Subtitles(crate::subtitles::SubtitleCommand),
+    /// M13's Create Subtitles from Audio.
+    Speech(crate::speech::SpeechCommand),
     /// Save the current frame under a chosen name.
     SaveFrameAs,
     /// M12's Video Capture commands.
@@ -1860,6 +1867,110 @@ pub const ACTIONS: &[ActionInfo] = &[
         "Save subtitle as...",
         Some("Ctrl+Alt+S"),
         &[10362],
+        &[],
+    ),
+    info(
+        Action::Speech(SpeechCommand::Start),
+        "speech-start",
+        "Start",
+        None,
+        &[11371],
+        &[],
+    ),
+    info(
+        Action::Speech(SpeechCommand::VoiceFilter),
+        "speech-voice-filter",
+        "Applying voice emphasis filter when extracting sound",
+        None,
+        &[11378],
+        &[],
+    ),
+    info(
+        Action::Speech(SpeechCommand::BesideVideo),
+        "speech-beside-video",
+        "If possible, save subtitles in the same folder as the video",
+        None,
+        &[11379],
+        &[],
+    ),
+    info(
+        Action::Speech(SpeechCommand::Auto(0)),
+        "speech-auto-off",
+        "Do not use",
+        None,
+        &[11373],
+        &[],
+    ),
+    info(
+        Action::Speech(SpeechCommand::Auto(1)),
+        "speech-auto-always",
+        "Automatically generated when playback starts",
+        None,
+        &[11374],
+        &[],
+    ),
+    info(
+        Action::Speech(SpeechCommand::Auto(2)),
+        "speech-auto-no-subtitles",
+        "If there are no subtitles, using",
+        None,
+        &[11375],
+        &[],
+    ),
+    info(
+        Action::Speech(SpeechCommand::Realtime(0)),
+        "speech-realtime-off",
+        "Not used",
+        None,
+        &[11600],
+        &[],
+    ),
+    info(
+        Action::Speech(SpeechCommand::Realtime(1)),
+        "speech-realtime-always",
+        "Always use",
+        None,
+        &[11601],
+        &[],
+    ),
+    info(
+        Action::Speech(SpeechCommand::Realtime(2)),
+        "speech-realtime-no-subtitles",
+        "Use if there are no subtitles",
+        None,
+        &[11602],
+        &[],
+    ),
+    info(
+        Action::Speech(SpeechCommand::Realtime(3)),
+        "speech-realtime-streams",
+        "Use only when generating subtitles from sound is not possible(not a file)",
+        None,
+        &[11603],
+        &[],
+    ),
+    info(
+        Action::Speech(SpeechCommand::EngineFolder),
+        "speech-engine-folder",
+        "Open engine folder",
+        None,
+        &[11394, 11624],
+        &[],
+    ),
+    info(
+        Action::Speech(SpeechCommand::ModelFolder),
+        "speech-model-folder",
+        "Open model folder",
+        None,
+        &[11419, 11649],
+        &[],
+    ),
+    info(
+        Action::Settings(SettingsPage::Speech),
+        "speech-settings",
+        "Create subtitles from audio...",
+        None,
+        &[11370, 11604],
         &[],
     ),
     info(

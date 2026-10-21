@@ -136,6 +136,7 @@ impl Settings {
         self.decoders.validate(&mut notes);
         self.smoothing.validate(&mut notes);
         self.subtitles.validate(&mut notes);
+        self.speech.validate(&mut notes);
         notes
     }
 
@@ -401,6 +402,7 @@ pub fn import(path: &Path) -> Result<(Settings, Vec<String>), String> {
                             | "devices"
                             | "smoothing"
                             | "subtitles"
+                            | "speech"
                     ) {
                         value.clone()
                     } else if value.is_object() {
@@ -648,7 +650,13 @@ impl App {
                 "subtitles.ass-override": crate::subtitles::ASS_OVERRIDE,
                 "subtitles.border-style": crate::subtitles::BORDER_STYLE,
                 "subtitles.align": crate::subtitles::ALIGN,
+                "subtitles.encoding": crate::subtitles::ENCODINGS,
                 "subtitles.browser.times": crate::subtitle_editor::BROWSER_TIMES,
+                "speech.engine": crate::speech::ENGINES.iter().map(|(name, _)| *name).collect::<Vec<_>>(),
+                "speech.model": crate::speech::MODELS,
+                "speech.language": crate::speech::LANGUAGES.iter().map(|(code, _)| *code).collect::<Vec<_>>(),
+                "speech.auto": crate::speech::AUTO_MODES,
+                "speech.realtime": crate::speech::REALTIME_MODES,
             },
             "file": self.settings_path().map(|path| path.display().to_string()),
             "portable": portable,
@@ -666,6 +674,7 @@ impl App {
                 .settings_path()
                 .and_then(std::path::Path::parent)
                 .map(|dir| dir.join("fonts").display().to_string()),
+            "speech": self.speech_view(),
         })
     }
 

@@ -1186,7 +1186,10 @@ Window {
     //                         Subtitles, saving elsewhere (--out), the sync
     //                         dialog, syncing to the next subtitle, Combine
     //                         Subtitle and the Subtitles settings pages;
-    //                         the file: fixture-chapters.mkv with its .srt
+    //                         --speech-check also makes subtitles from the
+    //                         audio (whisper.cpp's CPU engine, the tiny
+    //                         model); the file: fixture-chapters.mkv with
+    //                         its .srt
     //   --selftest=resume     expects the last file reopened paused within
     //                         --expect-tolerance (default 2.5) seconds of
     //                         --expect-time=SECONDS; with --expect-entry=I

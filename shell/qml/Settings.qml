@@ -48,6 +48,7 @@ ApplicationWindow {
         { key: "subtitle-location", title: "Fade/3D/Location" },
         { key: "subtitle-sync", title: "Language/Sync/Other" },
         { key: "subtitle-browser", title: "Subtitle Browser" },
+        { key: "speech", title: "Subtitles from Audio" },
         { key: "input", title: "Keys and Mouse" },
         { key: "skins", title: "Skins" },
         { key: "window-size", title: "Window Size" },
@@ -63,7 +64,7 @@ ApplicationWindow {
         { title: "General", page: "", pages: ["input", "skins", "visualization", "playlist"] },
         { title: "Playback", page: "playback",
           pages: ["time-jump", "skip", "section-repeat", "scene-browser", "window-size", "fullscreen-mode"] },
-        { title: "Subtitles", page: "subtitles", pages: ["subtitle-style", "subtitle-location", "subtitle-sync", "subtitle-browser"] },
+        { title: "Subtitles", page: "subtitles", pages: ["subtitle-style", "subtitle-location", "subtitle-sync", "subtitle-browser", "speech"] },
         { title: "Device", page: "devices", pages: [] },
         { title: "Filter Control", page: "decoders", pages: [] },
         { title: "Video", page: "video",
@@ -1861,6 +1862,13 @@ ApplicationWindow {
                                 folderListChooser.open()
                             }
                         }
+                        Heading { text: "Text encoding" }
+                        Choice {
+                            label: "Files that are not UTF-8"
+                            path: "subtitles.encoding"
+                            values: win.view.choices["subtitles.encoding"] || []
+                            texts: ({ "auto": "Guess (Automatic)" })
+                        }
                         Heading { text: "Fade and 3D" }
                         Note { text: "mpv fades only the events of ASS scripts that ask for it (\\fad); other subtitles cannot fade. mpv draws subtitles once over the finished picture, not once for each eye, so there is no stereo 3D subtitle mode (docs/spikes/m12-studies.md)." }
                     }
@@ -1896,6 +1904,81 @@ ApplicationWindow {
                         Amount { label: "Lines of each subtitle"; path: "subtitles.browser.lines"; from: 1; to: 5; step: 1 }
                         Check { path: "subtitles.browser.follow"; text: "Follow the subtitle that shows" }
                         Note { text: "The browser edits subtitle files (SRT, ASS, WebVTT): edits show at once and Save writes them into the file with the sync. libmpv gives no access to the subtitles inside a video." }
+                    }
+
+                    Page {
+                        Heading { text: "Subtitles from audio (whisper.cpp, offline)" }
+                        Choice {
+                            label: "Engine"
+                            path: "speech.file.engine"
+                            values: win.view.choices["speech.engine"] || []
+                            texts: (win.view.speech || {}).engines || ({})
+                        }
+                        Choice {
+                            label: "Model"
+                            path: "speech.file.model"
+                            values: win.view.choices["speech.model"] || []
+                            texts: (win.view.speech || {}).models || ({})
+                        }
+                        Choice {
+                            label: "Language"
+                            path: "speech.file.language"
+                            values: win.view.choices["speech.language"] || []
+                            texts: (win.view.speech || {}).languages || ({})
+                        }
+                        Check { path: "speech.voice-filter"; text: "Apply a voice emphasis filter when extracting the sound" }
+                        Check { path: "speech.beside-video"; text: "Save the subtitles in the video's folder when possible" }
+                        Check { path: "speech.show"; text: "Show made subtitles when they arrive" }
+                        Choice {
+                            label: "When a file starts"
+                            path: "speech.auto"
+                            values: win.view.choices["speech.auto"] || []
+                            texts: ({ "off": "Do not make subtitles", "always": "Make subtitles",
+                                      "no-subtitles": "Make subtitles when the file has none" })
+                        }
+                        RowLayout {
+                            Button {
+                                text: (win.view.speech || {}).running ? "Stop" : "Make subtitles now"
+                                onClicked: { win.player.run_action("speech-start"); win.reload(false) }
+                            }
+                        }
+                        Heading { text: "Real time" }
+                        Choice {
+                            label: "Use"
+                            path: "speech.realtime"
+                            values: win.view.choices["speech.realtime"] || []
+                            texts: ({ "off": "Not used", "always": "Always", "no-subtitles": "When the file has no subtitles",
+                                      "streams": "For sources that are not files" })
+                        }
+                        Choice {
+                            label: "Engine"
+                            path: "speech.realtime-recognizer.engine"
+                            values: win.view.choices["speech.engine"] || []
+                            texts: (win.view.speech || {}).engines || ({})
+                        }
+                        Choice {
+                            label: "Model"
+                            path: "speech.realtime-recognizer.model"
+                            values: win.view.choices["speech.model"] || []
+                            texts: (win.view.speech || {}).models || ({})
+                        }
+                        Choice {
+                            label: "Language"
+                            path: "speech.realtime-recognizer.language"
+                            values: win.view.choices["speech.language"] || []
+                            texts: (win.view.speech || {}).languages || ({})
+                        }
+                        Note { text: "Real time makes 30 s pieces from the playback position on, two ahead of it, and again from where a seek lands." }
+                        Heading { text: "Engines and models" }
+                        RowLayout {
+                            Label { text: "Models: " + ((win.view.speech || {}).model_folder || ""); Layout.fillWidth: true; wrapMode: Text.WrapAnywhere }
+                            Button { text: "Open"; onClicked: win.player.run_action("speech-model-folder") }
+                        }
+                        RowLayout {
+                            Label { text: "Engines: " + ((win.view.speech || {}).engine_folder || ""); Layout.fillWidth: true; wrapMode: Text.WrapAnywhere }
+                            Button { text: "Open"; onClicked: win.player.run_action("speech-engine-folder") }
+                        }
+                        Note { text: "Models are whisper.cpp's ggml-<model>.bin files from " + ((win.view.speech || {}).models_url || "") + " that you download into the models folder; RVP downloads nothing and sends nothing anywhere. RVP's CPU and Vulkan engine comes with it; whisper.cpp's CUDA and BLAS builds (" + ((win.view.speech || {}).engines_url || "") + ") go into the engines folder's cuda and blas folders. Above the GPU power budget, the next pieces and jobs run on the CPU." }
                     }
 
                     Loader {

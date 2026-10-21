@@ -151,6 +151,8 @@ pub struct Settings {
     pub smoothing: crate::smoothing::SmoothingSettings,
     /// M13's subtitle options (PotPlayer's Subtitles pages).
     pub subtitles: crate::subtitles::SubtitleSettings,
+    /// M13's subtitles made from the audio (Create Subtitles from Audio).
+    pub speech: crate::speech::SpeechSettings,
 }
 
 impl Default for Settings {
@@ -213,6 +215,7 @@ impl Default for Settings {
             decoders: crate::decoders::DecoderSettings::default(),
             smoothing: crate::smoothing::SmoothingSettings::default(),
             subtitles: crate::subtitles::SubtitleSettings::default(),
+            speech: crate::speech::SpeechSettings::default(),
         }
     }
 }

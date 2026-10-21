@@ -397,6 +397,8 @@ pub struct App {
     /// The subtitle file the browser, the editor and Input Subtitles work
     /// on (`crate::subtitle_editor`).
     pub(crate) subtitle_editor: Option<crate::subtitle_editor::OpenSubtitle>,
+    /// Subtitles made from the audio (`crate::speech`).
+    pub(crate) speech: crate::speech::Speech,
 }
 
 impl App {
@@ -485,6 +487,7 @@ impl App {
             subtitle_fps: None,
             subtitle_files: Vec::new(),
             subtitle_editor: None,
+            speech: crate::speech::Speech::default(),
         };
         app.start_picture();
         Ok(app)
@@ -930,6 +933,7 @@ impl App {
             Action::ToggleVapourSynth => Some(self.settings.vapoursynth.enabled),
             Action::Smoothing(command) => Some(self.smoothing_checked(command)),
             Action::Subtitles(command) => self.subtitle_checked(command),
+            Action::Speech(command) => self.speech_checked(command),
             Action::ControlPanel => Some(self.session.control_panel),
             Action::Audio(command) => self.audio_checked(command),
             other => self
@@ -1763,6 +1767,7 @@ impl App {
                     self.media_track += 1;
                     requests.extend(self.close_subtitle_editor());
                     self.file_loaded(engine, path, now);
+                    requests.extend(self.speech_file_loaded(engine));
                     save_now = true;
                 }
                 EngineEvent::EndFile {
@@ -1847,6 +1852,7 @@ impl App {
             requests.push(UiRequest::OnTop(top));
         }
         requests.extend(self.watch_svp(now));
+        requests.extend(self.speech_tick(engine, now));
         // RVP's smoothing starts once SVP had its chance.
         let hold = self.svp.holds_smoothing();
         if hold != self.smoothing.svp_hold {
@@ -2093,6 +2099,7 @@ impl App {
     pub fn shutdown(&mut self, engine: &Engine, now: Instant) -> io::Result<()> {
         // Subtitle edits not saved stay in RVP's folder.
         drop(self.close_subtitle_editor());
+        self.stop_speech(true, true);
         self.stop_second();
         drop(engine.stop());
         self.writer.flush();

@@ -145,7 +145,7 @@ impl OpenSubtitle {
 }
 
 /// Milliseconds of `seconds`.
-fn milliseconds(seconds: f64) -> i64 {
+pub(crate) fn milliseconds(seconds: f64) -> i64 {
     // Times of a video are far within i64's milliseconds.
     #[allow(clippy::cast_possible_truncation)]
     let ms = (seconds * 1000.0).round() as i64;
@@ -180,7 +180,7 @@ fn shown_subtitle(engine: &Engine) -> Result<(i64, Option<PathBuf>, Option<Strin
 }
 
 /// The highest ID of the external subtitle tracks: the one just added.
-fn newest_external(engine: &Engine) -> Option<i64> {
+pub(crate) fn newest_external(engine: &Engine) -> Option<i64> {
     engine
         .tracks()
         .into_iter()
@@ -191,7 +191,7 @@ fn newest_external(engine: &Engine) -> Option<i64> {
 
 /// Writes `bytes` to `path` through a temporary file and a rename, without
 /// a flush.
-fn write_file(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
+pub(crate) fn write_file(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
     if let Some(dir) = path.parent() {
         std::fs::create_dir_all(dir)?;
     }
@@ -249,9 +249,11 @@ impl App {
         })?;
         let name = crate::view::file_name(&path.to_string_lossy()).to_owned();
         let bytes = std::fs::read(&path).map_err(|error| format!("Cannot read {name}: {error}"))?;
-        let document = Document::parse(&bytes, Some(&name)).map_err(|_| {
-            format!("RVP edits and saves SRT, ASS and WebVTT files: {name} is none of them")
-        })?;
+        let encoding = &self.settings.subtitles.encoding;
+        let document =
+            Document::parse_with_encoding(&bytes, encoding, Some(&name)).map_err(|_| {
+                format!("RVP edits and saves SRT, ASS and WebVTT files: {name} is none of them")
+            })?;
         self.subtitle_editor = Some(OpenSubtitle {
             source: Some(path),
             track: Some(sid),

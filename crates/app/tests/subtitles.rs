@@ -181,6 +181,7 @@ fn style_and_placement_settings_become_mpvs_options() {
     subtitles.override_color = true;
     subtitles.scale_x = Some(120.0);
     subtitles.show = false;
+    subtitles.encoding = "windows-1251".to_owned();
     let applied = h.app.apply_settings(&h.engine, settings);
     assert!(applied.notes.is_empty(), "{:?}", applied.notes);
     let option = |engine: &Engine, name: &str| engine.get_text(name).unwrap_or_default();
@@ -193,6 +194,7 @@ fn style_and_placement_settings_become_mpvs_options() {
     assert_eq!(option(&h.engine, "sub-filter-sdh"), "yes");
     assert_eq!(option(&h.engine, "sub-ass-override"), "force");
     assert_eq!(option(&h.engine, "sub-visibility"), "no");
+    assert_eq!(option(&h.engine, "sub-codepage"), "windows-1251");
     // mpv shows colours as #AARRGGBB too.
     assert_eq!(option(&h.engine, "sub-color").to_uppercase(), "#FFFFFF00");
     let outline = h

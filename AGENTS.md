@@ -330,6 +330,48 @@ smoothing for users without SVP, after a study of the engines.
   Ubuntu release inside a container (CI: `ubuntu:26.10`): install,
   libraries, the self-tests under Xvfb (M11's too).
 
+## Subtitles (M13)
+
+- Subtitle options go to mpv after it starts, each by the first name the
+  running libmpv knows (`SubtitleSettings::mpv_options`: Linux's 0.37
+  lacks `sub-border-style` and `sub-line-spacing`, and keeps margins
+  within 0 to 300); an unset number or colour stays libmpv's own default
+  (`MpvDefaults`, read through `option-info`).
+- RVP reads and writes SRT, ASS and WebVTT itself (`crates/subtitle`):
+  the browser and editor, Input Subtitles and Subtitle Saving work on the
+  external file that shows (`crate::subtitle_editor`). libmpv gives no
+  access to embedded tracks' lines. Edits show through a working copy
+  (`<state>/subtitles/editing.<ext>`) added in place of the track; a file
+  RVP writes over goes to `<state>/subtitles/backup/` first, and unsaved
+  edits to `unsaved-<name>` when another file starts or RVP closes.
+  Saving writes the times as they show (`t * sub-fps / video fps +
+  sub-delay`, mpv's `dec_sub.c`) and, into the file mpv shows, sets the
+  sync back to none.
+- Subtitles from audio (`crate::speech`, `docs/spikes/m13-whisper.md`)
+  run whisper.cpp's `whisper-cli` as a process (no console, below normal
+  priority on Windows) on a WAV file a libmpv encode core writes. RVP's
+  CPU and Vulkan build is `tools/whisper/build.sh`
+  (`tools/libmpv/rootless.sh ROOT WORK tools/whisper/build.sh`, after the
+  libmpv build) and goes into the package as `whisper/`
+  (`package.py --whisper`); CUDA and BLAS are whisper.cpp's own builds the
+  user puts in `<config>/whisper/<engine>`. Models are never downloaded or
+  committed: the user puts `ggml-<model>.bin` into
+  `<config>/whisper-models`. Tests take `RVP_WHISPER_CLI`,
+  `RVP_WHISPER_MODELS` (with `ggml-tiny.bin`) and `RVP_SPEECH_CLIP` or
+  espeak-ng (in WSL unpacked into `~/rvp-deps/espeak`); without them they
+  pass with a note. The jobs' events reach the window's thread in
+  `App::speech_tick` (each drain and the shell's one-second tick). A job
+  on the GPU is a step of the GPU power budget; whisper on the host's GPU
+  runs only at gpu-limit.ps1's power limit, with permission.
+- Free subtitle samples for round trips are kept in
+  `~/rvp-reference/subtitles` (`RVP_SUBTITLE_SAMPLES`), never
+  committed.
+- The Windows VM's M13 check is `tools/windows-vm/m13-all.ps1`
+  (`--selftest=m13 --speech-check`, whisper.cpp on the speech clip, and
+  the headless tests `formats`, `editor`, `subtitles` and `speech` built
+  with `cargo xwin test --no-run`), with the clip and the tiny model in
+  `C:\rvp-test\m13`.
+
 ## Playback, playlist and opening (M11)
 
 - The thumbnail core (`crates/engine/src/thumbnail.rs`) is a second

@@ -156,6 +156,58 @@ fn every_audio_hotkey_works_or_says_why_not() {
     assert_eq!(keys, 28, "PotPlayer's audio keys");
 }
 
+/// M13: every item of the Subtitles menu, static or live, works, is one of
+/// RVP's lists or says why not (none is left for later), and each of
+/// PotPlayer's keys for one works by default.
+#[test]
+fn every_subtitle_item_and_hotkey_works_or_says_why_not() {
+    let mut subtitles: BTreeMap<u32, (String, ItemStatus)> = BTreeMap::new();
+    for (place, item) in commands(context_tree()) {
+        if place.starts_with("Subtitles > ") {
+            subtitles.insert(item.id, (place, item_status(item)));
+        }
+    }
+    for command in runtime_commands() {
+        if command.place.starts_with("Subtitles > ") {
+            let status = runtime_status(&command);
+            subtitles.insert(command.id, (command.place, status));
+        }
+    }
+    assert!(subtitles.len() > 300, "{}", subtitles.len());
+    for (id, (place, status)) in &subtitles {
+        if let ItemStatus::Missing(why) = status {
+            assert!(
+                !why.starts_with("planned") && !why.contains("not in RVP yet"),
+                "{place} ({id}): {why}"
+            );
+        }
+    }
+    let bindings = Bindings::potplayer_defaults();
+    let mut keys = 0;
+    for line in include_str!("../../../docs/r1/hotkeys.tsv").lines().skip(1) {
+        let cells: Vec<&str> = line.split('\t').collect();
+        let (Some(&"157"), Some(key), Some(Ok(id))) = (
+            cells.first(),
+            cells.get(1),
+            cells.get(2).map(|id| id.parse::<u32>()),
+        ) else {
+            continue;
+        };
+        let Some((place, status)) = subtitles.get(&id) else {
+            continue;
+        };
+        keys += 1;
+        let chord = KeyChord::parse(key).expect("R1's key");
+        match status {
+            ItemStatus::Window(action) => {
+                assert_eq!(bindings.key(&chord), Some(*action), "{key}: {place}");
+            }
+            other => panic!("{key}: {place} ({id}) is {other:?}"),
+        }
+    }
+    assert!(keys >= 30, "PotPlayer's subtitle keys: {keys}");
+}
+
 /// M11: the keys of PotPlayer's Open, Playback, Album/Favorites and DVD
 /// Control items, and of its playlist, work or say why not.
 #[test]

@@ -120,13 +120,18 @@ pub enum Step {
     Shaders,
     /// The VapourSynth script off.
     Script,
+    /// Subtitles from audio on the CPU (M13, `crate::speech`): the next
+    /// pieces and jobs.
+    Speech,
 }
 
 impl Step {
-    pub const ALL: [Self; 7] = [
+    pub const ALL: [Self; 8] = [
         Self::SmoothingLighter,
         Self::SmoothingBlend,
         Self::SmoothingOff,
+        // The picture stays as it is: before the steps that change it.
+        Self::Speech,
         Self::Scalers,
         Self::Processor,
         Self::Shaders,
@@ -144,6 +149,7 @@ impl Step {
             Self::Processor => "GPU Super Resolution and RTX Video HDR off",
             Self::Shaders => "pixel shaders off",
             Self::Script => "VapourSynth script off",
+            Self::Speech => "subtitles from audio on the CPU",
         }
     }
 
@@ -158,6 +164,7 @@ impl Step {
             Self::Processor => "GPU Super Resolution and RTX Video HDR back",
             Self::Shaders => "pixel shaders back",
             Self::Script => "VapourSynth script back",
+            Self::Speech => "subtitles from audio on the GPU again",
         }
     }
 
@@ -172,6 +179,7 @@ impl Step {
             Self::Processor => "processor",
             Self::Shaders => "shaders",
             Self::Script => "script",
+            Self::Speech => "speech",
         }
     }
 }
@@ -468,6 +476,7 @@ impl App {
                 let vs = &self.settings.vapoursynth;
                 vs.enabled && vs.script.is_some()
             }
+            Step::Speech => self.speech_on_gpu(),
         }
     }
 
@@ -493,6 +502,7 @@ impl App {
                 drop(self.apply_video_filters(engine));
             }
             Step::Shaders => drop(self.apply_shaders(engine)),
+            Step::Speech => self.speech_cpu_only(self.gpu_step_taken(Step::Speech)),
         }
     }
 

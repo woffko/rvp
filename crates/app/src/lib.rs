@@ -47,6 +47,7 @@ pub mod shaders;
 pub mod smoothing;
 pub mod sources;
 pub mod speakers;
+pub mod speech;
 pub mod stereo;
 mod storage;
 pub mod subtitle_editor;
