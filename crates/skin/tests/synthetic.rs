@@ -641,3 +641,43 @@ fn the_fullscreen_video_slot_draws_nothing() {
     assert_eq!(fullscreen.pixel(10, 10)[3], 0, "the video shows through");
     assert_eq!(fullscreen.pixel(1, 18), TITLE_LEFT, "the bar still draws");
 }
+
+/// A skin's `<Logo>` section: its idle part shows in state
+/// `CMD_DEFAULT_LOGO`, and an `IsLogo` picture keeps its shape, centred
+/// and never enlarged.
+#[test]
+fn logo_pictures_keep_their_shape() {
+    let markup = "<Skin><Logo>
+\t<Static Align='Client' State='CMD_DEFAULT_LOGO'>
+\t\t<Image Image='Atlas.png' Align='Client' ImageLeft='0' ImageTop='10' ImageWidth='8' ImageHeight='4' IsLogo='1' />
+\t</Static>
+\t<Static Align='Client' State='CMD_LOADING_LOGO' />
+</Logo></Skin>";
+    let archive = SkinArchive::from_files(
+        "Logo",
+        [
+            ("VideoSkin.xml", markup.as_bytes().to_vec()),
+            ("atlas.png", atlas()),
+        ],
+    );
+    let skin = Skin::load(archive, "VideoSkin.xml").expect("load");
+    assert_eq!(skin.logo_states(), (true, true));
+    let draw = |state: &UiState, width: i32, height: i32| {
+        let placed = layout(&skin, "Logo", width, height, state).expect("layout");
+        let list = paint(&skin, &placed, state, &DataModel::default());
+        rasterize(&list, &skin, &mut Fonts::new(Vec::new()))
+    };
+    let mut state = UiState::default();
+    // Without its state the logo does not show.
+    assert_eq!(draw(&state, 20, 20).pixel(10, 10)[3], 0);
+    state.flags.insert("CMD_DEFAULT_LOGO".to_owned());
+    // An 8x4 picture in 20x20: centred at its size (6..14, 8..12).
+    let image = draw(&state, 20, 20);
+    assert_eq!(image.pixel(10, 10), BUTTON_STATES[0]);
+    assert_eq!(image.pixel(10, 6)[3], 0, "above the picture");
+    assert_eq!(image.pixel(4, 10)[3], 0, "left of the picture");
+    // In 4x20 it shrinks to 4x2, keeping its shape.
+    let image = draw(&state, 4, 20);
+    assert_ne!(image.pixel(1, 10)[3], 0);
+    assert_eq!(image.pixel(1, 7)[3], 0, "above the shrunk picture");
+}

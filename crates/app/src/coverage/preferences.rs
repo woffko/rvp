@@ -913,6 +913,35 @@ const ITEMS: &[(u32, u32, Status)] = &[
     (366, 3035, Setting("input.drag-picture")),
     (366, 3036, Setting("input.drag-subtitles")),
     (366, 3037, Setting("input.x-wheel")),
+    // General > Skins (376), Logo (378) and On Screen Control (434), M14.
+    (376, 3005, Setting("skin")),
+    (376, 3027, Setting("skin")),
+    (376, 3024, Setting("skin")),
+    (376, 3052, Setting("skins.auto-hide")),
+    (376, 3057, Setting("skins.fullscreen-resize")),
+    (376, 3072, Setting("skins.video-skin-at-start")),
+    (376, 3073, Setting("skins.lock-mode")),
+    (376, 3074, Setting("skins.remember-mode-window")),
+    (376, 3075, Setting("skins.keep-size")),
+    (376, 3342, Setting("skins.animations")),
+    (376, 3343, Setting("skins.reverse-times")),
+    (376, 3344, Setting("skins.speed-times")),
+    (378, 3315, Setting("skins.idle-logo")),
+    (378, 3317, Setting("skins.start-logo")),
+    (378, 3005, Setting("skins.logo-position")),
+    (378, 3021, Setting("skins.idle-logo")),
+    (378, 3061, Setting("skins.random-logo")),
+    (378, 3027, Setting("skins.idle-logo")),
+    (434, 3005, Setting("skins.osc")),
+    (434, 3034, Setting("skins.osc-keep-while-over")),
+    (434, 3043, Setting("skins.osc-opacity")),
+    (434, 3011, Missing(NO_DAUM_WINDOWS)),
+    (434, 3012, Missing(NO_DAUM_WINDOWS)),
+    (434, 3013, Missing(NO_DAUM_WINDOWS)),
+    (434, 3006, Setting("skins.color-theme")),
+    (434, 3066, Setting("skins.custom.hsb")),
+    (434, 3067, Setting("skins.custom.hsb")),
+    (434, 3028, Setting("skins.custom")),
     // Subtitles (353).
     (
         353,
@@ -1134,6 +1163,10 @@ const ITEMS: &[(u32, u32, Status)] = &[
         Missing("mpv (libass) always shows overlapping subtitles together, one above the other"),
     ),
 ];
+
+/// PotPlayer's windows for its screen capture and Daum's broadcast and chat
+/// services, which RVP does not have.
+const NO_DAUM_WINDOWS: &str = "RVP has no capture, broadcast or chat windows: Daum's broadcast and chat services are discontinued and PotPlayer's screen capture is not planned";
 
 /// The milestone or reason for whole pages, by the start of their place;
 /// the longest wins.

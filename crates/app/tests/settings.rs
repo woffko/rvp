@@ -130,11 +130,11 @@ fn changes_apply_to_the_player_and_survive_a_restart() {
     let (default_scaler, _) = change(&settings, "scaler", json!("")).expect("scaler");
     app.apply_settings(&engine, default_scaler.clone());
     assert_eq!(text("scale"), text("option-info/scale/default-value"));
-    // The skin waits for a restart.
+    // The skin changes at once (M14): the shell shows it.
     let (skin, _) = change(&default_scaler, "skin", json!("/no/such.dsf")).expect("skin");
     let applied = app.apply_settings(&engine, skin.clone());
-    assert!(applied.restart);
-    assert_eq!(applied.notes.len(), 1, "{:?}", applied.notes);
+    assert!(!applied.restart);
+    assert_eq!(app.chosen_skin(), Some("/no/such.dsf".into()));
 
     app.shutdown(&engine, Instant::now()).expect("shutdown");
     let saved: Settings = read_json(&dirs.config.join("settings.json"))

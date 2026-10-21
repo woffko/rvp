@@ -138,6 +138,11 @@ pub enum UiRequest {
     /// The save dialog for the open subtitles, suggesting this file (then
     /// `App::save_subtitle_as`).
     SaveSubtitleDialog(PathBuf),
+    /// A Skins menu choice changed the skin, its mode or theme: the shell
+    /// shows `App::skin_want` and this notice (M14).
+    SkinChanged(String),
+    /// The colour theme's Customize dialog.
+    ColorThemeDialog,
     /// A save dialog for an audio recording, suggesting this file.
     RecordDialog(PathBuf),
     /// Start or stop recording what RVP plays.
@@ -401,9 +406,26 @@ pub struct App {
     pub(crate) speech: crate::speech::Speech,
     /// A Ctrl+Alt drag's sideways travel not yet turned into a step (M14).
     pub(crate) subtitle_drag_x: f64,
+    /// What the loaded skin offers, and the random theme picked for this
+    /// start (M14, `crate::skins`).
+    pub(crate) skin_info: crate::skins::SkinInfo,
+    pub(crate) random_theme: Option<usize>,
+    /// "Change logo randomly on each loading": this file's pick.
+    pub(crate) random_logo: Option<usize>,
+    /// The skin the command line or `RVP_SKIN` chose (`Some(None)`: RVP
+    /// Default) until the user picks one.
+    pub(crate) skin_override: crate::skins::SkinOverride,
+    /// The file that plays has no video (the audio skin mode).
+    pub(crate) audio_only: bool,
 }
 
 impl App {
+    /// A file is starting (before it plays): the start logo shows (M14).
+    #[must_use]
+    pub(crate) fn starting(&self) -> bool {
+        self.tracking == Tracking::Loading
+    }
+
     /// Loads `settings.json` (writing the defaults when it is missing), the
     /// resume store and the albums.
     ///
@@ -491,6 +513,11 @@ impl App {
             subtitle_editor: None,
             speech: crate::speech::Speech::default(),
             subtitle_drag_x: 0.0,
+            skin_info: crate::skins::SkinInfo::default(),
+            random_theme: None,
+            random_logo: None,
+            skin_override: crate::skins::SkinOverride::Off,
+            audio_only: false,
         };
         app.start_picture();
         Ok(app)
@@ -938,6 +965,7 @@ impl App {
             Action::Subtitles(command) => self.subtitle_checked(command),
             Action::Speech(command) => self.speech_checked(command),
             Action::Misc(command) => self.misc_checked(command),
+            Action::Skins(command) => self.skin_checked(command),
             Action::ControlPanel => Some(self.session.control_panel),
             Action::Audio(command) => self.audio_checked(command),
             other => self
@@ -1757,6 +1785,7 @@ impl App {
             match event {
                 EngineEvent::StartFile => {
                     self.tracking = Tracking::Loading;
+                    self.next_random_logo();
                     self.seek_bar = None;
                     // A-B points, chapters and skips belong to one file.
                     self.session.point_a = None;
@@ -1936,11 +1965,15 @@ impl App {
         {
             self.library.set_title(album, &[index], Some(&title));
         }
+        let tracks = engine.tracks();
         let audio_only = self.model.int(PropertyId::VideoWidth).is_none()
-            && !engine
-                .tracks()
+            && !tracks
                 .iter()
                 .any(|track| track.kind == rvp_engine::TrackKind::Video);
+        // The skin's audio mode: a cover picture is no video.
+        self.audio_only = !tracks
+            .iter()
+            .any(|track| track.kind == rvp_engine::TrackKind::Video && !track.album_art);
         let remember = if audio_only {
             self.settings.remember_positions && self.settings.playback.remember_audio_positions
         } else {

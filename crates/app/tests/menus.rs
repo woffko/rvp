@@ -95,6 +95,7 @@ fn the_context_menu_follows_potplayer_with_rvps_keys_and_state() {
             "Subtitles",
             "Video",
             "Audio",
+            "Skins",
             "Misc",
             "",
             "Frame Size",
@@ -168,14 +169,19 @@ fn the_context_menu_follows_potplayer_with_rvps_keys_and_state() {
         }
     });
     assert!(commands > 120, "{commands} commands");
+}
 
-    // Other keys and states show at once.
+/// Other keys and states show at once.
+#[test]
+fn the_context_menu_shows_rebound_keys_and_states() {
     let mut settings = Settings::default();
     settings.keys.insert("D".into(), String::new());
     settings.keys.insert("Ctrl+B".into(), "frame-back".into());
     settings.repeat = Repeat::Album;
-    let (app, _dir2) = new_app("context-rebound", settings);
+    let (app, _dir) = new_app("context-rebound", settings);
     let menu = app.context_menu(&Live::default());
+    let repeat =
+        |menu: &[MenuItem], label| item(menu, &["Playback", "Repeat Playback", label]).checked;
     assert_eq!(
         item(&menu, &["Playback", "Jump (to)", "Previous frame"]).shortcut,
         "Ctrl+B"

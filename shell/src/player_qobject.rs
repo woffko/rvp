@@ -82,6 +82,26 @@ pub mod qobject {
         #[qproperty(bool, black_other_displays)]
         /// Fullscreen goes to the primary display (M12).
         #[qproperty(bool, fullscreen_primary)]
+        /// The main window's and the control panel's opacity (M14; 0 until
+        /// the core starts, which QML reads as 1).
+        #[qproperty(f64, window_opacity)]
+        #[qproperty(f64, panel_opacity)]
+        /// The window's smallest size from the skin (M14, `Mode::limits`;
+        /// 0 until a skin is laid out, which QML reads as 320x200).
+        #[qproperty(i32, min_width)]
+        #[qproperty(i32, min_height)]
+        /// The logo over the video area (M14, `App::logo`): a picture's
+        /// URL, empty while the skin draws its own (`skin_logo`), and where
+        /// it goes (`skins.logo-position`).
+        #[qproperty(QString, logo_source)]
+        #[qproperty(bool, skin_logo)]
+        #[qproperty(QString, logo_position)]
+        /// The skin's bars lie over the video (M14): fullscreen, or the
+        /// window with Skins > "Auto hide main skin" while a video shows;
+        /// their opacity there, and whether they fade.
+        #[qproperty(bool, overlay)]
+        #[qproperty(f64, osc_opacity)]
+        #[qproperty(bool, animations)]
         /// The slideshow for audio files (JSON, `App::slideshow_json`).
         #[qproperty(QString, slideshow)]
         #[qproperty(QString, power_notice)]
@@ -213,6 +233,11 @@ pub mod qobject {
         /// Opens a folder's media files (Open Folder).
         #[qinvokable]
         fn open_folder(self: Pin<&mut Self>, path: &QString);
+
+        /// RVP's `skins`, `logos` or `menus` folder as a URL for the file
+        /// manager, made when missing (M14's Open ... Folder buttons).
+        #[qinvokable]
+        fn settings_folder_url(self: &Self, kind: &QString) -> QString;
 
         /// Loads a subtitle file for the playing video.
         #[qinvokable]
@@ -553,6 +578,11 @@ pub mod qobject {
         #[qsignal]
         #[cxx_name = "panelDamaged"]
         fn panel_damaged(self: Pin<&mut Self>);
+
+        /// The skin's logo repaints (M14, `SkinView.surface` 2).
+        #[qsignal]
+        #[cxx_name = "logoDamaged"]
+        fn logo_damaged(self: Pin<&mut Self>);
 
         /// Resize the window to this size (a new video at 100 %).
         #[qsignal]

@@ -24,7 +24,7 @@ impl qobject::Player {
                 "filters": ["SubRip (*.srt)", "Advanced SubStation Alpha (*.ass)",
                             "WebVTT (*.vtt)", "All files (*)"],
             })),
-            other => eprintln!("rvp: unhandled request {other:?}"),
+            other => self.m14_request(other),
         }
     }
 

@@ -32,6 +32,9 @@ pub enum Mode {
     /// The control panel (F7) in a window of its own
     /// (`ControlBoxSkinArea`).
     ControlBox,
+    /// The skin's logo over the video area while nothing plays or a file
+    /// starts (`<Logo>`, M14).
+    Logo,
 }
 
 impl Mode {
@@ -41,6 +44,7 @@ impl Mode {
             Mode::Window => "MainSkinArea",
             Mode::Fullscreen => "MainSkinAreaOscInside",
             Mode::ControlBox => "ControlBoxSkinArea",
+            Mode::Logo => "Logo",
         }
     }
 
@@ -52,6 +56,34 @@ impl Mode {
         let size = (area.attrs.int("Width")?, area.attrs.int("Height")?);
         (size.0 > 0 && size.1 > 0).then_some(size)
     }
+
+    /// The window's limits the mode's area sets (M14): `WidthLimit` and
+    /// `HeightLimit` are the smallest window (0: no limit of the skin's),
+    /// and `ForceMinWidth` or `ForceMinHeight` shrink the window to that
+    /// side's smallest size when the skin mode comes (BlackSpace's audio
+    /// skin: the bars without the video).
+    #[must_use]
+    pub fn limits(self, skin: &Skin) -> WindowLimits {
+        let Some(area) = skin.area(self.area()) else {
+            return WindowLimits::default();
+        };
+        let attrs = &area.attrs;
+        WindowLimits {
+            width: attrs.int_or("WidthLimit", 0).max(0),
+            height: attrs.int_or("HeightLimit", 0).max(0),
+            force_width: attrs.int_or("ForceMinWidth", 0) == 1,
+            force_height: attrs.int_or("ForceMinHeight", 0) == 1,
+        }
+    }
+}
+
+/// See [`Mode::limits`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct WindowLimits {
+    pub width: i32,
+    pub height: i32,
+    pub force_width: bool,
+    pub force_height: bool,
 }
 
 /// What the painters need: the display list and the region rectangles,
@@ -98,6 +130,9 @@ impl Damage {
 
 /// The skin state of one window.
 pub struct Chrome {
+    /// Over the video, the video keeps to the bars' video slot (Skins >
+    /// "Auto resize video depending on fullscreen pop-ups" while they show).
+    video_in_slot: bool,
     skin: &'static Skin,
     mode: Mode,
     width: i32,
@@ -178,6 +213,7 @@ impl Chrome {
         Self {
             skin,
             mode: Mode::Window,
+            video_in_slot: false,
             width: 0,
             height: 0,
             layout: None,
@@ -193,6 +229,26 @@ impl Chrome {
     #[must_use]
     pub fn skin(&self) -> &'static Skin {
         self.skin
+    }
+
+    /// Keeps the video in the bars' video slot over the video (`true`) or
+    /// gives it the whole window; true when that changed.
+    pub fn set_video_in_slot(&mut self, in_slot: bool) -> bool {
+        let changed = self.video_in_slot != in_slot;
+        self.video_in_slot = in_slot;
+        changed
+    }
+
+    /// Shows another skin (M14: the skin list, the audio skin, a colour
+    /// theme); the state but the pointer's carries over. The next
+    /// [`Chrome::resize`] lays it out.
+    pub fn set_skin(&mut self, skin: &'static Skin) {
+        self.skin = skin;
+        self.layout = None;
+        self.state.hover = None;
+        self.state.pressed = None;
+        self.painted_regions.clear();
+        self.painted_static.clear();
     }
 
     #[must_use]
@@ -327,6 +383,11 @@ impl Chrome {
     pub fn video_rect(&self) -> Rect {
         match (self.mode, &self.layout) {
             (Mode::Window, Some(placed)) => placed
+                .slot("CMD_VIDEO_WINDOW")
+                .unwrap_or_else(|| Rect::new(0, 0, self.width, self.height)),
+            // The bars' video slot while they show and the video makes
+            // room for them (M14).
+            (Mode::Fullscreen, Some(placed)) if self.video_in_slot => placed
                 .slot("CMD_VIDEO_WINDOW")
                 .unwrap_or_else(|| Rect::new(0, 0, self.width, self.height)),
             _ => Rect::new(0, 0, self.width, self.height),

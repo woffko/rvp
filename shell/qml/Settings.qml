@@ -52,6 +52,8 @@ ApplicationWindow {
         { key: "input", title: "Keys and Mouse" },
         { key: "input-options", title: "Keyboard and Mouse Options" },
         { key: "skins", title: "Skins" },
+        { key: "logo", title: "Logo" },
+        { key: "osc", title: "On Screen Control" },
         { key: "window-size", title: "Window Size" },
         { key: "fullscreen-mode", title: "Fullscreen Mode" },
         { key: "capture", title: "Video Capture" },
@@ -62,7 +64,7 @@ ApplicationWindow {
     // group's pages show as tabs over the page. `page` is the group's own
     // page (General has none yet: M14 brings PotPlayer's general options).
     readonly property var tree: [
-        { title: "General", page: "", pages: ["input", "input-options", "skins", "visualization", "playlist"] },
+        { title: "General", page: "", pages: ["input", "input-options", "skins", "logo", "osc", "visualization", "playlist"] },
         { title: "Playback", page: "playback",
           pages: ["time-jump", "skip", "section-repeat", "scene-browser", "window-size", "fullscreen-mode"] },
         { title: "Subtitles", page: "subtitles", pages: ["subtitle-style", "subtitle-location", "subtitle-sync", "subtitle-browser", "speech"] },
@@ -2023,7 +2025,96 @@ ApplicationWindow {
                                 onClicked: win.set("skin", modelData)
                             }
                         }
-                        Note { text: "Empty: RVP Default, RVP's own skin. RVP also draws PotPlayer's .dsf skins (BlackSpace is the one it is made for). The skin changes at the next start." }
+                        Note { text: "Empty: RVP Default, RVP's own skin. RVP also draws PotPlayer's .dsf skins (BlackSpace is the one it is made for), from its skins folder (" + (win.view.skins_folder || "") + "), next to the chosen skin and PotPlayer's. The skin changes at once (also from the Skins menu)." }
+                        RowLayout {
+                            Button { text: "Rescan Skin Files"; onClicked: win.reload(false) }
+                            Button {
+                                text: "Open Skin Folder"
+                                onClicked: Qt.openUrlExternally(win.player.settings_folder_url("skins"))
+                            }
+                        }
+                        Heading { text: "Skin modes" }
+                        Check { path: "skins.video-skin-at-start"; text: "Use the video skin at program start" }
+                        Check { path: "skins.lock-mode"; text: "Disable switching between skin modes (the audio skin for files without video)" }
+                        Check { path: "skins.remember-mode-window"; text: "Remember the window's position and size of each skin mode" }
+                        Check { path: "skins.keep-size"; text: "Keep the window's size while switching between skin modes" }
+                        Heading { text: "The skin over the video" }
+                        Check { path: "skins.auto-hide"; text: "Auto hide the main window's skin while a video shows (its bars come over the video)" }
+                        Check { path: "skins.fullscreen-resize"; text: "In fullscreen the video makes room for the bars while they show" }
+                        Check { path: "skins.animations"; text: "Enable window animations (the bars and the control panel fade)" }
+                        Heading { text: "Times in the skin" }
+                        Check { path: "skins.reverse-times"; text: "Reverse the elapsed and remaining times" }
+                        Check { path: "skins.speed-times"; text: "Correct the times according to the playback speed" }
+                        Heading { text: "Opacity" }
+                        Amount { label: "Main window"; path: "skins.opacity"; from: 10; to: 100; step: 10; unit: "%" }
+                        Amount { label: "Control panel"; path: "skins.panel-opacity"; from: 10; to: 100; step: 10; unit: "%" }
+                    }
+
+                    Page {
+                        Heading { text: "Logo while playback is off" }
+                        Choice {
+                            label: "Logo"
+                            path: "skins.idle-logo"
+                            values: ["skin", "default"].concat(win.view.logo_list || [])
+                            texts: ({ "skin": "[Skin defined]", "default": "<Default logo>" })
+                        }
+                        Heading { text: "Logo while starting playback" }
+                        Choice {
+                            label: "Logo"
+                            path: "skins.start-logo"
+                            values: ["same", "skin", "default"].concat(win.view.logo_list || [])
+                            texts: ({ "same": "{Same as the first logo}", "skin": "[Skin defined]", "default": "<Default logo>" })
+                        }
+                        Heading { text: "Logo settings" }
+                        Choice {
+                            label: "Logo position"
+                            path: "skins.logo-position"
+                            values: ["center", "top-left", "top-right", "bottom-left", "bottom-right", "fit"]
+                            texts: ({ "center": "Center", "top-left": "Top left", "top-right": "Top right",
+                                      "bottom-left": "Bottom left", "bottom-right": "Bottom right",
+                                      "fit": "Fit to the video area" })
+                        }
+                        Check { path: "skins.random-logo"; text: "Change the logo randomly on each loading" }
+                        RowLayout {
+                            Button {
+                                text: "Open Logo Folder"
+                                onClicked: Qt.openUrlExternally(win.player.settings_folder_url("logos"))
+                            }
+                            Button { text: "Rescan Logo Files"; onClicked: win.reload(false) }
+                        }
+                        Note { text: "Pictures (PNG, JPEG, BMP, GIF) in RVP's logo folder (" + (win.view.logos_folder || "") + ") and, on Windows, PotPlayer's. The skin's own logo: PotPlayer's Flash logos (BlackSpace's) cannot show, so RVP's shows instead." }
+                    }
+
+                    Page {
+                        Heading { text: "On Screen Control" }
+                        Choice {
+                            label: "Method"
+                            path: "skins.osc"
+                            values: [true, false]
+                            texts: ({ "true": "The skin's bars over the video (Qt)", "false": "Disable" })
+                        }
+                        Check { path: "skins.osc-keep-while-over"; text: "Disable auto hide of the bars while the mouse pointer is over them" }
+                        Amount { label: "Opacity"; path: "skins.osc-opacity"; from: 10; to: 100; step: 5; unit: "%" }
+                        Heading { text: "Color themes" }
+                        Choice {
+                            label: "Color theme"
+                            path: "skins.color-theme"
+                            values: ["", "random", "custom"].concat(win.view.skin_themes || [])
+                            texts: ({ "": "Do not use", "random": "Random (each start)", "custom": "Custom" })
+                        }
+                        RowLayout {
+                            RadioButton {
+                                text: "HSB color theme"
+                                checked: win.value("skins.custom.hsb") === true
+                                onClicked: win.set("skins.custom.hsb", true)
+                            }
+                            RadioButton {
+                                text: "RGB color theme"
+                                checked: win.value("skins.custom.hsb") === false
+                                onClicked: win.set("skins.custom.hsb", false)
+                            }
+                            Button { text: "Set Custom Color Theme…"; onClicked: win.player.run_action("theme-customize") }
+                        }
                     }
 
                     Page {

@@ -12,7 +12,7 @@ use std::fmt::Write as _;
 use std::path::{Path, PathBuf};
 use std::pin::Pin;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, Mutex, OnceLock};
+use std::sync::{Arc, Mutex, OnceLock, RwLock};
 use std::time::Instant;
 
 use cxx_qt::{CxxQtType, Threading};
@@ -36,6 +36,7 @@ use crate::video::ENGINE;
 mod m11;
 mod m12;
 mod m13;
+mod m14;
 
 /// `ui_request` kinds.
 pub mod request {
@@ -108,16 +109,116 @@ pub mod request {
     pub const SUBTITLE_SYNC: i32 = 37;
     /// The subtitle browser (argument 0) or Input Subtitles (1).
     pub const SUBTITLE_EDITOR: i32 = 38;
+    /// The colour theme's Customize dialog.
+    pub const COLOR_THEME: i32 = 39;
 }
 
-/// The skin, loaded once for the process (the painters read it on the
-/// render thread).
-static SKIN: OnceLock<&'static Skin> = OnceLock::new();
+/// The skin the main window shows (the painters read it on the render
+/// thread). M14 switches it while RVP runs: another skin, the audio skin
+/// or a colour theme.
+static SKIN: RwLock<Option<&'static Skin>> = RwLock::new(None);
+
+/// One skin as loaded: where it came from, its file and its tint.
+#[derive(Debug, Clone, PartialEq)]
+struct SkinKey {
+    source: SkinSource,
+    file: String,
+    tint: Option<rvp_skin::theme::Tint>,
+}
+
+/// Every skin loaded so far. Each lives for the process (layouts and the
+/// render thread borrow it), so a switch back costs nothing and the leak
+/// is bounded by the skins, modes and themes the user picks.
+static LOADED: Mutex<Vec<(SkinKey, &'static Skin)>> = Mutex::new(Vec::new());
 /// The frame the painters draw.
 static FRAME: Mutex<Option<Arc<Frame>>> = Mutex::new(None);
 
 pub fn skin() -> Option<&'static Skin> {
-    SKIN.get().copied()
+    SKIN.read().ok().and_then(|slot| *slot)
+}
+
+/// The skin the painters draw from now on.
+fn show_skin(skin: &'static Skin) {
+    if let Ok(mut slot) = SKIN.write() {
+        *slot = Some(skin);
+    }
+}
+
+/// A loaded skin by its key, or `None`.
+fn loaded_skin(key: &SkinKey) -> Option<&'static Skin> {
+    LOADED
+        .lock()
+        .ok()?
+        .iter()
+        .find(|(loaded, _)| loaded == key)
+        .map(|(_, skin)| *skin)
+}
+
+/// Keeps `skin` for the process under `key`.
+fn keep_skin(key: SkinKey, skin: Skin) -> &'static Skin {
+    let skin: &'static Skin = Box::leak(Box::new(skin));
+    if let Ok(mut loaded) = LOADED.lock() {
+        loaded.push((key, skin));
+    }
+    skin
+}
+
+/// The command line's or `RVP_SKIN`'s skin stays until the user picks one
+/// (M14).
+fn command_line_skin(cli: &Cli, app: &mut App) {
+    match skin_source(cli, &app.settings) {
+        SkinSource::File(path) if app.settings.skin.as_ref() != Some(&path) => {
+            app.set_skin_override(Some(path));
+        }
+        SkinSource::Default if app.settings.skin.is_some() => app.set_skin_override(None),
+        _ => {}
+    }
+}
+
+/// The skin of `source`'s `file` (`None`: its video skin), tinted when
+/// asked: loaded once, then kept.
+fn skin_variant(
+    source: &SkinSource,
+    file: Option<&str>,
+    tint: Option<rvp_skin::theme::Tint>,
+) -> Result<&'static Skin, String> {
+    let base_key = |file: &str| SkinKey {
+        source: source.clone(),
+        file: file.to_owned(),
+        tint: None,
+    };
+    let base = if let Some(file) = file {
+        if let Some(skin) = loaded_skin(&base_key(file)) {
+            skin
+        } else {
+            keep_skin(base_key(file), open_skin_file(source, Some(file))?)
+        }
+    } else {
+        let found = LOADED.lock().ok().and_then(|loaded| {
+            loaded
+                .iter()
+                .find(|(key, _)| {
+                    key.source == *source
+                        && key.tint.is_none()
+                        && rvp_skin::skin::VIDEO_SKIN_FILES.contains(&key.file.as_str())
+                })
+                .map(|(_, skin)| *skin)
+        });
+        if let Some(skin) = found {
+            skin
+        } else {
+            let skin = open_skin_file(source, None)?;
+            keep_skin(base_key(skin.file()), skin)
+        }
+    };
+    let Some(tint) = tint else {
+        return Ok(base);
+    };
+    let key = SkinKey {
+        tint: Some(tint),
+        ..base_key(base.file())
+    };
+    Ok(loaded_skin(&key).unwrap_or_else(|| keep_skin(key, base.tinted(tint))))
 }
 
 pub fn frame() -> Option<Arc<Frame>> {
@@ -135,6 +236,13 @@ static PANEL_FRAME: Mutex<Option<Arc<Frame>>> = Mutex::new(None);
 
 pub fn panel_frame() -> Option<Arc<Frame>> {
     PANEL_FRAME.lock().ok().and_then(|frame| frame.clone())
+}
+
+/// The frame of the skin's logo (M14).
+static LOGO_FRAME: Mutex<Option<Arc<Frame>>> = Mutex::new(None);
+
+pub fn logo_frame() -> Option<Arc<Frame>> {
+    LOGO_FRAME.lock().ok().and_then(|frame| frame.clone())
 }
 
 /// The control panel's window (F7): the skin's `ControlBoxSkinArea` with a
@@ -193,6 +301,8 @@ struct Core {
     native_failed: Option<String>,
     /// Where the GPU power budget's readings come from (D17).
     gpu_readings: GpuReadings,
+    /// The skin, its logo and its bars over the video (M14).
+    look: m14::Look,
 }
 
 /// Who gives the GPU power budget its readings.
@@ -301,6 +411,16 @@ pub struct PlayerRust {
     pub(crate) video_aspect: f64,
     pub(crate) black_other_displays: bool,
     pub(crate) fullscreen_primary: bool,
+    pub(crate) window_opacity: f64,
+    pub(crate) panel_opacity: f64,
+    pub(crate) min_width: i32,
+    pub(crate) min_height: i32,
+    pub(crate) logo_source: QString,
+    pub(crate) skin_logo: bool,
+    pub(crate) logo_position: QString,
+    pub(crate) overlay: bool,
+    pub(crate) osc_opacity: f64,
+    pub(crate) animations: bool,
     pub(crate) slideshow: QString,
     pub(crate) power_notice: QString,
     pub(crate) power_seconds: i32,
@@ -391,14 +511,22 @@ type SkinLoad = std::thread::JoinHandle<Result<Skin, String>>;
 static PRELOAD: Mutex<Option<(SkinSource, SkinLoad)>> = Mutex::new(None);
 
 fn open_skin(source: &SkinSource) -> Result<Skin, String> {
-    let mut skin = match source {
-        SkinSource::File(path) => {
+    open_skin_file(source, None)
+}
+
+/// A skin's `file` (`None`: its video skin) with RVP's logo (D10).
+fn open_skin_file(source: &SkinSource, file: Option<&str>) -> Result<Skin, String> {
+    let mut skin = match (source, file) {
+        (SkinSource::File(path), None) => {
             Skin::open(path).map_err(|error| format!("{}: {error}", path.display()))?
         }
-        SkinSource::Default => {
+        (SkinSource::File(path), Some(file)) => SkinArchive::open(path)
+            .and_then(|archive| Skin::load(archive, file))
+            .map_err(|error| format!("{}: {error}", path.display()))?,
+        (SkinSource::Default, file) => {
             let archive = SkinArchive::from_zip_bytes(rvp_look::skin::NAME, DEFAULT_SKIN.to_vec())
                 .map_err(|error| format!("{}: {error}", rvp_look::skin::NAME))?;
-            Skin::load(archive, "VideoSkin.xml")
+            Skin::load(archive, file.unwrap_or("VideoSkin.xml"))
                 .map_err(|error| format!("{}: {error}", rvp_look::skin::NAME))?
         }
     };
@@ -477,8 +605,13 @@ fn load_skin(source: &SkinSource) -> Result<&'static Skin, String> {
     };
     // The skin lives for the whole process: the layout borrows it and the
     // render thread paints from it.
-    let skin: &'static Skin = Box::leak(Box::new(skin));
-    let _ = SKIN.set(skin);
+    let key = SkinKey {
+        source: source.clone(),
+        file: skin.file().to_owned(),
+        tint: None,
+    };
+    let skin = keep_skin(key, skin);
+    show_skin(skin);
     Ok(skin)
 }
 
@@ -664,6 +797,7 @@ impl qobject::Player {
         }
         crate::metrics::mark("settings_loaded_ms");
         let chrome = load_chrome(&cli, &app.settings, &mut messages);
+        command_line_skin(&cli, &mut app);
         crate::metrics::mark("skin_loaded_ms");
 
         crate::ffi::bridge::rvp_set_c_numeric_locale();
@@ -734,7 +868,11 @@ impl qobject::Player {
             slideshow: false,
             native_failed: None,
             gpu_readings: GpuReadings::Off,
+            look: m14::Look::default(),
         });
+        // The skin's themes, its audio skin and the theme to show (M14).
+        self.as_mut().sync_skin();
+        self.as_mut().sync_opacity();
         if let Some(message) = messages.first() {
             self.as_mut().show_message(message);
         }
@@ -809,6 +947,12 @@ impl qobject::Player {
         core.awake.set(core.app.keeps_screen_on());
         let hides_pointer = core.hides_pointer();
         let center = core.app.settings.playback.center_window;
+        let file_changed = drained.events.iter().any(|event| {
+            matches!(
+                event,
+                EngineEvent::FileLoaded { .. } | EngineEvent::EndFile { .. }
+            )
+        });
         for event in &drained.events {
             match event {
                 EngineEvent::PlaybackRestart => crate::metrics::playback_restarted(),
@@ -860,7 +1004,7 @@ impl qobject::Player {
         let has_video = core.app.model.int(PropertyId::VideoWidth).is_some();
         let title = view::title(&core.app.model, core.app.library().lists());
         let requests = drained.requests;
-        self.as_mut().set_has_video(has_video);
+        self.as_mut().show_video(has_video);
         self.as_mut().set_hide_pointer(hides_pointer);
         self.as_mut().set_center_window(center);
         self.as_mut().sync_window_settings();
@@ -872,6 +1016,10 @@ impl qobject::Player {
             }));
         for request in requests {
             self.as_mut().handle_request(request);
+        }
+        // A file with or without video: the audio or video skin (M14).
+        if file_changed {
+            self.as_mut().sync_skin();
         }
         if let Some(request) = fit
             && !*self.fullscreen()
@@ -945,7 +1093,8 @@ impl qobject::Player {
                 .request_list_thumbnails(geometry.first, geometry.visible + 1);
         }
         self.as_mut().emit_damage(&damage, synced);
-        self.sync_panel(false);
+        self.as_mut().sync_panel(false);
+        self.sync_logo();
     }
 
     /// Recomputes the control panel while it shows; it repaints whole.
@@ -1193,7 +1342,7 @@ impl qobject::Player {
     }
 
     fn relayout(mut self: Pin<&mut Self>) {
-        let fullscreen = *self.fullscreen();
+        let overlay = self.as_mut().sync_overlay();
         let Some(core) = self.as_mut().core_mut() else {
             return;
         };
@@ -1203,7 +1352,7 @@ impl qobject::Player {
             self.set_video_rect(to_rectf(rect));
             return;
         };
-        let mode = if fullscreen {
+        let mode = if overlay {
             Mode::Fullscreen
         } else {
             Mode::Window
@@ -1218,6 +1367,9 @@ impl qobject::Player {
         };
         let synced = false;
         self.as_mut().emit_damage(&damage, synced);
+        if !overlay {
+            self.as_mut().sync_limits();
+        }
         self.sync_chrome();
     }
 
@@ -1308,7 +1460,7 @@ impl qobject::Player {
             width: core.width,
             height: core.height,
             movable: !fullscreen && !core.maximized,
-            chrome_shown: core.chrome.is_some() && (!fullscreen || *self.chrome_shown()),
+            chrome_shown: core.chrome.is_some() && (!*self.overlay() || *self.chrome_shown()),
             panel: false,
             turn_view: core.app.vr_active(),
             modifiers,
@@ -1537,7 +1689,7 @@ impl qobject::Player {
         let Some(ctx) = self.pointer_context(Modifiers::default()) else {
             return;
         };
-        let fullscreen = *self.fullscreen();
+        let overlay = *self.overlay();
         let Some(core) = self.as_mut().core_mut() else {
             return;
         };
@@ -1550,11 +1702,14 @@ impl qobject::Player {
         let tooltip = core.pointer.tooltip.unwrap_or("");
         let cursor = cursor_shape(core.pointer.cursor);
         let dragging = core.pointer.dragging();
+        let osc = core.app.settings.skins.osc;
+        core.look.bars_moved = Some(Instant::now());
         self.as_mut().set_tooltip(QString::from(tooltip));
         self.as_mut().set_cursor_shape(cursor);
-        if fullscreen {
-            // The bars show while the pointer is over them (auto-hide).
-            self.as_mut().set_chrome_shown(over_bars || dragging);
+        if overlay {
+            // The bars show while the pointer is over them (auto-hide),
+            // unless On Screen Control is off.
+            self.as_mut().show_bars(osc && (over_bars || dragging));
         }
         self.as_mut().apply_effects(&effects);
         self.sync_chrome();
@@ -1602,8 +1757,8 @@ impl qobject::Player {
             self.as_mut().seek_hover(None);
         }
         self.as_mut().set_tooltip(QString::default());
-        if *self.fullscreen() {
-            self.as_mut().set_chrome_shown(false);
+        if *self.overlay() {
+            self.as_mut().show_bars(false);
         }
         self.sync_chrome();
     }
@@ -1703,6 +1858,9 @@ impl qobject::Player {
                 core.app.set_fullscreen(core.engine, enter, fit);
                 self.as_mut().set_chrome_shown(false);
                 self.as_mut().set_fullscreen(enter);
+                // The bars lie over the video from now; the layout follows
+                // with the window's new size.
+                self.as_mut().sync_overlay();
                 self.as_mut()
                     .ui_request(request::FULLSCREEN, i32::from(enter));
             }
@@ -2128,6 +2286,11 @@ impl qobject::Player {
             self.as_mut().set_on_top(on_top);
         }
         self.as_mut().sync_window_settings();
+        // Another skin, mode or theme, the windows' opacity, the bars
+        // over the video and the logo (M14).
+        self.as_mut().sync_skin();
+        self.as_mut().sync_opacity();
+        self.as_mut().refresh_overlay();
         self.sync_chrome();
     }
 
@@ -2563,6 +2726,7 @@ impl qobject::Player {
             self.as_mut().handle_request(request);
         }
         self.as_mut().tick_m11();
+        self.as_mut().tick_bars();
         self.as_mut().tick_gpu_power();
         self.check_native_video();
     }
@@ -2757,6 +2921,25 @@ impl qobject::Player {
             ),
             ("tooltip", text(Some(&self.tooltip().to_string()))),
             ("state_file", text(core.app.store().path().to_str())),
+            (
+                "skin_file",
+                text(core.chrome.as_ref().map(|chrome| chrome.skin().file())),
+            ),
+            (
+                "skin_id",
+                integer(
+                    core.chrome
+                        .as_ref()
+                        .and_then(|chrome| i64::try_from(chrome.skin().id()).ok()),
+                ),
+            ),
+            (
+                "skin_forces_height",
+                core.chrome
+                    .as_ref()
+                    .is_some_and(|chrome| Mode::Window.limits(chrome.skin()).force_height)
+                    .to_string(),
+            ),
         ];
         let body: Vec<String> = fields
             .into_iter()

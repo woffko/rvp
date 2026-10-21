@@ -449,14 +449,16 @@ fn control_effect(
 }
 
 fn target(chrome: &Chrome, ctx: Context, x: i32, y: i32) -> Target {
-    if !ctx.chrome_shown {
-        return Target::Video;
-    }
+    // A movable window's edges resize it, also while its bars hide over
+    // the video (Skins > "Auto hide main skin", M14).
     if ctx.movable && !ctx.panel {
         let edges = edges_at(x, y, ctx.width, ctx.height);
         if edges != 0 {
             return Target::Edge(edges);
         }
+    }
+    if !ctx.chrome_shown {
+        return Target::Video;
     }
     match chrome.hit(x, y) {
         Some(hit @ Hit::Control { .. }) => Target::Control(hit),

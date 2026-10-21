@@ -31,10 +31,24 @@ Window {
     title: "Control Panel"
     color: "black"
     visible: player.panel_shown
+    // Skins > Opacity > Control Panel (M14), fading in as it shows when
+    // window animations are on.
+    property real fade: 1
+    opacity: (player.panel_opacity > 0 ? player.panel_opacity : 1) * fade
+    NumberAnimation {
+        id: fadeIn
+        target: panel
+        property: "fade"
+        from: 0
+        to: 1
+        duration: 150
+    }
 
     onVisibleChanged: {
         if (!visible)
             return
+        if (player.animations)
+            fadeIn.restart()
         if (!placed) {
             placed = true
             const video = player.video_rect

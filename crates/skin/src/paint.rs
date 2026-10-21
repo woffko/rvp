@@ -39,6 +39,10 @@
 //!   as tall as the slider: a 1-pixel line per chapter (white) and bookmark
 //!   (light blue), 2-pixel lines for the A-B points (amber), and with both
 //!   points a faint amber band between them.
+//! * An `Image` marked `IsLogo='1'` (the skin's logo in its `<Logo>`
+//!   section, M14) keeps its shape: centred in its place, never larger
+//!   than its picture, smaller when the place is smaller. Other `Image`s
+//!   fill their place.
 
 use crate::geometry::Rect;
 use crate::layout::{Kind, Layout, Node};
@@ -487,12 +491,39 @@ fn paint_image(list: &mut DisplayList, node: &Node<'_>, data: &DataModel) {
         );
         return;
     }
+    let dst = if attrs.flag("IsLogo") {
+        fit_logo(node.rect, width, height)
+    } else {
+        node.rect
+    };
     list.image(
         node.atlas,
         Rect::new(left, top, width, height),
-        node.rect,
+        dst,
         node.clip,
     );
+}
+
+/// A `width` x `height` logo centred in `place`, shrunk to fit it.
+fn fit_logo(place: Rect, width: i32, height: i32) -> Rect {
+    if width <= 0 || height <= 0 || place.w <= 0 || place.h <= 0 {
+        return place;
+    }
+    let scale = (f64::from(place.w) / f64::from(width))
+        .min(f64::from(place.h) / f64::from(height))
+        .min(1.0);
+    // At most the picture's size: within i32.
+    #[allow(clippy::cast_possible_truncation)]
+    let (w, h) = (
+        (f64::from(width) * scale).round() as i32,
+        (f64::from(height) * scale).round() as i32,
+    );
+    Rect::new(
+        place.x + (place.w - w) / 2,
+        place.y + (place.h - h) / 2,
+        w,
+        h,
+    )
 }
 
 fn paint_slider(list: &mut DisplayList, node: &Node<'_>, state: &UiState, data: &DataModel) {

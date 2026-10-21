@@ -9,8 +9,9 @@
 //! * A change applies at once: mpv's options are set on the running player
 //!   (decoding, output, sync, scaler, audio device, volume limit, the
 //!   normalizer, subtitle options and SVP's IPC endpoint), the bindings are
-//!   rebuilt, and the rest is read where it is used. Only the skin needs a
-//!   restart.
+//!   rebuilt, the shell shows another skin or colour theme at once (M14),
+//!   and the rest is read where it is used. VapourSynth's library, the
+//!   process priority and the renderer wait for the next start.
 //! * Import reads a settings file (unknown fields are named and ignored)
 //!   and applies it as one change; export writes the current settings.
 
@@ -138,6 +139,7 @@ impl Settings {
         self.subtitles.validate(&mut notes);
         self.speech.validate(&mut notes);
         self.copy_time.validate(&mut notes);
+        self.skins.validate(&mut notes);
         notes
     }
 
@@ -406,6 +408,7 @@ pub fn import(path: &Path) -> Result<(Settings, Vec<String>), String> {
                             | "speech"
                             | "input"
                             | "copy-time"
+                            | "skins"
                     ) {
                         value.clone()
                     } else if value.is_object() {
@@ -443,7 +446,8 @@ pub fn export(settings: &Settings, path: &Path) -> io::Result<()> {
 pub struct Applied {
     /// Repairs and binding warnings.
     pub notes: Vec<String>,
-    /// A change waits for the next start (the skin).
+    /// A change waits for the next start (VapourSynth's library, the
+    /// priority, the renderer).
     pub restart: bool,
 }
 
@@ -498,6 +502,10 @@ impl App {
             set("scale", &scaler);
         }
         self.subtitle_settings_changed(engine, &old, &mut applied.notes);
+        if old.skin != new.skin {
+            // The user's skin now, not the command line's (M14).
+            self.skin_override = crate::skins::SkinOverride::Off;
+        }
         if old.normalizer.enabled != new.normalizer.enabled {
             self.configure_normalizer();
             // As a toggle does: play on from here with the new chain.
@@ -678,44 +686,30 @@ impl App {
                 .and_then(std::path::Path::parent)
                 .map(|dir| dir.join("fonts").display().to_string()),
             "speech": self.speech_view(),
+            "skin_themes": self.skin_themes(),
+            "skin_shown": self.chosen_skin().map(|path| path.display().to_string()),
+            "skins_folder": self.skins_folder().display().to_string(),
+            "logo_list": self
+                .logo_list()
+                .iter()
+                .filter_map(|path| path.file_name())
+                .map(|name| name.to_string_lossy().into_owned())
+                .collect::<Vec<_>>(),
+            "logos_folder": self.logos_folder().display().to_string(),
         })
     }
 
-    /// `.dsf` skins next to the configured one and in PotPlayer's skin
-    /// folder (Windows), sorted.
+    /// The skins to choose from (`App::skin_list`, RVP Default left out).
     #[must_use]
     pub fn skin_choices(&self) -> Vec<std::path::PathBuf> {
-        let mut folders: Vec<std::path::PathBuf> = Vec::new();
-        if let Some(folder) = self.settings.skin.as_ref().and_then(|skin| skin.parent()) {
-            folders.push(folder.to_path_buf());
-        }
-        if cfg!(windows) {
-            folders.push(r"C:\Program Files\DAUM\PotPlayer\Skins".into());
-        }
-        let mut skins = std::collections::BTreeSet::new();
-        for folder in folders {
-            let Ok(entries) = std::fs::read_dir(&folder) else {
-                continue;
-            };
-            for entry in entries.flatten() {
-                let path = entry.path();
-                if path
-                    .extension()
-                    .is_some_and(|ext| ext.eq_ignore_ascii_case("dsf"))
-                {
-                    skins.insert(path);
-                }
-            }
-        }
-        skins.into_iter().collect()
+        self.skin_list().into_iter().flatten().collect()
     }
 }
 
-/// True when a change waits for RVP's next start: the skin, VapourSynth's
+/// True when a change waits for RVP's next start: VapourSynth's
 /// library, the process priority, the renderer and its swapchain format.
 fn taken_at_start(old: &Settings, new: &Settings) -> bool {
-    old.skin != new.skin
-        || old.vapoursynth.library != new.vapoursynth.library
+    old.vapoursynth.library != new.vapoursynth.library
         || old.playback.priority != new.playback.priority
         || old.render.renderer != new.render.renderer
         || old.render.ten_bit != new.render.ten_bit

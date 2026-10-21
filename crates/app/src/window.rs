@@ -57,6 +57,14 @@ pub enum WindowRequest {
     Maximum,
     /// This size (the whole window), kept on the screen.
     Size { width: i32, height: i32 },
+    /// This place (when known) and size, kept on the screen: a skin
+    /// mode's own window (M14).
+    Place {
+        x: Option<i32>,
+        y: Option<i32>,
+        width: i32,
+        height: i32,
+    },
     /// A share of the desktop's width, keeping the video's shape.
     Desktop { percent: f64 },
     /// The size times `factor`, keeping the shape.

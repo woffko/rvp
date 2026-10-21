@@ -2,7 +2,8 @@
 //! (D5). In the main window (`surface` 0) with `region_index` -1 it is the
 //! static layer and covers the window; otherwise it covers one dynamic
 //! region and paints only what touches it (`rvp_app::chrome`). The control
-//! panel's window (`surface` 1) is small and paints everything at once.
+//! panel's window (`surface` 1) and the skin's logo (`surface` 2, M14) are
+//! small and paint everything at once.
 
 use std::pin::Pin;
 
@@ -30,9 +31,15 @@ fn rgba(color: [u8; 4]) -> u32 {
     u32::from_be_bytes(color)
 }
 
+/// The C++ image cache's key of a skin's atlas: under the skin's id, so
+/// another skin's or theme's image of the same name never shows (M14).
+fn atlas_key(skin: &Skin, name: &str) -> String {
+    format!("skin/{}/{name}", skin.id())
+}
+
 /// Copies an atlas to the C++ image cache on first use.
-fn ensure_atlas(skin: &Skin, name: &str) -> bool {
-    if rvp_atlas_contains(name) {
+fn ensure_atlas(skin: &Skin, key: &str, name: &str) -> bool {
+    if rvp_atlas_contains(key) {
         return true;
     }
     let Some(image) = skin.image(name) else {
@@ -42,7 +49,7 @@ fn ensure_atlas(skin: &Skin, name: &str) -> bool {
     else {
         return false;
     };
-    rvp_atlas_insert(name, image.data(), width, height);
+    rvp_atlas_insert(key, image.data(), width, height);
     true
 }
 
@@ -54,8 +61,9 @@ fn draw(mut painter: Pin<&mut qobject::QPainter>, skin: &Skin, op: &Op) {
             dst,
             clip,
         } => {
-            if ensure_atlas(skin, atlas) {
-                rvp_paint_atlas(painter.as_mut(), atlas, rect(*src), rect(*dst), rect(*clip));
+            let key = atlas_key(skin, atlas);
+            if ensure_atlas(skin, &key, atlas) {
+                rvp_paint_atlas(painter.as_mut(), &key, rect(*src), rect(*dst), rect(*clip));
             }
         }
         Op::Fill { rect: area, color } => {
@@ -136,6 +144,12 @@ impl qobject::SkinView {
         let painter = unsafe { Pin::new_unchecked(painter) };
         if *self.surface() == 1 {
             if let Some(frame) = crate::player::panel_frame() {
+                paint_all(painter, &frame);
+            }
+            return;
+        }
+        if *self.surface() == 2 {
+            if let Some(frame) = crate::player::logo_frame() {
                 paint_all(painter, &frame);
             }
             return;

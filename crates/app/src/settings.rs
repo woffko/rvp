@@ -155,6 +155,8 @@ pub struct Settings {
     pub input: crate::input::InputSettings,
     /// M14: how Misc > Other copies times.
     pub copy_time: crate::misc::CopyTimeSettings,
+    /// M14: the Skins menu's and pages' options.
+    pub skins: crate::skins::SkinsSettings,
     /// M13's subtitles made from the audio (Create Subtitles from Audio).
     pub speech: crate::speech::SpeechSettings,
 }
@@ -221,6 +223,7 @@ impl Default for Settings {
             subtitles: crate::subtitles::SubtitleSettings::default(),
             input: crate::input::InputSettings::default(),
             copy_time: crate::misc::CopyTimeSettings::default(),
+            skins: crate::skins::SkinsSettings::default(),
             speech: crate::speech::SpeechSettings::default(),
         }
     }

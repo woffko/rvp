@@ -2,6 +2,7 @@
 
 use std::collections::BTreeMap;
 use std::path::Path;
+use std::sync::atomic::{AtomicU64, Ordering};
 
 use crate::archive::SkinArchive;
 use crate::error::SkinError;
@@ -24,9 +25,15 @@ pub struct LogoSlot {
     pub height: i32,
 }
 
+/// The next skin's [`Skin::id`].
+static NEXT_ID: AtomicU64 = AtomicU64::new(1);
+
 /// A skin ready for layout and rendering.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Skin {
+    /// Unique for each loaded or tinted skin in the process: painters key
+    /// their image caches by it, so two skins' `Main.png` never mix.
+    id: u64,
     archive: SkinArchive,
     file: String,
     expanded: Expanded,
@@ -90,6 +97,7 @@ impl Skin {
             }
         }
         Ok(Self {
+            id: NEXT_ID.fetch_add(1, Ordering::Relaxed),
             archive,
             file: file.to_owned(),
             expanded,
@@ -99,6 +107,45 @@ impl Skin {
             sprites: BTreeMap::new(),
             warnings,
         })
+    }
+
+    /// Unique for each loaded or tinted skin of the process.
+    #[must_use]
+    pub fn id(&self) -> u64 {
+        self.id
+    }
+
+    /// Whether the archive has `file` (`AudioSkin.xml`, ...).
+    #[must_use]
+    pub fn has_file(&self, file: &str) -> bool {
+        self.archive.get(file).is_some()
+    }
+
+    /// The colour themes the skin lists (see [`crate::theme`]).
+    #[must_use]
+    pub fn color_themes(&self) -> Vec<crate::theme::ColorTheme> {
+        crate::theme::themes(&self.root)
+    }
+
+    /// A copy with every image tinted (but the parts the skin keeps out of
+    /// themes), under a new [`Skin::id`].
+    #[must_use]
+    pub fn tinted(&self, tint: crate::theme::Tint) -> Self {
+        let mut skin = self.clone();
+        skin.id = NEXT_ID.fetch_add(1, Ordering::Relaxed);
+        let exclusions = crate::theme::exclusions(&self.root);
+        for (name, image) in &mut skin.images {
+            if name.starts_with("rvp-sprite-") {
+                continue;
+            }
+            let keep: Vec<crate::geometry::Rect> = exclusions
+                .iter()
+                .filter(|(excluded, _)| excluded == name)
+                .map(|(_, rect)| *rect)
+                .collect();
+            crate::theme::tint_image(image, tint, &keep);
+        }
+        skin
     }
 
     /// The skin archive.
@@ -165,6 +212,25 @@ impl Skin {
     #[must_use]
     pub fn area_atlas<'a>(&'a self, area: &'a Element) -> &'a str {
         area.attrs.get("Image").unwrap_or("")
+    }
+
+    /// Whether the skin's `<Logo>` section draws an idle logo (a part
+    /// shown in state `CMD_DEFAULT_LOGO`) and one for a starting file
+    /// (`CMD_LOADING_LOGO`). Flash logos (`<Logo IdleFileName='Logo.swf'>`)
+    /// have no such parts.
+    #[must_use]
+    pub fn logo_states(&self) -> (bool, bool) {
+        let (mut idle, mut loading) = (false, false);
+        if let Some(logo) = self.area("Logo") {
+            logo.walk(&mut |element| {
+                let states = element.attrs.get("State").unwrap_or("");
+                for state in states.split_whitespace() {
+                    idle |= state == "CMD_DEFAULT_LOGO";
+                    loading |= state == "CMD_LOADING_LOGO";
+                }
+            });
+        }
+        (idle, loading)
     }
 
     /// The logo buttons of every title bar, except those a skin marks

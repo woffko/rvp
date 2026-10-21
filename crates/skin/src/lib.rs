@@ -28,6 +28,7 @@ pub mod render;
 pub mod skin;
 pub mod state;
 pub mod text;
+pub mod theme;
 
 pub use archive::SkinArchive;
 pub use error::SkinError;

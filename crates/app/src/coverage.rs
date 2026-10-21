@@ -100,7 +100,6 @@ const CONTEXT_REASONS: &[(&str, &str)] = &[
         "PotPlayer's AviSynth processing needs a bridge RVP does not have (docs/spikes/m12-studies.md: avsw runs a 32-bit AviSynth in a second process, 8-bit video only); RVP opens .avs files, runs VapourSynth scripts and loads AviSynth plugins in them",
     ),
     ("101_0_13", "DirectShow filters do not apply to libmpv"),
-    ("101_0_14", "RVP loads one skin, chosen in the settings"),
     ("101_0_15", "not in RVP yet"),
     ("101_0_15_2", "RVP's interface is English"),
     (
@@ -111,6 +110,10 @@ const CONTEXT_REASONS: &[(&str, &str)] = &[
 
 /// Why parts of PotPlayer's playlist menu (resource 111) are not in RVP.
 const PLAYLIST_REASONS: &[(&str, &str)] = &[("111_0", "not in RVP's albums yet")];
+
+/// PotPlayer's ways to draw the on-screen control besides its Direct3D 11
+/// one.
+const OSC_METHODS: &str = "RVP draws the on-screen control one way, with Qt over the video (the Direct3D 11 item); Direct3D 9 and layered windows are PotPlayer's renderers' ways";
 
 /// Reasons for single items.
 const ITEM_REASONS: &[(u32, &str)] = &[
@@ -143,6 +146,12 @@ const ITEM_REASONS: &[(u32, &str)] = &[
     (10809, "touch input is not planned"),
     (10442, "other on-screen information is not in RVP yet"),
     (10449, "other on-screen information is not in RVP yet"),
+    (
+        20009,
+        "a submenu in PotPlayer's running menu: Skins > Opacity > Main Window lists the percentages (39600-39609)",
+    ),
+    (10515, OSC_METHODS),
+    (10516, OSC_METHODS),
     (10386, "RVP is private and has no website or update service"),
     (10392, "RVP is private and has no website or update service"),
 ];
@@ -342,7 +351,25 @@ const RUNTIME_LISTS: &[(&str, &str)] = &[
         "whisper's languages",
     ),
     ("Frame Size > Presets", "RVP's frame size presets"),
+    (
+        "Skins > Color Themes",
+        "the skin's colour themes (its ColorTheme list)",
+    ),
+    (
+        "Skins > Logo (while playback is off)",
+        "the pictures of RVP's logo folders, for the idle logo",
+    ),
+    (
+        "Skins > Logo (while starting playback)",
+        "the pictures of RVP's logo folders, for the start logo",
+    ),
 ];
+
+/// Run-time lists by their IDs, where their place holds other items too.
+const RUNTIME_LIST_IDS: &[(std::ops::RangeInclusive<u32>, &str)] = &[(
+    44_700..=44_799,
+    "RVP's skins: RVP Default and the .dsf files of its skins folder, the chosen skin's folder and PotPlayer's",
+)];
 
 /// Why run-time commands are not in RVP, by place; the longest wins.
 const RUNTIME_REASONS: &[(&str, &str)] = &[
@@ -445,6 +472,12 @@ pub fn runtime_status(command: &RuntimeCommand) -> ItemStatus {
     if let Some((_, what)) = RUNTIME_LISTS.iter().find(|(place, _)| {
         command.parent == *place || command.parent.starts_with(&format!("{place} > "))
     }) {
+        return ItemStatus::Runtime(what);
+    }
+    if let Some((_, what)) = RUNTIME_LIST_IDS
+        .iter()
+        .find(|(ids, _)| ids.contains(&command.id))
+    {
         return ItemStatus::Runtime(what);
     }
     ItemStatus::Missing(

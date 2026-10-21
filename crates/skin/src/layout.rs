@@ -23,6 +23,10 @@
 //! * An attached playlist fills the `Contain='CMD_PLAYLIST_TOGGLE'` slot with
 //!   the `CMD_PLAYLIST_HOLDER` part of `PlaylistSkinArea`; the playlist
 //!   window's own frame is not drawn.
+//! * An area's parts lie in its `<Control>`; the `<Logo>` section (M14)
+//!   holds them directly. An element with an `Image` attribute of its own
+//!   draws from that picture, and so do its children (Default.dsf's logo
+//!   parts); the others draw from their area's.
 
 use std::fmt::Write as _;
 
@@ -195,17 +199,8 @@ pub fn layout<'a>(
         nodes: Vec::new(),
     };
     let window = Rect::new(0, 0, width, height);
-    if let Some(control) = area.child("Control") {
-        builder.children(
-            control,
-            window,
-            window,
-            None,
-            0,
-            skin.area_atlas(area),
-            area,
-        );
-    }
+    let parts = area.child("Control").unwrap_or(area);
+    builder.children(parts, window, window, None, 0, skin.area_atlas(area), area);
     Ok(Layout {
         width,
         height,
@@ -250,6 +245,11 @@ impl<'a> Builder<'a, '_> {
                 continue;
             }
             let node_clip = placed.intersect(&clip);
+            let atlas = child
+                .attrs
+                .get("Image")
+                .filter(|image| !image.trim().is_empty())
+                .unwrap_or(atlas);
             let index = self.nodes.len();
             self.nodes.push(Node {
                 element: child,

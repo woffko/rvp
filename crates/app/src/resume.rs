@@ -66,6 +66,14 @@ pub struct ResumeState {
     /// selections").
     #[serde(default)]
     pub subtitle_tracks: BTreeMap<String, SubtitleTracks>,
+    /// The audio skin showed last (M14: "Use video skin at program start"
+    /// off starts in it).
+    #[serde(default)]
+    pub audio_skin: bool,
+    /// The window of each skin mode (`video`, `audio`) when each keeps its
+    /// own.
+    #[serde(default)]
+    pub mode_windows: BTreeMap<String, WindowGeometry>,
 }
 
 /// The subtitles chosen in one file: the first (`None`: off) and the
@@ -99,6 +107,8 @@ impl Default for ResumeState {
             sequence: 0,
             audio_tracks: BTreeMap::new(),
             subtitle_tracks: BTreeMap::new(),
+            audio_skin: false,
+            mode_windows: BTreeMap::new(),
         }
     }
 }
@@ -263,6 +273,26 @@ impl ResumeStore {
     pub fn set_volume(&mut self, volume: f64) {
         if self.state.volume != Some(volume) {
             self.state.volume = Some(volume);
+            self.dirty = true;
+        }
+    }
+
+    pub fn set_audio_skin(&mut self, audio: bool) {
+        if self.state.audio_skin != audio {
+            self.state.audio_skin = audio;
+            self.dirty = true;
+        }
+    }
+
+    /// The window of a skin mode (`video`, `audio`).
+    #[must_use]
+    pub fn mode_window(&self, mode: &str) -> Option<WindowGeometry> {
+        self.state.mode_windows.get(mode).copied()
+    }
+
+    pub fn set_mode_window(&mut self, mode: &str, window: WindowGeometry) {
+        if self.state.mode_windows.get(mode) != Some(&window) {
+            self.state.mode_windows.insert(mode.to_owned(), window);
             self.dirty = true;
         }
     }

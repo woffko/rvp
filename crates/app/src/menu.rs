@@ -47,6 +47,7 @@ const LIVE_TSV: &str = include_str!("../../../docs/r1/menu-runtime.tsv");
 /// titles that lead to the live one.
 const LIVE_SUBMENUS: &[(&str, &[&str])] = &[
     ("101_0_10", &["Subtitles"]),
+    ("101_0_14", &["Skins"]),
     ("101_0_11", &["Video"]),
     ("101_0_17", &["Frame Size"]),
     ("101_0_18", &["Aspect Ratio"]),
@@ -75,6 +76,14 @@ const LIVE_VAPOURSYNTH: u32 = 531_020;
 const LIVE_SPEECH_ENGINES: [u32; 2] = [530_766, 2_561_986];
 const LIVE_SPEECH_MODELS: [u32; 2] = [6_751_510, 1_186_868];
 const LIVE_SPEECH_LANGUAGES: [u32; 2] = [11_408_618, 4_263_276];
+/// The live Color Themes submenu (M14): the skin's themes in place of
+/// BlackSpace's (35103 on). The Skins menu itself lists RVP's skins first.
+const LIVE_COLOR_THEMES: u32 = 3_020_852;
+/// The live Logo submenus (M14): RVP's logo pictures in place of
+/// PotPlayer's (35002 and 34903 on), while playback is off and while it
+/// starts.
+const LIVE_IDLE_LOGOS: u32 = 2_170_038;
+const LIVE_START_LOGOS: u32 = 1_311_826;
 
 /// One item of a PotPlayer menu as R1 recorded it.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -320,6 +329,8 @@ pub enum Command {
     DiscAngle(u8),
     /// A choice of Create Subtitles from Audio's lists (M13).
     Speech(crate::speech::SpeechChoice),
+    /// A skin or colour theme of the Skins menu's lists (M14).
+    Skin(crate::skins::SkinChoice),
 }
 
 /// An audio output choice of the Audio menu's lists.
@@ -449,6 +460,7 @@ impl Command {
             Command::DiscTitle(title) => format!("t:{title}"),
             Command::DiscAngle(angle) => format!("g:{angle}"),
             Command::Speech(choice) => format!("z:{}", choice.id()),
+            Command::Skin(choice) => format!("d:{}", choice.id()),
         }
     }
 
@@ -481,6 +493,7 @@ impl Command {
             "r" => value.parse().ok().map(Command::Recent),
             "y" => value.parse().ok().map(Command::Script),
             "z" => crate::speech::SpeechChoice::parse(value).map(Command::Speech),
+            "d" => crate::skins::SkinChoice::parse(value).map(Command::Skin),
             "h" => {
                 if let Some(index) = value.strip_prefix("post") {
                     index.parse().ok().map(|index| Command::Shader(true, index))
@@ -756,6 +769,7 @@ impl App {
             Command::DiscTitle(index) => self.play_disc_title(engine, index),
             Command::DiscAngle(angle) => self.set_disc_angle(engine, angle),
             Command::Speech(choice) => self.speech_choice(choice),
+            Command::Skin(choice) => self.skin_choice(choice),
             Command::EqualizerPreset(index) => self.set_equalizer_preset(engine, index),
             Command::Speakers(index) => self.set_speakers(engine, index),
             Command::Audio(choice) => self.audio_choice(engine, choice),
@@ -767,18 +781,8 @@ impl App {
             return Some(MenuItem::separator());
         }
         if node.submenu {
-            if node.id == LIVE_FRAME_PRESETS {
-                return MenuItem::submenu(&node.text, self.frame_preset_menu(node, live));
-            }
-            if node.id == LIVE_VAPOURSYNTH {
-                return MenuItem::submenu(&node.text, self.script_menu(node, live));
-            }
-            if let Some(items) = self.speech_menu(node, live) {
+            if let Some(items) = self.list_submenu(node, live) {
                 return MenuItem::submenu(&node.text, items);
-            }
-            if node.id == LIVE_PRE_SHADERS || node.id == LIVE_POST_SHADERS {
-                let post = node.id == LIVE_POST_SHADERS;
-                return MenuItem::submenu(&node.text, self.shader_menu(node, live, post));
             }
             let live_children = LIVE_SUBMENUS
                 .iter()
@@ -802,6 +806,13 @@ impl App {
                 .into_iter()
                 .filter_map(|child| self.convert(child, live))
                 .collect();
+            // The Skins menu starts with RVP's skins (M14).
+            if node.path == "101_0_14" {
+                let mut skins = self.skin_items();
+                skins.push(MenuItem::separator());
+                skins.append(&mut children);
+                children = skins;
+            }
             // RVP's run-time lists where PotPlayer has its own.
             let extra = match node.path.as_str() {
                 "101_0_12_0" => self.tracks(live, TrackKind::Audio),
@@ -909,6 +920,130 @@ impl App {
                 checked: Some(vs.enabled && vs.script.as_ref() == Some(slot)),
                 ..MenuItem::default()
             });
+        }
+        items
+    }
+
+    /// The skins to choose from (M14), in place of PotPlayer's list.
+    fn skin_items(&self) -> Vec<MenuItem> {
+        use crate::skins::SkinChoice;
+        self.skin_list()
+            .iter()
+            .enumerate()
+            .map(|(index, skin)| {
+                let label = skin.as_ref().map_or_else(
+                    || "RVP Default (built in)".to_owned(),
+                    |path| crate::view::file_name(&path.to_string_lossy()).to_owned(),
+                );
+                let choice = SkinChoice::Skin(index);
+                MenuItem {
+                    label,
+                    command: Some(Command::Skin(choice)),
+                    checked: Some(self.skin_choice_checked(choice)),
+                    ..MenuItem::default()
+                }
+            })
+            .collect()
+    }
+
+    /// The Color Themes submenu (M14): PotPlayer's own items with the
+    /// skin's themes in place of BlackSpace's (35103 on).
+    fn theme_menu(&self, node: &Recorded, live: &Live) -> Vec<MenuItem> {
+        use crate::skins::SkinChoice;
+        let themes: Vec<MenuItem> = self
+            .skin_themes()
+            .iter()
+            .enumerate()
+            .map(|(index, name)| {
+                let choice = SkinChoice::Theme(index);
+                MenuItem {
+                    label: name.clone(),
+                    command: Some(Command::Skin(choice)),
+                    checked: Some(self.skin_choice_checked(choice)),
+                    ..MenuItem::default()
+                }
+            })
+            .collect();
+        let mut items = Vec::new();
+        let mut placed = false;
+        for child in &node.children {
+            if (35_103..35_200).contains(&child.id) {
+                if !placed {
+                    items.extend(themes.iter().cloned());
+                    placed = true;
+                }
+                continue;
+            }
+            items.extend(self.convert(child, live));
+        }
+        if !placed {
+            items.extend(themes);
+        }
+        items
+    }
+
+    /// The live submenus whose items are RVP's lists: frame size presets,
+    /// VapourSynth scripts, speech choices, colour themes, logos and
+    /// shaders. `None` for other submenus.
+    fn list_submenu(&self, node: &Recorded, live: &Live) -> Option<Vec<MenuItem>> {
+        match node.id {
+            LIVE_FRAME_PRESETS => Some(self.frame_preset_menu(node, live)),
+            LIVE_VAPOURSYNTH => Some(self.script_menu(node, live)),
+            LIVE_COLOR_THEMES => Some(self.theme_menu(node, live)),
+            LIVE_IDLE_LOGOS | LIVE_START_LOGOS => {
+                Some(self.logo_menu(node, live, node.id == LIVE_START_LOGOS))
+            }
+            LIVE_PRE_SHADERS | LIVE_POST_SHADERS => {
+                Some(self.shader_menu(node, live, node.id == LIVE_POST_SHADERS))
+            }
+            _ => self.speech_menu(node, live),
+        }
+    }
+
+    /// A Logo submenu (M14): PotPlayer's own items with RVP's logo
+    /// pictures in place of PotPlayer's.
+    fn logo_menu(&self, node: &Recorded, live: &Live, start: bool) -> Vec<MenuItem> {
+        use crate::skins::SkinChoice;
+        let pictures: Vec<MenuItem> = self
+            .logo_list()
+            .iter()
+            .enumerate()
+            .map(|(index, path)| {
+                let choice = if start {
+                    SkinChoice::StartLogo(index)
+                } else {
+                    SkinChoice::IdleLogo(index)
+                };
+                MenuItem {
+                    label: crate::view::file_name(&path.to_string_lossy()).to_owned(),
+                    command: Some(Command::Skin(choice)),
+                    checked: Some(self.skin_choice_checked(choice)),
+                    ..MenuItem::default()
+                }
+            })
+            .collect();
+        let files = if start {
+            34_903..35_000
+        } else {
+            35_002..35_100
+        };
+        let mut items = Vec::new();
+        let mut placed = false;
+        for child in &node.children {
+            if files.contains(&child.id) || (child.separator && !placed) {
+                if !placed {
+                    items.extend(pictures.iter().cloned());
+                    placed = true;
+                }
+                if child.separator {
+                    items.push(MenuItem::separator());
+                }
+                continue;
+            }
+            items.extend(self.convert(child, live));
+        }
+        if !placed {
+            items.extend(pictures);
         }
         items
     }

@@ -13,12 +13,15 @@ Window {
     objectName: "rvpMain"
     width: 1280
     height: 720
-    minimumWidth: 320
-    minimumHeight: 200
+    // The skin's limits (M14); 0 until the skin is laid out.
+    minimumWidth: player.min_width > 0 ? player.min_width : 320
+    minimumHeight: player.min_height > 0 ? player.min_height : 200
     visible: false
     color: "black"
     title: player.window_title
     flags: Qt.Window | Qt.FramelessWindowHint | (player.on_top ? Qt.WindowStaysOnTopHint : 0)
+    // Skins > Opacity (M14); 0 until the core starts.
+    opacity: player.window_opacity > 0 ? player.window_opacity : 1
 
     // Request kinds of Player.uiRequest (src/player.rs, mod request).
     readonly property int requestOpenFiles: 1
@@ -49,6 +52,7 @@ Window {
     readonly property int requestAudioSync: 26
     readonly property int requestSubtitleSync: 37
     readonly property int requestSubtitleEditor: 38
+    readonly property int requestColorTheme: 39
     readonly property int requestRecordAs: 27
     readonly property int requestRecordFolder: 28
     readonly property int requestDialog: 29
@@ -266,6 +270,10 @@ Window {
             subtitleEditorLoader.active = true
             subtitleEditorLoader.item.ask(argument === 1)
             break
+        case requestColorTheme:
+            colorThemeLoader.active = true
+            colorThemeLoader.item.ask()
+            break
         case requestRecordAs:
             dialogLoader.active = true
             dialogLoader.item.askRecording(player.record_path)
@@ -388,6 +396,13 @@ Window {
             break
         case "size":
             root.resizeWindow(r.width, r.height, area, "corner")
+            break
+        case "place":
+            if (r.x === null || r.y === null || !root.onScreen(r.x, r.y))
+                root.resizeWindow(r.width, r.height, area, "corner")
+            else
+                root.placeInArea(r.x, r.y, Math.round(Math.max(root.minimumWidth, Math.min(r.width, area.width))),
+                                 Math.round(Math.max(root.minimumHeight, Math.min(r.height, area.height))), area)
             break
         case "move":
             root.moveWindow(r.placement, r.step, area)
@@ -596,13 +611,20 @@ Window {
     }
 
     // The skin's static layer: under the video in the window, over it in
-    // fullscreen (where it only holds the bars).
+    // fullscreen and with "Auto hide main skin" (where it only holds the
+    // bars, at On Screen Control's opacity, fading when animations are on).
     SkinView {
         id: staticSkin
+        readonly property bool shown: player.has_skin && (!player.overlay || player.chrome_shown)
         region_index: -1
         anchors.fill: parent
-        visible: player.has_skin && (!player.fullscreen || player.chrome_shown)
-        z: player.fullscreen ? 2 : 0
+        opacity: shown ? (player.overlay && player.osc_opacity > 0 ? player.osc_opacity : 1) : 0
+        visible: opacity > 0
+        z: player.overlay ? 2 : 0
+        Behavior on opacity {
+            enabled: player.animations && player.overlay
+            NumberAnimation { duration: 150 }
+        }
     }
 
     MpvItem {
@@ -636,27 +658,25 @@ Window {
         holes: [videoHole(seekTip), videoHole(powerBox), videoHole(infoBox),
                 videoHole(messageBox), videoHole(sceneLoader.item), videoHole(slideshowLoader.item)]
             .filter(hole => hole !== null)
-            .concat(player.fullscreen && staticSkin.visible ? JSON.parse(player.chrome_bars || "[]") : [])
+            .concat(player.overlay && staticSkin.visible ? JSON.parse(player.chrome_bars || "[]") : [])
     })
     onVideoWindowPlaceChanged: Tools.place_video_window(videoWindowPlace)
 
-    // RVP's logo on the idle screen (D10): while no video picture shows,
-    // after a moment so that it does not flash between files.
-    Image {
-        id: idleLogo
+    // The logo over the video area while no video picture shows (D10,
+    // M14's Skins > Logo): RVP's, a picture of the logo folders, or the
+    // skin's own (SkinView surface 2), after a moment so that it does not
+    // flash between files.
+    Item {
+        id: logoLayer
         readonly property bool idle: !player.has_video
         property bool shown: idle
-        source: "qrc:/qt/qml/Rvp/look/logo/symbol.png"
-        fillMode: Image.PreserveAspectFit
-        smooth: true
-        mipmap: true
-        height: Math.round(Math.min(200, player.video_rect.height * 0.25))
-        width: Math.round(height * implicitWidth / Math.max(1, implicitHeight))
-        x: Math.round(player.video_rect.x + (player.video_rect.width - width) / 2)
-        y: Math.round(player.video_rect.y + (player.video_rect.height - height) / 2)
+        x: player.video_rect.x
+        y: player.video_rect.y
+        width: player.video_rect.width
+        height: player.video_rect.height
         z: 1.5
         opacity: shown ? 1 : 0
-        visible: opacity > 0 && height >= 16
+        visible: opacity > 0
         Behavior on opacity {
             NumberAnimation { duration: 200 }
         }
@@ -670,7 +690,44 @@ Window {
         Timer {
             id: idleDelay
             interval: 400
-            onTriggered: idleLogo.shown = idleLogo.idle
+            onTriggered: logoLayer.shown = logoLayer.idle
+        }
+        Image {
+            id: idleLogo
+            readonly property bool rvp: player.logo_source.startsWith("qrc:")
+            readonly property string place: player.logo_position || "center"
+            readonly property int margin: 16
+            readonly property real room: Math.max(1, Math.min((parent.width - 2 * margin) / Math.max(1, implicitWidth),
+                                                               (parent.height - 2 * margin) / Math.max(1, implicitHeight)))
+            source: player.skin_logo ? "" : player.logo_source
+            fillMode: Image.PreserveAspectFit
+            smooth: true
+            mipmap: true
+            // RVP's logo: at most 200 pixels, a quarter of the height; a
+            // picture: its size, smaller where the area is; "fit": as
+            // large as the area.
+            height: Math.round(rvp && place !== "fit" ? Math.min(200, parent.height * 0.25)
+                               : place === "fit" ? parent.height - 2 * margin
+                               : Math.min(implicitHeight, implicitHeight * Math.min(1, room)))
+            width: Math.round(place === "fit" ? parent.width - 2 * margin
+                              : height * implicitWidth / Math.max(1, implicitHeight))
+            x: Math.round(place.endsWith("left") ? margin : place.endsWith("right") ? parent.width - width - margin
+                          : (parent.width - width) / 2)
+            y: Math.round(place.startsWith("top") ? margin : place.startsWith("bottom") ? parent.height - height - margin
+                          : (parent.height - height) / 2)
+            visible: source !== "" && height >= 16
+        }
+        SkinView {
+            id: skinLogo
+            surface: 2
+            anchors.fill: parent
+            visible: player.skin_logo
+        }
+        Connections {
+            target: player
+            function onLogoDamaged() {
+                Tools.repaint(skinLogo, false)
+            }
         }
     }
 
@@ -686,6 +743,7 @@ Window {
             width: area.width
             height: area.height
             z: 3
+            opacity: staticSkin.opacity
             visible: staticSkin.visible
         }
     }
@@ -845,6 +903,13 @@ Window {
         id: subtitleEditorLoader
         active: false
         Component.onCompleted: setSource("SubtitleBrowser.qml", { player: player })
+    }
+    Loader {
+        id: colorThemeLoader
+        anchors.fill: parent
+        z: 30
+        active: false
+        Component.onCompleted: setSource("ColorTheme.qml", { player: player })
     }
     Loader {
         id: albumLoader
@@ -1190,6 +1255,11 @@ Window {
     //                         audio (whisper.cpp's CPU engine, the tiny
     //                         model); the file: fixture-chapters.mkv with
     //                         its .srt
+    //   --selftest=m14        M14's checks (SelfTestM14.qml): a colour theme
+    //                         and none, the window's opacity, the audio
+    //                         skin for a file without video, another skin
+    //                         from the Skins menu, the copied time; the
+    //                         files: fixture-60s.mkv, fixture-tone.ogg
     //   --selftest=speech     subtitles from a file's audio (SelfTestM13.qml,
     //                         the host session): the whole file with
     //                         --speech-engine and --speech-model, timed,
@@ -1314,7 +1384,23 @@ Window {
             return m13Tick()
         if (selftest.mode === "speech")
             return m13Tick(true)
+        if (selftest.mode === "m14")
+            return m14Tick()
         functionalTick()
+    }
+
+    // --selftest=m14: M14's skins, themes and the rest (SelfTestM14.qml).
+    Loader {
+        id: m14Loader
+        active: false
+        Component.onCompleted: setSource("SelfTestM14.qml", { player: player, t: selftest, host: root })
+    }
+    function m14Tick() {
+        if (!m14Loader.item) {
+            m14Loader.active = true
+            return
+        }
+        m14Loader.item.tick()
     }
 
     // --selftest=m13: M13's subtitles (SelfTestM13.qml).
@@ -1837,7 +1923,8 @@ Window {
         case 0:
             t.stepStarted = Date.now()
             // RVP's own art comes from the build's Qt resources.
-            t.check("logo_resources", idleLogo.status === Image.Ready, "idle logo status " + idleLogo.status)
+            t.check("logo_resources", player.skin_logo || idleLogo.status === Image.Ready,
+                    "idle logo status " + idleLogo.status)
             t.next()
             break
         case 1:
