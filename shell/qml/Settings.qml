@@ -1084,7 +1084,7 @@ ApplicationWindow {
                             label: qsTr("Playlist folder")
                             path: "potplayer-playlists"
                             optional: true
-                            placeholder: win.view.windows ? "%APPDATA%\\PotPlayerMini64\\Playlist" : "not set"
+                            placeholder: win.view.windows ? qsTr("PotPlayer's own folder") : qsTr("not set")
                             Button {
                                 text: qsTr("Browse…")
                                 onClicked: {

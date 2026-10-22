@@ -1064,6 +1064,14 @@ in %2 seconds</source>
             <translation>Папка списков</translation>
         </message>
         <message>
+            <source>PotPlayer's own folder</source>
+            <translation>папка PotPlayer</translation>
+        </message>
+        <message>
+            <source>not set</source>
+            <translation>не задана</translation>
+        </message>
+        <message>
             <source>Browse…</source>
             <translation>Обзор…</translation>
         </message>
@@ -2625,7 +2633,7 @@ in %2 seconds</source>
         </message>
         <message>
             <source>empty: SVP mode off</source>
-            <translation>пусто — режим SVP выключен</translation>
+            <translation>пусто: без SVP</translation>
         </message>
         <message>
             <source>Status: %1</source>

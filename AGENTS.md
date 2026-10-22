@@ -372,6 +372,38 @@ smoothing for users without SVP, after a study of the engines.
   with `cargo xwin test --no-run`), with the clip and the tiny model in
   `C:\rvp-test\m13`.
 
+## Preferences, skins and the interface (M14)
+
+- Interface languages are English (the source text) and Russian,
+  written for RVP (`shell/i18n/qml_ru.ts` from lupdate, `menu_ru.ts`
+  for the "Menu" context); `shell/build.rs` compiles them with Qt's
+  lrelease. Every user-visible QML string goes through `qsTr` (with
+  `.arg()` for values); menu and action labels from Rust go through
+  `Tools.tr_menu`, which sets numbers aside as `%1`, `%2`... A QML file
+  that uses `Tools` imports `RvpNative`. After changing strings run
+  `lupdate -no-obsolete -locations none` on the QML files (not the
+  `SelfTest*` ones) into `qml_ru.ts`, translate the new entries and keep
+  Russian texts short enough for their controls: `tests/translations.rs`
+  fails an untranslated string or a lost placeholder, and
+  `--selftest=m14` fails a settings text that does not fit.
+- The QML engine keeps its last translation when `Qt.uiLanguage` names
+  a language without a `.qm` file, and loads the system's at start:
+  English is `Qt.uiLanguage = ""` (`Main.qml` `applyLanguage`).
+- Notices RVP formats in Rust (OSD texts, errors) stay English.
+- Presets (`crates/app/src/presets.rs`): the default preset is
+  settings.json's own values; another preset keeps a whole copy, and
+  while it is active every change goes into it.
+- `docs/coverage/` must not say "not in RVP yet" or "planned" for M14's
+  areas (`tests/coverage.rs` fails it): every item works or keeps a
+  reason that says why it cannot.
+- `--selftest=m14 --registry-check` (the test VM only) writes the Run
+  key and the file types to the current user's registry and removes
+  them; never pass `--registry-check` on the host. The VM's check is
+  `tools/windows-vm/m14-all.ps1`; the host comparison of skin modes is
+  `tools/windows-vm/m14-host.ps1` with host-session's `m14`, with
+  permission, saving and writing back PotPlayer's registry key and
+  playlist folder.
+
 ## Playback, playlist and opening (M11)
 
 - The thumbnail core (`crates/engine/src/thumbnail.rs`) is a second

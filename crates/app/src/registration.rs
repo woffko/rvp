@@ -278,11 +278,17 @@ fn type_changes(
 /// RVP's handlers for Windows' autoplay events, on or off.
 fn autoplay_changes(settings: &AssociationSettings, exe: &str, changes: &mut Vec<RegistryChange>) {
     let icon = format!("{exe},0");
-    changes.push(set(
-        format!(r"{CLASSES}\RVP.AutoPlay\shell\play\command"),
-        "",
-        format!("\"{exe}\" \"%L\""),
-    ));
+    // The handlers' ProgID, while any handler needs it.
+    let progid = format!(r"{CLASSES}\RVP.AutoPlay");
+    if settings.autoplay.is_empty() {
+        changes.push(RegistryChange::DeleteKey { key: progid });
+    } else {
+        changes.push(set(
+            format!(r"{progid}\shell\play\command"),
+            "",
+            format!("\"{exe}\" \"%L\""),
+        ));
+    }
     for (name, event) in AUTOPLAY {
         let handler = format!("RVP{event}");
         let key = format!(r"{HANDLERS}\Handlers\{handler}");

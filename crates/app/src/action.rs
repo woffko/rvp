@@ -5179,13 +5179,15 @@ pub const ACTIONS: &[ActionInfo] = &[
         &[10768],
         &[],
     ),
+    // The skins' When Playback Finished menus end with ID_ETC_RESTORE_POS
+    // where PotPlayer's own ends with this item.
     info(
         Action::ToggleRememberAfter,
         "remember-after-playback",
         "Remember playback finished action",
         None,
         &[10553],
-        &[],
+        &["ID_ETC_RESTORE_POS"],
     ),
     info(
         Action::PowerTimer(PowerTimer::At),

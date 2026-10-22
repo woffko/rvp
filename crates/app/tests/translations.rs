@@ -99,10 +99,14 @@ fn walk(items: &[MenuItem], out: &mut BTreeSet<String>) {
     }
 }
 
-/// Labels that are names, not words: RVP's own names, the languages and
-/// the user's albums.
+/// Labels that are names, not words: RVP's own names, the languages, the
+/// user's albums and whisper.cpp's engines (listed when installed, as on
+/// Windows).
 fn is_name(label: &str) -> bool {
     ["RVP Default (built in)", "English", "Русский", "Default"].contains(&label)
+        || rvp_app::speech::ENGINES
+            .iter()
+            .any(|(_, engine)| *engine == label)
 }
 
 #[test]
