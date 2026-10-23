@@ -170,12 +170,14 @@ pub fn data_model(model: &PlayerModel, lists: &Playlists, volume_max: f64) -> Da
     let loaded = model.media_loaded();
     let time = model.double(PropertyId::TimePos).unwrap_or(0.0);
     let duration = model.double(PropertyId::Duration).filter(|d| *d > 0.0);
-    data.set_text("CMD_TITLE_MESSAGE", title(model, lists));
+    let title = title(model, lists);
+    let total = format_time(duration.unwrap_or(0.0));
+    // Other skins' names for the title and the duration (M14).
+    data.set_text("CMD_TITLE_WITH_MESSAGE", title.clone());
+    data.set_text("CMD_TITLE_MESSAGE", title);
     data.set_text("CMD_CURRENTTIME_MESSAGE", format_time(time));
-    data.set_text(
-        "CMD_TOTALTIME_MESSAGE",
-        format_time(duration.unwrap_or(0.0)),
-    );
+    data.set_text("CMD_MEDIATIME_MESSAGE", total.clone());
+    data.set_text("CMD_TOTALTIME_MESSAGE", total);
     data.set_text(
         "CMD_LEFTTIME_MESSAGE",
         format_time(duration.map_or(0.0, |d| d - time)),
@@ -210,6 +212,15 @@ pub fn data_model(model: &PlayerModel, lists: &Playlists, volume_max: f64) -> Da
         },
     );
     data.playlist = panel(lists);
+    // The shown album's length, of the entries whose duration is known.
+    let album: f64 = data
+        .playlist
+        .entries
+        .iter()
+        .filter_map(|entry| entry.duration)
+        .map(f64::from)
+        .sum();
+    data.set_text("CMD_PLAYLIST_TOTAL_TIME_MESSAGE", format_time(album));
     data
 }
 
@@ -254,10 +265,20 @@ fn set_info_strip(data: &mut DataModel, model: &PlayerModel, time: f64, duration
         let name = file_name(path);
         if let Some((_, extension)) = name.rsplit_once('.') {
             data.set_text("CMD_PLAY_FILE_TYPE", extension.to_ascii_uppercase());
+            data.set_text("CMD_FILE_TYPE_MESSAGE", extension.to_ascii_uppercase());
         }
     }
     if let Some(codec) = model.text(PropertyId::VideoFormat) {
         data.set_text("CMD_VIDEO_CODEC_FOURCC_MESSAGE", video_fourcc(codec));
+    }
+    if model.int(PropertyId::VideoWidth).is_some() {
+        let hardware = model
+            .text(PropertyId::HwdecCurrent)
+            .is_some_and(|hwdec| !hwdec.is_empty() && hwdec != "no");
+        data.set_text(
+            "CMD_VIDEO_OUT_HW_SW_MESSAGE",
+            if hardware { "HW" } else { "SW" },
+        );
     }
     if let Some(format) = model.text(PropertyId::VideoOutFormat) {
         data.set_text(
@@ -270,6 +291,7 @@ fn set_info_strip(data: &mut DataModel, model: &PlayerModel, time: f64, duration
     }
     if let Some(codec) = model.text(PropertyId::AudioCodecName) {
         data.set_text("CMD_AUDIO_CODEC_TAG_MESSAGE", audio_tag(codec));
+        data.set_text("CMD_AUDIO_CODEC_TYPE_MESSAGE", codec.to_ascii_uppercase());
     }
     if let Some(count) = model.int(PropertyId::AudioChannels) {
         data.set_text("CMD_AUDIO_IN_NUM_CHANNEL_MESSAGE", channels(count));

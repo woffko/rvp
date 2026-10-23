@@ -253,8 +253,10 @@ pub fn popup_source(command: &str) -> Option<PopupSource> {
         "CMD_POPUPMENU_PANSCAN" => PopupSource::Context("101_0_17"),
         "CMD_POPUPMENU_RATIO" => PopupSource::Context("101_0_18"),
         // PotPlayer's keys J, K and S (M12): RVP's names.
-        MenuPopup::THREE_D => PopupSource::Live(&["Video", "3D Video Mode"]),
-        MenuPopup::CAPTURE => PopupSource::Live(&["Video", "Video Capture"]),
+        MenuPopup::THREE_D | "CMD_POPUPMENU_VIDEO_3D" => {
+            PopupSource::Live(&["Video", "3D Video Mode"])
+        }
+        MenuPopup::CAPTURE | "ID_CAPTURE_MENU" => PopupSource::Live(&["Video", "Video Capture"]),
         MenuPopup::SHADERS => PopupSource::Live(&["Video", "Pixel Shaders"]),
         MenuPopup::LANGUAGE => PopupSource::Context("101_0_15_2"),
         "CMD_POPUPMENU_PLAY_GOTO" => PopupSource::Context("101_0_9_6"),
@@ -275,12 +277,19 @@ pub fn popup_source(command: &str) -> Option<PopupSource> {
         "CMD_POPUPMENU_CAPTION_SYNC" => PopupSource::Context("101_0_10_10"),
         // The bottom margin kept for subtitles.
         "CMD_POPUPMENU_CAPTION_MARGIN" => PopupSource::Context("101_0_18_23"),
+        // Other skins' names for the same submenus (M14).
+        "CMD_BASE_OPEN_MENU" => PopupSource::Context("101_0_1"),
+        "CMD_POPUPMENU_SKIN_COLOR" => PopupSource::Context("101_0_14_3"),
+        "CMD_POPUPMENU_AUDIO_DEVICE" => PopupSource::Context("101_0_12_1"),
+
         "CMD_POPUPMENU_AUDIO_CHANNEL" => PopupSource::Live(&["Audio", "Output Speakers"]),
         "CMD_POPUPMENU_AUDIO_SAMPLE" => PopupSource::Live(&["Audio", "Output Format/Resample"]),
         "ID_CAPTION_SELECT_MENU" => PopupSource::Context("101_0_10_0"),
         "CMD_POPUPMENU_CAPTION_LANG" => PopupSource::Tracks(TrackKind::Subtitle),
-        "ID_AUDIO_SELECT_MENU" => PopupSource::Tracks(TrackKind::Audio),
-        "CMD_POPUPMENU_PLAY_BOOKMARK" => PopupSource::Chapters,
+        "ID_AUDIO_SELECT_MENU" | "CMD_POPUPMENU_AUDIO_LANG" => {
+            PopupSource::Tracks(TrackKind::Audio)
+        }
+        "CMD_POPUPMENU_PLAY_BOOKMARK" | "ID_CHAPTER_SEL_MENU" => PopupSource::Chapters,
         "CMD_POPUPMENU_FAVORITE" => PopupSource::Albums,
         "CMD_PLAYLIST_MENU_SORT" => PopupSource::Playlist("111_0_8"),
         "CMD_POPUPMENU_AUDIO_EQULIZER" | "CMD_POPUPMENU_EQULIZER_PRESET" => {

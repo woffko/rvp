@@ -843,7 +843,7 @@ pub const ACTIONS: &[ActionInfo] = &[
         "Previous frame",
         Some("D"),
         &[10242],
-        &[],
+        &["ID_PLAY_PREV_FRAME"],
     ),
     info(
         Action::FrameForward,
@@ -851,7 +851,7 @@ pub const ACTIONS: &[ActionInfo] = &[
         "Next frame",
         Some("F"),
         &[10241],
-        &[],
+        &["ID_PLAY_NEXT_FRAME"],
     ),
     info(
         Action::SeekBackward(SeekStep::Short),
@@ -1019,7 +1019,7 @@ pub const ACTIONS: &[ActionInfo] = &[
         "Reset Point A",
         Some("Shift+["),
         &[10251],
-        &[],
+        &["ID_PLAY_REPEAT_START_RESET"],
     ),
     info(
         Action::AbRepeat(AbRepeat::ClearB),
@@ -1027,7 +1027,7 @@ pub const ACTIONS: &[ActionInfo] = &[
         "Reset Point B",
         Some("Shift+]"),
         &[10252],
-        &[],
+        &["ID_PLAY_REPEAT_STOP_RESET"],
     ),
     info(
         Action::AbRepeat(AbRepeat::Toggle),
@@ -1051,7 +1051,7 @@ pub const ACTIONS: &[ActionInfo] = &[
         "Cycle Repeat Playback",
         None,
         &[10034],
-        &[],
+        &["ID_PLAYBACK_REPEAT"],
     ),
     info(
         Action::SetRepeat(Repeat::Off),
@@ -1164,7 +1164,7 @@ pub const ACTIONS: &[ActionInfo] = &[
         "Normalizer",
         Some("Shift+N"),
         &[10009],
-        &[],
+        &["ID_AUDIO_NORMALIZE"],
     ),
     info(
         Action::ToggleBoost,
@@ -1236,7 +1236,7 @@ pub const ACTIONS: &[ActionInfo] = &[
         "Default volume control (Recommended)",
         None,
         &[10393],
-        &[],
+        &["ID_VOLUME_CTL_NORMAL"],
     ),
     info(
         Action::Audio(AudioCommand::Method(VolumeMethod::Wave)),
@@ -1244,7 +1244,7 @@ pub const ACTIONS: &[ActionInfo] = &[
         "System Wave volume control",
         None,
         &[10394],
-        &[],
+        &["ID_VOLUME_CTL_WAVE"],
     ),
     info(
         Action::Audio(AudioCommand::Method(VolumeMethod::Master)),
@@ -1252,7 +1252,7 @@ pub const ACTIONS: &[ActionInfo] = &[
         "System Master volume control",
         None,
         &[10395],
-        &[],
+        &["ID_VOLUME_CTL_MASTER"],
     ),
     info(
         Action::Audio(AudioCommand::ChannelVolumes),
@@ -3394,7 +3394,7 @@ pub const ACTIONS: &[ActionInfo] = &[
         "Flip Vertical",
         Some("Ctrl+P"),
         &[10070],
-        &[],
+        &["ID_VIDEO_V_FLIP_VIDEO"],
     ),
     info(
         Action::VideoEffect(VideoEffect::FlipHorizontal),
@@ -3402,7 +3402,7 @@ pub const ACTIONS: &[ActionInfo] = &[
         "Flip Horizontal",
         Some("Ctrl+Z"),
         &[10071],
-        &[],
+        &["ID_VIDEO_H_FLIP_VIDEO"],
     ),
     // M12: the window's sizes and moves.
     info(
@@ -4083,7 +4083,7 @@ pub const ACTIONS: &[ActionInfo] = &[
         "Temporary Denoise",
         Some("Ctrl+M"),
         &[10427],
-        &[],
+        &["ID_VIDEO_DENOISE_T"],
     ),
     info(
         Action::VideoEffect(VideoEffect::Offset),
@@ -4139,7 +4139,7 @@ pub const ACTIONS: &[ActionInfo] = &[
         "Denoise 3D",
         Some("Ctrl+N"),
         &[10425],
-        &[],
+        &["ID_VIDEO_DENOISE_D"],
     ),
     info(
         Action::ToggleDeband,
@@ -4163,7 +4163,7 @@ pub const ACTIONS: &[ActionInfo] = &[
         "Decrease Brightness by 1%",
         Some("W"),
         &[10086],
-        &[],
+        &["ID_VIDEO_DEC_LUMOFF"],
     ),
     info(
         Action::Color(ColorChange::Up(ColorKind::Brightness)),
@@ -4171,7 +4171,7 @@ pub const ACTIONS: &[ActionInfo] = &[
         "Increase Brightness by 1%",
         Some("E"),
         &[10087],
-        &[],
+        &["ID_VIDEO_INC_LUMOFF"],
     ),
     info(
         Action::Color(ColorChange::Down(ColorKind::Contrast)),
@@ -4179,7 +4179,7 @@ pub const ACTIONS: &[ActionInfo] = &[
         "Decrease Contrast by 1%",
         Some("R"),
         &[10088],
-        &[],
+        &["ID_VIDEO_DEC_LUMGAIN"],
     ),
     info(
         Action::Color(ColorChange::Up(ColorKind::Contrast)),
@@ -4187,7 +4187,7 @@ pub const ACTIONS: &[ActionInfo] = &[
         "Increase Contrast by 1%",
         Some("T"),
         &[10089],
-        &[],
+        &["ID_VIDEO_INC_LUMGAIN"],
     ),
     info(
         Action::Color(ColorChange::Down(ColorKind::Saturation)),
@@ -4195,7 +4195,7 @@ pub const ACTIONS: &[ActionInfo] = &[
         "Decrease Saturation by 1%",
         Some("Y"),
         &[10090],
-        &[],
+        &["ID_VIDEO_DEC_SAT"],
     ),
     info(
         Action::Color(ColorChange::Up(ColorKind::Saturation)),
@@ -4203,7 +4203,7 @@ pub const ACTIONS: &[ActionInfo] = &[
         "Increase Saturation by 1%",
         Some("U"),
         &[10091],
-        &[],
+        &["ID_VIDEO_INC_SAT"],
     ),
     info(
         Action::Color(ColorChange::Down(ColorKind::Hue)),
@@ -4211,7 +4211,7 @@ pub const ACTIONS: &[ActionInfo] = &[
         "Decrease Hue by 1%",
         Some("I"),
         &[10092],
-        &[],
+        &["ID_VIDEO_DEC_HUE"],
     ),
     info(
         Action::Color(ColorChange::Up(ColorKind::Hue)),
@@ -4219,7 +4219,7 @@ pub const ACTIONS: &[ActionInfo] = &[
         "Increase Hue by 1%",
         Some("O"),
         &[10093],
-        &[],
+        &["ID_VIDEO_INC_HUE"],
     ),
     info(
         Action::Color(ColorChange::Down(ColorKind::Gamma)),
@@ -4502,7 +4502,12 @@ pub const ACTIONS: &[ActionInfo] = &[
         "Fullscreen (Keep AR)",
         Some("Alt+Enter"),
         &[10013],
-        &["CMD_FULLSCREEN", "ID_VIEW_FULLSCREEN", "ID_FULLSCREEN"],
+        &[
+            "CMD_FULLSCREEN",
+            "ID_VIEW_FULLSCREEN",
+            "ID_FULLSCREEN",
+            "CMD_FULL_WINDOW",
+        ],
     ),
     info(
         Action::ToggleFullscreenStretch,
@@ -4582,7 +4587,7 @@ pub const ACTIONS: &[ActionInfo] = &[
         "Cycle Stay on Top",
         Some("Ctrl+T"),
         &[10337],
-        &["ID_ETC_NEXTONTOP"],
+        &["ID_ETC_NEXTONTOP", "CMD_TOPMOST_WINDOW"],
     ),
     info(
         Action::SetOnTop(OnTop::Never),
@@ -4598,7 +4603,7 @@ pub const ACTIONS: &[ActionInfo] = &[
         "Stay on Top: Always",
         None,
         &[10038],
-        &[],
+        &["ID_ETC_ALLWAYSONTOP"],
     ),
     info(
         Action::SetOnTop(OnTop::WhilePlaying),
@@ -4606,9 +4611,16 @@ pub const ACTIONS: &[ActionInfo] = &[
         "Stay on Top: While playing",
         None,
         &[10039],
-        &[],
+        &["ID_ETC_PLAYINGONTOP"],
     ),
-    info(Action::ContextMenu, "context-menu", "Menu", None, &[], &[]),
+    info(
+        Action::ContextMenu,
+        "context-menu",
+        "Menu",
+        None,
+        &[],
+        &["CMD_MAIN_MENU"],
+    ),
     info(
         Action::TogglePlaylist,
         "toggle-playlist",
@@ -5023,7 +5035,7 @@ pub const ACTIONS: &[ActionInfo] = &[
         "Use shuffle playback mode",
         None,
         &[10069],
-        &[],
+        &["ID_PLAYBACK_SHUFFLE"],
     ),
     info(
         Action::Bookmark(BookmarkCommand::Add),
@@ -5031,7 +5043,7 @@ pub const ACTIONS: &[ActionInfo] = &[
         "Add Bookmark",
         Some("P"),
         &[10326],
-        &[],
+        &["ID_BOOKMARK_ADD"],
     ),
     info(
         Action::Bookmark(BookmarkCommand::Edit),
@@ -5380,7 +5392,7 @@ pub const ACTIONS: &[ActionInfo] = &[
         "Add only selected files to playlist",
         None,
         &[10277],
-        &[],
+        &["ID_ETC_ONLY_OPEN"],
     ),
     info(
         Action::SetWhenOpened(WhenOpened::Similar),
@@ -5388,7 +5400,7 @@ pub const ACTIONS: &[ActionInfo] = &[
         "Add together similar files to playlist",
         None,
         &[10278],
-        &[],
+        &["ID_ETC_SAME_OPEN"],
     ),
     info(
         Action::SetWhenOpened(WhenOpened::All),
@@ -5396,7 +5408,7 @@ pub const ACTIONS: &[ActionInfo] = &[
         "Add together all files to playlist",
         None,
         &[10279],
-        &[],
+        &["ID_ETC_ALL_OPEN"],
     ),
     info(
         Action::CopyName(CopyName::Name),
@@ -6686,9 +6698,23 @@ impl ListAction {
             "CMD_PLAYLIST_UP" => ListAction::MoveUp,
             "CMD_PLAYLIST_DOWN" => ListAction::MoveDown,
             "CMD_PLAYLIST_BOTTOM" => ListAction::MoveBottom,
-            "CMD_PLAYLIST_ADD" => ListAction::AddFiles,
-            "CMD_PLAYLIST_DEL" => ListAction::RemoveSelected,
+            // With other skins' names for the same buttons (M14).
+            "CMD_PLAYLIST_ADD" | "ID_PLAYLIST_FILE_ADD" => ListAction::AddFiles,
+            "CMD_PLAYLIST_DEL" | "ID_PLAYLIST_DEL" => ListAction::RemoveSelected,
             "ID_PLAYLIST_SAVE" => ListAction::SavePlaylist,
+            "ID_PLAYLIST_FOLDER_ADD" => ListAction::AddFolder,
+            "ID_PLAYLIST_URL_ADD" => ListAction::AddUrl,
+            "ID_PLAYLIST_DEL_UNSEL" => ListAction::RemoveUnselected,
+            "ID_PLAYLIST_DEL_ALL" => ListAction::RemoveAll,
+            "ID_PLAYLIST_DEL_FILE" => ListAction::DeleteFiles,
+            "ID_PLAYLIST_SELECT_ALL" => ListAction::SelectAll,
+            "ID_PLAYLIST_SELECT_INV" => ListAction::InvertSelection,
+            "ID_PLAYLIST_SORT" => ListAction::SortAscending,
+            "ID_PLAYLIST_SORT_INV" => ListAction::SortDescending,
+            "ID_PLAYLIST_SORT_RANDOM" => ListAction::Shuffle,
+            "ID_PLAYLIST_FIND_FILE" => ListAction::Search,
+            "ID_PLAYLIST_EDIT" => ListAction::EditTitle,
+            "ID_PLAYLIST_PLAY" | "CMD_PLAYLIST_PLAY" => ListAction::Play,
             _ => return None,
         })
     }

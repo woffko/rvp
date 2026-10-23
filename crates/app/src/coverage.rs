@@ -676,6 +676,19 @@ pub const DISPLAY: &[(&str, &str)] = &[
     ("CMD_TIMEBAR_CTRL", "seek bar"),
     ("CMD_TITLE_MESSAGE", "title"),
     ("CMD_TOTALTIME_MESSAGE", "duration"),
+    ("CMD_MEDIATIME_MESSAGE", "duration"),
+    ("CMD_TITLE_WITH_MESSAGE", "title"),
+    ("CMD_FILE_TYPE_MESSAGE", "file type"),
+    (
+        "CMD_VIDEO_OUT_HW_SW_MESSAGE",
+        "hardware or software decoding",
+    ),
+    ("CMD_AUDIO_CODEC_TYPE_MESSAGE", "audio codec"),
+    ("CMD_PLAYLIST_TOTAL_TIME_MESSAGE", "the album's length"),
+    (
+        "CMD_LOADING_MESSAGE",
+        "the file being opened, in the skin's logo",
+    ),
     ("CMD_VIDEO_BIT_RATE_MESSAGE", "video bit rate"),
     ("CMD_VIDEO_CODEC_FOURCC_MESSAGE", "video codec"),
     ("CMD_VIDEO_CODEC_FPS_MESSAGE", "source frame rate"),
@@ -759,6 +772,24 @@ pub fn skin_reason(command: &str) -> &'static str {
     ]) || matches!(command, "CMD_ATTACH_BROADCAST" | "CMD_ATTACH_CHAT")
     {
         return "Daum's broadcast and chat services, discontinued";
+    }
+    if starts(&[
+        "CMD_WEB_VOD_",
+        "CMD_CLIP_",
+        "CMD_CAST_",
+        "CMD_RESV_COOKIE",
+        "CMD_PLUS_FRIEND",
+        "CMD_BRPADCAST",
+        "CMD_BOOKMARK_BROADCAST",
+        "CMD_POPUPMENU_VOD_QUALITY",
+    ]) {
+        return "Daum's video, clip and cast services, discontinued";
+    }
+    if matches!(command, "ID_OPEN_HOME_PAGE" | "ID_CHECK_FOR_UPDATE") {
+        return "RVP is private and has no website or update service";
+    }
+    if command == "ID_OPEN_WDM" {
+        return "TV tuners (WDM/BDA channels): FFmpeg cannot tune them (a non-goal, PLAN.md section 1); capture cards open as devices";
     }
     if starts(&["CMD_CAPTURE1ST", "CMD_CAPTURE2ND", "CMD_CAPTURE_PIP"]) {
         return "PotPlayer's capture areas are its broadcasting tools for Daum's discontinued service: non-goals (PLAN.md section 1)";

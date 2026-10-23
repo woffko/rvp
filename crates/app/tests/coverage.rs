@@ -423,26 +423,9 @@ fn the_blackspace_report_is_current() {
     );
 }
 
-/// Commands RVP Default keeps for the classic layout's sake although RVP
-/// does not carry them out yet; any other must work.
-const DEFAULT_SKIN_GAPS: [&str; 16] = [
-    "CMD_POPUPMENU_AUDIO_CHANNEL",
-    "CMD_POPUPMENU_AUDIO_SAMPLE",
-    "CMD_POPUPMENU_CAPTION_FONT",
-    "CMD_POPUPMENU_CAPTION_MARGIN",
-    "CMD_POPUPMENU_CAPTION_PARA",
-    "ID_CAPTION_MOVE_LEFT",
-    "ID_CAPTION_MOVE_RIGHT",
-    "ID_ETC_CLOSE_SYSTEM_FILE",
-    "ID_ETC_CLOSE_SYSTEM_LIST",
-    "ID_ETC_RESTORE_POS",
-    "ID_OPEN_DVD",
-    "ID_PLAYLIST_SAVE",
-    "ID_SKIN_AUTO_HIDE",
-    "ID_VIDEO_ADV_CAPTURE",
-    "ID_VIDEO_CAPTURE_CAPTION",
-    "ID_VIDEO_IMAGE_THUMBNAIL",
-];
+/// The one command RVP Default keeps for the classic layout's sake although
+/// RVP opens the subtitle font in a dialog; any other must work.
+const DEFAULT_SKIN_GAPS: [&str; 1] = ["CMD_POPUPMENU_CAPTION_FONT"];
 
 #[test]
 fn the_rvp_default_report_is_current() {
