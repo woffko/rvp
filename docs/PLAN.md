@@ -3,10 +3,10 @@
 Status: in progress. Goals A-J are done (M1 skin engine, the gates, M2
 player window, M3 daily-use essentials, M4 menus and commands, M5 settings
 window, M6 SVP and video processing, M7 RVP's own logo and default skin, M8
-packages and desktop integration), and so are goals L, M, N, T and O
+packages and desktop integration), and so are goals L, M, N, T, O and P
 (M10 audio, M11 playback, playlist and opening, M12 video, picture and
-window, M18 motion smoothing without SVP, M13 subtitles); the Ubuntu boot
-run of M3-M5
+window, M18 motion smoothing without SVP, M13 subtitles, M14 preferences,
+skins and the rest); the Ubuntu boot run of M3-M5
 passed on 2026-10-13; open: M3's one-week trial and one Ubuntu boot run for
 M6, M7 and M8, which M6's and M8's acceptance need. Results are in
 `docs/goals/`. Next (owner, 2026-10-16, D14): PotPlayer parity wherever
