@@ -485,6 +485,7 @@ pub struct PlayerRust {
     pub(crate) center_window: bool,
     pub(crate) native_video: bool,
     pub(crate) chrome_bars: QString,
+    pub(crate) shown_bar: QRectF,
     pub(crate) video_aspect: f64,
     pub(crate) black_other_displays: bool,
     pub(crate) fullscreen_primary: bool,
@@ -1860,7 +1861,10 @@ impl qobject::Player {
         let Some(chrome) = core.chrome.as_mut() else {
             return;
         };
-        let over_bars = chrome.bar_rects().iter().any(|rect| rect.contains(x, y));
+        let bar = chrome
+            .bar_rects()
+            .into_iter()
+            .find(|rect| rect.contains(x, y));
         let effects = core.pointer.moved(chrome, ctx, x, y);
         let tooltip = core.pointer.tooltip.unwrap_or("");
         let cursor = cursor_shape(core.pointer.cursor);
@@ -1876,9 +1880,16 @@ impl qobject::Player {
         self.as_mut().set_tooltip(QString::from(tooltip));
         self.as_mut().set_cursor_shape(cursor);
         if overlay {
-            // The bars show while the pointer is over them (auto-hide),
-            // unless On Screen Control is off.
-            self.as_mut().show_bars(osc && (over_bars || dragging));
+            // The bar the pointer is on shows (auto-hide), alone, as in
+            // PotPlayer's fullscreen: the title bar at the top edge, the
+            // control bar at the bottom; a drag keeps its bar. Nothing
+            // shows when On Screen Control is off.
+            if let Some(bar) = bar
+                && !dragging
+            {
+                self.as_mut().set_shown_bar(to_window(bar));
+            }
+            self.as_mut().show_bars(osc && (bar.is_some() || dragging));
         }
         self.as_mut().apply_effects(&effects);
         self.sync_chrome();

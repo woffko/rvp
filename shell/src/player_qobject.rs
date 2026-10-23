@@ -75,6 +75,9 @@ pub mod qobject {
         /// The skin's bars over the video in fullscreen, as JSON
         /// `[[x, y, w, h]...]` (`Chrome::bars`).
         #[qproperty(QString, chrome_bars)]
+        /// The bar over the video the pointer is on, which alone shows
+        /// (window coordinates; empty: every bar), M14.
+        #[qproperty(QRectF, shown_bar)]
         /// The video's display aspect ratio (0 without video), for the
         /// window's sizes (M12).
         #[qproperty(f64, video_aspect)]

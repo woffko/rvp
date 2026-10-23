@@ -98,7 +98,9 @@ pub struct SkinsSettings {
     pub lock_mode: bool,
     /// Each mode keeps its window's place and size.
     pub remember_mode_window: bool,
-    /// The window keeps its size when the mode changes.
+    /// The window keeps its size when the mode changes (off, as in
+    /// PotPlayer: its audio skin shrinks the window to the skin's bars,
+    /// seen in goal P's host session).
     pub keep_size: bool,
     /// The main window's and the control panel's opacity in percent.
     pub opacity: u8,
@@ -161,7 +163,7 @@ impl Default for SkinsSettings {
             video_skin_at_start: true,
             lock_mode: false,
             remember_mode_window: false,
-            keep_size: true,
+            keep_size: false,
             opacity: 100,
             panel_opacity: 100,
             idle_logo: LOGO_SKIN.to_owned(),

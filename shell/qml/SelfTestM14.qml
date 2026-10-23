@@ -121,6 +121,11 @@ Item {
         case 12:
             if (t.waitFor("m14_bars_over_the_video", () => player.chrome_shown, 3000,
                           () => "shown " + player.chrome_shown)) {
+                // Only the bar under the pointer shows, as in PotPlayer:
+                // the bottom one here.
+                const bar = player.shown_bar
+                t.check("m14_only_the_pointers_bar", bar.height > 0 && bar.y + bar.height >= host.height - 3
+                            && bar.y > host.height / 2, String(bar))
                 setSetting("skins.osc", false)
                 player.mouse_leave()
                 player.mouse_move(host.width / 2, host.height - 3)

@@ -7,13 +7,17 @@
 //! 2. the video (`--video`) opened at 1280x720 (`-2-video.png`);
 //! 3. a double click on the video for fullscreen, the pointer at the
 //!    bottom so that the on-screen control shows (`-3-fullscreen.png`),
-//!    another double click back;
+//!    then at the top (`-3-fullscreen-top.png`) and still in the middle
+//!    for 3 s (`-3-fullscreen-middle.png`), another double click back;
 //! 4. the audio file (`--audio`): the audio skin (`-4-audio.png`).
 //!
 //! PotPlayer opens the files in its running window (`/current`); RVP runs
 //! on a channel of its own (`--instance=m14-host`) with its settings and
-//! state in `--out` (so its own folders stay as they are), and a second
-//! `rvp.exe` on that channel hands the files over. Only mouse input is
+//! state in `--out` (so its own folders stay as they are, and with no IPC
+//! server, so SVP does not attach), and a second `rvp.exe` on that channel
+//! hands the files over. Each window is kept on top while it is captured
+//! (the terminal that runs this tool would otherwise cover it); `--players
+//! rvp` captures RVP only. Only mouse input is
 //! injected (a double click on the video); no setting of either player is
 //! changed. PotPlayer saves its window place and adds the files to its
 //! playlist and history: `m14-host.ps1` saves its registry key and
@@ -26,7 +30,8 @@ use std::time::{Duration, Instant};
 use windows_sys::Win32::Foundation::{HWND, RECT};
 use windows_sys::Win32::UI::Input::KeyboardAndMouse::{MOUSEEVENTF_LEFTDOWN, MOUSEEVENTF_LEFTUP};
 use windows_sys::Win32::UI::WindowsAndMessaging::{
-    PostMessageW, SWP_NOZORDER, SetForegroundWindow, SetWindowPos, WM_CLOSE,
+    HWND_NOTOPMOST, HWND_TOPMOST, PostMessageW, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE,
+    SetWindowPos, WM_CLOSE,
 };
 
 use super::{
@@ -47,29 +52,42 @@ pub fn m14(options: &Options) -> Result<(), String> {
     let skin = options.path("--skin")?;
     let video = options.path("--video")?;
     let audio = options.path("--audio")?;
+    let players = options.get("--players").unwrap_or("potplayer,rvp");
     let mut log = Log::open(&out)?;
-    require_no_potplayer()?;
     if !processes_named(RVP_EXE).is_empty() {
         log.line("note=another RVP runs; this session's RVP uses its own channel");
     }
 
-    log.line("== PotPlayer");
-    let pot = start_potplayer(&potplayer, &[], &mut log)?;
-    let pot_window = pot.hwnd;
-    let open_pot = |file: &Path| {
-        let _ = Command::new(&potplayer).arg(file).arg("/current").spawn();
-    };
-    let result = session("potplayer", pot_window, &out, &video, &audio, &open_pot, &mut log);
-    if let Err(error) = &result {
-        log.line(&format!("potplayer_error={error}"));
+    let mut result = Ok(());
+    if players.contains("potplayer") {
+        require_no_potplayer()?;
+        log.line("== PotPlayer");
+        let pot = start_potplayer(&potplayer, &[], &mut log)?;
+        let pot_window = pot.hwnd;
+        let open_pot = |file: &Path| {
+            let _ = Command::new(&potplayer).arg(file).arg("/current").spawn();
+        };
+        result = session("potplayer", pot_window, &out, &video, &audio, &open_pot, &mut log);
+        if let Err(error) = &result {
+            log.line(&format!("potplayer_error={error}"));
+        }
+        unsafe {
+            SetWindowPos(pot_window, HWND_NOTOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+        }
+        close_potplayer(pot, &mut log);
     }
-    close_potplayer(pot, &mut log);
+    if !players.contains("rvp") {
+        return result;
+    }
 
     log.line("== RVP");
     let config = out.join("rvp-config");
     let state = out.join("rvp-state");
     std::fs::create_dir_all(&config).map_err(|e| e.to_string())?;
     std::fs::create_dir_all(&state).map_err(|e| e.to_string())?;
+    // No IPC server: SVP attaches to RVP only through one.
+    std::fs::write(config.join("settings.json"), "{ \"ipc-server\": \"\" }\n")
+        .map_err(|e| e.to_string())?;
     let mut child = Command::new(&rvp)
         .arg(CHANNEL)
         .arg(format!("--skin={}", skin.display()))
@@ -117,7 +135,10 @@ fn rvp_window(child: &Child) -> Option<HWND> {
 fn close_rvp(child: &mut Child, log: &mut Log) {
     for hwnd in top_windows(None, Some(child.id())) {
         if class_name(hwnd).contains("QWindow") {
-            unsafe { PostMessageW(hwnd, WM_CLOSE, 0, 0) };
+            unsafe {
+                SetWindowPos(hwnd, HWND_NOTOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+                PostMessageW(hwnd, WM_CLOSE, 0, 0);
+            }
         }
     }
     let deadline = Instant::now() + Duration::from_secs(15);
@@ -132,15 +153,21 @@ fn close_rvp(child: &mut Child, log: &mut Log) {
     log.line("rvp_close=TIMEOUT (stopped)");
 }
 
-/// Puts the window at the session's place, in front.
+/// Puts the window at the session's place, on top.
 fn place(hwnd: HWND, monitor: &RECT) {
     let x = monitor.left + 40;
     let y = monitor.top + 40;
-    unsafe {
-        SetForegroundWindow(hwnd);
-        SetWindowPos(hwnd, std::ptr::null_mut(), x, y, SIZE.0, SIZE.1, SWP_NOZORDER);
-    }
+    unsafe { SetWindowPos(hwnd, HWND_TOPMOST, x, y, SIZE.0, SIZE.1, SWP_NOACTIVATE) };
     sleep_ms(1500);
+}
+
+/// Keeps the window over the others (without taking the keyboard), as it
+/// is now.
+fn raise(hwnd: HWND) {
+    unsafe {
+        SetWindowPos(hwnd, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+    }
+    sleep_ms(300);
 }
 
 fn double_click(x: i32, y: i32) {
@@ -185,6 +212,7 @@ fn session(
 
     // The video's middle: inside the window, above the bars.
     let middle = ((rect.left + rect.right) / 2, rect.top + (rect.bottom - rect.top) / 3);
+    raise(hwnd);
     double_click(middle.0, middle.1);
     sleep_ms(2500);
     let full = window_rect(hwnd);
@@ -193,8 +221,18 @@ fn session(
     move_to((monitor.left + monitor.right) / 2, monitor.bottom - 40);
     sleep_ms(400);
     move_to((monitor.left + monitor.right) / 2 + 10, monitor.bottom - 30);
+    raise(hwnd);
     sleep_ms(1500);
     shot(log, "3-fullscreen", &monitor);
+    move_to((monitor.left + monitor.right) / 2, monitor.top + 40);
+    sleep_ms(400);
+    move_to((monitor.left + monitor.right) / 2 + 10, monitor.top + 30);
+    raise(hwnd);
+    sleep_ms(1500);
+    shot(log, "3-fullscreen-top", &monitor);
+    move_to((monitor.left + monitor.right) / 2, (monitor.top + monitor.bottom) / 2);
+    sleep_ms(3000);
+    shot(log, "3-fullscreen-middle", &monitor);
     double_click(
         (monitor.left + monitor.right) / 2,
         monitor.top + (monitor.bottom - monitor.top) / 3,
@@ -205,6 +243,7 @@ fn session(
     open(audio);
     log.line(&format!("{name}_opened={}", audio.display()));
     sleep_ms(5000);
+    raise(hwnd);
     move_to(park.0, park.1);
     sleep_ms(800);
     let rect = window_rect(hwnd);

@@ -798,20 +798,41 @@ Window {
         root.setWindowGeometry(x, y, width, height, "fit")
     }
 
+    // Over the video only the bar the pointer is on shows (M14).
+    readonly property bool oneBar: player.overlay && player.shown_bar.width > 0
+    function inShownBar(x, y, width, height) {
+        const bar = player.shown_bar
+        return !oneBar || (x < bar.x + bar.width && bar.x < x + width
+                           && y < bar.y + bar.height && bar.y < y + height)
+    }
+
     // The skin's static layer: under the video in the window, over it in
     // fullscreen and with "Auto hide main skin" (where it only holds the
-    // bars, at On Screen Control's opacity, fading when animations are on).
-    SkinView {
-        id: staticSkin
-        readonly property bool shown: player.has_skin && (!player.overlay || player.chrome_shown)
-        region_index: -1
-        anchors.fill: parent
-        opacity: shown ? (player.overlay && player.osc_opacity > 0 ? player.osc_opacity : 1) : 0
-        visible: opacity > 0
+    // bars, at On Screen Control's opacity, fading when animations are on,
+    // cut to the bar the pointer is on).
+    Item {
+        id: staticClip
+        x: root.oneBar ? player.shown_bar.x : 0
+        y: root.oneBar ? player.shown_bar.y : 0
+        width: root.oneBar ? player.shown_bar.width : root.width
+        height: root.oneBar ? player.shown_bar.height : root.height
+        clip: root.oneBar
         z: player.overlay ? 2 : 0
-        Behavior on opacity {
-            enabled: player.animations && player.overlay
-            NumberAnimation { duration: 150 }
+
+        SkinView {
+            id: staticSkin
+            readonly property bool shown: player.has_skin && (!player.overlay || player.chrome_shown)
+            region_index: -1
+            x: -staticClip.x
+            y: -staticClip.y
+            width: root.width
+            height: root.height
+            opacity: shown ? (player.overlay && player.osc_opacity > 0 ? player.osc_opacity : 1) : 0
+            visible: opacity > 0
+            Behavior on opacity {
+                enabled: player.animations && player.overlay
+                NumberAnimation { duration: 150 }
+            }
         }
     }
 
@@ -846,7 +867,9 @@ Window {
         holes: [videoHole(seekTip), videoHole(powerBox), videoHole(infoBox), videoHole(miscInfoBox),
                 videoHole(messageBox), videoHole(sceneLoader.item), videoHole(slideshowLoader.item)]
             .filter(hole => hole !== null)
-            .concat(player.overlay && staticSkin.visible ? JSON.parse(player.chrome_bars || "[]") : [])
+            .concat(player.overlay && staticSkin.visible
+                    ? JSON.parse(player.chrome_bars || "[]").filter(bar => root.inShownBar(bar[0], bar[1], bar[2], bar[3]))
+                    : [])
     })
     onVideoWindowPlaceChanged: Tools.place_video_window(videoWindowPlace)
 
@@ -932,7 +955,7 @@ Window {
             height: area.height
             z: 3
             opacity: staticSkin.opacity
-            visible: staticSkin.visible
+            visible: staticSkin.visible && root.inShownBar(x, y, width, height)
         }
     }
 

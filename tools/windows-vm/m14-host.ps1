@@ -11,6 +11,9 @@
 # captures go to -Out and are copied from there to
 # ~/rvp-reference/m14 (never committed).
 #
+# -RvpOnly captures RVP alone (PotPlayer is neither needed nor touched);
+# -PotPlayerOnly captures PotPlayer alone.
+#
 # PotPlayer keeps its window place, playlist and history: its registry key
 # (HKCU\Software\DAUM\PotPlayerMini64) and playlist folder are saved
 # before the session and written back after it; the values PotPlayer added
@@ -21,11 +24,21 @@ param(
     [string]$Data = 'C:\Users\<user>\rvp-test\m14-host\data',
     [string]$Out = 'C:\Users\<user>\rvp-test\m14-host\out',
     [string]$PotPlayer = 'C:\Program Files\DAUM\PotPlayer\PotPlayerMini64.exe',
-    [string]$Skin = 'C:\Program Files\DAUM\PotPlayer\Skins\BlackSpace_en.dsf'
+    [string]$Skin = 'C:\Program Files\DAUM\PotPlayer\Skins\BlackSpace_en.dsf',
+    [switch]$RvpOnly,
+    [switch]$PotPlayerOnly
 )
 $key = 'HKCU\Software\DAUM\PotPlayerMini64'
 $playlist = Join-Path $env:APPDATA 'PotPlayerMini64\Playlist'
 
+if ($RvpOnly) {
+    Remove-Item -Recurse -Force $Out -ErrorAction SilentlyContinue
+    New-Item -ItemType Directory -Force $Out | Out-Null
+    & "$Data\host-session.exe" m14 --players rvp --out $Out --potplayer $PotPlayer --rvp "$Bundle\rvp.exe" `
+        --skin $Skin --video "$Data\fixture-60s.mkv" --audio "$Data\fixture-tone.ogg"
+    Write-Host "host_session_exit=$LASTEXITCODE"
+    exit $LASTEXITCODE
+}
 if (Get-Process PotPlayerMini64 -ErrorAction SilentlyContinue) {
     Write-Host 'stop=PotPlayer is running; close it first'
     exit 2
@@ -45,7 +58,8 @@ foreach ($item in Get-ChildItem -Recurse "Registry::$key" -ErrorAction SilentlyC
 $root = Get-Item "Registry::$key" -ErrorAction SilentlyContinue
 if ($root) { foreach ($name in $root.GetValueNames()) { $valuesBefore["$($root.Name)|$name"] = $true } }
 
-& "$Data\host-session.exe" m14 --out $Out --potplayer $PotPlayer --rvp "$Bundle\rvp.exe" `
+$players = if ($PotPlayerOnly) { 'potplayer' } else { 'potplayer,rvp' }
+& "$Data\host-session.exe" m14 --players $players --out $Out --potplayer $PotPlayer --rvp "$Bundle\rvp.exe" `
     --skin $Skin --video "$Data\fixture-60s.mkv" --audio "$Data\fixture-tone.ogg"
 $code = $LASTEXITCODE
 
