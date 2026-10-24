@@ -423,6 +423,7 @@ pub struct App {
     /// start (M14, `crate::skins`).
     pub(crate) skin_info: crate::skins::SkinInfo,
     pub(crate) random_theme: Option<usize>,
+    pub(crate) skin_file: Option<crate::skins::SkinFile>,
     /// "Change logo randomly on each loading": this file's pick.
     pub(crate) random_logo: Option<usize>,
     /// What paused playback for the window (M14's General page): bits of
@@ -538,6 +539,7 @@ impl App {
             subtitle_drag_x: 0.0,
             skin_info: crate::skins::SkinInfo::default(),
             random_theme: None,
+            skin_file: None,
             random_logo: None,
             attention_holds: 0,
             default_values: None,

@@ -133,7 +133,11 @@ impl qobject::Player {
                 .find(|theme| theme.name == *name)
                 .map(|theme| theme.tint),
         };
-        let file = want.audio.then_some("AudioSkin.xml");
+        // The mode's file, or the one the skin's button chose.
+        let file = want
+            .file
+            .as_deref()
+            .or_else(|| want.audio.then_some("AudioSkin.xml"));
         let skin = match skin_variant(&source, file, tint, touch) {
             Ok(skin) => skin,
             Err(error) => {
@@ -146,7 +150,7 @@ impl qobject::Player {
             .look
             .skin_want
             .as_ref()
-            .is_some_and(|old| old.audio != want.audio);
+            .is_some_and(|old| old.audio != want.audio || old.file != want.file);
         let shown = core.chrome.as_ref().map(rvp_app::chrome::Chrome::skin);
         if shown.map(rvp_skin::Skin::id) == Some(skin.id()) {
             core.look.skin_want = Some(want);

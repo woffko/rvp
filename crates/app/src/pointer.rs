@@ -12,7 +12,9 @@
 //!   its `UserMenuName` (right click: `AltUserMenuName`) names; one with a
 //!   built-in submenu command (`CMD_POPUPMENU_*`) opens that part of the
 //!   menu ([`Effect::Popup`]). `CMD_SELECT_PAGE` shows the controls of its
-//!   `PageIndex` (the playlist panel's pages).
+//!   `PageIndex` (the playlist panel's pages), and `CMD_LOAD_SKIN_XML` the
+//!   skin file its `String` names ([`Effect::SkinFile`]: BlackSpace's Mini
+//!   Audio Mode, M14).
 //! * Sliders act on press and while dragging: the seek bar seeks, the
 //!   volume sliders set the volume, the others (the control panel's
 //!   equalizer bands and colours) set their value ([`Effect::Slider`]).
@@ -121,6 +123,9 @@ pub enum Effect {
         command: &'static str,
         menu: Option<&'static str>,
     },
+    /// Show another file of the skin for this skin mode
+    /// (`CMD_LOAD_SKIN_XML`).
+    SkinFile(&'static str),
     /// The pointer is over the seek bar (or holds it) at this place, or
     /// left it (`None`): the time tooltip and preview (M11).
     SeekHover(Option<crate::playback::SeekHover>),
@@ -233,6 +238,7 @@ enum Drag {
         element: usize,
         command: &'static str,
         menu: Option<&'static str>,
+        file: Option<&'static str>,
         page: Option<i32>,
     },
     Slider {
@@ -421,21 +427,26 @@ enum Target {
     Background,
 }
 
-/// Skin commands the pointer handles itself: menus and pages.
+/// Skin commands the pointer handles itself: menus, pages and skin files.
 fn is_control_command(command: &str) -> bool {
     command == "CMD_POPUP_USER_MENU"
         || command == "CMD_SELECT_PAGE"
+        || command == "CMD_LOAD_SKIN_XML"
         || command.starts_with("CMD_POPUPMENU_")
         || popup_source(command).is_some()
 }
 
-/// A menu or page command of a skin control.
+/// A menu, page or skin file command of a skin control.
 fn control_effect(
     chrome: &mut Chrome,
     command: &'static str,
     menu: Option<&'static str>,
+    file: Option<&'static str>,
     page: Option<i32>,
 ) -> Vec<Effect> {
+    if command == "CMD_LOAD_SKIN_XML" {
+        return file.map(Effect::SkinFile).into_iter().collect();
+    }
     if command == "CMD_SELECT_PAGE" {
         if let Some(page) = page {
             chrome.state.current_page = page;
@@ -562,6 +573,7 @@ impl Pointer {
                 element,
                 command,
                 menu,
+                file,
                 page,
                 ..
             }) => {
@@ -583,6 +595,7 @@ impl Pointer {
                         element,
                         command,
                         menu,
+                        file,
                         page,
                     };
                     Vec::new()
@@ -866,6 +879,7 @@ impl Pointer {
                     element,
                     command,
                     menu,
+                    file,
                     page,
                 } => {
                     let over = matches!(
@@ -883,7 +897,7 @@ impl Pointer {
                             Effect::List(ListEffect::Action(action)),
                         ]
                     } else {
-                        control_effect(chrome, command, menu, page)
+                        control_effect(chrome, command, menu, file, page)
                     }
                 }
                 Drag::Rows {
@@ -910,6 +924,7 @@ impl Pointer {
                 Target::Control(Hit::Control {
                     alt_command: Some(command),
                     alt_menu,
+                    file,
                     page,
                     ..
                 }) if Action::from_skin_command(command).is_some()
@@ -917,7 +932,7 @@ impl Pointer {
                 {
                     match Action::from_skin_command(command) {
                         Some(action) => vec![Effect::Action(action)],
-                        None => control_effect(chrome, command, alt_menu, page),
+                        None => control_effect(chrome, command, alt_menu, file, page),
                     }
                 }
                 Target::List(hit) => {

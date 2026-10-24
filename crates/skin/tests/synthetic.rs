@@ -101,6 +101,8 @@ const VIDEO_SKIN: &str = "<?XML version='1.0' ?>
 \t\t<Button CmdID='ID_AUDIO_EQULIZER' AltCmdID='CMD_POPUP_USER_MENU' AltUserMenuName='EQMenu' DownFlag='1' Left='-12' Top='2' Width='8' Height='8' ImageLeft='0' ImageTop='10' />
 \t\t<Button CmdID='ID_WIDE_ONLY' Left='40' Top='2' Width='8' Height='8' ImageLeft='0' ImageTop='10' VisParentMinWidth='500' />
 \t\t<Static State='CMD_PAGE_CONTROL' PageIndex='4' Left='50' Top='2' Width='8' Height='8' />
+\t\t<Button CmdID='CMD_POPUP_WINDOW' Left='60' Top='2' Width='8' Height='8' ImageLeft='0' ImageTop='10' />
+\t\t<Button CmdID='CMD_LOAD_SKIN_XML' String='Mini.xml' Left='70' Top='2' Width='4' Height='4' ImageLeft='0' ImageTop='10' />
 \t</Static>
 \t#include<Part.txt #KIND=Button>
 \t<Static Align='Client' Contain='CMD_VIDEO_WINDOW' />
@@ -799,5 +801,21 @@ fn color_themes_tint_the_render_but_excluded_parts() {
         assert_ne!(tinted.pixel(50, 5), plain.pixel(50, 5), "{}", theme.name);
         // The title's right end lies in the excluded area of the atlas.
         assert_eq!(tinted.pixel(98, 5), TITLE_RIGHT, "{}", theme.name);
+    }
+}
+
+#[test]
+fn popup_window_buttons_hide_and_skin_files_are_linked() {
+    let skin = skin();
+    let placed = layout(&skin, "MainSkinArea", 100, 60, &UiState::default()).expect("layout");
+    // Daum's pop-up windows: hidden as their slots are.
+    assert!(placed.find_command("CMD_POPUP_WINDOW").is_none());
+    assert_eq!(skin.linked_files(), ["Mini.xml"]);
+    let file = placed
+        .find_command("CMD_LOAD_SKIN_XML")
+        .expect("the file button");
+    match hit_test(&placed, file.rect.x + 1, file.rect.y + 1) {
+        Some(Hit::Control { file, .. }) => assert_eq!(file, Some("Mini.xml")),
+        other => panic!("unexpected hit {other:?}"),
     }
 }

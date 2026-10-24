@@ -209,6 +209,25 @@ impl Skin {
         crate::menu::commands(&self.root)
     }
 
+    /// The other files of the skin its controls show (the `String` of
+    /// `CMD_LOAD_SKIN_XML`: BlackSpace's audio skin links `AudioMini.xml`),
+    /// in the order they appear.
+    #[must_use]
+    pub fn linked_files(&self) -> Vec<String> {
+        let mut files: Vec<String> = Vec::new();
+        self.root.walk(&mut |element| {
+            let attrs = &element.attrs;
+            let loads =
+                [attrs.get("CmdID"), attrs.get("AltCmdID")].contains(&Some("CMD_LOAD_SKIN_XML"));
+            if let Some(file) = attrs.get("String").filter(|_| loads)
+                && !files.iter().any(|known| known.eq_ignore_ascii_case(file))
+            {
+                files.push(file.to_owned());
+            }
+        });
+        files
+    }
+
     /// The skin's string table.
     #[must_use]
     pub fn strings(&self) -> &StringTable {

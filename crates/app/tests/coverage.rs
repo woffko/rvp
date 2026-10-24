@@ -417,6 +417,14 @@ fn the_blackspace_report_is_current() {
     );
     let menus = skin.user_menus();
     assert_eq!(menus.len(), 19, "BlackSpace has 19 skin menus");
+    // With the audio skin and its Mini Audio Mode.
+    let commands = rvp_app::coverage::skin_mode_commands(&skin);
+    assert!(
+        commands
+            .get("CMD_LOAD_SKIN_XML")
+            .is_some_and(|used| used.areas.iter().any(|area| area.contains("AudioSkin.xml"))),
+        "the audio skin's Mini Audio Mode button"
+    );
     check(
         "blackspace.md",
         &skin_report("BlackSpace", BLACKSPACE_INTRO, &commands),
@@ -433,7 +441,7 @@ fn the_rvp_default_report_is_current() {
     let archive =
         SkinArchive::from_zip_bytes(rvp_look::skin::NAME, bytes).expect("a readable archive");
     let skin = Skin::load(archive, "VideoSkin.xml").expect("RVP Default loads");
-    let commands = skin.commands();
+    let commands = rvp_app::coverage::skin_mode_commands(&skin);
     let gaps: Vec<&str> = commands
         .keys()
         .map(String::as_str)

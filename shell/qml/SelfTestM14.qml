@@ -21,6 +21,8 @@ Item {
     property string firstSkin: ""
     property int videoHeight: 0
     property var rememberBefore: true
+    // Where the pointer went over the bars (case 11).
+    property real pointerY: 0
 
     function view() { return JSON.parse(player.settings_view(false)) }
     function setSetting(path, value) {
@@ -96,6 +98,21 @@ Item {
                                      && host.height < videoHeight, 5000,
                                  () => host.width + "x" + host.height + " minimum " + host.minimumWidth + "x"
                                      + host.minimumHeight + " video " + videoHeight)) {
+                // Mini Audio Mode: the audio skin's own button shows
+                // AudioMini.xml, whose button goes back.
+                const click = (command) => {
+                    const r = player.control_rect(command)
+                    if (r.width > 0) {
+                        player.mouse_press(r.x + r.width / 2, r.y + r.height / 2, Qt.LeftButton, 0)
+                        player.mouse_release(r.x + r.width / 2, r.y + r.height / 2, Qt.LeftButton)
+                    }
+                }
+                click("CMD_LOAD_SKIN_XML")
+                const mini = t.status().skin_file
+                click("CMD_LOAD_SKIN_XML")
+                const back = t.status().skin_file
+                t.check("m14_mini_audio_mode", mini === "AudioMini.xml" && back === "AudioSkin.xml",
+                        mini + " then " + back)
                 player.run_action("previous")
             }
             break
@@ -115,8 +132,10 @@ Item {
                               && Math.abs(player.video_rect.width - host.width) <= 1
                               && Math.abs(player.video_rect.height - host.height) <= 1, 5000,
                           () => "overlay " + player.overlay + " video " + player.video_rect + " window "
-                              + host.width + "x" + host.height))
-                player.mouse_move(host.width / 2, host.height - 3)
+                              + host.width + "x" + host.height)) {
+                pointerY = host.height - 3
+                player.mouse_move(host.width / 2, pointerY)
+            }
             break
         case 12:
             if (t.waitFor("m14_bars_over_the_video", () => player.chrome_shown, 3000,
@@ -124,8 +143,9 @@ Item {
                 // Only the bar under the pointer shows, as in PotPlayer:
                 // the bottom one here.
                 const bar = player.shown_bar
-                t.check("m14_only_the_pointers_bar", bar.height > 0 && bar.y + bar.height >= host.height - 3
-                            && bar.y > host.height / 2, String(bar))
+                t.check("m14_only_the_pointers_bar", bar.height > 0 && bar.y <= pointerY
+                            && pointerY < bar.y + bar.height && bar.y > pointerY / 2,
+                        String(bar) + " pointer at " + pointerY + " window " + host.width + "x" + host.height)
                 setSetting("skins.osc", false)
                 player.mouse_leave()
                 player.mouse_move(host.width / 2, host.height - 3)

@@ -2,7 +2,8 @@
 //! given, the video skin loads, `MainSkinArea` and
 //! `MainSkinAreaOscInside` (the bars over the video) lay out and draw at
 //! 1280x720, the audio skin (`AudioSkin.xml`) does the same when the skin
-//! has one, and every command the skin names is sorted as
+//! has one, and every command the skin names (with its audio skin's and
+//! the files their `CMD_LOAD_SKIN_XML` buttons show) is sorted as
 //! `docs/coverage/` sorts BlackSpace's. Third-party skins stay local: the
 //! reports and renders go to OUT, and one summary line per skin to stdout.
 //!
@@ -12,7 +13,7 @@ use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
-use rvp_app::coverage::{skin_covered, skin_reason, skin_report};
+use rvp_app::coverage::{skin_covered, skin_mode_commands, skin_reason, skin_report};
 use rvp_skin::{DataModel, Fonts, Skin, SkinArchive, UiState, render_area};
 
 const INTRO: &str = "Made by `cargo run -p rvp-app --example skin_coverage` from \
@@ -49,7 +50,7 @@ fn check(path: &Path, out: &Path, fonts: &mut Fonts) -> Result<String, String> {
         |stem| stem.to_string_lossy().into_owned(),
     );
     let skin = Skin::open(path).map_err(|error| error.to_string())?;
-    let commands = skin.commands();
+    let commands = skin_mode_commands(&skin);
     std::fs::write(
         out.join(format!("{stem}.md")),
         skin_report(&stem, INTRO, &commands),

@@ -306,6 +306,18 @@ pub struct SkinWant {
     pub theme: ThemeWant,
     /// The skin's touch layout (Accessibility > Touch, M14).
     pub touch: bool,
+    /// Another file of the skin its own button chose for this mode
+    /// (`CMD_LOAD_SKIN_XML`: BlackSpace's Mini Audio Mode); `None`:
+    /// `VideoSkin.xml` or `AudioSkin.xml`.
+    pub file: Option<String>,
+}
+
+/// A skin file chosen by the skin's own button, for one skin and mode.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct SkinFile {
+    path: Option<PathBuf>,
+    audio: bool,
+    file: String,
 }
 
 /// The colour theme the window should show.
@@ -569,12 +581,45 @@ impl App {
             }
             name => ThemeWant::Named(name.to_owned()),
         };
+        let path = self.chosen_skin();
+        let audio = self.skin_mode_audio();
+        // A file the skin's button chose stays for its skin and mode.
+        let file = self
+            .skin_file
+            .as_ref()
+            .filter(|chosen| chosen.path == path && chosen.audio == audio)
+            .map(|chosen| chosen.file.clone());
         SkinWant {
-            path: self.chosen_skin(),
-            audio: self.skin_mode_audio(),
+            path,
+            audio,
             theme,
             touch: self.settings.accessibility.touch_skin,
+            file,
         }
+    }
+
+    /// A skin's `CMD_LOAD_SKIN_XML` button: its file shows for the skin
+    /// mode now shown (the mode's own file again clears the choice). Only
+    /// a plain `.xml` name of the skin is taken.
+    pub fn load_skin_file(&mut self, file: &str) {
+        let plain = Path::new(file)
+            .extension()
+            .is_some_and(|extension| extension.eq_ignore_ascii_case("xml"))
+            && !file.contains(['/', '\\']);
+        if !plain {
+            return;
+        }
+        let audio = self.skin_mode_audio();
+        let own = if audio {
+            "AudioSkin.xml"
+        } else {
+            "VideoSkin.xml"
+        };
+        self.skin_file = (!file.eq_ignore_ascii_case(own)).then(|| SkinFile {
+            path: self.chosen_skin(),
+            audio,
+            file: file.to_owned(),
+        });
     }
 
     /// Whether the audio skin should show: a file without video plays, the

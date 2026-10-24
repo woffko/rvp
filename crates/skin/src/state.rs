@@ -65,6 +65,8 @@ impl UiState {
             "CMD_RESTORE_WINDOW" => self.maximized,
             "CMD_PLAYLIST_WINDOW_OPEN" | "CMD_ATTACH_WINDOW_OPEN" => !self.playlist_attached,
             "CMD_PLAYLIST_WINDOW_CLOSE" | "CMD_ATTACH_WINDOW_CLOSE" => self.playlist_attached,
+            // Daum's pop-up windows, as their slots below.
+            "CMD_POPUP_WINDOW" => false,
             _ => true,
         }
     }

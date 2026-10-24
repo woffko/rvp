@@ -1758,6 +1758,12 @@ impl qobject::Player {
                     }
                     self.as_mut().ui_request(request::SKIN_MENU, 0);
                 }
+                Effect::SkinFile(file) => {
+                    if let Some(core) = self.as_mut().core_mut() {
+                        core.app.load_skin_file(file);
+                    }
+                    self.as_mut().sync_skin();
+                }
                 Effect::SeekHover(hover) => self.as_mut().seek_hover(hover),
                 Effect::TurnView { dx, dy } => {
                     if let Some(core) = self.as_mut().core_mut() {

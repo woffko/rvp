@@ -19,7 +19,10 @@
 //!   rectangle without changing the free space.
 //! * Hidden elements take no space: paired commands (Play/Pause,
 //!   Maximize/Restore), `State` conditions, `Contain` slots,
-//!   `VisParentMinWidth`, `VisParentMinHeight` and `VisMinLeft`.
+//!   `VisParentMinWidth`, `VisParentMinHeight` and `VisMinLeft`. Controls
+//!   of Daum's pop-up windows (`CMD_POPUP_WINDOW`, BlackSpace's audio
+//!   skin's "screen partition" button) are hidden as their slots are
+//!   (goal P's host session: PotPlayer shows neither).
 //! * An attached playlist fills the `Contain='CMD_PLAYLIST_TOGGLE'` slot with
 //!   the `CMD_PLAYLIST_HOLDER` part of `PlaylistSkinArea`; the playlist
 //!   window's own frame is not drawn.

@@ -298,6 +298,17 @@ fn set_info_strip(data: &mut DataModel, model: &PlayerModel, time: f64, duration
     }
     if let Some(rate) = model.int(PropertyId::AudioSampleRate) {
         data.set_text("CMD_AUDIO_OUT_SAMPLE_RATE_MESSAGE", rate.to_string());
+        // In kHz: 48, 44.1.
+        let thousands = rate / 1000;
+        let rest = (rate % 1000) / 100;
+        data.set_text(
+            "CMD_AUDIO_OUT_SAMPLE_RATE_K_MESSAGE",
+            if rest == 0 {
+                thousands.to_string()
+            } else {
+                format!("{thousands}.{rest}")
+            },
+        );
     }
     if let Some(bits) = model.double(PropertyId::AudioBitrate) {
         data.set_text("CMD_AUDIO_BIT_RATE_MESSAGE", kilobits(bits));

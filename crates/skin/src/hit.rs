@@ -23,6 +23,8 @@ pub enum Hit<'a> {
         menu: Option<&'a str>,
         /// The same for the right click (`AltUserMenuName`).
         alt_menu: Option<&'a str>,
+        /// The skin file a `CMD_LOAD_SKIN_XML` command shows (`String`).
+        file: Option<&'a str>,
         /// The page a `CMD_SELECT_PAGE` control shows (`PageIndex`).
         page: Option<i32>,
     },
@@ -57,6 +59,7 @@ pub fn hit_test<'a>(layout: &Layout<'a>, x: i32, y: i32) -> Option<Hit<'a>> {
                 tooltip: attrs.get("Tooltip").filter(|tip| !tip.is_empty()),
                 menu: attrs.get("UserMenuName").filter(|name| !name.is_empty()),
                 alt_menu: attrs.get("AltUserMenuName").filter(|name| !name.is_empty()),
+                file: attrs.get("String").filter(|name| !name.is_empty()),
                 page: attrs.int("PageIndex"),
             });
         }
