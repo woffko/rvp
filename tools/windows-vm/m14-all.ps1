@@ -9,7 +9,9 @@
 #   cargo xwin test --no-run --release --target x86_64-pc-windows-msvc \
 #       -p rvp-skin --test synthetic
 # copied as rvp-bundle\settings.exe, translations.exe, menus.exe and
-# synthetic.exe.
+# synthetic.exe. synthetic.exe reads its geometry snapshot where the
+# build had it: copy crates/skin/tests/snapshots/synthetic-100x60.txt to
+# C:\home\<user>\rvp\crates\skin\tests\snapshots after a change to it.
 #
 # 1. The M14 self-test (`--selftest=m14 --registry-check`,
 #    shell/qml/SelfTestM14.qml) with RVP Default and with BlackSpace: skin
