@@ -103,6 +103,9 @@ pub mod qobject {
         /// window with Skins > "Auto hide main skin" while a video shows;
         /// their opacity there, and whether they fade.
         #[qproperty(bool, overlay)]
+        /// The skin shown draws the audio's spectrum and a file is loaded:
+        /// QML ticks [`tick_spectrum`] (M14).
+        #[qproperty(bool, spectrum_shown)]
         #[qproperty(f64, osc_opacity)]
         #[qproperty(bool, animations)]
         /// The OSD Messages page's look (M14, JSON: `App::osd_look`) and
@@ -632,6 +635,11 @@ pub mod qobject {
         /// opened for and the text entered.
         #[qinvokable]
         fn video_dialog_answer(self: Pin<&mut Self>, purpose: &QString, text: &QString);
+
+        /// The skin's spectrum bars move on (a few dozen times a second
+        /// while `spectrum_shown`).
+        #[qinvokable]
+        fn tick_spectrum(self: Pin<&mut Self>);
 
         /// Keeps the mouse pointer on the window's display while `wanted`
         /// (fullscreen and active) and the setting asks for it (M12).

@@ -48,19 +48,22 @@ pub enum Kind {
     PicLabel,
     Image,
     Slider,
+    /// `Visual`: the audio's spectrum as bars (M14).
+    Visual,
     /// `Layout`: an invisible spacer.
     Spacer,
 }
 
 impl Kind {
     fn of(element: &Element) -> Option<Self> {
-        const KINDS: [(&str, Kind); 7] = [
+        const KINDS: [(&str, Kind); 8] = [
             ("Static", Kind::Static),
             ("Button", Kind::Button),
             ("Label", Kind::Label),
             ("PicLabel", Kind::PicLabel),
             ("Image", Kind::Image),
             ("Slider", Kind::Slider),
+            ("Visual", Kind::Visual),
             ("Layout", Kind::Spacer),
         ];
         KINDS

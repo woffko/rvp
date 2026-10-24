@@ -147,6 +147,7 @@ fn stereo_downmix() -> String {
         source: &source,
         gain: 1.0,
         responses: &responses,
+        spectrum: false,
     };
     let (front, _) = build(&inputs);
     front

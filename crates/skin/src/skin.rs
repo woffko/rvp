@@ -209,6 +209,15 @@ impl Skin {
         crate::menu::commands(&self.root)
     }
 
+    /// Whether the skin file draws the audio's spectrum (a `Visual`
+    /// element).
+    #[must_use]
+    pub fn has_visual(&self) -> bool {
+        let mut found = false;
+        self.root.walk(&mut |element| found |= element.is("Visual"));
+        found
+    }
+
     /// The other files of the skin its controls show (the `String` of
     /// `CMD_LOAD_SKIN_XML`: BlackSpace's audio skin links `AudioMini.xml`),
     /// in the order they appear.

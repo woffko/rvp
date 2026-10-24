@@ -5,11 +5,12 @@
 # C:\rvp-test\BlackSpace_en.dsf, and the headless tests built for Windows
 # next to the bundle's libmpv-2.dll:
 #   cargo xwin test --no-run --release --target x86_64-pc-windows-msvc \
-#       -p rvp-app --test settings --test translations --test menus
+#       -p rvp-app --test settings --test translations --test menus \
+#       --test spectrum_live
 #   cargo xwin test --no-run --release --target x86_64-pc-windows-msvc \
 #       -p rvp-skin --test synthetic
-# copied as rvp-bundle\settings.exe, translations.exe, menus.exe and
-# synthetic.exe. synthetic.exe reads its geometry snapshot where the
+# copied as rvp-bundle\settings.exe, translations.exe, menus.exe,
+# spectrum.exe (the skins' spectrum on Windows' FFmpeg) and synthetic.exe. synthetic.exe reads its geometry snapshot where the
 # build had it: copy crates/skin/tests/snapshots/synthetic-100x60.txt to
 # C:\home\<user>\rvp\crates\skin\tests\snapshots after a change to it.
 #
@@ -66,7 +67,7 @@ $typesAfter = Get-RvpTypes
 Write-Host "check types_left_clean=$(if ($typesAfter -eq $typesBefore) { 'PASS' } else { 'FAIL' }) before $typesBefore after $typesAfter"
 
 $env:RVP_TEST_SKIN = $Skin
-foreach ($test in @('settings', 'translations', 'menus', 'synthetic')) {
+foreach ($test in @('settings', 'translations', 'menus', 'spectrum', 'synthetic')) {
     Write-Host "== headless tests: $test"
     $binary = "$bundle\$test.exe"
     if (-not (Test-Path $binary)) {

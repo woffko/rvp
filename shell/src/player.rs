@@ -497,6 +497,7 @@ pub struct PlayerRust {
     pub(crate) skin_logo: bool,
     pub(crate) logo_position: QString,
     pub(crate) overlay: bool,
+    pub(crate) spectrum_shown: bool,
     pub(crate) osc_opacity: f64,
     pub(crate) animations: bool,
     pub(crate) osd_look: QString,
@@ -1217,9 +1218,13 @@ impl qobject::Player {
             data.set_text("CMD_SYSTEM_TIME_MESSAGE", core.clock.as_str());
         }
         core.app.panel_data(&mut data);
+        // The spectrum's bars move on their own tick (`tick_spectrum`).
+        data.visual = std::mem::take(&mut chrome.data.visual);
+        data.visual_peaks = std::mem::take(&mut chrome.data.visual_peaks);
         if data != chrome.data {
             chrome.data = data;
         }
+        let spectrum = core.app.skin_spectrum() && core.app.model.media_loaded();
         view::apply_playback_state(&mut chrome.state, &core.app.model);
         let toggles = chrome.toggle_commands();
         core.app.toggle_flags(&mut chrome.state, toggles);
@@ -1233,6 +1238,9 @@ impl qobject::Player {
                 .request_list_thumbnails(geometry.first, geometry.visible + 1);
         }
         self.as_mut().emit_damage(&damage, synced);
+        if *self.spectrum_shown() != spectrum {
+            self.as_mut().set_spectrum_shown(spectrum);
+        }
         self.as_mut().sync_panel(false);
         self.sync_logo();
     }
@@ -3166,6 +3174,20 @@ impl qobject::Player {
                     .as_ref()
                     .is_some_and(|chrome| Mode::Window.limits(chrome.skin()).force_height)
                     .to_string(),
+            ),
+            // The skin's spectrum: its highest bar now (M14).
+            (
+                "spectrum",
+                core.chrome
+                    .as_ref()
+                    .map(|chrome| {
+                        chrome
+                            .data
+                            .visual
+                            .iter()
+                            .fold(0.0_f32, |high, level| high.max(*level))
+                    })
+                    .map_or_else(|| "null".to_owned(), |high| format!("{high:.3}")),
             ),
         ];
         let body: Vec<String> = fields

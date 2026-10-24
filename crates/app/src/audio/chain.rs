@@ -1,6 +1,9 @@
 //! RVP's part of mpv's audio filters (M10), built at once from the
 //! settings and the file that plays, in this order, each under its label:
 //!
+//! 0. `@rvpspectrum`: while a skin with a spectrum shows, a tap that
+//!    measures the audio's bands and leaves the audio as it is
+//!    (`crate::spectrum`).
 //! 1. `@rvpdownmix`: the output speakers (`crate::speakers`): PotPlayer's
 //!    mix to the layout with the mixer's levels, stereo spread to the
 //!    centre and surround speakers, the LFE redirection, the matrix
@@ -83,6 +86,8 @@ pub struct Inputs<'a> {
     /// The normalizer's current gain.
     pub gain: f64,
     pub responses: &'a Responses,
+    /// A skin shows the audio's spectrum (`crate::spectrum`).
+    pub spectrum: bool,
 }
 
 /// One of RVP's filters: its label and its `af` entry.
@@ -535,6 +540,9 @@ pub fn stretching_pitch(percent: i32) -> f64 {
 pub fn build(inputs: &Inputs) -> (Vec<Entry>, Vec<Entry>) {
     let channels = output_channels(inputs.speakers, inputs.source);
     let mut front: Vec<Entry> = Vec::new();
+    if inputs.spectrum {
+        front.push((crate::spectrum::LABEL, crate::spectrum::chain_entry()));
+    }
     let mut push = |label: &'static str, graph: Option<String>| {
         if let Some(graph) = graph {
             front.push((label, lavfi(label, &graph)));
@@ -688,6 +696,7 @@ mod tests {
             source,
             gain: 1.0,
             responses,
+            spectrum: false,
         }
     }
 

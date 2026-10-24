@@ -424,6 +424,9 @@ pub struct App {
     pub(crate) skin_info: crate::skins::SkinInfo,
     pub(crate) random_theme: Option<usize>,
     pub(crate) skin_file: Option<crate::skins::SkinFile>,
+    /// The spectrum's reader while a skin with one shows, and its bars.
+    pub(crate) spectrum: Option<crate::spectrum::Control>,
+    pub(crate) spectrum_bars: crate::spectrum::Bars,
     /// "Change logo randomly on each loading": this file's pick.
     pub(crate) random_logo: Option<usize>,
     /// What paused playback for the window (M14's General page): bits of
@@ -540,6 +543,8 @@ impl App {
             skin_info: crate::skins::SkinInfo::default(),
             random_theme: None,
             skin_file: None,
+            spectrum: None,
+            spectrum_bars: crate::spectrum::Bars::default(),
             random_logo: None,
             attention_holds: 0,
             default_values: None,
@@ -1437,13 +1442,20 @@ impl App {
                 .as_ref()
                 .map_or(1.0, crate::normalizer::Control::gain),
             responses: &responses,
+            spectrum: self.spectrum.is_some(),
         };
         let (front, back) = crate::audio::chain::build(&inputs);
         let current = engine.get_text("af").unwrap_or_default();
         let text = crate::audio::chain::assemble(&current, &front, &back);
         if let Some(second) = self.second.as_mut() {
             // The second device: the gain from the main core's normalizer,
-            // and PCM (no AC3 encoding for pass-through).
+            // and PCM (no AC3 encoding for pass-through); the skin's
+            // spectrum reads the main core's.
+            let front: Vec<crate::audio::chain::Entry> = front
+                .iter()
+                .filter(|(label, _)| *label != crate::spectrum::LABEL)
+                .cloned()
+                .collect();
             let back: Vec<crate::audio::chain::Entry> = back
                 .iter()
                 .filter(|(label, _)| *label != crate::audio::chain::AC3)
@@ -1540,6 +1552,40 @@ impl App {
 
     /// RVP's audio filters changed: they are set at once and playback goes
     /// on from here, or near the end of a file they wait for the next one.
+    /// Whether the skin shown has a spectrum (`Visual`): its tap goes into
+    /// the chain and its reader starts, or both go.
+    pub fn set_skin_spectrum(&mut self, engine: &Engine, shown: bool) {
+        if shown == self.spectrum.is_some() {
+            return;
+        }
+        self.spectrum = if shown {
+            crate::spectrum::Control::start(engine)
+                .map_err(|error| eprintln!("rvp: {error}"))
+                .ok()
+        } else {
+            None
+        };
+        self.spectrum_bars.clear();
+        self.audio_chain_changed(engine);
+    }
+
+    /// Whether the skin shown draws the audio's spectrum.
+    #[must_use]
+    pub fn skin_spectrum(&self) -> bool {
+        self.spectrum.is_some()
+    }
+
+    /// The spectrum's bars and peaks now, when they changed.
+    pub fn spectrum_bars(&mut self, now: std::time::Instant) -> Option<(Vec<f32>, Vec<f32>)> {
+        let measured = self.spectrum.as_ref()?.levels(now);
+        self.spectrum_bars.tick(&measured, now).then(|| {
+            (
+                self.spectrum_bars.levels.clone(),
+                self.spectrum_bars.peaks.clone(),
+            )
+        })
+    }
+
     pub(crate) fn audio_chain_changed(&mut self, engine: &Engine) {
         if self.defer_chain_change() {
             return;

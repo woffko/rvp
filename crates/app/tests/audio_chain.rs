@@ -152,6 +152,7 @@ impl<'a> Case<'a> {
             source: &self.source,
             gain: 1.0,
             responses: &self.responses,
+            spectrum: false,
         };
         let (front, back) = build(&inputs);
         assemble("", &front, &back)

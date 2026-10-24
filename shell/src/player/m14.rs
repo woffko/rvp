@@ -162,6 +162,8 @@ impl qobject::Player {
         if let Some(chrome) = core.chrome.as_mut() {
             chrome.set_skin(skin);
         }
+        // A skin with a spectrum puts its tap into the audio chain.
+        core.app.set_skin_spectrum(core.engine, skin.has_visual());
         core.pointer = Pointer::default();
         core.popup = None;
         // The control panel comes back with the new skin when shown.
@@ -468,6 +470,24 @@ impl qobject::Player {
             let video = chrome.video_rect();
             self.set_video_rect(to_window(video));
         }
+    }
+
+    /// The skin's spectrum bars move on: the bands' levels in, the
+    /// `Visual` regions repainted.
+    pub(crate) fn tick_spectrum(mut self: Pin<&mut Self>) {
+        let Some(core) = self.as_mut().core_mut() else {
+            return;
+        };
+        let Some((levels, peaks)) = core.app.spectrum_bars(std::time::Instant::now()) else {
+            return;
+        };
+        let Some(chrome) = core.chrome.as_mut() else {
+            return;
+        };
+        chrome.data.visual = levels;
+        chrome.data.visual_peaks = peaks;
+        let damage = chrome.refresh();
+        self.emit_damage(&damage, false);
     }
 
     /// The bars hide after a while with the pointer resting on them when

@@ -56,6 +56,7 @@ pub mod skins;
 pub mod smoothing;
 pub mod sources;
 pub mod speakers;
+pub mod spectrum;
 pub mod speech;
 pub mod stereo;
 mod storage;

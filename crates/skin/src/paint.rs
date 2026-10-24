@@ -39,6 +39,14 @@
 //!   as tall as the slider: a 1-pixel line per chapter (white) and bookmark
 //!   (light blue), 2-pixel lines for the A-B points (amber), and with both
 //!   points a faint amber band between them.
+//! * A `Visual` (the audio skins' spectrum, M14) draws a bar per
+//!   `BarWidth` plus `BarDistance` of its width, each a column of
+//!   `LineHeight`-pixel lines `LineDistance` apart, lit from the bottom up
+//!   to its band's level, coloured from the atlas pixel at
+//!   `BarStartColorX`/`Y` at the bottom to `BarEndColorX`/`Y` at the top
+//!   (goal P's host capture: PotPlayer's lit lines over the skin's dimmed
+//!   ones); a `PeakHeight` line in `PeakColorX`/`Y` marks each band's
+//!   peak. Bars share the bands evenly, low frequencies on the left.
 //! * An `Image` marked `IsLogo='1'` (the skin's logo in its `<Logo>`
 //!   section, M14) keeps its shape: centred in its place, never larger
 //!   than its picture, smaller when the place is smaller. Other `Image`s
@@ -205,6 +213,7 @@ pub fn paint(skin: &Skin, layout: &Layout<'_>, state: &UiState, data: &DataModel
             Kind::PicLabel => paint_pic_label(&mut list, node, data),
             Kind::Image => paint_image(&mut list, node, data),
             Kind::Slider => paint_slider(&mut list, node, state, data),
+            Kind::Visual => paint_visual(&mut list, skin, node, data),
             Kind::Spacer => {}
         }
     }
@@ -524,6 +533,96 @@ fn fit_logo(place: Rect, width: i32, height: i32) -> Rect {
         w,
         h,
     )
+}
+
+/// A `Visual`: the spectrum's bars, each a column of `LineHeight` lines
+/// `LineDistance` apart, `BarWidth` wide and `BarDistance` apart, lit from
+/// the bottom up to its band's level with colours that run from the atlas
+/// pixel at `BarStartColorX`/`Y` (bottom) to `BarEndColorX`/`Y` (top); a
+/// `PeakHeight` line in `PeakColorX`/`Y` marks each band's peak.
+fn paint_visual(list: &mut DisplayList, skin: &Skin, node: &Node<'_>, data: &DataModel) {
+    if data.visual.is_empty() {
+        return;
+    }
+    let attrs = &node.element.attrs;
+    let rect = node.rect;
+    let bar_width = attrs.int_or("BarWidth", 4).max(1);
+    let bar_gap = attrs.int_or("BarDistance", 1).max(0);
+    let line_height = attrs.int_or("LineHeight", 2).max(1);
+    let line_gap = attrs.int_or("LineDistance", 1).max(0);
+    let peak_height = attrs.int_or("PeakHeight", 0).max(0);
+    let color = |name: &str| {
+        let mut color = skin.atlas_color(
+            node.atlas,
+            attrs.int_or(&format!("{name}ColorX"), 0),
+            attrs.int_or(&format!("{name}ColorY"), 0),
+        );
+        color[3] = 255;
+        color
+    };
+    let (start, end, peak) = (color("BarStart"), color("BarEnd"), color("Peak"));
+    let bars = (rect.w + bar_gap) / (bar_width + bar_gap);
+    let lines = (rect.h + line_gap) / (line_height + line_gap);
+    if bars <= 0 || lines <= 0 {
+        return;
+    }
+    let band = |values: &[f32], bar: i32| -> f32 {
+        // Bars share the bands evenly, low frequencies on the left.
+        let count = i32::try_from(values.len()).unwrap_or(i32::MAX);
+        let index = usize::try_from(bar * count / bars).unwrap_or(0);
+        values.get(index).copied().unwrap_or(0.0).clamp(0.0, 1.0)
+    };
+    let lit_lines = |level: f32| {
+        // At most a few dozen lines: f32 holds them exactly.
+        #[allow(clippy::cast_precision_loss, clippy::cast_possible_truncation)]
+        let count = (level * lines as f32).round() as i32;
+        count.clamp(0, lines)
+    };
+    let line_top = |line: i32| rect.y + rect.h - (line + 1) * line_height - line * line_gap;
+    for bar in 0..bars {
+        let x = rect.x + bar * (bar_width + bar_gap);
+        for line in 0..lit_lines(band(&data.visual, bar)) {
+            let mix = if lines > 1 {
+                f64::from(line) / f64::from(lines - 1)
+            } else {
+                0.0
+            };
+            let channel = |from: u8, to: u8| {
+                // A blend of two bytes stays a byte.
+                #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+                let value =
+                    (f64::from(from) + (f64::from(to) - f64::from(from)) * mix).round() as u8;
+                value
+            };
+            let color = [
+                channel(start[0], end[0]),
+                channel(start[1], end[1]),
+                channel(start[2], end[2]),
+                255,
+            ];
+            let line_rect =
+                Rect::new(x, line_top(line), bar_width, line_height).intersect(&node.clip);
+            if !line_rect.is_empty() {
+                list.ops.push(Op::Fill {
+                    rect: line_rect,
+                    color,
+                });
+            }
+        }
+        if peak_height > 0 && !data.visual_peaks.is_empty() {
+            let top = lit_lines(band(&data.visual_peaks, bar));
+            if top > 0 {
+                let y = line_top(top - 1);
+                let peak_rect = Rect::new(x, y, bar_width, peak_height).intersect(&node.clip);
+                if !peak_rect.is_empty() {
+                    list.ops.push(Op::Fill {
+                        rect: peak_rect,
+                        color: peak,
+                    });
+                }
+            }
+        }
+    }
 }
 
 fn paint_slider(list: &mut DisplayList, node: &Node<'_>, state: &UiState, data: &DataModel) {

@@ -190,7 +190,7 @@ fn dynamic_regions(layout: &Layout<'_>) -> Vec<Rect> {
         .nodes
         .iter()
         .filter(|node| match node.kind {
-            Kind::Button | Kind::Slider | Kind::Label | Kind::PicLabel => true,
+            Kind::Button | Kind::Slider | Kind::Label | Kind::PicLabel | Kind::Visual => true,
             Kind::Image => node.command().is_some(),
             Kind::Static | Kind::Spacer => node.slot() == Some("CMD_PLAY_LIST_ALBUM_TAB"),
         })

@@ -21,6 +21,7 @@ Item {
     property string firstSkin: ""
     property int videoHeight: 0
     property var rememberBefore: true
+    property bool audioChecked: false
     // Where the pointer went over the bars (case 11).
     property real pointerY: 0
 
@@ -79,15 +80,26 @@ Item {
                 firstSkin = s.skin_file
             break
         case 7:
-            // The audio skin when the skin has one (BlackSpace), else the
-            // video skin stays (RVP Default).
-            t.check("m14_audio_skin_for_audio", firstSkin === "AudioSkin.xml"
-                        || (firstSkin === "VideoSkin.xml" && s.skin_id === baseId), shown(s))
-            // No video: a logo shows (RVP's for skins without one of
-            // their own, or BlackSpace's Flash logo).
-            t.check("m14_logo_without_video", player.skin_logo || player.logo_source.startsWith("qrc:"),
-                    "logo " + player.logo_source + " skin " + player.skin_logo)
-            t.next()
+            if (!audioChecked) {
+                audioChecked = true
+                // The audio skin when the skin has one (BlackSpace), else
+                // the video skin stays (RVP Default).
+                t.check("m14_audio_skin_for_audio", firstSkin === "AudioSkin.xml"
+                            || (firstSkin === "VideoSkin.xml" && s.skin_id === baseId), shown(s))
+                // No video: a logo shows (RVP's for skins without one of
+                // their own, or BlackSpace's Flash logo).
+                t.check("m14_logo_without_video", player.skin_logo || player.logo_source.startsWith("qrc:"),
+                        "logo " + player.logo_source + " skin " + player.skin_logo)
+            }
+            // BlackSpace's audio skin draws the spectrum: the tone lights it.
+            if (firstSkin !== "AudioSkin.xml") {
+                t.check("m14_spectrum_moves", true, "SKIPPED: the skin draws no spectrum")
+                t.next()
+            } else {
+                if (t.waitFor("m14_spectrum_moves", () => player.spectrum_shown && s.spectrum > 0.05, 8000,
+                              () => "spectrum " + s.spectrum + " shown " + player.spectrum_shown))
+                    Tools.grab(t.outDir, "spectrum")
+            }
             break
         case 8:
             if (firstSkin !== "AudioSkin.xml" || !s.skin_forces_height) {

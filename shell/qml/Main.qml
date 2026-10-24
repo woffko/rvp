@@ -343,6 +343,15 @@ Window {
             root.setWindowGeometry(x, y, root.width, root.height, "snap")
     }
 
+    // The skin's spectrum (M14): 25 times a second while it shows.
+    Timer {
+        interval: 40
+        repeat: true
+        running: player.spectrum_shown && root.visibility !== Window.Minimized
+            && root.visibility !== Window.Hidden
+        onTriggered: player.tick_spectrum()
+    }
+
     // Saves the normal geometry shortly after it settles.
     Timer {
         id: geometryTimer

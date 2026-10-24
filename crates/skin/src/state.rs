@@ -171,6 +171,11 @@ pub struct DataModel {
     pub playlist: Playlist,
     /// Marks on the seek bar: chapters, bookmarks and the A-B points.
     pub marks: Vec<Mark>,
+    /// The audio's spectrum for `Visual` elements: each band's level from
+    /// 0 to 1, low to high frequencies (empty: no bar lit), and the peaks
+    /// the bars fall from.
+    pub visual: Vec<f32>,
+    pub visual_peaks: Vec<f32>,
 }
 
 impl DataModel {

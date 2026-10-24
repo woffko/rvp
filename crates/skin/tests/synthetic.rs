@@ -128,6 +128,11 @@ const VIDEO_SKIN: &str = "<?XML version='1.0' ?>
 #else
 <Marker Value='other' />
 #endif
+<VisualSkinArea Image='Atlas.png'>
+<Control>
+\t<Visual Left='0' Top='0' Width='13' Height='8' BarWidth='3' BarDistance='2' LineDistance='1' LineHeight='1' BarStartColorX='0' BarStartColorY='0' BarEndColorX='4' BarEndColorY='0' PeakHeight='1' PeakColorX='26' PeakColorY='0' RefreshTime='20' />
+</Control>
+</VisualSkinArea>
 <ColorTheme>
  <ColorThemeRGB Name='Warm' Red='40' Green='-20' Blue='-20'/>
  <ColorThemeYUV Name='Blue' Hue='64' Sat='60'/>
@@ -818,4 +823,40 @@ fn popup_window_buttons_hide_and_skin_files_are_linked() {
         Some(Hit::Control { file, .. }) => assert_eq!(file, Some("Mini.xml")),
         other => panic!("unexpected hit {other:?}"),
     }
+}
+
+#[test]
+fn visual_bars_light_from_the_bottom_with_the_skins_colours() {
+    let skin = skin();
+    let state = UiState::default();
+    let placed = layout(&skin, "VisualSkinArea", 13, 8, &state).expect("layout");
+    let draw = |data: &DataModel| {
+        rasterize(
+            &paint(&skin, &placed, &state, data),
+            &skin,
+            &mut Fonts::new(Vec::new()),
+        )
+    };
+    // Nothing lit without levels.
+    assert_eq!(draw(&DataModel::default()).pixel(0, 7), [0, 0, 0, 0]);
+    let data = DataModel {
+        visual: vec![1.0, 0.5, 0.0],
+        visual_peaks: vec![1.0, 0.75, 0.25],
+        ..DataModel::default()
+    };
+    let image = draw(&data);
+    // Three bars of 3 pixels 2 apart; four 1-pixel lines 1 apart.
+    assert_eq!(image.pixel(0, 7), TITLE_LEFT, "the bottom line: BarStart");
+    assert_eq!(image.pixel(0, 3), [67, 133, 0, 255], "two thirds up");
+    assert_eq!(
+        image.pixel(0, 1),
+        TITLE_RIGHT,
+        "the first bar's peak at the top"
+    );
+    assert_eq!(image.pixel(5, 5), [133, 67, 0, 255], "half lit: two lines");
+    assert_eq!(image.pixel(5, 3), TITLE_RIGHT, "its peak, a line above");
+    assert_eq!(image.pixel(5, 6), [0, 0, 0, 0], "between lines");
+    assert_eq!(image.pixel(10, 7), TITLE_RIGHT, "an unlit bar's peak");
+    assert_eq!(image.pixel(10, 5), [0, 0, 0, 0]);
+    assert_eq!(image.pixel(3, 7), [0, 0, 0, 0], "between bars");
 }
