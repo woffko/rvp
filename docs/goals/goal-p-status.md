@@ -141,15 +141,16 @@ Daum-era ones.
 - Headless tests on Windows: `settings` (6), `translations` (3), `menus`
   (8) and `synthetic` (19).
 
-The earlier milestones' checks: on bab4d16's build, with the machine
-idle, `m7-all.ps1`'s functional self-tests with RVP Default and
-BlackSpace passed all 178 checks and `m11-all.ps1` its 47 (with its
-headless tests on Windows' FFmpeg). On the final build `m7-all.ps1`
-passed 177 of 178 while another project's build loaded the machine: the
-one timeout (`svp_diagnostic_shows`: the 60 s clip ended first) came
-the same way on bab4d16's build under the same load, and earlier runs
-under that load timed out in other steps on both builds. These steps
-are sensitive to the host's load, not to M14's changes.
+The earlier milestones' checks pass on the final build: `m7-all.ps1`'s
+functional self-tests with RVP Default and BlackSpace (178 checks) and
+`m11-all.ps1` (47 checks, its headless tests on Windows' FFmpeg). The
+coverage tests ran on the VM too (`tests/coverage.rs`, 12, and the
+library's preferences checks, 2), with the reports and BlackSpace in
+place. While another project's build loaded the PC, m7-all's filter and
+SVP steps had timed out on this and on bab4d16's build alike: on a slow
+machine the 60 s clip reached its end, where filter changes wait for the
+next file. The self-test now seeks back near the start before those
+steps (`room()` in `Main.qml`), and passed all 178 under the same load.
 
 ## The host session (2026-10-22 and 23, with the owner's permission)
 

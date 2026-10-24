@@ -1581,6 +1581,14 @@ Window {
             step += 1
             stepStarted = Date.now()
         }
+        // Seeks back near the start once the file is past 60 % of its
+        // length: filter and SVP steps that met the file's end on a loaded
+        // machine waited for the next file and timed out (goal P).
+        function room() {
+            const s = status()
+            if (s.duration > 0 && s.time > 0.6 * s.duration)
+                player.seek_fraction(0.05)
+        }
         // Waits for `condition`; on timeout records a failure. Returns true
         // when the step is over.
         function waitFor(name, condition, timeoutMs, detail) {
@@ -2590,8 +2598,10 @@ Window {
             break
         case 303:
             if (t.waitFor("panel_shows_video_page", () => s.panel_page === 1, 2000,
-                          () => "page " + s.panel_page))
+                          () => "page " + s.panel_page)) {
+                t.room()
                 root.panelSlide("CMD_COLOR_OFFSET", 0.75, false)
+            }
             break
         case 304: {
             t.waitFor("color_slider_applies", () => {
@@ -2693,6 +2703,7 @@ Window {
             // SVP mode on an endpoint of the test's own: SVP does not attach
             // (no Manager on the test machines), and RVP says why.
             const endpoint = Qt.platform.os === "windows" ? "rvp-selftest-svp" : t.outDir + "/svp.sock"
+            t.room()
             const result = JSON.parse(player.set_setting("ipc-server", JSON.stringify(endpoint)))
             t.check("svp_mode_on", !result.error && s.loaded, endpoint + " " + (result.error || ""))
             t.next()
@@ -2726,6 +2737,7 @@ Window {
                 player.mouse_press(cx, cy, Qt.LeftButton, 0)
                 player.mouse_release(cx, cy, Qt.LeftButton)
             }
+            t.room()
             player.key(Qt.Key_C, Qt.ShiftModifier)
             t.next()
             break
