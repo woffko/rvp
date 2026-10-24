@@ -130,9 +130,11 @@ impl Damage {
 
 /// The skin state of one window.
 pub struct Chrome {
-    /// Over the video, the video keeps to the bars' video slot (Skins >
-    /// "Auto resize video depending on fullscreen pop-ups" while they show).
-    video_in_slot: bool,
+    /// In fullscreen, the bar the video makes room for while it shows
+    /// (Skins > "Auto resize video depending on fullscreen pop-ups"):
+    /// PotPlayer shows one bar at a time, and the video takes the screen
+    /// but that bar (goal P's host session).
+    video_room: Option<Rect>,
     skin: &'static Skin,
     mode: Mode,
     width: i32,
@@ -213,7 +215,7 @@ impl Chrome {
         Self {
             skin,
             mode: Mode::Window,
-            video_in_slot: false,
+            video_room: None,
             width: 0,
             height: 0,
             layout: None,
@@ -231,11 +233,11 @@ impl Chrome {
         self.skin
     }
 
-    /// Keeps the video in the bars' video slot over the video (`true`) or
-    /// gives it the whole window; true when that changed.
-    pub fn set_video_in_slot(&mut self, in_slot: bool) -> bool {
-        let changed = self.video_in_slot != in_slot;
-        self.video_in_slot = in_slot;
+    /// Makes the video leave room for `bar` in fullscreen (`None`: the
+    /// video takes the whole screen); true when that changed.
+    pub fn set_video_room(&mut self, bar: Option<Rect>) -> bool {
+        let changed = self.video_room != bar;
+        self.video_room = bar;
         changed
     }
 
@@ -385,11 +387,11 @@ impl Chrome {
             (Mode::Window, Some(placed)) => placed
                 .slot("CMD_VIDEO_WINDOW")
                 .unwrap_or_else(|| Rect::new(0, 0, self.width, self.height)),
-            // The bars' video slot while they show and the video makes
-            // room for them (M14).
-            (Mode::Fullscreen, Some(placed)) if self.video_in_slot => placed
-                .slot("CMD_VIDEO_WINDOW")
-                .unwrap_or_else(|| Rect::new(0, 0, self.width, self.height)),
+            // The screen but the bar that shows, while the video makes room
+            // for it (M14).
+            (Mode::Fullscreen, Some(_)) if let Some(bar) = self.video_room => {
+                room_beside(bar, self.width, self.height)
+            }
             _ => Rect::new(0, 0, self.width, self.height),
         }
     }
@@ -472,6 +474,18 @@ impl Chrome {
     }
 }
 
+/// The part of a `width` x `height` screen beside `bar`: below a bar in
+/// the upper half, above one in the lower half.
+#[must_use]
+pub fn room_beside(bar: Rect, width: i32, height: i32) -> Rect {
+    if bar.y + bar.h / 2 < height / 2 {
+        let top = (bar.y + bar.h).clamp(0, height);
+        Rect::new(0, top, width, height - top)
+    } else {
+        Rect::new(0, 0, width, bar.y.clamp(0, height))
+    }
+}
+
 /// The largest window size within `window` whose video area (the window
 /// minus `chrome`) has the video's aspect ratio (R1 finding 1: PotPlayer
 /// keeps the window at the video's shape while a video plays).
@@ -525,6 +539,20 @@ mod tests {
         assert_eq!(
             layered(&[Rect::new(0, 0, 20, 20), Rect::new(2, 2, 3, 3)]),
             vec![Rect::new(0, 0, 20, 20), Rect::new(2, 2, 3, 3)]
+        );
+    }
+
+    #[test]
+    fn the_video_makes_room_for_the_bar_that_shows() {
+        // BlackSpace's control bar at the bottom of 2560x1440, its title bar
+        // at the top.
+        assert_eq!(
+            room_beside(Rect::new(0, 1369, 2560, 71), 2560, 1440),
+            Rect::new(0, 0, 2560, 1369)
+        );
+        assert_eq!(
+            room_beside(Rect::new(20, 0, 2520, 32), 2560, 1440),
+            Rect::new(0, 32, 2560, 1408)
         );
     }
 

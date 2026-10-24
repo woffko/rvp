@@ -34,6 +34,8 @@ pub(super) struct Look {
     /// When the pointer last moved while the bars show over the video
     /// (Skins > On Screen Control's auto hide).
     pub(super) bars_moved: Option<std::time::Instant>,
+    /// The bar over the video the pointer last showed (chrome pixels).
+    pub(super) bar: Option<rvp_skin::Rect>,
     /// "Automatically run at system startup" as last applied (or found at
     /// start).
     pub(super) startup: Option<bool>,
@@ -445,7 +447,7 @@ impl qobject::Player {
 
     /// Shows or hides the bars over the video; in fullscreen with "Auto
     /// resize video depending on fullscreen pop-ups" the video makes room
-    /// for them while they show.
+    /// for the bar that shows.
     pub(super) fn show_bars(mut self: Pin<&mut Self>, shown: bool) {
         if *self.chrome_shown() != shown {
             self.as_mut().set_chrome_shown(shown);
@@ -454,11 +456,15 @@ impl qobject::Player {
         let Some(core) = self.as_mut().core_mut() else {
             return;
         };
-        let room = shown && fullscreen && core.app.settings.skins.fullscreen_resize;
+        let room = if shown && fullscreen && core.app.settings.skins.fullscreen_resize {
+            core.look.bar
+        } else {
+            None
+        };
         let Some(chrome) = core.chrome.as_mut() else {
             return;
         };
-        if chrome.set_video_in_slot(room) {
+        if chrome.set_video_room(room) {
             let video = chrome.video_rect();
             self.set_video_rect(to_window(video));
         }

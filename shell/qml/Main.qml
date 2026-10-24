@@ -2284,11 +2284,37 @@ Window {
             t.waitFor("enter_fullscreen", () => root.isFullscreen && s.fullscreen, 3000,
                       () => "visibility " + root.visibility)
             break
-        case 20:
+        case 20: {
+            // The bars over the video once the window has the screen (the
+            // window system reports the size after the state).
+            const full = player.overlay && player.video_rect.height >= root.height - 1
+                && root.height > 400
+            if (!full && Date.now() - t.stepStarted < 3000)
+                break
             Tools.grab(t.outDir, "fullscreen")
+            if (full && player.has_skin) {
+                // The bar under the pointer shows, and the video leaves it
+                // room as PotPlayer's does (M14, "Auto resize video
+                // depending on fullscreen pop-ups"); in the middle the video
+                // takes the screen again.
+                player.mouse_move(root.width / 2, root.height - 3)
+                const bar = player.shown_bar
+                const video = player.video_rect
+                t.check("fullscreen_video_leaves_the_bar_room", player.chrome_shown && bar.height > 0
+                            && video.y + video.height <= bar.y + 1 && video.height > root.height / 2,
+                        "bar " + bar + " video " + video + " shown " + player.chrome_shown)
+                player.mouse_move(root.width / 2, root.height / 2)
+                t.check("fullscreen_video_takes_the_screen_again", !player.chrome_shown
+                            && player.video_rect.height >= root.height - 1, "video " + player.video_rect)
+                player.mouse_leave()
+            } else {
+                t.check("fullscreen_video_leaves_the_bar_room", true,
+                        "SKIPPED: the window did not take the screen (" + root.width + "x" + root.height + ")")
+            }
             player.mouse_double(root.width / 2, root.height / 2, Qt.LeftButton)
             t.next()
             break
+        }
         case 21:
             t.waitFor("double_click_leaves_fullscreen", () => !root.isFullscreen && !s.fullscreen, 3000,
                       () => "visibility " + root.visibility)

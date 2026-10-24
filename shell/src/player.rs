@@ -1893,6 +1893,9 @@ impl qobject::Player {
             if let Some(bar) = bar
                 && !dragging
             {
+                if let Some(core) = self.as_mut().core_mut() {
+                    core.look.bar = Some(bar);
+                }
                 self.as_mut().set_shown_bar(to_window(bar));
             }
             self.as_mut().show_bars(osc && (bar.is_some() || dragging));
