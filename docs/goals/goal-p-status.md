@@ -15,7 +15,7 @@ reported no findings from goal O's build, so nothing came before M14.
 | Part | Result | Where |
 |------|--------|-------|
 | Keyboard and Mouse | PotPlayer's Keyboard and Mouse pages: default hotkeys off (the user's own keys stay), the keyboard's media, volume and browser keys, the media keys while another window has the keyboard (Windows' hotkeys), the left click in the video only, moving the window by its title bar only, Alt, Ctrl and Shift drags that pan, zoom and stretch, Ctrl+Alt drags that move the subtitles, and the wheel with X1 or X2 held. | `crates/app/src/input.rs`, `pointer.rs` |
-| Skins | The Skins menu lists RVP Default and the `.dsf` skins of RVP's skins folder, the chosen skin's folder and PotPlayer's, and switches at once. Files without video show the skin's audio skin (`AudioSkin.xml`), whose own button shows its Mini Audio Mode (`CMD_LOAD_SKIN_XML`); each skin mode can keep its own window; the video skin at start and locking the mode. Colour themes: the skin's `ColorTheme` list, or a custom HSB or RGB theme (Customize...). The window's and the control panel's opacity. Skin Settings. | `crates/app/src/skins.rs`, `ColorTheme.qml` |
+| Skins | The Skins menu lists RVP Default and the `.dsf` skins of RVP's skins folder, the chosen skin's folder and PotPlayer's, and switches at once. Files without video show the skin's audio skin (`AudioSkin.xml`), whose own button shows its Mini Audio Mode (`CMD_LOAD_SKIN_XML`) and whose spectrum moves with the sound (the `Visual` element: 16 bands measured in mpv's filter chain, `crate::spectrum`); each skin mode can keep its own window; the video skin at start and locking the mode. Colour themes: the skin's `ColorTheme` list, or a custom HSB or RGB theme (Customize...). The window's and the control panel's opacity. Skin Settings. | `crates/app/src/skins.rs`, `ColorTheme.qml` |
 | Logos and the on-screen control | The skin's `<Logo>`, RVP's, or a picture of the logos folder, while idle and while a file starts. The bars over the video (`MainSkinAreaOscInside`) can be turned off, made translucent and hidden after a while; "Auto hide main skin" (the skins' Floating Window button) shows the window that way while a video plays; in fullscreen the video can make room for the bars. | `logos.rs`, `skins.rs`, `crates/skin` |
 | Context menu | Context Menu Design: RVP's whole menu or a menu file in PotPlayer's format (RVP's menus folder, and PotPlayer's on Windows, read at run time). Context Menu Style: RVP's look, the system's menus, or the skin's first or second style, dark colours with a dark system, a transparency and a size; Context Menu Items hides top-level items. Zoom Skinned Windows. | `menu_design.rs`, `Menus.qml` |
 | OSD and info | RVP's notices: on or off, alignment, margins, fonts, sized with the video, drawn in the picture. Scroll Lock: the misc info line (time, percent, frame, clock, playlist position, file, chapter, battery). Shift+Tab: the short info notice. Ctrl+F1: Playback/System Info (file, video, audio, rendering, system), copied to the clipboard. | `osd.rs`, `SystemInfo.qml` |
@@ -108,8 +108,10 @@ Daum-era ones.
 - `crates/app/src/preferences.rs`: Reset Page puts back only the page's
   options.
 - `crates/skin/tests/synthetic.rs`: logos, menu files and styles, the
-  touch layout, and the colour themes checked pixel by pixel with an
-  excluded area.
+  touch layout, the colour themes checked pixel by pixel with an
+  excluded area, and the spectrum's bars, colours and peaks.
+- `crates/app/tests/spectrum_live.rs`: a 1 kHz tone lights its band and
+  leaves the far ones dark, on a headless player.
 - `crates/look/tests/default_skin.rs`: golden renders of RVP Default in
   an HSB and an RGB theme (`tests/golden/theme-*.png`). BlackSpace's
   renders stay local.
@@ -134,15 +136,16 @@ Daum-era ones.
 
 ## Checks on the Windows VM
 
-`tools/windows-vm/m14-all.ps1` on the final build (990c9d5): 103 checks
-pass.
+`tools/windows-vm/m14-all.ps1` on the final build (27b10e4): 106 checks
+pass, the spectrum with BlackSpace's audio skin and on Windows' FFmpeg
+among them.
 
 - The M14 self-test with RVP Default and with BlackSpace: every check
   passes. Windows' voices are listed (David and Zira), the Run key is
   written and removed, the 77 file types are registered and removed.
 - The registry after the runs: no Run value and no RVP type left.
 - Headless tests on Windows: `settings` (6), `translations` (3), `menus`
-  (8) and `synthetic` (19).
+  (8), `spectrum` (1) and `synthetic` (20).
 
 The earlier milestones' checks pass on the final build: `m7-all.ps1`'s
 functional self-tests with RVP Default and BlackSpace (182 checks, with
@@ -222,7 +225,13 @@ run on the 96x72 clip); the later runs had no IPC server.
    shows only the one under the pointer, and RVP kept the window's size
    on the audio skin where PotPlayer shrinks it (both fixed, see above).
    The first run lost RVP's captures to the terminal over its window; the
-   tool now keeps the captured window on top. The audio skin showed a
+   tool now keeps the captured window on top.
+9. The owner's review of the comparison: part of the control bar was
+   missing in fullscreen (the video now makes room for the bar), and
+   PotPlayer's audio skin animates the sound in bars where RVP's stood
+   still (the `Visual` element is now drawn, from 16 bands mpv's filter
+   chain measures; one `bandpass` per band leaked a tone into all of
+   them, three in a row do not). The audio skin showed a
    "screen partition" button of Daum's pop-up windows that PotPlayer
    hides (hidden now), and a Mini Audio Mode button the coverage reports
    had not seen, as they read only `VideoSkin.xml` (they read the audio
