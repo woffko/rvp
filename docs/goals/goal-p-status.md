@@ -15,7 +15,7 @@ reported no findings from goal O's build, so nothing came before M14.
 | Part | Result | Where |
 |------|--------|-------|
 | Keyboard and Mouse | PotPlayer's Keyboard and Mouse pages: default hotkeys off (the user's own keys stay), the keyboard's media, volume and browser keys, the media keys while another window has the keyboard (Windows' hotkeys), the left click in the video only, moving the window by its title bar only, Alt, Ctrl and Shift drags that pan, zoom and stretch, Ctrl+Alt drags that move the subtitles, and the wheel with X1 or X2 held. | `crates/app/src/input.rs`, `pointer.rs` |
-| Skins | The Skins menu lists RVP Default and the `.dsf` skins of RVP's skins folder, the chosen skin's folder and PotPlayer's, and switches at once. Files without video show the skin's audio skin (`AudioSkin.xml`); each skin mode can keep its own window; the video skin at start and locking the mode. Colour themes: the skin's `ColorTheme` list, or a custom HSB or RGB theme (Customize...). The window's and the control panel's opacity. Skin Settings. | `crates/app/src/skins.rs`, `ColorTheme.qml` |
+| Skins | The Skins menu lists RVP Default and the `.dsf` skins of RVP's skins folder, the chosen skin's folder and PotPlayer's, and switches at once. Files without video show the skin's audio skin (`AudioSkin.xml`), whose own button shows its Mini Audio Mode (`CMD_LOAD_SKIN_XML`); each skin mode can keep its own window; the video skin at start and locking the mode. Colour themes: the skin's `ColorTheme` list, or a custom HSB or RGB theme (Customize...). The window's and the control panel's opacity. Skin Settings. | `crates/app/src/skins.rs`, `ColorTheme.qml` |
 | Logos and the on-screen control | The skin's `<Logo>`, RVP's, or a picture of the logos folder, while idle and while a file starts. The bars over the video (`MainSkinAreaOscInside`) can be turned off, made translucent and hidden after a while; "Auto hide main skin" (the skins' Floating Window button) shows the window that way while a video plays; in fullscreen the video can make room for the bars. | `logos.rs`, `skins.rs`, `crates/skin` |
 | Context menu | Context Menu Design: RVP's whole menu or a menu file in PotPlayer's format (RVP's menus folder, and PotPlayer's on Windows, read at run time). Context Menu Style: RVP's look, the system's menus, or the skin's first or second style, dark colours with a dark system, a transparency and a size; Context Menu Items hides top-level items. Zoom Skinned Windows. | `menu_design.rs`, `Menus.qml` |
 | OSD and info | RVP's notices: on or off, alignment, margins, fonts, sized with the video, drawn in the picture. Scroll Lock: the misc info line (time, percent, frame, clock, playlist position, file, chapter, battery). Shift+Tab: the short info notice. Ctrl+F1: Playback/System Info (file, video, audio, rendering, system), copied to the clipboard. | `osd.rs`, `SystemInfo.qml` |
@@ -38,7 +38,7 @@ that says "not in RVP yet", "planned in M14" or "(goal P)".
 | Context menu items with a command (672) | 522 carried out | 541 carried out, 131 with a reason |
 | Playlist menu (54) | 53 | 54 |
 | Live menu's run-time commands (720) | 101 carried out, 421 in RVP's lists, 198 not | 148 carried out, 481 in RVP's lists, 91 with a reason |
-| BlackSpace's live commands (257) | 91 not carried out | 76: Daum's broadcast and chat (54), the broadcasting capture areas (21), the subtitle font menu (a dialog in RVP) |
+| BlackSpace's live commands (267 with its audio skin and Mini Audio Mode, 257 before) | 91 not carried out | 78: Daum's broadcast and chat (55), the broadcasting capture areas (21), the subtitle font menu (a dialog in RVP), the audio skin's cover picture (mpv shows it as video) |
 | RVP Default's commands (180) | 16 not carried out | 1 (the subtitle font is a dialog, not a menu) |
 
 The reasons that stay:
@@ -53,6 +53,50 @@ The reasons that stay:
 - The built-in Korean interface and PotPlayer's other language files.
 - DVD and Blu-ray menus: goal R.
 - Online subtitles: deferred by the owner.
+
+## Other skins
+
+The owner named no other skin, so RVP was checked with every skin of
+PotPlayer's Skins folder on the host (the user's files, read in place):
+`cargo run --release -p rvp-app --example skin_coverage -- OUT SKIN.dsf...`
+loads each one, lays out and draws its video skin, its bars over the
+video and its audio skin at 1280x720, and sorts every command it names,
+its audio skin's and those of the files its buttons show included.
+The reports and renders stay in `~/rvp-reference/m14/skins`. All
+23 skins load and draw. Most of what the large skins lack is Daum's
+broadcast, chat, video and cast services and the broadcasting capture
+areas; the commands other skins name for things RVP has (the playlist's
+buttons, colour steps, repeat, shuffle, on top, frame steps, flips,
+denoise, the volume method, the normalizer, menus, the duration and file
+type fields) now reach RVP's actions. 47 command names stay unknown
+(R1 did not record what they do), at most 11 in any skin outside the
+Daum-era ones.
+
+| Skin | Commands | Carried out or shown | Not | Areas that draw |
+|------|----------|----------------------|-----|-----------------|
+| Bhargavi | 123 | 112 | 11 | video, audio |
+| BlackBox2_en | 281 | 194 | 87 | video, over the video, audio |
+| BlackBox3_en | 281 | 194 | 87 | video, over the video, audio |
+| BlackBox_en | 268 | 185 | 83 | video, over the video, audio |
+| BlackSpace_en | 267 | 189 | 78 | video, over the video, audio |
+| Default | 187 | 101 | 86 | video, over the video, audio |
+| Olddefault | 121 | 119 | 2 | video |
+| TabList | 123 | 39 | 84 | video, audio |
+| WindowFrame | 187 | 101 | 86 | video, over the video, audio |
+| fl2_en | 68 | 67 | 1 | video |
+| gom_en | 75 | 71 | 4 | video |
+| kmp1_en | 68 | 65 | 3 | video, audio |
+| kmp2_en | 99 | 88 | 11 | video, audio |
+| original_en | 177 | 93 | 84 | video, over the video, audio |
+| original_new_en | 176 | 93 | 83 | video, over the video, audio |
+| pot_en | 47 | 47 | 0 | video |
+| qqblack_en | 85 | 81 | 4 | video, audio |
+| qqblue_en | 89 | 79 | 10 | video, audio |
+| tmt3_en | 88 | 84 | 4 | video |
+| tmt3_en_erpy-meu-mix | 70 | 68 | 2 | video |
+| vlc_en | 65 | 61 | 4 | video |
+| zoom5_en | 61 | 58 | 3 | video |
+| zoom6_en | 79 | 74 | 5 | video |
 
 ## Tests
 
@@ -88,19 +132,24 @@ The reasons that stay:
 
 ## Checks on the Windows VM
 
-`tools/windows-vm/m14-all.ps1` on the final build: 102 checks pass.
+`tools/windows-vm/m14-all.ps1` on the final build: 103 checks pass.
 
 - The M14 self-test with RVP Default and with BlackSpace: every check
   passes. Windows' voices are listed (David and Zira), the Run key is
   written and removed, the 77 file types are registered and removed.
 - The registry after the runs: no Run value and no RVP type left.
 - Headless tests on Windows: `settings` (6), `translations` (3), `menus`
-  (8) and `synthetic` (18).
+  (8) and `synthetic` (19).
 
-The earlier milestones' checks on the same build pass too:
-`m7-all.ps1`'s functional self-tests with RVP Default and BlackSpace
-(178 checks) and `m11-all.ps1` (47 checks, its headless tests with
-Windows' FFmpeg).
+The earlier milestones' checks: on bab4d16's build, with the machine
+idle, `m7-all.ps1`'s functional self-tests with RVP Default and
+BlackSpace passed all 178 checks and `m11-all.ps1` its 47 (with its
+headless tests on Windows' FFmpeg). On the final build `m7-all.ps1`
+passed 177 of 178 while another project's build loaded the machine: the
+one timeout (`svp_diagnostic_shows`: the 60 s clip ended first) came
+the same way on bab4d16's build under the same load, and earlier runs
+under that load timed out in other steps on both builds. These steps
+are sensitive to the host's load, not to M14's changes.
 
 ## The host session (2026-10-22 and 23, with the owner's permission)
 
@@ -115,11 +164,14 @@ under `Settings`) were deleted afterwards, with the owner's permission.
 The captures are in `~/rvp-reference/m14` (never committed: they
 show the owner's PotPlayer playlist).
 
-There were three runs. In the first, the terminal that ran the tool
+There were four runs. In the first, the terminal that ran the tool
 covered RVP's window, so RVP's captures and its double click were lost;
 the tool now keeps each captured window on top, and RVP ran again alone.
 A third, PotPlayer-only run captured fullscreen with the pointer at the
-top and resting in the middle.
+top and resting in the middle. The fourth captured RVP again after the
+fixes below, with the same steps. The owner can see both players side
+by side in `C:\Users\<user>\rvp-test\m14-host\compare\index.html`
+(local, as are its pictures).
 
 | Mode | PotPlayer | RVP before | RVP now |
 |------|-----------|------------|---------|
@@ -128,11 +180,13 @@ top and resting in the middle.
 | Fullscreen, pointer at the bottom | the control bar only | the control bar and the title bar | the control bar only |
 | Fullscreen, pointer at the top | the title bar only | - | the title bar only |
 | Fullscreen, pointer resting in the middle | no bar | - | no bar |
-| Audio file | the audio skin, the window shrinks to 370x186 | the audio skin in a 1126x720 window | shrinks to 360x186 |
+| Audio file | the audio skin, the window shrinks to 370x186 | the audio skin in a 1126x720 window | shrinks to 360x186; Daum's pop-up window button hidden (after the last capture) |
 
-Two fixes came from it: over the video only the bar under the pointer
-shows (`Player.shown_bar`), and "Keep the window's size while switching
-between skin modes" is now off by default, as PotPlayer behaves. SVP
+The fixes that came from it: over the video only the bar under the
+pointer shows (`Player.shown_bar`); "Keep the window's size while
+switching between skin modes" is now off by default, as PotPlayer
+behaves; the audio skin's button of Daum's pop-up windows is hidden;
+and its Mini Audio Mode button works. SVP
 attached to the first run's RVP through `mpvpipe` (its filter does not
 run on the 96x72 clip); the later runs had no IPC server.
 
@@ -158,7 +212,11 @@ run on the 96x72 clip); the later runs had no IPC server.
    shows only the one under the pointer, and RVP kept the window's size
    on the audio skin where PotPlayer shrinks it (both fixed, see above).
    The first run lost RVP's captures to the terminal over its window; the
-   tool now keeps the captured window on top.
+   tool now keeps the captured window on top. The audio skin showed a
+   "screen partition" button of Daum's pop-up windows that PotPlayer
+   hides (hidden now), and a Mini Audio Mode button the coverage reports
+   had not seen, as they read only `VideoSkin.xml` (they read the audio
+   skin and linked files now, and the button works).
 
 ## Differences from PotPlayer
 
@@ -223,17 +281,19 @@ tiny and base models from rvp-o):
 
 ## CI
 
-GitHub CI passed for 25eae86 (f3a0a29 to 25eae86, run 39677126908) and
-for bab4d16 (2551506 to bab4d16, run 39893261483: the checks on Ubuntu
-and Windows, cargo deny, both packages, and the artifacts' pruning).
-This file's commit follows them.
+GitHub CI passed for 25eae86 (f3a0a29 to 25eae86, run 39677126908), for
+bab4d16 (2551506 to bab4d16, run 39893261483), for 73e57f5 (run
+39895054571) and for c31bd4c (6fed569 to c31bd4c, run 40067895006): the
+checks on Ubuntu and Windows (the coverage tests included), cargo deny,
+both packages and the artifacts' pruning. This file's commit follows
+them.
 
 ## Open
 
 - Nothing of M14 is open.
-- Other `.dsf` skins: the owner named none. RVP lists and loads the 23
-  skins of PotPlayer's Skins folder; a coverage report for any of them
-  is one test run away (`RVP_TEST_SKIN`), kept local like BlackSpace's.
+- Other `.dsf` skins: the owner named none; PotPlayer's 23 were checked
+  (see "Other skins"). A skin the owner names later is one run of
+  `skin_coverage` away.
 - SVP with `rvp-p` on a real video was not part of the session (the
   first run's SVP attached to the 96x72 clip, where its filter does not
   run); the owner's tries will show it.
