@@ -293,10 +293,14 @@ tiny and base models from rvp-o):
 
 GitHub CI passed for 25eae86 (f3a0a29 to 25eae86, run 39677126908), for
 bab4d16 (2551506 to bab4d16, run 39893261483), for 73e57f5 (run
-39895054571) and for c31bd4c (6fed569 to c31bd4c, run 40067895006): the
-checks on Ubuntu and Windows (the coverage tests included), cargo deny,
-both packages and the artifacts' pruning. This file's commit follows
-them.
+39895054571), for c31bd4c (6fed569 to c31bd4c, run 40067895006), for
+f36f4fe (run 40070570660; its first try failed in `package-windows`'s
+media controls check on the hosted runner, the first file still opening
+after 30 s as in goal O, and passed when run again), for 48e8c64 (run
+40077168264) and for 1d84042 (990c9d5 and 1d84042, run 40111732264):
+the checks on Ubuntu and Windows (the coverage tests included), cargo
+deny, both packages and the artifacts' pruning. This file's commit
+follows them.
 
 ## Open
 
