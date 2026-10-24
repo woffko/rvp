@@ -123,7 +123,9 @@ Daum-era ones.
   loading and fitting the settings pages, the search and Reset Page, the
   entries' thumbnail images, and on Windows with `--registry-check` the
   Run key and the file types.
-- `rvp --selftest` (87 checks) passes in English and in Russian;
+- `rvp --selftest` (88 checks: in fullscreen the video leaves the shown
+  bar room, checked where the window takes the screen, so on Windows;
+  Xvfb has no window manager) passes in English and in Russian;
   `--selftest=upright` passes with BlackSpace. With RVP Default its
   picture check sees a black grab in WSL's Xvfb, as it already did at
   goal O's last commit (checked on a build of it); the Ubuntu VM is where
@@ -132,7 +134,8 @@ Daum-era ones.
 
 ## Checks on the Windows VM
 
-`tools/windows-vm/m14-all.ps1` on the final build: 103 checks pass.
+`tools/windows-vm/m14-all.ps1` on the final build (990c9d5): 103 checks
+pass.
 
 - The M14 self-test with RVP Default and with BlackSpace: every check
   passes. Windows' voices are listed (David and Zira), the Run key is
@@ -142,7 +145,8 @@ Daum-era ones.
   (8) and `synthetic` (19).
 
 The earlier milestones' checks pass on the final build: `m7-all.ps1`'s
-functional self-tests with RVP Default and BlackSpace (178 checks) and
+functional self-tests with RVP Default and BlackSpace (182 checks, with
+the video's room for the bar in fullscreen) and
 `m11-all.ps1` (47 checks, its headless tests on Windows' FFmpeg). The
 coverage tests ran on the VM too (`tests/coverage.rs`, 12, and the
 library's preferences checks, 2), with the reports and BlackSpace in
@@ -165,28 +169,33 @@ under `Settings`) were deleted afterwards, with the owner's permission.
 The captures are in `~/rvp-reference/m14` (never committed: they
 show the owner's PotPlayer playlist).
 
-There were four runs. In the first, the terminal that ran the tool
+There were five runs. In the first, the terminal that ran the tool
 covered RVP's window, so RVP's captures and its double click were lost;
 the tool now keeps each captured window on top, and RVP ran again alone.
 A third, PotPlayer-only run captured fullscreen with the pointer at the
 top and resting in the middle. The fourth captured RVP again after the
-fixes below, with the same steps. The owner can see both players side
-by side in `C:\Users\<user>\rvp-test\m14-host\compare\index.html`
-(local, as are its pictures).
+fixes below. The owner looked at both players side by side in
+`C:\Users\<user>\rvp-test\m14-host\compare\index.html` (local, as are
+its pictures) and found part of RVP's control bar missing in
+fullscreen; the fifth run captured RVP's final build after that fix.
 
 | Mode | PotPlayer | RVP before | RVP now |
 |------|-----------|------------|---------|
 | Idle | its logo | RVP's logo (D10) | the same |
 | Video, the window set to 1280x720 | keeps the width: 1280x836 | keeps the height: 1126x720 | the same (a difference) |
-| Fullscreen, pointer at the bottom | the control bar only | the control bar and the title bar | the control bar only |
-| Fullscreen, pointer at the top | the title bar only | - | the title bar only |
+| Fullscreen, pointer at the bottom | the control bar only, the video above it | the control bar and the title bar, over the video | the control bar only, the video above it |
+| Fullscreen, pointer at the top | the title bar only, the video below it | - | the title bar only, the video below it |
 | Fullscreen, pointer resting in the middle | no bar | - | no bar |
 | Audio file | the audio skin, the window shrinks to 370x186 | the audio skin in a 1126x720 window | shrinks to 360x186; Daum's pop-up window button hidden (after the last capture) |
 
 The fixes that came from it: over the video only the bar under the
-pointer shows (`Player.shown_bar`); "Keep the window's size while
-switching between skin modes" is now off by default, as PotPlayer
-behaves; the audio skin's button of Daum's pop-up windows is hidden;
+pointer shows (`Player.shown_bar`); in fullscreen the video makes room
+for that bar ("Auto resize video depending on fullscreen pop-ups", now
+on by default: PotPlayer's video ends above its control bar, so the
+bar's open middle and its seek bar's track lie on black, where RVP's
+had shown the picture through them, the owner's remark); "Keep the
+window's size while switching between skin modes" is now off by
+default; the audio skin's button of Daum's pop-up windows is hidden;
 and its Mini Audio Mode button works. SVP
 attached to the first run's RVP through `mpvpipe` (its filter does not
 run on the 96x72 clip); the later runs had no IPC server.
