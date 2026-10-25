@@ -329,7 +329,10 @@ f36f4fe (run 40070570660; its first try failed in `package-windows`'s
 media controls check on the hosted runner, the first file still opening
 after 30 s as in goal O, and passed when run again), for 48e8c64 (run
 40077168264) and for 1d84042 (990c9d5 and 1d84042, run 40111732264), for 4e5993b (27b10e4 and 4e5993b, run
-40116251818) and for ff6ced4 (run 40120678253):
+40116251818), for ff6ced4 (run 40120678253) and for 0fc1af5 (run
+40162732674; GitHub first refused to start its `prune-artifacts` job
+over the account's billing, and the job passed once the owner had
+fixed that):
 the checks on Ubuntu and Windows (the coverage tests included), cargo
 deny, both packages and the artifacts' pruning. This file's commit
 follows them.
