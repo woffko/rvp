@@ -416,10 +416,12 @@ pub enum SettingsPage {
     Tts,
     Touch,
     Xinput,
+    /// M15: the control API for remotes.
+    Remote,
 }
 
 impl SettingsPage {
-    pub const ALL: [SettingsPage; 47] = [
+    pub const ALL: [SettingsPage; 48] = [
         SettingsPage::Playback,
         SettingsPage::TimeJump,
         SettingsPage::Skip,
@@ -467,6 +469,7 @@ impl SettingsPage {
         SettingsPage::Tts,
         SettingsPage::Touch,
         SettingsPage::Xinput,
+        SettingsPage::Remote,
     ];
 
     /// The page's key in the settings window (`shell/qml/Settings.qml`).
@@ -520,6 +523,7 @@ impl SettingsPage {
             SettingsPage::Tts => "tts",
             SettingsPage::Touch => "touch",
             SettingsPage::Xinput => "xinput",
+            SettingsPage::Remote => "remote",
         }
     }
 }

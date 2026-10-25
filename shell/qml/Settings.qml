@@ -71,7 +71,8 @@ ApplicationWindow {
         { key: "presets", title: qsTr("Configuration") },
         { key: "tts", title: qsTr("TTS") },
         { key: "touch", title: qsTr("Touch") },
-        { key: "xinput", title: qsTr("XInput") }
+        { key: "xinput", title: qsTr("XInput") },
+        { key: "remote", title: qsTr("Remote Control") }
     ]
     // PotPlayer's tree: each group opens into its pages, and the selected
     // group's pages show as tabs over the page. `page` is the group's own
@@ -91,6 +92,7 @@ ApplicationWindow {
         { title: qsTr("Screen Saver"), page: "screensaver", pages: [] },
         { title: qsTr("Configuration"), page: "presets", pages: [] },
         { title: qsTr("Accessibility"), page: "", pages: ["tts", "touch", "xinput"] },
+        { title: qsTr("Remote Control"), page: "remote", pages: [] },
         { title: qsTr("Audio"), page: "audio",
           pages: ["audio-volume", "equalizer", "normalizer", "audio-effects", "audio-sync"] }
     ]
@@ -3103,6 +3105,92 @@ ApplicationWindow {
                             texts: ({ "off": qsTr("Off"), "left": qsTr("Left stick (A clicks)"), "right": qsTr("Right stick (A clicks)") })
                         }
                         Note { text: qsTr("A plays and pauses, B fullscreen, X mute, Y playback info, the shoulders previous and next, Back closes playback, Start plays and pauses, the pad's up and down the volume and left and right seek. Windows only; Linux's controllers come later.") }
+                    }
+
+                    Page {
+                        id: remotePage
+                        // The control API's state (Player.control_info) and
+                        // its token while shown.
+                        property var info: ({})
+                        property string token: ""
+                        function refresh() { info = JSON.parse(win.player.control_info()) }
+                        Timer {
+                            interval: 1000
+                            repeat: true
+                            triggeredOnStart: true
+                            running: win.visible && win.currentKey === "remote"
+                            onTriggered: remotePage.refresh()
+                        }
+                        Heading { text: qsTr("Remote control") }
+                        Check { path: "remote.enabled"; text: qsTr("Let remotes control RVP (its control API on this computer)") }
+                        RowLayout {
+                            Label {
+                                text: qsTr("Port")
+                                wrapMode: Text.WordWrap
+                                Layout.preferredWidth: 240
+                            }
+                            TextField {
+                                id: remotePort
+                                objectName: "remote-port"
+                                Layout.preferredWidth: 120
+                                // A port is an address, not an amount: typed.
+                                validator: IntValidator { bottom: 1024; top: 65535 }
+                                text: String(win.value("remote.port") || "")
+                                onEditingFinished: {
+                                    if (acceptableInput && Number(text) !== win.value("remote.port"))
+                                        win.set("remote.port", Number(text))
+                                }
+                            }
+                        }
+                        RowLayout {
+                            Label {
+                                text: qsTr("Address")
+                                wrapMode: Text.WordWrap
+                                Layout.preferredWidth: 240
+                            }
+                            Label {
+                                text: remotePage.info.address || ""
+                                textFormat: Text.PlainText
+                            }
+                        }
+                        RowLayout {
+                            Label {
+                                text: qsTr("Token")
+                                wrapMode: Text.WordWrap
+                                Layout.preferredWidth: 240
+                            }
+                            TextField {
+                                Layout.fillWidth: true
+                                readOnly: true
+                                text: remotePage.token
+                                placeholderText: qsTr("Hidden")
+                                font.family: "monospace"
+                            }
+                            Button {
+                                text: remotePage.token === "" ? qsTr("Show") : qsTr("Hide")
+                                onClicked: remotePage.token = remotePage.token === "" ? win.player.control_token() : ""
+                            }
+                            Button {
+                                text: qsTr("Copy")
+                                onClicked: Tools.set_clipboard_text(win.player.control_token())
+                            }
+                            Button {
+                                text: qsTr("Renew")
+                                onClicked: {
+                                    const renewed = win.player.renew_control_token()
+                                    remotePage.token = remotePage.token === "" ? "" : renewed
+                                    remotePage.refresh()
+                                }
+                            }
+                        }
+                        Note {
+                            objectName: "remote-state"
+                            text: remotePage.info.error
+                                  ? qsTr("Cannot listen: %1").arg(remotePage.info.error)
+                                  : remotePage.info.listening ? qsTr("Listening on this computer only (127.0.0.1).")
+                                                              : qsTr("Off.")
+                        }
+                        Note { text: qsTr("Remotes on a phone reach RVP through a program on this computer, such as Unified Remote's server: give its RVP remote the port and the token. RVP's remote for Unified Remote is in the “remote” folder beside rvp.exe; the installer copies it into Unified Remote when that is installed. Renew makes a new token: remotes with the old one are refused.") }
                     }
                 }
             }

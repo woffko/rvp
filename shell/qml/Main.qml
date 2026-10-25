@@ -1547,6 +1547,12 @@ Window {
     //                         skin for a file without video, another skin
     //                         from the Skins menu, the copied time; the
     //                         files: fixture-60s.mkv, fixture-tone.ogg
+    //   --selftest=m15        M15's control API (SelfTestM15.qml): turned on,
+    //                         called with and without the token, turned
+    //                         off; --remote-port (48932), and with
+    //                         --remote-serve=SECONDS it waits that long for
+    //                         --remote-expect=N commands from outside; the
+    //                         file: fixture-60s.mkv
     //   --selftest=speech     subtitles from a file's audio (SelfTestM13.qml,
     //                         the host session): the whole file with
     //                         --speech-engine and --speech-model, timed,
@@ -1681,7 +1687,23 @@ Window {
             return m13Tick(true)
         if (selftest.mode === "m14")
             return m14Tick()
+        if (selftest.mode === "m15")
+            return m15Tick()
         functionalTick()
+    }
+
+    // --selftest=m15: M15's control API (SelfTestM15.qml).
+    Loader {
+        id: m15Loader
+        active: false
+        Component.onCompleted: setSource("SelfTestM15.qml", { player: player, t: selftest, host: root })
+    }
+    function m15Tick() {
+        if (!m15Loader.item) {
+            m15Loader.active = true
+            return
+        }
+        m15Loader.item.tick()
     }
 
     // --selftest=m14: M14's skins, themes and the rest (SelfTestM14.qml).

@@ -9,6 +9,7 @@ repository.workspace = true
 publish.workspace = true
 
 [dependencies]
+getrandom.workspace = true
 rvp-engine = { path = "../engine" }
 rvp-skin = { path = "../skin" }
 rvp-subtitle = { path = "../subtitle" }

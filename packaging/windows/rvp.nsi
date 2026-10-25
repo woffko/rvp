@@ -7,8 +7,16 @@
 ; installer wrote and nothing else: the files it installed, then folders
 ; left empty, and of shared registry keys only RVP's values.
 ;
-; tools/packaging/package.py writes the two includes (types.nsh: the
-; registry entries per type; files.nsh: the installed files) and runs
+; When Unified Remote Server is installed, a component copies RVP's remote
+; for it (M15) into its custom remotes folder
+; (%ProgramData%\Unified Remote\Remotes\Custom\RVP); the uninstaller
+; removes the files it copied there, and the folder when it is empty. The
+; remote's settings.prop, which Unified Remote's manager edits, is not
+; written over.
+;
+; tools/packaging/package.py writes the includes (types.nsh: the registry
+; entries per type; files.nsh: the installed files; remote.nsh: the
+; remote's files) and runs
 ; makensis -DVERSION=... -DNUMERIC=a.b.c.d -DSOURCE=bundle -DOUTFILE=...
 ;          -DINCLUDES=dir rvp.nsi
 
@@ -39,6 +47,10 @@ VIAddVersionKey "LegalCopyright" "GPL-3.0-or-later"
 !define MUI_ICON "${SOURCE}\rvp.ico"
 !define MUI_UNICON "${SOURCE}\rvp.ico"
 !define MUI_FINISHPAGE_RUN "$INSTDIR\rvp.exe"
+; The components page shows only when there is a choice: Unified Remote
+; is installed.
+!define MUI_PAGE_CUSTOMFUNCTION_PRE SkipComponents
+!insertmacro MUI_PAGE_COMPONENTS
 !insertmacro MUI_PAGE_DIRECTORY
 !insertmacro MUI_PAGE_INSTFILES
 !insertmacro MUI_PAGE_FINISH
@@ -49,13 +61,21 @@ VIAddVersionKey "LegalCopyright" "GPL-3.0-or-later"
 
 !include "${INCLUDES}\types.nsh"
 !include "${INCLUDES}\files.nsh"
+!include "${INCLUDES}\remote.nsh"
+
+LangString REMOTE_SECTION ${LANG_ENGLISH} "Remote for Unified Remote"
+LangString REMOTE_SECTION ${LANG_RUSSIAN} "Пульт для Unified Remote"
+
+; Unified Remote's custom remotes folder.
+Var RemoteDir
 
 ; Tells Explorer the registered types changed.
 !macro NotifyShell
     System::Call 'shell32::SHChangeNotify(i 0x08000000, i 0, p 0, p 0)'
 !macroend
 
-Section "RVP"
+Section "RVP" SecMain
+    SectionIn RO
     SetOutPath "$INSTDIR"
     File /r "${SOURCE}\*.*"
     WriteUninstaller "$INSTDIR\uninstall.exe"
@@ -87,7 +107,46 @@ Section "RVP"
     !insertmacro NotifyShell
 SectionEnd
 
+Section "$(REMOTE_SECTION)" SecRemote
+    CreateDirectory "$RemoteDir\RVP"
+    ; A folder the user cannot write to is left alone.
+    ClearErrors
+    FileOpen $1 "$RemoteDir\RVP\.rvp-check" w
+    IfErrors 0 writable
+        DetailPrint "Cannot write to $RemoteDir\RVP: the remote was not copied."
+        Goto remote_done
+    writable:
+    FileClose $1
+    Delete "$RemoteDir\RVP\.rvp-check"
+    SetOutPath "$RemoteDir\RVP"
+    !insertmacro InstallRemote
+    WriteRegStr HKCU "${APP_KEY}" "UnifiedRemote" "$RemoteDir\RVP"
+    SetOutPath "$INSTDIR"
+    remote_done:
+SectionEnd
+
+Function .onInit
+    ReadEnvStr $0 PROGRAMDATA
+    StrCpy $RemoteDir "$0\Unified Remote\Remotes\Custom"
+    IfFileExists "$0\Unified Remote\Remotes\*.*" remote_found
+        ; No Unified Remote: the component is off and hidden.
+        SectionSetFlags ${SecRemote} 0
+        SectionSetText ${SecRemote} ""
+    remote_found:
+FunctionEnd
+
+Function SkipComponents
+    SectionGetText ${SecRemote} $0
+    StrCmp $0 "" 0 +2
+        Abort
+FunctionEnd
+
 Section "Uninstall"
+    ; The remote's files first: where they went is under RVP's key.
+    ReadRegStr $0 HKCU "${APP_KEY}" "UnifiedRemote"
+    StrCmp $0 "" no_remote
+        !insertmacro RemoveRemote
+    no_remote:
     ; RVP's value first: UnregisterTypes then removes the key if RVP
     ; created it and it is empty.
     DeleteRegValue HKCU "Software\RegisteredApplications" "RVP"

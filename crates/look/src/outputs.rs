@@ -1,7 +1,8 @@
 //! Every file built from the art: the shell's build script puts them in
 //! its `OUT_DIR` (resources compiled into `rvp`, the Windows icon resource
 //! linked into `rvp.exe`, the default skin included in it), and
-//! `cargo xtask look DIR` writes them for packaging and review. None is
+//! `cargo xtask look DIR` writes them for packaging and review (with the
+//! Unified Remote remote's icons, which the shell does not use). None is
 //! committed: the sources are.
 
 use rvp_skin::Image;
@@ -16,6 +17,14 @@ pub const SYMBOL_HEIGHT: u32 = 512;
 
 /// Height of the About box's wordmark images.
 pub const WORDMARK_HEIGHT: u32 = 96;
+
+/// The Unified Remote remote's icons (M15): Unified Remote's remotes carry
+/// a 64-pixel `icon.png` and a 512-pixel `icon_hires.png`.
+pub const REMOTE_ICONS: [(&str, u32); 2] = [("icon.png", 64), ("icon_hires.png", 512)];
+
+/// Where the remote's files go (`remote/unified-remote/RVP` holds the
+/// rest).
+pub const REMOTE_DIR: &str = "remote/unified-remote/RVP";
 
 /// The built files as `(relative path, bytes)`, in a fixed order.
 ///
@@ -48,6 +57,9 @@ pub fn outputs() -> Result<Vec<(String, Vec<u8>)>, String> {
         format!("skins/{}.dsf", crate::skin::NAME),
         crate::skin::dsf()?,
     ));
+    for (name, size) in REMOTE_ICONS {
+        files.push((format!("{REMOTE_DIR}/{name}"), png(&brand::icon(size)?)?));
+    }
     Ok(files)
 }
 

@@ -172,6 +172,8 @@ pub struct Settings {
     pub presets: crate::presets::PresetsSettings,
     /// M13's subtitles made from the audio (Create Subtitles from Audio).
     pub speech: crate::speech::SpeechSettings,
+    /// M15: the control API for remotes (the Remote page).
+    pub remote: crate::control::RemoteSettings,
 }
 
 impl Default for Settings {
@@ -244,6 +246,7 @@ impl Default for Settings {
             copy_time: crate::misc::CopyTimeSettings::default(),
             skins: crate::skins::SkinsSettings::default(),
             speech: crate::speech::SpeechSettings::default(),
+            remote: crate::control::RemoteSettings::default(),
         }
     }
 }

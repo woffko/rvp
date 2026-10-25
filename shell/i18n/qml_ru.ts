@@ -544,6 +544,10 @@ in %2 seconds</source>
             <translation>XInput</translation>
         </message>
         <message>
+            <source>Remote Control</source>
+            <translation>Удалённое управление</translation>
+        </message>
+        <message>
             <source>Filter Control</source>
             <translation>Управление фильтрами</translation>
         </message>
@@ -4390,6 +4394,62 @@ in %2 seconds</source>
         <message>
             <source>A plays and pauses, B fullscreen, X mute, Y playback info, the shoulders previous and next, Back closes playback, Start plays and pauses, the pad's up and down the volume and left and right seek. Windows only; Linux's controllers come later.</source>
             <translation>A — воспроизведение/пауза, B — полный экран, X — без звука, Y — информация, бамперы — предыдущий и следующий, Back закрывает воспроизведение, Start — воспроизведение/пауза, крестовина вверх и вниз — громкость, влево и вправо — перемотка. Только Windows; геймпады в Linux появятся позже.</translation>
+        </message>
+        <message>
+            <source>Remote control</source>
+            <translation>Удалённое управление</translation>
+        </message>
+        <message>
+            <source>Let remotes control RVP (its control API on this computer)</source>
+            <translation>Разрешить пультам управлять RVP (API управления на этом компьютере)</translation>
+        </message>
+        <message>
+            <source>Port</source>
+            <translation>Порт</translation>
+        </message>
+        <message>
+            <source>Address</source>
+            <translation>Адрес</translation>
+        </message>
+        <message>
+            <source>Token</source>
+            <translation>Токен</translation>
+        </message>
+        <message>
+            <source>Hidden</source>
+            <translation>Скрыт</translation>
+        </message>
+        <message>
+            <source>Show</source>
+            <translation>Показать</translation>
+        </message>
+        <message>
+            <source>Hide</source>
+            <translation>Скрыть</translation>
+        </message>
+        <message>
+            <source>Copy</source>
+            <translation>Копировать</translation>
+        </message>
+        <message>
+            <source>Renew</source>
+            <translation>Заменить</translation>
+        </message>
+        <message>
+            <source>Cannot listen: %1</source>
+            <translation>Не удаётся принимать запросы: %1</translation>
+        </message>
+        <message>
+            <source>Listening on this computer only (127.0.0.1).</source>
+            <translation>Принимает запросы только с этого компьютера (127.0.0.1).</translation>
+        </message>
+        <message>
+            <source>Off.</source>
+            <translation>Выключено.</translation>
+        </message>
+        <message>
+            <source>Remotes on a phone reach RVP through a program on this computer, such as Unified Remote's server: give its RVP remote the port and the token. RVP's remote for Unified Remote is in the “remote” folder beside rvp.exe; the installer copies it into Unified Remote when that is installed. Renew makes a new token: remotes with the old one are refused.</source>
+            <translation>Пульты на телефоне обращаются к RVP через программу на этом компьютере, например через сервер Unified Remote: укажите в его пульте RVP порт и токен. Пульт RVP для Unified Remote лежит в папке «remote» рядом с rvp.exe; установщик копирует его в Unified Remote, если тот установлен. «Заменить» создаёт новый токен: пульты со старым токеном получают отказ.</translation>
         </message>
         <message>
             <source>Restart RVP to apply it.</source>

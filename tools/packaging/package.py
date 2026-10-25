@@ -183,8 +183,23 @@ def windows_bundle(args, bundle: Path) -> None:
         # M13's subtitles from audio: the engine RVP finds next to itself.
         shutil.copytree(args.whisper, bundle / "whisper")
     shutil.copy2(Path(args.look) / "icons" / "rvp.ico", bundle / "rvp.ico")
+    remote_folder(Path(args.look), bundle)
     shutil.copy2(ROOT / "LICENSE", bundle / "LICENSE.txt")
     print(f"bundle: {len(copied)} Qt libraries in {bundle}")
+
+
+REMOTE = Path("remote") / "unified-remote" / "RVP"
+
+
+def remote_folder(look: Path, bundle: Path) -> None:
+    """M15's Unified Remote remote beside rvp.exe: its files from the
+    repository and its icons from `cargo xtask look`."""
+    target = bundle / REMOTE
+    target.mkdir(parents=True)
+    for source in sorted((ROOT / REMOTE).iterdir()):
+        shutil.copy2(source, target / source.name)
+    for name in ("icon.png", "icon_hires.png"):
+        shutil.copy2(look / REMOTE / name, target / name)
 
 
 def windows_zip(bundle: Path, target: Path, epoch: int) -> None:
@@ -272,6 +287,19 @@ def windows_includes(bundle: Path, includes: Path) -> None:
         remove.append(f'    RMDir "$INSTDIR\\{path.relative_to(bundle).as_posix().replace("/", chr(92))}"')
     remove.append("!macroend")
     (includes / "files.nsh").write_text("\n".join(remove) + "\n", encoding="utf-8")
+    # The Unified Remote remote (M15): copied into Unified Remote's folder,
+    # its settings left as the user set them; the uninstaller gets that
+    # folder in $0.
+    names = sorted(p.name for p in (bundle / REMOTE).iterdir())
+    source = "${SOURCE}\\" + str(REMOTE).replace("/", "\\")
+    install = ["!macro InstallRemote"]
+    for name in names:
+        line = f'    File "{source}\\{name}"'
+        install += ["    SetOverwrite off", line, "    SetOverwrite on"] if name == "settings.prop" else [line]
+    install.append("!macroend")
+    uninstall = ["!macro RemoveRemote"] + [f'    Delete "$0\\{name}"' for name in names]
+    uninstall += ['    RMDir "$0"', "!macroend"]
+    (includes / "remote.nsh").write_text("\n".join(install + [""] + uninstall) + "\n", encoding="utf-8")
 
 
 def windows(args) -> None:

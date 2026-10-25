@@ -404,6 +404,44 @@ smoothing for users without SVP, after a study of the engines.
   permission, saving and writing back PotPlayer's registry key and
   playlist folder.
 
+## Remote control (M15)
+
+- The control API (`crates/app/src/control`, D15) is a small HTTP/1.1
+  JSON service on `std::net`: off by default (`remote.enabled`, the
+  Remote Control page), 127.0.0.1 only, the installation's token
+  (`<state>/remote-token`, `control::token`) in `Authorization: Bearer`
+  on every request, requests with `Origin` or a `Host` that is not a
+  loopback name refused, and `control::LIMITS` on headers, bodies,
+  request time, connections, long polls and the window thread's answer.
+  Never log the token (the self-test checks its log) and never commit one.
+- Its threads never call mpv or touch `App`: commands reach the window's
+  thread through `CxxQtThread::queue` (`shell/src/player/m15.rs`, as the
+  media controls' do) and the status is a snapshot that `sync_chrome`
+  publishes (`Server::publish`; the version grows with every change but
+  the position). Actions run through `Player::perform`, as keys do.
+  Answers leave out `null` fields (Unified Remote's JSON reader documents
+  none).
+- The Unified Remote remote is `remote/unified-remote/RVP` (`meta.id:
+  RVP.Player`); `cargo xtask look` draws its `icon.png` and
+  `icon_hires.png` from RVP's icon; `tests/remote.rs` checks that every
+  action it calls exists and that `layout.xml` is well formed. With an
+  empty token setting it reads `%APPDATA%\RVP\remote-token`. The
+  installer's component copies it into
+  `%ProgramData%\Unified Remote\Remotes\Custom\RVP` when Unified Remote
+  is installed (`HKCU\Software\RVP\UnifiedRemote` notes where) and the
+  uninstaller removes those files.
+- Unified Remote Server is installed on the Windows test VM only, never
+  on the host without permission. On port 9510 its manager reloads
+  remotes (`/system/reload`) and its web-client protocol runs a remote's
+  action (`/client/connect`, then `/client/request` packets: handshake,
+  authenticate, `Action` 7 with `Run`); the manager's
+  `/system/remote/run` does not run actions in 3.13. Started over SSH it
+  ends with the session. Unified Remote Server 3.13 has CVE-2023-52252
+  (web pages can make it run Lua). The VM's check is
+  `tools/windows-vm/m15-all.ps1` (`--selftest=m15 --remote-serve`).
+- MPC-HC's web interface was studied and left out: it has no token
+  (`docs/spikes/m15-mpc-hc.md`).
+
 ## Playback, playlist and opening (M11)
 
 - The thumbnail core (`crates/engine/src/thumbnail.rs`) is a second

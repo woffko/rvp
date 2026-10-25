@@ -35,6 +35,10 @@ zip = { version = "=9.0.3", default-features = false, features = ["deflate-flate
 # Windows-125x) for RVP's subtitle reader (M13, crates/subtitle); MIT or
 # Apache-2.0, with BSD-3-Clause for the WHATWG index data.
 encoding_rs = "=0.8.35"
+# The control API's per-installation token (M15, D15): the system's random
+# bytes, which std does not offer; already in the tree through tempfile and
+# jobserver; MIT or Apache-2.0.
+getrandom = "=0.4.3"
 # D-Bus for MPRIS and idle inhibit on Linux (M8, crates/platform): pure Rust,
 # so the packages need no libdbus; MIT.
 zbus = "=5.19.0"

@@ -508,6 +508,19 @@ pub mod qobject {
         #[qinvokable]
         fn status(self: &Self) -> QString;
 
+        /// The control API for the Remote page as JSON: `enabled`,
+        /// `listening`, `address` and the `error` that stops it (M15).
+        #[qinvokable]
+        fn control_info(self: &Self) -> QString;
+
+        /// The control API's token (made on first use); never logged.
+        #[qinvokable]
+        fn control_token(self: &Self) -> QString;
+
+        /// A new token for the control API; the old one stops working.
+        #[qinvokable]
+        fn renew_control_token(self: Pin<&mut Self>) -> QString;
+
         /// Frame timing and output diagnostics from mpv as JSON (dropped
         /// frames, display rate, audio output; goal D rule 5).
         #[qinvokable]

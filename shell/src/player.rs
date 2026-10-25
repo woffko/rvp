@@ -37,6 +37,7 @@ mod m11;
 mod m12;
 mod m13;
 mod m14;
+mod m15;
 
 /// `ui_request` kinds.
 pub mod request {
@@ -380,6 +381,8 @@ struct Core {
     gpu_readings: GpuReadings,
     /// The skin, its logo and its bars over the video (M14).
     look: m14::Look,
+    /// The control API for remotes (M15).
+    remote: m15::Remote,
 }
 
 /// Who gives the GPU power budget its readings.
@@ -1000,6 +1003,7 @@ impl qobject::Player {
             native_failed: None,
             gpu_readings: GpuReadings::Off,
             look: m14::Look::default(),
+            remote: m15::Remote::default(),
         });
         self.as_mut().sync_look();
         if let Some(message) = messages.first() {
@@ -1068,6 +1072,8 @@ impl qobject::Player {
         if let Err(error) = result {
             self.as_mut().show_message(&format!("cannot open: {error}"));
         }
+        // The control API follows the application from here (M15).
+        self.as_mut().apply_remote();
         if let Some(action) = action {
             self.handle_request(action);
         }
@@ -1080,10 +1086,7 @@ impl qobject::Player {
         };
         core.drain_queued.store(false, Ordering::Release);
         let drained = core.app.drain(core.engine, Instant::now());
-        if let Some(desktop) = core.desktop.as_mut() {
-            desktop.sync(&core.app, &drained.events);
-        }
-        core.awake.set(core.app.keeps_screen_on());
+        core.show_drain(&drained);
         let hides_pointer = core.hides_pointer();
         let center = core.app.settings.playback.center_window;
         let file_changed = drained.events.iter().any(|event| {
@@ -1197,6 +1200,7 @@ impl qobject::Player {
 
     /// Recomputes the chrome from the model and signals what to repaint.
     fn sync_chrome(mut self: Pin<&mut Self>) {
+        self.as_mut().publish_remote();
         let Some(core) = self.as_mut().core_mut() else {
             return;
         };
@@ -2522,6 +2526,7 @@ impl qobject::Player {
         self.as_mut().refresh_overlay();
         self.as_mut().tick_misc_info();
         self.as_mut().apply_general();
+        self.as_mut().apply_remote();
         self.sync_chrome();
     }
 

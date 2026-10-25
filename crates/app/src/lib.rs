@@ -18,6 +18,7 @@ pub mod capture;
 pub mod chrome;
 mod cli;
 mod commands;
+pub mod control;
 pub mod coverage;
 pub mod crash;
 pub mod decoders;

@@ -1728,7 +1728,7 @@ impl App {
     /// Sets the volume (PotPlayer's percent), within 0 to the highest
     /// volume, and shows it on the OSD as the keys, the wheel and the
     /// sliders do.
-    fn set_volume(&mut self, engine: &Engine, percent: f64) -> Option<UiRequest> {
+    pub(crate) fn set_volume(&mut self, engine: &Engine, percent: f64) -> Option<UiRequest> {
         let percent = percent.clamp(0.0, self.settings.volume_max.max(100.0));
         engine
             .set_volume(crate::volume::mpv_volume(percent))

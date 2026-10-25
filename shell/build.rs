@@ -16,6 +16,10 @@ fn build_look(out: &Path) -> PathBuf {
     let mut qrc = String::from("<RCC>\n  <qresource prefix=\"/qt/qml/Rvp\">\n");
     let outputs = rvp_look::outputs::outputs().expect("draw RVP's art");
     for (name, bytes) in outputs {
+        // The Unified Remote remote's icons go into packages only.
+        if name.starts_with(rvp_look::outputs::REMOTE_DIR) {
+            continue;
+        }
         let path = look.join(&name);
         std::fs::create_dir_all(path.parent().expect("a folder")).expect("create look folder");
         std::fs::write(&path, bytes).expect("write built art");
@@ -120,7 +124,8 @@ fn main() {
         .qml_file("qml/SelfTestGpu.qml")
         .qml_file("qml/SelfTestSmoothing.qml")
         .qml_file("qml/SelfTestM13.qml")
-        .qml_file("qml/SelfTestM14.qml");
+        .qml_file("qml/SelfTestM14.qml")
+        .qml_file("qml/SelfTestM15.qml");
     CxxQtBuilder::new_qml_module(module)
         .qt_module("Gui")
         .qt_module("Qml")

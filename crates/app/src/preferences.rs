@@ -145,6 +145,7 @@ impl Settings {
         self.presets.validate(&mut notes);
         self.accessibility.validate(&mut notes);
         self.skins.validate(&mut notes);
+        self.remote.validate(&mut notes);
         notes
     }
 
@@ -446,6 +447,7 @@ pub fn import(path: &Path) -> Result<(Settings, Vec<String>), String> {
                             | "screensaver"
                             | "presets"
                             | "accessibility"
+                            | "remote"
                     ) {
                         value.clone()
                     } else if value.is_object() {

@@ -17,7 +17,9 @@ font is used.
 | `wordmark.svg` | The symbol followed by the letters R, V and P | Drawn for RVP; letters constructed from rectangles and arcs |
 
 `crates/look` renders them into the PNG icons, `rvp.ico`, the Windows
-resource, the idle screen's symbol and the About box's wordmark.
+resource, the idle screen's symbol and the About box's wordmark, and
+`icon.svg` also into the Unified Remote remote's `icon.png` (64 pixels) and
+`icon_hires.png` (512 pixels) (M15).
 
 ## RVP Default (`skin/`)
 

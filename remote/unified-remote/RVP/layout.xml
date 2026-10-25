@@ -1,0 +1,69 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- RVP's remote for Unified Remote (M15): the player's page in the manner
+     of Unified Remote's media remotes, the tracks and speed, and the
+     albums to play an entry from. remote.lua carries out the actions. -->
+<layout onvolumeup="volume_up" onvolumedown="volume_down" lightcolor="#2b6cb0" darkcolor="#1f4f85">
+	<tabs onchange="tab_changed">
+		<tab text="Player">
+			<row weight="wrap">
+				<label id="title" text="RVP" />
+			</row>
+			<row weight="wrap">
+				<slider id="position" text="Position" ondone="seek" />
+			</row>
+			<row weight="wrap">
+				<slider id="volume" text="Volume" onchange="volume" />
+			</row>
+			<row weight="wrap">
+				<button icon="vmute" ontap="mute" />
+				<button icon="rwd" ontap="back" />
+				<button id="play" icon="playpause" ontap="play_pause" />
+				<button icon="ff" ontap="forward" />
+				<button icon="fullscreen" ontap="fullscreen" />
+			</row>
+			<row weight="wrap">
+				<button icon="previous" ontap="previous" />
+				<button icon="stop" ontap="stop" />
+				<button icon="next" ontap="next" />
+			</row>
+		</tab>
+		<tab text="Tracks">
+			<row weight="wrap">
+				<label id="tracks" text="" />
+			</row>
+			<row weight="wrap">
+				<button text="Audio" ontap="audio_track" />
+				<button text="Subtitles" ontap="subtitle_track" />
+				<button text="Subtitles on/off" ontap="subtitles_on_off" />
+			</row>
+			<row weight="wrap">
+				<button text="Slower" ontap="slower" />
+				<label id="speed" text="1.00x" />
+				<button text="Faster" ontap="faster" />
+				<button text="1x" ontap="speed_reset" />
+			</row>
+			<row weight="wrap">
+				<toggle id="normalizer" text="Normalizer" onchange="normalizer" />
+			</row>
+			<row weight="wrap">
+				<button icon="vdown" ontap="volume_down" />
+				<button icon="vmute" ontap="mute" />
+				<button icon="vup" ontap="volume_up" />
+			</row>
+		</tab>
+		<tab text="Albums">
+			<row weight="wrap">
+				<label id="where" text="Albums" />
+			</row>
+			<row>
+				<list id="list" ontap="list_tapped">
+					<item text="Loading..." />
+				</list>
+			</row>
+			<row weight="wrap">
+				<button icon="back" ontap="list_back" />
+				<button icon="refresh" ontap="list_refresh" />
+			</row>
+		</tab>
+	</tabs>
+</layout>
