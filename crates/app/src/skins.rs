@@ -128,8 +128,10 @@ pub struct SkinsSettings {
     /// While a video shows in the window, the skin hides and its bars show
     /// over the video when the pointer comes, as in fullscreen.
     pub auto_hide: bool,
-    /// In fullscreen the video makes room for the bar that shows (on, as
-    /// PotPlayer behaves in goal P's host session).
+    /// In fullscreen the video makes room for the bar that shows. Off by
+    /// default: PotPlayer's video keeps its place and size under its bar,
+    /// whose own window is opaque (goal P's host captures; RVP gives the
+    /// bar a black backdrop, `Main.qml`).
     pub fullscreen_resize: bool,
     /// The bars and the control panel fade in and out.
     pub animations: bool,
@@ -177,7 +179,7 @@ impl Default for SkinsSettings {
             zoom: 100,
             panel_zoom: 100,
             auto_hide: false,
-            fullscreen_resize: true,
+            fullscreen_resize: false,
             animations: true,
             reverse_times: false,
             speed_times: false,

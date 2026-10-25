@@ -818,7 +818,9 @@ Window {
     // The skin's static layer: under the video in the window, over it in
     // fullscreen and with "Auto hide main skin" (where it only holds the
     // bars, at On Screen Control's opacity, fading when animations are on,
-    // cut to the bar the pointer is on).
+    // cut to the bar the pointer is on, on a black backdrop: PotPlayer's
+    // bars over the video are opaque windows of their own, so the video
+    // never shows through a skin's transparent parts).
     Item {
         id: staticClip
         x: root.oneBar ? player.shown_bar.x : 0
@@ -841,6 +843,18 @@ Window {
             Behavior on opacity {
                 enabled: player.animations && player.overlay
                 NumberAnimation { duration: 150 }
+            }
+
+            // Under the skin's drawing, with its opacity and fade.
+            Rectangle {
+                id: barBackdrop
+                z: -1
+                visible: root.oneBar
+                color: "black"
+                x: player.shown_bar.x
+                y: player.shown_bar.y
+                width: player.shown_bar.width
+                height: player.shown_bar.height
             }
         }
     }
@@ -2333,16 +2347,26 @@ Window {
                 break
             Tools.grab(t.outDir, "fullscreen")
             if (full && player.has_skin) {
-                // The bar under the pointer shows, and the video leaves it
-                // room as PotPlayer's does (M14, "Auto resize video
-                // depending on fullscreen pop-ups"); in the middle the video
+                // The bar under the pointer shows on a black backdrop, and
+                // the video keeps the screen as PotPlayer's does; with
+                // "Auto resize video depending on fullscreen pop-ups" the
+                // video leaves the bar room (M14); in the middle the video
                 // takes the screen again.
                 player.mouse_move(root.width / 2, root.height - 3)
-                const bar = player.shown_bar
+                let bar = player.shown_bar
+                t.check("fullscreen_bar_on_a_backdrop", player.chrome_shown && bar.height > 0
+                            && player.video_rect.height >= root.height - 1 && staticSkin.shown
+                            && root.oneBar && barBackdrop.y === bar.y && barBackdrop.height === bar.height,
+                        "bar " + bar + " video " + player.video_rect + " skin shown " + staticSkin.shown
+                            + " one bar " + root.oneBar)
+                player.set_setting("skins.fullscreen-resize", "true")
+                player.mouse_move(root.width / 2 + 5, root.height - 3)
+                bar = player.shown_bar
                 const video = player.video_rect
                 t.check("fullscreen_video_leaves_the_bar_room", player.chrome_shown && bar.height > 0
                             && video.y + video.height <= bar.y + 1 && video.height > root.height / 2,
                         "bar " + bar + " video " + video + " shown " + player.chrome_shown)
+                player.set_setting("skins.fullscreen-resize", "false")
                 player.mouse_move(root.width / 2, root.height / 2)
                 t.check("fullscreen_video_takes_the_screen_again", !player.chrome_shown
                             && player.video_rect.height >= root.height - 1, "video " + player.video_rect)

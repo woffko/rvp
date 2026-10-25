@@ -1,7 +1,9 @@
 # Goal Q status: milestone M15 (remote control: RVP's control API and a Unified Remote remote)
 
-Date: 2026-10-25. Result: **in progress**: built and checked in WSL and
-on the Windows VM; the owner's try from a phone is open.
+Date: 2026-10-25. Result: **done**. M15 is built and checked in WSL, on
+the Windows VM with Unified Remote Server, and by the owner from a phone
+on the host (the remote works and is accepted; its design is for later).
+The final build is in `C:\Users\<user>\rvp-test\rvp-q`.
 
 Precondition met: `goal-p-status.md` records goal P as done. The owner
 reported no findings from goal P's build (`rvp-p`) that block daily use,
@@ -73,6 +75,61 @@ which its old Server Manager remote uses, answers but runs nothing in
 3.13; the web-client protocol (`/client/connect`, `/client/request`)
 runs actions. A server started over SSH ends with the session.
 
+The installer changed (a components page that shows only with Unified
+Remote, the remote's component), so `m8-all.ps1` ran again on the final
+package (eab777e), with Unified Remote on the VM: the installed copy's
+self-test and `m7-all.ps1` (RVP Default and BlackSpace), the crash logs,
+and the uninstaller (every registry key as before, the folder gone) pass.
+In the portable ZIP's self-test the Crystality step timed out once (an
+audio-chain step that times out on a loaded machine, as in goal P); the
+portable part alone then passed.
+
+## The build
+
+`C:\Users\<user>\rvp-test\rvp-q`: the portable ZIP of eab777e, unpacked
+(file copies only), with the Whisper models copied from `rvp-p`; its
+`rvp.exe` and `rvp.scr` were then replaced by the build with the
+fullscreen fix (finding 4).
+
+## The host session (2026-10-25, with the owner's permission)
+
+The owner's PC already has Unified Remote Server (3.13, with a password
+for the phone app). With the owner's permission and nothing started on
+the host, the remote was copied into
+`C:\ProgramData\Unified Remote\Remotes\Custom\RVP`, a new token was made
+for `rvp-q` (`rvp-q\state\remote-token`) and the same token and port
+48931 were put into the remote's `settings.prop`. The owner starts
+`rvp-q`, turns on Remote Control and tries the remote from the phone.
+
+The owner tried it: the remote works, and the owner accepted it, with
+questions about its design for later. Unified Remote's log on the host
+shows the phone (an Android client) syncing the remote's layout and
+loading it twice, and no error of the remote.
+
+## Findings
+
+1. Unified Remote's manager call `/system/remote/run` runs nothing in
+   Unified Remote 3.13 (see the VM checks); the check speaks the
+   web-client protocol.
+2. The server redirected to a file cannot be read while RVP writes it on
+   Windows: the VM check waits for the API with the token instead of a
+   log line.
+3. Refusing a connection over the limit while its request was unread
+   reset the connection: the server now reads what the client sends for
+   a moment before closing (`control::linger`).
+4. The owner, trying `rvp-q`: in fullscreen the control bar "jumps up and
+   moves the picture by exactly its height". That was goal P's "Auto
+   resize video depending on fullscreen pop-ups", turned on by default
+   then after the owner's remark that part of the bar was missing. Goal
+   P's host captures show PotPlayer's video keeping its place and size
+   under an opaque bar (the bar is a window of its own). Now the shown bar
+   lies on a black backdrop (with the bar's opacity and fade), the video
+   keeps the screen, and the option is off by default; it still works
+   when turned on. Settings saved by goal P's builds keep it on: the
+   owner turns it off once (Skins page, "In fullscreen the video makes
+   room for the bars while they show"). The functional self-test checks
+   both ways (`m7-all.ps1` on the VM: 184 checks pass).
+
 ## Differences from PotPlayer
 
 PotPlayer has no control API; Unified Remote's PotPlayer remote sends
@@ -104,6 +161,10 @@ the normalizer, the albums) and works whatever window is in front.
    an entry.
 3. Renew the token on the page: the remote is refused until it has the
    new one.
+4. Fullscreen: move the pointer to the bottom; the control bar shows on
+   black and the picture stays where it is (in `rvp-q` first turn off
+   "In fullscreen the video makes room for the bars while they show" on
+   the Skins page, which goal P's build saved as on).
 
 Unified Remote Server 3.13 has CVE-2023-52252: a web page can make it
 run Lua code as the user. That is Unified Remote's; RVP's API refuses
@@ -111,8 +172,14 @@ browsers itself.
 
 ## CI
 
-Pending.
+GitHub CI passed for eab777e (run 40174569426): the checks on Ubuntu and
+Windows (the control API's and the remote's tests among them), cargo
+deny, both packages and the artifacts' pruning. This file's commit, with
+the fullscreen fix, follows it.
 
 ## Open
 
-- The owner's try from a phone (host session).
+- The remote's design: the owner has questions for later.
+- The host's Unified Remote keeps RVP's remote in its custom folder
+  (`C:\ProgramData\Unified Remote\Remotes\Custom\RVP`, copied with
+  permission); it goes when the owner asks.

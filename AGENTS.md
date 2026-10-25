@@ -396,6 +396,11 @@ smoothing for users without SVP, after a study of the engines.
 - `docs/coverage/` must not say "not in RVP yet" or "planned" for M14's
   areas (`tests/coverage.rs` fails it): every item works or keeps a
   reason that says why it cannot.
+- In fullscreen (and with "Auto hide main skin") the bar over the video
+  lies on a black backdrop (`Main.qml`, `barBackdrop`): PotPlayer's bars
+  are opaque windows of their own, and its video keeps its place. The
+  video makes room for the bar only with `skins.fullscreen-resize` (off by
+  default since goal Q: on, the picture jumped by the bar's height).
 - `--selftest=m14 --registry-check` (the test VM only) writes the Run
   key and the file types to the current user's registry and removes
   them; never pass `--registry-check` on the host. The VM's check is
