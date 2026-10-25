@@ -1060,15 +1060,24 @@ Window {
         id: tipTimer
         interval: 600
         onTriggered: {
-            if (player.tooltip !== "") {
-                tipLoader.active = true
-                const tip = tipLoader.item.tip
-                tip.text = player.tooltip
-                tip.x = Math.min(pointer.mouseX + 12, root.width - tip.implicitWidth)
-                tip.y = pointer.mouseY + 20
-                tip.open()
-            }
+            if (player.tooltip !== "")
+                root.showTip(player.tooltip, pointer.mouseX, pointer.mouseY)
         }
+    }
+
+    // Shows a tooltip by the pointer: below it, or above it where the
+    // window's bottom edge (a bar at the bottom in fullscreen) leaves no
+    // room. Qt moves a tooltip window that runs off the screen to the
+    // screen's top.
+    function showTip(text, x, y) {
+        tipLoader.active = true
+        const tip = tipLoader.item.tip
+        tip.text = text
+        tip.x = Math.max(0, Math.min(x + 12, root.width - tip.implicitWidth))
+        tip.y = y + 20 + tip.implicitHeight <= root.height
+            ? y + 20 : Math.max(0, y - tip.implicitHeight - 4)
+        tip.open()
+        return tip
     }
 
     // The tooltip, menu and file dialog load on first use: Qt Quick

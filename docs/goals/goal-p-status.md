@@ -136,9 +136,9 @@ Daum-era ones.
 
 ## Checks on the Windows VM
 
-`tools/windows-vm/m14-all.ps1` on the final build (27b10e4): 106 checks
-pass, the spectrum with BlackSpace's audio skin and on Windows' FFmpeg
-among them.
+`tools/windows-vm/m14-all.ps1` on the final build (with the tooltip's
+fix): 108 checks pass, the spectrum with BlackSpace's audio skin and on
+Windows' FFmpeg and the tooltip's place by the pointer among them.
 
 - The M14 self-test with RVP Default and with BlackSpace: every check
   passes. Windows' voices are listed (David and Zira), the Run key is
@@ -159,7 +159,7 @@ machine the 60 s clip reached its end, where filter changes wait for the
 next file. The self-test now seeks back near the start before those
 steps (`room()` in `Main.qml`), and passed all 178 under the same load.
 
-## The host session (2026-10-22 and 23, with the owner's permission)
+## The host session (2026-10-22 to 25, with the owner's permission)
 
 `tools/windows-vm/m14-host.ps1` with host-session's `m14` put PotPlayer
 and then RVP (`rvp-p`, on a channel of its own, with its settings in the
@@ -172,7 +172,7 @@ under `Settings`) were deleted afterwards, with the owner's permission.
 The captures are in `~/rvp-reference/m14` (never committed: they
 show the owner's PotPlayer playlist).
 
-There were five runs. In the first, the terminal that ran the tool
+There were seven runs. In the first, the terminal that ran the tool
 covered RVP's window, so RVP's captures and its double click were lost;
 the tool now keeps each captured window on top, and RVP ran again alone.
 A third, PotPlayer-only run captured fullscreen with the pointer at the
@@ -181,6 +181,18 @@ fixes below. The owner looked at both players side by side in
 `C:\Users\<user>\rvp-test\m14-host\compare\index.html` (local, as are
 its pictures) and found part of RVP's control bar missing in
 fullscreen; the fifth run captured RVP's final build after that fix.
+The sixth, of RVP alone to show the spectrum, lost every capture:
+another terminal stayed over RVP's window although the tool keeps it
+on top, and the tool's two double clicks went into that terminal (they
+selected blank text; no key was sent, and that terminal does not copy
+a selection). Its captures, which showed that terminal, were deleted
+with the owner's permission. The tool now checks before each click and
+each capture that the window under the points belongs to the player's
+process, and stops before clicking otherwise. The seventh run
+(2026-10-25) passed those checks: the audio skin's spectrum moves, and
+in fullscreen RVP showed the play button's tooltip at the top of the
+screen where PotPlayer shows it by the pointer (the fifth run's
+capture had it too; fixed after the seventh).
 
 | Mode | PotPlayer | RVP before | RVP now |
 |------|-----------|------------|---------|
@@ -189,7 +201,8 @@ fullscreen; the fifth run captured RVP's final build after that fix.
 | Fullscreen, pointer at the bottom | the control bar only, the video above it | the control bar and the title bar, over the video | the control bar only, the video above it |
 | Fullscreen, pointer at the top | the title bar only, the video below it | - | the title bar only, the video below it |
 | Fullscreen, pointer resting in the middle | no bar | - | no bar |
-| Audio file | the audio skin, the window shrinks to 370x186 | the audio skin in a 1126x720 window | shrinks to 360x186; Daum's pop-up window button hidden (after the last capture) |
+| Audio file | the audio skin, the window shrinks to 370x186 | the audio skin in a 1126x720 window, its spectrum still | shrinks to 360x186, the spectrum moves; Daum's pop-up window button hidden |
+| A button's tooltip with the pointer on the bottom bar in fullscreen | by the pointer | at the top of the screen | above the pointer (after the last capture) |
 
 The fixes that came from it: over the video only the bar under the
 pointer shows (`Player.shown_bar`); in fullscreen the video makes room
@@ -236,6 +249,15 @@ run on the 96x72 clip); the later runs had no IPC server.
    hides (hidden now), and a Mini Audio Mode button the coverage reports
    had not seen, as they read only `VideoSkin.xml` (they read the audio
    skin and linked files now, and the button works).
+10. The seventh host run: a tooltip asked for below a pointer near the
+    window's bottom edge ran off the screen, and Qt moved its window to
+    the screen's top. A tooltip that does not fit below the pointer now
+    opens above it (`showTip` in `Main.qml`; the M14 self-test checks
+    its place on screen).
+11. The sixth host run: a window kept on top does not stay over every
+    other window, and the tool's clicks went to a terminal over RVP;
+    host-session's `m14` now clicks and captures only while the
+    player's own window is under the points.
 
 ## Differences from PotPlayer
 
@@ -306,8 +328,8 @@ bab4d16 (2551506 to bab4d16, run 39893261483), for 73e57f5 (run
 f36f4fe (run 40070570660; its first try failed in `package-windows`'s
 media controls check on the hosted runner, the first file still opening
 after 30 s as in goal O, and passed when run again), for 48e8c64 (run
-40077168264) and for 1d84042 (990c9d5 and 1d84042, run 40111732264) and for 4e5993b (27b10e4 and 4e5993b, run
-40116251818):
+40077168264) and for 1d84042 (990c9d5 and 1d84042, run 40111732264), for 4e5993b (27b10e4 and 4e5993b, run
+40116251818) and for ff6ced4 (run 40120678253):
 the checks on Ubuntu and Windows (the coverage tests included), cargo
 deny, both packages and the artifacts' pruning. This file's commit
 follows them.
@@ -316,7 +338,8 @@ follows them.
 
 - Nothing of M14 is open. The owner reviewed the comparison, had the
   fullscreen bar and the audio skin's spectrum fixed, and closed goal P
-  (2026-10-24).
+  (2026-10-24). The comparison page now shows the seventh run (the
+  spectrum); the tooltip's fix came after it and is in `rvp-p`.
 - Other `.dsf` skins: the owner named none; PotPlayer's 23 were checked
   (see "Other skins"). A skin the owner names later is one run of
   `skin_coverage` away.

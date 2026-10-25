@@ -24,6 +24,8 @@ Item {
     property bool audioChecked: false
     // Where the pointer went over the bars (case 11).
     property real pointerY: 0
+    // The tooltip case 12 opens.
+    property var tipShown: null
 
     function view() { return JSON.parse(player.settings_view(false)) }
     function setSetting(path, value) {
@@ -158,12 +160,27 @@ Item {
                 t.check("m14_only_the_pointers_bar", bar.height > 0 && bar.y <= pointerY
                             && pointerY < bar.y + bar.height && bar.y > pointerY / 2,
                         String(bar) + " pointer at " + pointerY + " window " + host.width + "x" + host.height)
+                // A tooltip by a pointer on the bottom bar (checked once
+                // its window is placed, in the next step).
+                tipShown = host.showTip("RVP", host.width / 2, pointerY)
                 setSetting("skins.osc", false)
                 player.mouse_leave()
                 player.mouse_move(host.width / 2, host.height - 3)
             }
             break
         case 13:
+            if (tipShown !== null) {
+                // It opens above the pointer, inside the window: Qt moves
+                // a tooltip window that runs off the screen to its top.
+                const at = tipShown.contentItem.mapToGlobal(0, 0)
+                const y = at.y - host.contentItem.mapToGlobal(0, 0).y
+                t.check("m14_tooltip_by_the_pointer", tipShown.opened && y >= 0 && y < pointerY
+                            && pointerY - y < 3 * tipShown.implicitHeight,
+                        "tip text at " + Math.round(y) + " height " + tipShown.implicitHeight + " pointer at "
+                            + pointerY + " window " + host.width + "x" + host.height)
+                tipShown.close()
+                tipShown = null
+            }
             t.check("m14_osc_off_hides_the_bars", !player.chrome_shown, "shown " + player.chrome_shown)
             setSetting("skins.osc", true)
             setSetting("skins.auto-hide", false)

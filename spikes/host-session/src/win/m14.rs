@@ -16,8 +16,11 @@
 //! state in `--out` (so its own folders stay as they are, and with no IPC
 //! server, so SVP does not attach), and a second `rvp.exe` on that channel
 //! hands the files over. Each window is kept on top while it is captured
-//! (the terminal that runs this tool would otherwise cover it); `--players
-//! rvp` captures RVP only. Only mouse input is
+//! (the terminal that runs this tool would otherwise cover it), and the
+//! tool clicks and captures only while that window is the one under the
+//! points: when another window stays over it (one that is kept on top
+//! too), the session stops before it clicks anything; `--players rvp`
+//! captures RVP only. Only mouse input is
 //! injected (a double click on the video); no setting of either player is
 //! changed. PotPlayer saves its window place and adds the files to its
 //! playlist and history: `m14-host.ps1` saves its registry key and
@@ -27,11 +30,12 @@ use std::path::Path;
 use std::process::{Child, Command};
 use std::time::{Duration, Instant};
 
-use windows_sys::Win32::Foundation::{HWND, RECT};
+use windows_sys::Win32::Foundation::{HWND, POINT, RECT};
 use windows_sys::Win32::UI::Input::KeyboardAndMouse::{MOUSEEVENTF_LEFTDOWN, MOUSEEVENTF_LEFTUP};
 use windows_sys::Win32::UI::WindowsAndMessaging::{
-    HWND_NOTOPMOST, HWND_TOPMOST, PostMessageW, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE,
-    SetWindowPos, WM_CLOSE,
+    GA_ROOT, GWL_EXSTYLE, GetAncestor, GetWindowLongW, GetWindowThreadProcessId, HWND_NOTOPMOST,
+    HWND_TOPMOST, PostMessageW, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE, SetWindowPos, WM_CLOSE,
+    WS_EX_TOPMOST, WindowFromPoint,
 };
 
 use super::{
@@ -170,6 +174,49 @@ fn raise(hwnd: HWND) {
     sleep_ms(300);
 }
 
+/// The top-level window under the point when it belongs to another
+/// process than `hwnd` (a player's own popups, such as PotPlayer's
+/// fullscreen control bar, are fine): its class, process and whether it
+/// is kept on top.
+fn covering(hwnd: HWND, x: i32, y: i32) -> Option<String> {
+    let root = unsafe { GetAncestor(WindowFromPoint(POINT { x, y }), GA_ROOT) };
+    let mut player = 0;
+    let mut pid = 0;
+    unsafe {
+        GetWindowThreadProcessId(hwnd, &raw mut player);
+        GetWindowThreadProcessId(root, &raw mut pid);
+    }
+    if pid == player {
+        return None;
+    }
+    let topmost = unsafe { GetWindowLongW(root, GWL_EXSTYLE) } as u32 & WS_EX_TOPMOST != 0;
+    Some(format!("class={} pid={pid} topmost={topmost}", class_name(root)))
+}
+
+/// Fails unless the player's window is the one under every point, before
+/// a click or a capture.
+fn require_shown(hwnd: HWND, points: &[(i32, i32)], step: &str) -> Result<(), String> {
+    for &(x, y) in points {
+        if let Some(other) = covering(hwnd, x, y) {
+            return Err(format!(
+                "{step}: another window is over the player at {x},{y} ({other}); stopped before clicking or capturing"
+            ));
+        }
+    }
+    Ok(())
+}
+
+/// The middle and the corners of a rectangle, 16 pixels inside.
+fn inside(rect: &RECT) -> [(i32, i32); 5] {
+    [
+        ((rect.left + rect.right) / 2, (rect.top + rect.bottom) / 2),
+        (rect.left + 16, rect.top + 16),
+        (rect.right - 17, rect.top + 16),
+        (rect.left + 16, rect.bottom - 17),
+        (rect.right - 17, rect.bottom - 17),
+    ]
+}
+
 fn double_click(x: i32, y: i32) {
     move_to(x, y);
     let click = [mouse_flags(MOUSEEVENTF_LEFTDOWN), mouse_flags(MOUSEEVENTF_LEFTUP)];
@@ -198,7 +245,9 @@ fn session(
     place(hwnd, &monitor);
     move_to(park.0, park.1);
     sleep_ms(800);
-    shot(log, "1-idle", &window_rect(hwnd));
+    let rect = window_rect(hwnd);
+    require_shown(hwnd, &inside(&rect), "1-idle")?;
+    shot(log, "1-idle", &rect);
 
     open(video);
     log.line(&format!("{name}_opened={}", video.display()));
@@ -208,11 +257,13 @@ fn session(
     sleep_ms(1500);
     let rect = window_rect(hwnd);
     log.line(&format!("{name}_video_window={}", rect_text(&rect)));
+    require_shown(hwnd, &inside(&rect), "2-video")?;
     shot(log, "2-video", &rect);
 
     // The video's middle: inside the window, above the bars.
     let middle = ((rect.left + rect.right) / 2, rect.top + (rect.bottom - rect.top) / 3);
     raise(hwnd);
+    require_shown(hwnd, &[middle], "fullscreen click")?;
     double_click(middle.0, middle.1);
     sleep_ms(2500);
     let full = window_rect(hwnd);
@@ -223,20 +274,25 @@ fn session(
     move_to((monitor.left + monitor.right) / 2 + 10, monitor.bottom - 30);
     raise(hwnd);
     sleep_ms(1500);
+    require_shown(hwnd, &inside(&monitor), "3-fullscreen")?;
     shot(log, "3-fullscreen", &monitor);
     move_to((monitor.left + monitor.right) / 2, monitor.top + 40);
     sleep_ms(400);
     move_to((monitor.left + monitor.right) / 2 + 10, monitor.top + 30);
     raise(hwnd);
     sleep_ms(1500);
+    require_shown(hwnd, &inside(&monitor), "3-fullscreen-top")?;
     shot(log, "3-fullscreen-top", &monitor);
     move_to((monitor.left + monitor.right) / 2, (monitor.top + monitor.bottom) / 2);
     sleep_ms(3000);
+    require_shown(hwnd, &inside(&monitor), "3-fullscreen-middle")?;
     shot(log, "3-fullscreen-middle", &monitor);
-    double_click(
+    let back = (
         (monitor.left + monitor.right) / 2,
         monitor.top + (monitor.bottom - monitor.top) / 3,
     );
+    require_shown(hwnd, &[back], "windowed click")?;
+    double_click(back.0, back.1);
     sleep_ms(2500);
     log.line(&format!("{name}_back_window={}", rect_text(&window_rect(hwnd))));
 
@@ -248,6 +304,7 @@ fn session(
     sleep_ms(800);
     let rect = window_rect(hwnd);
     log.line(&format!("{name}_audio_window={}", rect_text(&rect)));
+    require_shown(hwnd, &inside(&rect), "4-audio")?;
     shot(log, "4-audio", &rect);
     Ok(())
 }
