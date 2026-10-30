@@ -53,10 +53,6 @@ const CONTEXT_REASONS: &[(&str, &str)] = &[
         "TV tuners (WDM/BDA channels): FFmpeg cannot tune them (a non-goal, PLAN.md section 1); capture cards open as devices",
     ),
     (
-        "101_0_8",
-        "DVD and Blu-ray menus are M16's (goal R); RVP plays a disc's titles, chapters and streams",
-    ),
-    (
         "101_0_9_12",
         "seamless playback is not in RVP (docs/spikes/m11-studies.md): mpv preloads and joins files only inside its own playlist, and RVP's albums give mpv one entry at a time",
     ),

@@ -376,7 +376,16 @@ fn skin_menus_name_commands_and_builtin_submenus() {
             "Previous Chapter",
             "Next Chapter",
             "",
-            "Speed"
+            "Speed",
+            // M16: the disc's own menus.
+            "",
+            "Previous Menu",
+            "Root Menu",
+            "Title Menu",
+            "Chapter Menu",
+            "Audio Menu",
+            "Subtitle Menu",
+            "Angle Menu"
         ]
     );
     assert_eq!(items[0].shortcut, "Ctrl+U");

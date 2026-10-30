@@ -11,12 +11,23 @@ shinchiro's build host has none. `build.sh` builds libmpv with the same
 recipe at a fixed commit, after it builds glslang 16.6.0 for the build host
 into the work folder and puts it on the PATH.
 
-The one change to the recipe, `curl-release.patch`, keeps it building: it
-holds curl at its 8.22.0 release. curl's master (since 8.23.0) calls OpenSSL
-4.1's `ASN1_STRING_get_length`, which the recipe's pinned OpenSSL
-(4.1.0-dev of 2026-07-18) does not have yet. The recipe takes every other
-package at its newest commit, so a later build may need another pin like
-this one.
+Four changes to the recipe:
+
+- `curl-release.patch` holds curl at its 8.22.0 release: curl's master
+  (since 8.23.0) calls OpenSSL 4.1's `ASN1_STRING_get_length`, which the
+  recipe's pinned OpenSSL (4.1.0-dev of 2026-07-18) does not have yet.
+- `curl-no-libssh.patch` builds curl without SSH: libssh's master
+  removed the SCP API that curl 8.22.0 still uses, and a player needs no
+  SCP or SFTP (goal R).
+- `ffmpeg-no-opengl.patch` drops `--enable-opengl`: FFmpeg's master
+  removed its OpenGL output device, which RVP never used (goal R).
+- `no-libdvdcss.patch` builds libdvdread without libdvdcss (goal R): RVP
+  never ships libdvdcss, and libdvdread loads a user's `libdvdcss-2.dll`
+  at run time instead. `build.sh` fails when the result still holds
+  libdvdcss's strings.
+
+The recipe takes every other package at its newest commit, so a later
+build may need another pin like these.
 
 Nothing built here is committed: the result is a `mpv-dev-x86_64-*.7z` in
 the work folder, which takes the place of shinchiro's for the packages.

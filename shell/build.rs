@@ -125,7 +125,8 @@ fn main() {
         .qml_file("qml/SelfTestSmoothing.qml")
         .qml_file("qml/SelfTestM13.qml")
         .qml_file("qml/SelfTestM14.qml")
-        .qml_file("qml/SelfTestM15.qml");
+        .qml_file("qml/SelfTestM15.qml")
+        .qml_file("qml/SelfTestM16.qml");
     CxxQtBuilder::new_qml_module(module)
         .qt_module("Gui")
         .qt_module("Qml")
@@ -134,6 +135,8 @@ fn main() {
         .qt_module("Network")
         .files([
             "src/ffi.rs",
+            "src/disc_ffi.rs",
+            "src/bluray_ffi.rs",
             "src/player_qobject.rs",
             "src/skin_view_qobject.rs",
             "src/thumb_view_qobject.rs",
@@ -146,6 +149,10 @@ fn main() {
         .cpp_file("cpp/registry.cpp")
         .cpp_file("cpp/tts.cpp")
         .cpp_file("cpp/xinput.cpp")
+        .cpp_file("cpp/disc.h")
+        .cpp_file("cpp/disc.cpp")
+        .cpp_file("cpp/bluray.h")
+        .cpp_file("cpp/bluray.cpp")
         .qrc(&look_qrc)
         .qrc(&i18n_qrc)
         .build();

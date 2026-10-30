@@ -1199,7 +1199,11 @@ ApplicationWindow {
                         Field { label: qsTr("DVD drive or folder"); path: "devices.dvd"; placeholder: qsTr("ask every time") }
                         Field { label: qsTr("Blu-ray drive or folder"); path: "devices.bluray"; placeholder: qsTr("ask every time") }
                         Field { label: qsTr("CD drive"); path: "devices.cd"; placeholder: qsTr("libmpv's default") }
-                        Note { text: qsTr("Discs play their titles; their menus come with a later version.") }
+                        Check { path: "devices.dvd-menus"; text: qsTr("Play whole DVDs through their menus") }
+                        Field { label: qsTr("Menu language (two letters)"); path: "devices.dvd-menu-language"; placeholder: qsTr("the disc's default") }
+                        Check { path: "devices.dvd-skip-opening"; text: qsTr("Go straight to a DVD's menu, past its opening") }
+                        Check { path: "devices.bluray-menus"; text: qsTr("Play whole Blu-rays through their menus") }
+                        Note { text: qsTr("Encrypted discs need the user's own libdvdcss-2.dll (DVD) or libaacs.dll and its keys (Blu-ray) next to rvp.exe; RVP includes neither.") }
                     }
 
                     Page {

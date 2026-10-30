@@ -493,14 +493,18 @@ const ITEMS: &[(u32, u32, Status)] = &[
     (
         382,
         3008,
-        Missing("libmpv's dvdnav plays DVDs: DirectShow navigators do not apply"),
+        Missing(
+            "RVP's navigator (libdvdnav) plays a DVD's menus, and libmpv its titles: DirectShow navigators do not apply",
+        ),
     ),
     (
         382,
         3070,
-        Missing("libmpv's dvdnav plays DVDs: DirectShow navigators do not apply"),
+        Missing(
+            "RVP's navigator (libdvdnav) plays a DVD's menus, and libmpv its titles: DirectShow navigators do not apply",
+        ),
     ),
-    (382, 3003, Missing("DVD menus are M16's (goal R)")),
+    (382, 3003, Setting("devices.dvd-menu-language")),
     (382, 3005, Setting("audio.languages")),
     (382, 3006, Setting("subtitle-languages")),
     (
@@ -509,15 +513,13 @@ const ITEMS: &[(u32, u32, Status)] = &[
         Missing("a DVD's subtitles are tracks like any file's (Subtitles menu)"),
     ),
     (382, 3009, Setting("remember-positions")),
-    (
-        382,
-        3010,
-        Missing("skipping a disc's opening is M16's (goal R) with its menus"),
-    ),
+    (382, 3010, Setting("devices.dvd-skip-opening")),
     (
         382,
         3004,
-        Missing("libmpv's libbluray plays Blu-rays: there is no other method"),
+        Missing(
+            "RVP's navigator (libbluray) plays a Blu-ray's menus, and libmpv its playlists: there is no other method",
+        ),
     ),
     (
         382,

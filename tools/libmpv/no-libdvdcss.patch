@@ -1,0 +1,19 @@
+diff --git a/packages/libdvdread.cmake b/packages/libdvdread.cmake
+index 89e8bad..22a80bc 100644
+--- a/packages/libdvdread.cmake
++++ b/packages/libdvdread.cmake
+@@ -1,5 +1,4 @@
+ ExternalProject_Add(libdvdread
+-    DEPENDS libdvdcss
+     GIT_REPOSITORY https://code.videolan.org/videolan/libdvdread.git
+     SOURCE_DIR ${SOURCE_LOCATION}
+     GIT_CLONE_FLAGS "--filter=tree:0"
+@@ -11,7 +10,7 @@ ExternalProject_Add(libdvdread
+         --cross-file=${MESON_CROSS}
+         --buildtype=release
+         --default-library=static
+-        -Dlibdvdcss=enabled
++        -Dlibdvdcss=disabled
+     BUILD_COMMAND ${EXEC} ninja -C <BINARY_DIR>
+     INSTALL_COMMAND ${EXEC} ninja -C <BINARY_DIR> install
+     LOG_DOWNLOAD 1 LOG_UPDATE 1 LOG_CONFIGURE 1 LOG_BUILD 1 LOG_INSTALL 1

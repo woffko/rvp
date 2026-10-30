@@ -38,6 +38,7 @@ mod m12;
 mod m13;
 mod m14;
 mod m15;
+mod m16;
 
 /// `ui_request` kinds.
 pub mod request {
@@ -383,6 +384,8 @@ struct Core {
     look: m14::Look,
     /// The control API for remotes (M15).
     remote: m15::Remote,
+    /// The DVD that plays with its menus (M16).
+    disc: Option<m16::Playing>,
 }
 
 /// Who gives the GPU power budget its readings.
@@ -938,25 +941,9 @@ impl qobject::Player {
         app.prepare_svp(VSSCRIPT.get().cloned().flatten());
         let options = engine_options(&mut app, &cli, &mut messages);
         app.second_mpv_options = extra_mpv_options(&cli);
-        let mut engine = match Engine::new(&options) {
-            Ok(engine) => engine,
-            Err(error) => {
-                self.show_message(&format!("cannot start libmpv: {error}"));
-                return;
-            }
-        };
-        let drain_queued = Arc::new(AtomicBool::new(false));
-        let thread = self.qt_thread();
-        let queued = Arc::clone(&drain_queued);
-        // On an mpv thread: only queue work (section 5).
-        engine.set_wakeup_callback(move || {
-            if !queued.swap(true, Ordering::AcqRel) {
-                let _ = thread.queue(qobject::Player::drain);
-            }
-        });
-        if ENGINE.set(engine).is_err() {
+        let Some(drain_queued) = self.as_mut().start_engine(&options, &mut app) else {
             return;
-        }
+        };
         crate::metrics::mark("engine_ready_ms");
         messages.extend(m11::start_thumbnails(&mut app, self.qt_thread()));
         let Some(engine) = ENGINE.get() else {
@@ -1004,6 +991,7 @@ impl qobject::Player {
             gpu_readings: GpuReadings::Off,
             look: m14::Look::default(),
             remote: m15::Remote::default(),
+            disc: None,
         });
         self.as_mut().sync_look();
         if let Some(message) = messages.first() {
@@ -1012,6 +1000,34 @@ impl qobject::Player {
         if crate::video::READY.load(Ordering::Acquire) {
             self.render_ready();
         }
+    }
+
+    /// Starts libmpv's player core and its wakeups; `None` when it cannot
+    /// start. The flag is true while a drain is queued.
+    fn start_engine(
+        self: Pin<&mut Self>,
+        options: &rvp_engine::EngineOptions,
+        app: &mut App,
+    ) -> Option<Arc<AtomicBool>> {
+        let mut engine = match Engine::new(options) {
+            Ok(engine) => engine,
+            Err(error) => {
+                self.show_message(&format!("cannot start libmpv: {error}"));
+                return None;
+            }
+        };
+        let drain_queued = Arc::new(AtomicBool::new(false));
+        let thread = self.qt_thread();
+        let queued = Arc::clone(&drain_queued);
+        // On an mpv thread: only queue work (section 5).
+        engine.set_wakeup_callback(move || {
+            if !queued.swap(true, Ordering::AcqRel) {
+                let _ = thread.queue(qobject::Player::drain);
+            }
+        });
+        m16::start(app, &engine);
+        ENGINE.set(engine).ok()?;
+        Some(drain_queued)
     }
 
     /// The window's last geometry, for QML to restore.
@@ -1159,6 +1175,7 @@ impl qobject::Player {
         for request in requests {
             self.as_mut().handle_request(request);
         }
+        self.as_mut().disc_drained(&drained.events);
         // A file with or without video: the audio or video skin (M14).
         if file_changed {
             self.as_mut().sync_skin();
@@ -1185,6 +1202,7 @@ impl qobject::Player {
     /// About ten times a second: a playback update held back by
     /// [`CHROME_INTERVAL`] is shown.
     pub(crate) fn flush_chrome(mut self: Pin<&mut Self>) {
+        self.as_mut().disc_tick();
         let Some(core) = self.as_mut().core_mut() else {
             return;
         };
@@ -1200,6 +1218,7 @@ impl qobject::Player {
 
     /// Recomputes the chrome from the model and signals what to repaint.
     fn sync_chrome(mut self: Pin<&mut Self>) {
+        self.as_mut().follow_disc();
         self.as_mut().publish_remote();
         let Some(core) = self.as_mut().core_mut() else {
             return;
@@ -1515,6 +1534,7 @@ impl qobject::Player {
     }
 
     fn relayout(mut self: Pin<&mut Self>) {
+        self.as_mut().disc_layout_changed();
         let overlay = self.as_mut().sync_overlay();
         let Some(core) = self.as_mut().core_mut() else {
             return;
@@ -1679,6 +1699,16 @@ impl qobject::Player {
         let Some(button) = button(button_value) else {
             return;
         };
+        // A DVD menu's buttons under the pointer (M16).
+        if button == Button::Left
+            && match phase {
+                0 => self.as_mut().disc_pointer(x, y, true),
+                2 => self.as_mut().disc_release(),
+                _ => false,
+            }
+        {
+            return;
+        }
         let Some(ctx) = self.pointer_context(modifiers) else {
             return;
         };
@@ -1868,6 +1898,7 @@ impl qobject::Player {
     }
 
     pub(crate) fn mouse_move(mut self: Pin<&mut Self>, x: f64, y: f64) {
+        self.as_mut().disc_pointer(x, y, false);
         let Some(ctx) = self.pointer_context(Modifiers::default()) else {
             return;
         };
@@ -1968,6 +1999,11 @@ impl qobject::Player {
     }
 
     pub(crate) fn key(mut self: Pin<&mut Self>, key: i32, modifiers: i32) -> bool {
+        // A DVD menu's arrows and Enter (M16).
+        if self.as_mut().disc_key(key, modifiers) {
+            self.sync_chrome();
+            return true;
+        }
         let fullscreen = *self.fullscreen();
         let Some(core) = self.core() else {
             return false;
@@ -3199,6 +3235,7 @@ impl qobject::Player {
             .into_iter()
             .chain(self.playlist_status(core))
             .chain(m11::status(self, core))
+            .chain(m16::status(self, core))
             .map(|(name, value)| format!("\"{name}\":{value}"))
             .collect();
         QString::from(&format!("{{{}}}", body.join(",")))

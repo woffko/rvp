@@ -22,6 +22,7 @@ pub mod control;
 pub mod coverage;
 pub mod crash;
 pub mod decoders;
+pub mod disc;
 pub mod dpl;
 pub mod equalizer;
 pub mod general;

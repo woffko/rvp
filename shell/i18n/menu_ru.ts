@@ -364,6 +364,10 @@
         <translation>Анаглиф жёлтый/синий, полуцветной</translation>
     </message>
     <message>
+        <source>Angle Menu</source>
+        <translation>Меню ракурсов</translation>
+    </message>
+    <message>
         <source>Apply subtitle sync</source>
         <translation>Применить синхронизацию субтитров</translation>
     </message>
@@ -406,6 +410,10 @@
     <message>
         <source>Audio Language/Sync/Other Settings...</source>
         <translation>Язык/синхронизация/прочее для звука...</translation>
+    </message>
+    <message>
+        <source>Audio Menu</source>
+        <translation>Меню звука</translation>
     </message>
     <message>
         <source>Audio Processing Settings...</source>
@@ -526,6 +534,10 @@
     <message>
         <source>Capture Consecutive Images...</source>
         <translation>Захват серии изображений...</translation>
+    </message>
+    <message>
+        <source>Chapter Menu</source>
+        <translation>Меню глав</translation>
     </message>
     <message>
         <source>Chapter/Bookmark</source>
@@ -1924,6 +1936,10 @@
         <translation>Предыдущая глава</translation>
     </message>
     <message>
+        <source>Previous Menu</source>
+        <translation>Предыдущее меню</translation>
+    </message>
+    <message>
         <source>Previous frame</source>
         <translation>Предыдущий кадр</translation>
     </message>
@@ -2126,6 +2142,10 @@
     <message>
         <source>Rock</source>
         <translation>Рок</translation>
+    </message>
+    <message>
+        <source>Root Menu</source>
+        <translation>Корневое меню</translation>
     </message>
     <message>
         <source>Rotation (Horizontal/Vertical)</source>
@@ -2452,6 +2472,10 @@
         <translation>Язык/синхронизация/прочее для субтитров...</translation>
     </message>
     <message>
+        <source>Subtitle Menu</source>
+        <translation>Меню субтитров</translation>
+    </message>
+    <message>
         <source>Subtitle Processing Settings...</source>
         <translation>Настройки обработки субтитров...</translation>
     </message>
@@ -2526,6 +2550,10 @@
     <message>
         <source>Title</source>
         <translation>Название</translation>
+    </message>
+    <message>
+        <source>Title Menu</source>
+        <translation>Меню разделов</translation>
     </message>
     <message>
         <source>To Twice the Video's Rate</source>

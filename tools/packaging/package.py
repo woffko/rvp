@@ -5,7 +5,8 @@ windows: the Windows folder (rvp.exe, Qt, libmpv, the C++ runtime and,
     with --vapoursynth, RVP's VapourSynth runtime in `vapoursynth/`, made
     by tools/packaging/vapoursynth.py; with --whisper, whisper.cpp's
     CPU and Vulkan engine in `whisper/`, made by tools/whisper/build.sh;
-    no models), the portable ZIP (with
+    no models; with --discs, libdvdnav and libbluray for the disc menus,
+    made by tools/discs/build.sh), the portable ZIP (with
     rvp.portable) and the NSIS installer (packaging/windows/rvp.nsi).
 linux: the AppDir, the AppImage and the .deb. Build on the oldest system
     the packages support (Ubuntu 22.04); RVP's binary must carry
@@ -21,7 +22,8 @@ entries and the commit's time as every file's time.
 usage:
   package.py version | mime-types
   package.py windows --exe rvp.exe --qt QT --mpv libmpv-2.dll --runtime DIR
-      --look DIR --out DIR [--vapoursynth DIR] [--whisper DIR] [--makensis PATH] [--nsisdir DIR]
+      --look DIR --out DIR [--vapoursynth DIR] [--whisper DIR] [--discs DIR] [--makensis PATH]
+      [--nsisdir DIR]
       [--objdump PATH]
   package.py linux --exe rvp --qt QT --mpv DIR --look DIR --out DIR
       --runtime APPIMAGE_RUNTIME [--mksquashfs PATH]
@@ -182,6 +184,18 @@ def windows_bundle(args, bundle: Path) -> None:
     if args.whisper:
         # M13's subtitles from audio: the engine RVP finds next to itself.
         shutil.copytree(args.whisper, bundle / "whisper")
+    if args.discs:
+        # M16's disc menus: the libraries RVP loads from its own folder,
+        # libbluray's BD-J jars beside it (it looks there) and their
+        # licences. Never libdvdcss, libaacs or keys.
+        discs = Path(args.discs)
+        names = ["libdvdnav-4.dll", "libbluray-4.dll"]
+        names += sorted(p.name for p in discs.glob("libbluray-*.jar"))
+        names += sorted(p.name for p in discs.glob("*-COPYING.txt"))
+        for name in names:
+            if "dvdcss" in name or "aacs" in name:
+                raise SystemExit(f"{name} must not be in RVP's package")
+            shutil.copy2(discs / name, bundle / name)
     shutil.copy2(Path(args.look) / "icons" / "rvp.ico", bundle / "rvp.ico")
     remote_folder(Path(args.look), bundle)
     shutil.copy2(ROOT / "LICENSE", bundle / "LICENSE.txt")
@@ -561,6 +575,7 @@ def main() -> int:
     win.add_argument("--runtime", required=True)
     win.add_argument("--vapoursynth", help="RVP's VapourSynth runtime (tools/packaging/vapoursynth.py)")
     win.add_argument("--whisper", help="whisper.cpp's CPU and Vulkan engine (tools/whisper/build.sh)")
+    win.add_argument("--discs", help="libdvdnav and libbluray for the disc menus (tools/discs/build.sh)")
     win.add_argument("--look", required=True)
     win.add_argument("--out", required=True)
     win.add_argument("--makensis")

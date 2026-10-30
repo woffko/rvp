@@ -1,0 +1,21 @@
+diff --git a/packages/curl.cmake b/packages/curl.cmake
+index 9e2130b..c4f0509 100644
+--- a/packages/curl.cmake
++++ b/packages/curl.cmake
+@@ -3,7 +3,6 @@ ExternalProject_Add(curl
+         brotli
+         c-ares
+         libpsl
+-        libssh
+         ngtcp2
+         nghttp2
+         nghttp3
+@@ -31,7 +30,7 @@ ExternalProject_Add(curl
+         -DCURL_CA_NATIVE=ON
+         -DCURL_BROTLI=ON
+         -DCURL_USE_LIBPSL=ON
+-        -DCURL_USE_LIBSSH=ON
++        -DCURL_USE_LIBSSH=OFF
+         -DCURL_USE_LIBSSH2=OFF
+         -DCURL_USE_OPENSSL=ON
+         -DCURL_ZSTD=ON

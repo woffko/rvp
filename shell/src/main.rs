@@ -19,9 +19,12 @@
 #![cfg_attr(windows, windows_subsystem = "windows")]
 
 mod awake;
+mod bluray_ffi;
 mod crash;
 mod desktop;
 mod devices;
+mod disc;
+mod disc_ffi;
 mod ffi;
 mod gpu_power;
 #[cfg(windows)]

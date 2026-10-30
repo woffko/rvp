@@ -231,6 +231,8 @@ pub enum UiRequest {
     ListView,
     /// A built-in submenu at the pointer (`CMD_POPUPMENU_*`).
     PopupMenu(&'static str),
+    /// One of DVD Control's menus of the disc that plays (M16).
+    DiscMenu(crate::disc::play::DiscMenu),
 }
 
 /// A sync step as PotPlayer's menu names it: `50ms`, `0.5 Sec`.
@@ -313,7 +315,13 @@ pub struct App {
     library: Library,
     tracking: Tracking,
     /// The end of the file that plays was handled (moved on or stayed).
-    end_handled: bool,
+    pub(crate) end_handled: bool,
+    /// The shell loads libdvdnav and libbluray (M16).
+    pub(crate) disc_menus_available: (bool, bool),
+    /// A disc for the shell to start with its menus.
+    pub(crate) disc_request: Option<crate::disc::play::DiscPlay>,
+    /// The disc that plays with its menus.
+    pub(crate) disc_playing: Option<crate::disc::play::DiscPlay>,
     /// `start` restored the saved volume and mute. Until then mpv's reports
     /// (its defaults) must not replace them: the window starts the app only
     /// once its video output is ready, and mpv reports its volume before.
@@ -495,6 +503,9 @@ impl App {
             library: Library::open(state_dir)?,
             tracking: Tracking::On,
             end_handled: false,
+            disc_menus_available: (false, false),
+            disc_request: None,
+            disc_playing: None,
             started: false,
             play_on_load: false,
             chain_pending: false,
@@ -908,6 +919,12 @@ impl App {
         self.tracking = Tracking::Loading;
         self.remember_recent(&path);
         engine.set_pause(paused)?;
+        // A whole disc plays through its menus (M16): the shell's
+        // navigator.
+        if self.plays_disc_menus(&path) {
+            self.request_disc_menus(&path);
+            return Ok(());
+        }
         // Streaming sites go through yt-dlp first (crate::ytdl).
         if self.resolve_stream(engine, &path) {
             return Ok(());
@@ -1945,7 +1962,12 @@ impl App {
             self.end_handled = true;
             self.end_of_file(engine, now, &mut requests);
         }
+        // A disc's segment is not the album entry's length (M16).
         if changes.contains(PropertyId::Duration)
+            && !self
+                .model
+                .loaded_path()
+                .is_some_and(crate::disc::play::is_segment)
             && let Some(duration) = self.model.double(PropertyId::Duration).filter(|d| *d > 0.0)
         {
             self.library.update_current(Some(duration), true);
@@ -2011,6 +2033,7 @@ impl App {
     /// A file is open: A-B points, SVP's watch, the last file, and the
     /// resume position.
     fn file_loaded(&mut self, engine: &Engine, path: &str, now: Instant) {
+        self.leave_disc(path);
         if std::mem::take(&mut self.play_on_load) {
             drop(engine.set_pause(false));
         }
@@ -2030,7 +2053,10 @@ impl App {
             drop(self.apply_video_filters(engine));
         }
         self.apply_ab(engine);
-        self.store.set_last_file(path);
+        // A disc's segments are no files: the disc is the last file.
+        if !crate::disc::play::is_segment(path) {
+            self.store.set_last_file(path);
+        }
         self.read_chapters(engine);
         self.apply_loop_count(engine);
         if !self.settings.playback.keep_speed {
@@ -2102,6 +2128,15 @@ impl App {
         if self.video_pending.get() && !self.near_end() {
             drop(self.apply_video_filters(engine));
         }
+        // The disc's navigator ends its segments, and says when the disc
+        // ends (`disc_finished`).
+        if self
+            .model
+            .loaded_path()
+            .is_some_and(crate::disc::play::is_segment)
+        {
+            return;
+        }
         if self.tracking == Tracking::On
             && let (Some(path), Some(time)) = (self.model.loaded_path(), time)
         {
@@ -2138,10 +2173,16 @@ impl App {
     /// The file played to its end: repeat it, move on, start the album
     /// again, exit or power off, as the repeat mode and "When Playback
     /// Finished" say; a played file may go to the Recycle Bin.
-    fn end_of_file(&mut self, engine: &Engine, now: Instant, requests: &mut Vec<UiRequest>) {
+    pub(crate) fn end_of_file(
+        &mut self,
+        engine: &Engine,
+        now: Instant,
+        requests: &mut Vec<UiRequest>,
+    ) {
         let finished = self.model.loaded_path().map(str::to_owned);
         if self.settings.playback.recycle_played
             && let Some(path) = &finished
+            && !crate::disc::play::is_segment(path)
             && let Some(request) = Self::recycle_request(std::slice::from_ref(path), true)
         {
             requests.push(request);

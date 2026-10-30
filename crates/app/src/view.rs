@@ -57,7 +57,12 @@ pub fn title(model: &PlayerModel, lists: &Playlists) -> String {
         let album = lists.albums.get(album)?;
         let index = album.current?;
         let entry = album.entries.get(index)?;
-        (entry.path == path).then_some((index, album.entries.len(), entry.label()))
+        // A disc's segments play its entry (M16).
+        (entry.path == path || crate::disc::play::is_segment(path)).then_some((
+            index,
+            album.entries.len(),
+            entry.label(),
+        ))
     });
     match playing {
         Some((index, count, label)) if count > 1 => format!("[{}/{count}] {label}", index + 1),

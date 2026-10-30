@@ -1200,8 +1200,28 @@ in %2 seconds</source>
             <translation>libmpv</translation>
         </message>
         <message>
-            <source>Discs play their titles; their menus come with a later version.</source>
-            <translation>Диски воспроизводят свои эпизоды; меню дисков появятся в следующей версии.</translation>
+            <source>Play whole DVDs through their menus</source>
+            <translation>Воспроизводить DVD целиком через их меню</translation>
+        </message>
+        <message>
+            <source>Menu language (two letters)</source>
+            <translation>Язык меню (две буквы)</translation>
+        </message>
+        <message>
+            <source>the disc's default</source>
+            <translation>как задано на диске</translation>
+        </message>
+        <message>
+            <source>Go straight to a DVD's menu, past its opening</source>
+            <translation>Сразу открывать меню DVD, без вступления</translation>
+        </message>
+        <message>
+            <source>Play whole Blu-rays through their menus</source>
+            <translation>Воспроизводить Blu-ray целиком через их меню</translation>
+        </message>
+        <message>
+            <source>Encrypted discs need the user's own libdvdcss-2.dll (DVD) or libaacs.dll and its keys (Blu-ray) next to rvp.exe; RVP includes neither.</source>
+            <translation>Зашифрованным дискам нужны собственные libdvdcss-2.dll (DVD) или libaacs.dll с ключами (Blu-ray) пользователя рядом с rvp.exe; в RVP их нет.</translation>
         </message>
         <message>
             <source>Audio Output</source>

@@ -447,6 +447,43 @@ smoothing for users without SVP, after a study of the engines.
 - MPC-HC's web interface was studied and left out: it has no token
   (`docs/spikes/m15-mpc-hc.md`).
 
+## Disc menus (M16)
+
+- A whole disc (`dvd://longest/DEVICE`, `bd://longest/DEVICE`) plays
+  through RVP's own navigators (D8 approved libdvdnav, libdvdread and
+  libbluray, `docs/spikes/s7-disc-menus.md`): `shell/cpp/disc.cpp` and
+  `bluray.cpp` load `libdvdnav-4.dll` and `libbluray-4.dll` from RVP's
+  folder (Linux: the system's `.so.4` and `.so.2`), `shell/src/disc`
+  drives them, `shell/src/player/m16.rs` is the window's part, and
+  `crates/app/src/disc` holds what needs no library (SPU decoding, the
+  highlight, the Blu-ray plane). Without a library the disc plays as
+  mpv's `dvd://` or `bd://`.
+- mpv plays a disc as segments `rvpdisc://N` of a custom stream
+  (`stream.rs`, one open disc per process): one per still, VM jump,
+  playlist, or cells that go back. The number in the address binds the
+  segment (mpv opens it after `loadfile` returned); a title's segment
+  seeks and ends at its last sector, and the navigator reads past it
+  only when mpv reached the end (`finish`). Never hold the navigator's
+  lock while calling mpv: mpv's stream open takes it.
+- RVP draws the menus with `overlay-add` (slot 7; the pixels stay alive
+  in `Playing::shown`), maps the pointer through `osd-dimensions`, and
+  takes the arrows, Enter and the left button while a menu with buttons
+  shows. The disc's program chooses the streams (`Navigation::streams`:
+  mpv's source IDs, DVD 0x80+ audio and 0x20+ sub-pictures, Blu-ray PIDs
+  0x1100+ and 0x1200+).
+- RVP never ships libdvdcss, libaacs or keys (`tools/discs/build.sh` and
+  `tools/libmpv/build.sh` fail on DVDCSS strings; `package.py --discs`
+  refuses such files); a user may put their own beside `rvp.exe`.
+  libdvdread is built with `-mno-ms-bitfields` like libdvdnav (MinGW's
+  default layout broke the button rectangles).
+- Tests: `tools/test-clips/make-m16-dvd.sh` and `make-m16-bluray.py`
+  write the synthetic discs (never committed; CI makes them);
+  `shell/src/disc/tests.rs` (`RVP_DVD_MENU`, `RVP_BD_MENU`, and
+  `RVP_DVD_REAL` for a real disc's opening and menu: the owner's copy is
+  in `~/rvp-reference/discs`), one disc at a time;
+  `rvp --selftest=m16 --dvd-menus=DIR --bd-menus=DIR`; the VM's check is
+  `tools/windows-vm/m16-all.ps1` (the discs in `C:\rvp-test\m16`).
+
 ## Playback, playlist and opening (M11)
 
 - The thumbnail core (`crates/engine/src/thumbnail.rs`) is a second

@@ -8,7 +8,12 @@
 # builds have none; this script builds glslang for the build host at a
 # release. One more change keeps the recipe building: curl stays at its
 # 8.22.0 release, since curl's master since 8.23.0 expects an OpenSSL 4.1
-# with ASN1_STRING_get_length, newer than the 4.1.0-dev the recipe pins.
+# with ASN1_STRING_get_length, newer than the 4.1.0-dev the recipe pins;
+# curl leaves out SSH (libssh's master removed the SCP API curl 8.22.0
+# uses; a player needs no SCP or SFTP); FFmpeg's master no longer has the
+# OpenGL output device the recipe enables (both goal R). And libdvdread is built without libdvdcss (goal R): RVP never ships it;
+# libdvdread loads a user's libdvdcss-2.dll at run time instead. The
+# script checks the result for libdvdcss's strings.
 # Everything else is the recipe's own, its other packages at their newest.
 #
 # Runs on Ubuntu (WSL included) with the packages tools/libmpv/README.md
@@ -33,6 +38,9 @@ cd mpv-winbuild-cmake
 git fetch -q origin
 git checkout -q --force "$COMMIT"
 git apply "$HERE/curl-release.patch"
+git apply "$HERE/curl-no-libssh.patch"
+git apply "$HERE/ffmpeg-no-opengl.patch"
+git apply "$HERE/no-libdvdcss.patch"
 
 # glslang for the build host (see above), installed in the work folder.
 GLSLANG=16.6.0
@@ -68,6 +76,14 @@ if [ ! -d "$WORK/install_rustup/.cargo/bin" ]; then
     ninja -C "$BUILD" rustup
 fi
 ninja -C "$BUILD" update
+# A libdvdcss an earlier build installed must not be found again.
+rm -rf "$BUILD"/x86_64-w64-mingw32/lib/libdvdcss.* "$BUILD"/x86_64-w64-mingw32/lib/pkgconfig/libdvdcss.pc \
+    "$BUILD"/x86_64-w64-mingw32/include/dvdcss
 ninja -C "$BUILD" mpv
 ninja -C "$BUILD" mpv-packaging
 ls -l "$BUILD"/mpv-dev-*.7z
+DLL=$(ls -t "$BUILD"/mpv-dev-*/libmpv-2.dll | head -1)
+if strings "$DLL" | grep -q 'DVDCSS_'; then
+    echo "$DLL contains libdvdcss" >&2
+    exit 1
+fi

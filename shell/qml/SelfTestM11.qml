@@ -289,6 +289,8 @@ Item {
                             "error " + error + " entries " + after.shown_entries)
                 else
                     t.check("recycle_bin", true, "SKIPPED (Linux: goal S) " + error)
+                // mpv's own DVD playback: the menus (M16) stay off here.
+                setSetting("devices.dvd-menus", false)
                 player.open_disc(player.option("dvd-folder"), false)
             }
             break

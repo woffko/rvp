@@ -84,7 +84,7 @@ impl qobject::Player {
                     self.set_osd(QString::from(&text));
                 }
             }
-            other => eprintln!("rvp: unhandled request {other:?}"),
+            other => self.m16_request(&other),
         }
     }
 

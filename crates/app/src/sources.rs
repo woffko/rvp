@@ -52,6 +52,8 @@ pub enum Capture {
 }
 
 /// The Device pages' settings (`devices` in `settings.json`).
+// Each flag is a setting of its own.
+#[allow(clippy::struct_excessive_bools)]
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(default, rename_all = "kebab-case")]
 pub struct Devices {
@@ -68,6 +70,16 @@ pub struct Devices {
     pub bluray: String,
     /// The CD drive (empty: libmpv's default).
     pub cd: String,
+    /// A whole DVD plays through its menus (M16), where RVP has
+    /// libdvdnav.
+    pub dvd_menus: bool,
+    /// A whole Blu-ray plays through its menus, where RVP has libbluray.
+    pub bluray_menus: bool,
+    /// The language of a DVD's menus (two letters, ISO 639-1; empty: the
+    /// disc's default).
+    pub dvd_menu_language: String,
+    /// A DVD goes straight to its menu, past the opening.
+    pub dvd_skip_opening: bool,
 }
 
 impl Default for Devices {
@@ -80,6 +92,10 @@ impl Default for Devices {
             dvd: String::new(),
             bluray: String::new(),
             cd: String::new(),
+            dvd_menus: true,
+            bluray_menus: true,
+            dvd_menu_language: String::new(),
+            dvd_skip_opening: false,
         }
     }
 }
@@ -148,6 +164,16 @@ impl Devices {
                 notes.push(format!("{name} must be one line: cleared"));
                 value.clear();
             }
+        }
+        let language = self.dvd_menu_language.trim().to_ascii_lowercase();
+        if language.is_empty() || crate::disc::play::language_code(&language).is_some() {
+            self.dvd_menu_language = language;
+        } else {
+            notes.push(format!(
+                "devices.dvd-menu-language {:?} must be two letters (ISO 639-1): cleared",
+                self.dvd_menu_language
+            ));
+            self.dvd_menu_language.clear();
         }
     }
 }

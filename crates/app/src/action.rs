@@ -706,6 +706,8 @@ pub enum Action {
     EditFavorites,
     /// DVD Control > Speed: forward (positive) or backward, 1x to 8x.
     DvdSpeed(i8),
+    /// DVD Control's menus of the disc that plays (M16).
+    DiscMenu(crate::disc::play::DiscMenu),
     /// The playlist's selected files (and with `true` their related files)
     /// to the Recycle Bin, from the window (Shift+Del).
     DeleteFiles(bool),
@@ -6053,6 +6055,63 @@ pub const ACTIONS: &[ActionInfo] = &[
         "8x Forward",
         None,
         &[10476],
+        &[],
+    ),
+    // M16: DVD Control's menus.
+    info(
+        Action::DiscMenu(crate::disc::play::DiscMenu::Previous),
+        "dvd-previous-menu",
+        "Previous Menu",
+        None,
+        &[10109],
+        &[],
+    ),
+    info(
+        Action::DiscMenu(crate::disc::play::DiscMenu::Root),
+        "dvd-root-menu",
+        "Root Menu",
+        None,
+        &[10110],
+        &[],
+    ),
+    info(
+        Action::DiscMenu(crate::disc::play::DiscMenu::Title),
+        "dvd-title-menu",
+        "Title Menu",
+        Some("Alt+BackSpace"),
+        &[10111],
+        &[],
+    ),
+    info(
+        Action::DiscMenu(crate::disc::play::DiscMenu::Chapter),
+        "dvd-chapter-menu",
+        "Chapter Menu",
+        None,
+        &[10112],
+        &[],
+    ),
+    info(
+        Action::DiscMenu(crate::disc::play::DiscMenu::Audio),
+        "dvd-audio-menu",
+        "Audio Menu",
+        None,
+        &[10113],
+        &[],
+    ),
+    info(
+        Action::DiscMenu(crate::disc::play::DiscMenu::Subtitle),
+        "dvd-subtitle-menu",
+        "Subtitle Menu",
+        None,
+        &[10114],
+        &[],
+    ),
+    info(
+        Action::DiscMenu(crate::disc::play::DiscMenu::Angle),
+        "dvd-angle-menu",
+        "Angle Menu",
+        None,
+        &[10115],
         &[],
     ),
     // M18: RVP's own motion smoothing (no PotPlayer command).

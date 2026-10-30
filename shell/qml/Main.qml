@@ -1567,6 +1567,16 @@ Window {
     //                         --remote-serve=SECONDS it waits that long for
     //                         --remote-expect=N commands from outside; the
     //                         file: fixture-60s.mkv
+    //   --selftest=m16        M16's disc menus (SelfTestM16.qml) on the
+    //                         synthetic DVD of --dvd-menus=FOLDER
+    //                         (make-m16-dvd.sh): the highlight, the arrows,
+    //                         the pointer, DVD Control's menus, the
+    //                         machine's streams, a timed still, the menus
+    //                         turned off; then the synthetic Blu-ray of
+    //                         --bd-menus=FOLDER (make-m16-bluray.py): its
+    //                         HDMV menu, the top menu, the streams and
+    //                         chapters its buttons choose; each part
+    //                         skipped without its library
     //   --selftest=speech     subtitles from a file's audio (SelfTestM13.qml,
     //                         the host session): the whole file with
     //                         --speech-engine and --speech-model, timed,
@@ -1703,7 +1713,23 @@ Window {
             return m14Tick()
         if (selftest.mode === "m15")
             return m15Tick()
+        if (selftest.mode === "m16")
+            return m16Tick()
         functionalTick()
+    }
+
+    // --selftest=m16: M16's DVD menus (SelfTestM16.qml).
+    Loader {
+        id: m16Loader
+        active: false
+        Component.onCompleted: setSource("SelfTestM16.qml", { player: player, t: selftest, host: root })
+    }
+    function m16Tick() {
+        if (!m16Loader.item) {
+            m16Loader.active = true
+            return
+        }
+        m16Loader.item.tick()
     }
 
     // --selftest=m15: M15's control API (SelfTestM15.qml).

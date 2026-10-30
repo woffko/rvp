@@ -320,6 +320,11 @@ impl App {
                 };
                 self.list_action(engine, action, false, 10)
             }
+            Action::DiscMenu(menu) => Some(if self.disc_playing.is_some() {
+                UiRequest::DiscMenu(menu)
+            } else {
+                UiRequest::Osd("DVD menus: no DVD plays with its menus".to_owned())
+            }),
             Action::DvdSpeed(speed) => Some(UiRequest::Osd(match self.dvd_speed(engine, speed) {
                 Ok(true) => format!(
                     "Speed: {}x {}",

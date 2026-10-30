@@ -1172,6 +1172,11 @@ impl Harness {
             Action::SystemInfo => {
                 assert_eq!(self.dispatch(action), Some(UiRequest::SystemInfo));
             }
+            // M16: a DVD's menu (Alt+BackSpace) needs a disc that plays
+            // with its menus.
+            Action::DiscMenu(_) => {
+                self.osd(action, "DVD menus: no DVD plays with its menus");
+            }
             _ => panic!("{action:?} has no check"),
         }
     }
