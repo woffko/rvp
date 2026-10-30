@@ -144,7 +144,11 @@ without an EP map, and the synthetic Blu-ray.
 
 ## CI
 
-Recorded after the push.
+Run 41136992313 for b72cd91: green (checks on Ubuntu 24.04 and Windows
+2025, deny, both packages, the artifacts' pruning). The Linux job builds
+both synthetic discs and runs the navigation tests on Ubuntu's libdvdnav
+6.1.1 and libbluray 1.3.4 (they ran, not skipped); the Windows job has no
+disc libraries and skips them with a note.
 
 ## Open
 
