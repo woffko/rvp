@@ -146,9 +146,17 @@ pub enum Effect {
     Window(&'static str),
 }
 
+/// The prefix of a `CmdID` of a grip that resizes the window from its
+/// right (`E`), bottom (`S`) or both (`SE`; M9, VLC's skins).
+pub const RESIZE_COMMAND: &str = "RVPRESIZE:";
+
 /// The prefix of a `CmdID` that shows or hides one of the skin's windows
 /// (M9; the windows' `RvpToggle`).
 pub const WINDOW_COMMAND: &str = "RVPWIN:";
+
+/// The prefix of a title bar's double-click command (`RvpDoubleCmd`) that
+/// shows another of the skin's files (M9: a VLC layout).
+pub const FILE_COMMAND: &str = "RVPFILE:";
 
 /// What a drag with modifiers on the video changes (PotPlayer's Mouse
 /// page).
@@ -590,6 +598,15 @@ impl Pointer {
                 let Some(command) = command else {
                     return Vec::new();
                 };
+                // VLC's grips resize the window (M9).
+                if let Some(edges) = command.strip_prefix(RESIZE_COMMAND) {
+                    let edges = match edges {
+                        "E" => EDGE_RIGHT,
+                        "S" => EDGE_BOTTOM,
+                        _ => EDGE_RIGHT | EDGE_BOTTOM,
+                    };
+                    return vec![Effect::StartResize(edges)];
+                }
                 chrome.state.pressed = Some(element);
                 let is_slider = chrome
                     .layout()
@@ -731,7 +748,23 @@ impl Pointer {
         match target(chrome, ctx, x, y) {
             Target::TitleBar if button == Button::Left => {
                 self.swallow_release = true;
-                vec![Effect::Action(Action::MaximizeRestore)]
+                // A VLC theme's picture runs its own (M9).
+                let own = match chrome.hit(x, y) {
+                    Some(Hit::TitleBar { node }) => chrome.node_attr(node, "RvpDoubleCmd"),
+                    _ => None,
+                };
+                let Some(command) = own else {
+                    return vec![Effect::Action(Action::MaximizeRestore)];
+                };
+                if let Some(action) = Action::from_skin_command(command) {
+                    vec![Effect::Action(action)]
+                } else if let Some(file) = command.strip_prefix(FILE_COMMAND) {
+                    vec![Effect::SkinFile(file)]
+                } else if command.starts_with(WINDOW_COMMAND) {
+                    vec![Effect::Window(command)]
+                } else {
+                    Vec::new()
+                }
             }
             Target::Video => {
                 self.swallow_release = true;
@@ -896,7 +929,7 @@ impl Pointer {
                         chrome.hit(x, y),
                         Some(Hit::Control { element: e, .. }) if e == element
                     );
-                    if !over {
+                    if !over || chrome.held_back(element) {
                         return Vec::new();
                     }
                     if let Some(action) = Action::from_skin_command(command) {

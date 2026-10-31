@@ -988,6 +988,7 @@ dependencies = [
 name = "rvp-skin"
 version = "0.0.1"
 dependencies = [
+ "flate2",
  "png",
  "swash",
  "zip",

@@ -110,6 +110,14 @@ pub enum Op {
         dst: Rect,
         clip: Rect,
     },
+    /// Scales `src` of atlas `atlas` to `dst`, clipped to `clip` (VLC's
+    /// stretched images, M9).
+    Stretch {
+        atlas: String,
+        src: Rect,
+        dst: Rect,
+        clip: Rect,
+    },
     /// Fills a rectangle with a colour (straight alpha).
     Fill {
         rect: Rect,
@@ -156,6 +164,26 @@ impl DisplayList {
             }
         }
     }
+}
+
+/// `src`'s size fitted into `place`, keeping its aspect, centred.
+fn fit(src: Rect, place: Rect) -> Rect {
+    if src.w <= 0 || src.h <= 0 {
+        return Rect::new(place.x, place.y, 0, 0);
+    }
+    let scale = (f64::from(place.w) / f64::from(src.w)).min(f64::from(place.h) / f64::from(src.h));
+    // Sizes of a window: small.
+    #[allow(clippy::cast_possible_truncation)]
+    let (w, h) = (
+        (f64::from(src.w) * scale).round() as i32,
+        (f64::from(src.h) * scale).round() as i32,
+    );
+    Rect::new(
+        place.x + (place.w - w) / 2,
+        place.y + (place.h - h) / 2,
+        w,
+        h,
+    )
 }
 
 /// Splits one axis into fixed start, tiled middle and fixed end:
@@ -274,6 +302,25 @@ fn paint_static(
     } else {
         (attrs.int_or("ImageLeft", 0), attrs.int_or("ImageTop", 0))
     };
+    // RVP's extension for VLC's images (M9): `RvpStretch='1'` scales the
+    // picture to the place, `'fit'` keeps its aspect, centred.
+    if let Some(stretch) = attrs.get("RvpStretch") {
+        let src = Rect::new(x, y, width, height);
+        let dst = if stretch == "fit" {
+            fit(src, node.rect)
+        } else {
+            node.rect
+        };
+        if !dst.is_empty() && !dst.intersect(&node.clip).is_empty() {
+            list.ops.push(Op::Stretch {
+                atlas: node.atlas.to_owned(),
+                src,
+                dst,
+                clip: node.clip,
+            });
+        }
+        return;
+    }
     list.nine_slice(
         node.atlas,
         Rect::new(x, y, width, height),
@@ -820,8 +867,9 @@ fn paint_slider(list: &mut DisplayList, node: &Node<'_>, state: &UiState, data: 
     let height = attrs.int_or("ImageHeight", 0);
     let rect = node.rect;
     let vertical = attrs.flag("Vert");
-    // RVP's extension for classic skins (M9): a picture per value,
-    // `RvpFrames` of them stacked from `BackImageTop` down, no fill.
+    // RVP's extension for classic and VLC skins (M9): a picture per value,
+    // `RvpFrames` of them stacked from `BackImageTop` down, no fill, drawn
+    // `RvpFrameOffsetX`/`Y` from the slider's corner.
     if let Some(frames) = attrs.int("RvpFrames").filter(|frames| *frames > 1) {
         let index = fraction(frames - 1, slider.value);
         list.image(
@@ -832,7 +880,12 @@ fn paint_slider(list: &mut DisplayList, node: &Node<'_>, state: &UiState, data: 
                 width,
                 height,
             ),
-            Rect::new(rect.x, rect.y, width, height),
+            Rect::new(
+                rect.x + attrs.int_or("RvpFrameOffsetX", 0),
+                rect.y + attrs.int_or("RvpFrameOffsetY", 0),
+                width,
+                height,
+            ),
             node.clip,
         );
         if slider.enabled {

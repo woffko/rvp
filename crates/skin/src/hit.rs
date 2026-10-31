@@ -1,6 +1,12 @@
 //! Finds the control under a point.
+//!
+//! A control marked `RvpHit='alpha'` (M9: VLC's buttons) takes the point
+//! only where its picture is opaque, as VLC tests its controls against
+//! their bitmaps: themes stack window-wide pictures, each opaque only where
+//! its button shows.
 
-use crate::layout::{Kind, Layout};
+use crate::layout::{Kind, Layout, Node};
+use crate::skin::Skin;
 
 /// What a mouse event at a point would act on.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -37,8 +43,25 @@ pub enum Hit<'a> {
 /// Returns the topmost interactive element at `(x, y)`.
 #[must_use]
 pub fn hit_test<'a>(layout: &Layout<'a>, x: i32, y: i32) -> Option<Hit<'a>> {
+    hit_test_in(layout, None, x, y)
+}
+
+/// [`hit_test`] with the pictures of `skin`, for `RvpHit='alpha'`.
+#[must_use]
+pub fn hit_test_in<'a>(
+    layout: &Layout<'a>,
+    skin: Option<&Skin>,
+    x: i32,
+    y: i32,
+) -> Option<Hit<'a>> {
     for (index, node) in layout.nodes.iter().enumerate().rev() {
         if !node.clip.contains(x, y) {
+            continue;
+        }
+        if let Some(skin) = skin
+            && node.element.attrs.get("RvpHit") == Some("alpha")
+            && !opaque_at(skin, node, x, y)
+        {
             continue;
         }
         let attrs = &node.element.attrs;
@@ -71,4 +94,17 @@ pub fn hit_test<'a>(layout: &Layout<'a>, x: i32, y: i32) -> Option<Hit<'a>> {
         }
     }
     None
+}
+
+/// Whether the node's picture (its first state) is opaque at `(x, y)`.
+fn opaque_at(skin: &Skin, node: &Node<'_>, x: i32, y: i32) -> bool {
+    let attrs = &node.element.attrs;
+    let Some(image) = skin.image(attrs.get("Image").unwrap_or(node.atlas)) else {
+        return true;
+    };
+    let pixel = image.pixel(
+        attrs.int_or("ImageLeft", 0) + x - node.rect.x,
+        attrs.int_or("ImageTop", 0) + y - node.rect.y,
+    );
+    pixel[3] > 0
 }

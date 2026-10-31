@@ -1,9 +1,10 @@
 //! M14: PotPlayer's Skins menu and Skins pages (goal P).
 //!
-//! * The skin list: RVP Default (built in), the `.dsf` skins in RVP's
-//!   `skins` folder (beside the settings), next to the chosen skin and, on
-//!   Windows, PotPlayer's installed `Skins` folder (read only). A choice
-//!   switches the skin at once.
+//! * The skin list: RVP Default (built in), the `.dsf` skins (and M9's
+//!   classic Winamp `.wsz` and VLC `.vlt` skins) in RVP's `skins` folder
+//!   (beside the settings), next to the chosen skin and, on Windows,
+//!   PotPlayer's installed `Skins` folder (read only). A choice switches
+//!   the skin at once.
 //! * Skin modes: a file without video shows the skin's audio skin
 //!   (`AudioSkin.xml`) when it has one, others its video skin, unless
 //!   switching is turned off ("Disable switching between skin modes"); "Use
@@ -413,18 +414,19 @@ fn toggle(flag: &mut bool, what: &str) -> String {
     format!("{what}: {}", if *flag { "on" } else { "off" })
 }
 
-/// The skin files in `folder`: PotPlayer's `.dsf` and classic Winamp
-/// skins (`.wsz`, M9).
+/// The skin files in `folder`: PotPlayer's `.dsf`, classic Winamp skins
+/// (`.wsz`) and VLC's (`.vlt`, M9).
 fn skins_in(folder: &Path, out: &mut std::collections::BTreeSet<PathBuf>) {
     let Ok(entries) = std::fs::read_dir(folder) else {
         return;
     };
     for entry in entries.flatten() {
         let path = entry.path();
-        if path
-            .extension()
-            .is_some_and(|ext| ext.eq_ignore_ascii_case("dsf") || ext.eq_ignore_ascii_case("wsz"))
-        {
+        if path.extension().is_some_and(|ext| {
+            ext.eq_ignore_ascii_case("dsf")
+                || ext.eq_ignore_ascii_case("wsz")
+                || ext.eq_ignore_ascii_case("vlt")
+        }) {
             out.insert(path);
         }
     }

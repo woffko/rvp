@@ -11,6 +11,7 @@
 
 pub mod archive;
 pub mod compare;
+pub mod compose;
 pub mod demo;
 pub mod error;
 pub mod fonts;
@@ -29,6 +30,7 @@ pub mod skin;
 pub mod state;
 pub mod text;
 pub mod theme;
+pub mod vlc;
 pub mod winamp;
 
 pub use archive::SkinArchive;

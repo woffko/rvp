@@ -259,6 +259,30 @@ impl qobject::Player {
         if *self.min_height() != height {
             self.as_mut().set_min_height(height);
         }
+        // A VLC layout's largest size (M9); 0: none.
+        let Some(area) = self
+            .core()
+            .and_then(|core| core.chrome.as_ref())
+            .and_then(|chrome| chrome.skin().area("MainSkinArea"))
+        else {
+            return;
+        };
+        let largest = |name: &str, least: i32| {
+            area.attrs
+                .int(name)
+                .filter(|value| *value > 0)
+                .map_or(0, |value| window_length(value).max(least))
+        };
+        let (max_width, max_height) = (
+            largest("RvpMaxWidth", width),
+            largest("RvpMaxHeight", height),
+        );
+        if *self.max_width() != max_width {
+            self.as_mut().set_max_width(max_width);
+        }
+        if *self.max_height() != max_height {
+            self.as_mut().set_max_height(max_height);
+        }
     }
 
     /// The logo over the video area while no video shows: a picture for

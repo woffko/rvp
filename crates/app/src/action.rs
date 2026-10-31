@@ -6768,6 +6768,10 @@ impl ListAction {
     /// The action of a playlist panel button's `CmdID`.
     #[must_use]
     pub fn from_skin_command(command: &str) -> Option<ListAction> {
+        // RVP's skins built from other formats (M9) name actions directly.
+        if let Some(name) = command.strip_prefix(RVP_COMMAND) {
+            return Self::from_name(name);
+        }
         Some(match command {
             "CMD_PLAYLIST_TOP" => ListAction::MoveTop,
             "CMD_PLAYLIST_UP" => ListAction::MoveUp,

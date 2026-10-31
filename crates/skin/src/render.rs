@@ -24,11 +24,71 @@ pub fn rasterize(list: &DisplayList, skin: &Skin, fonts: &mut Fonts) -> Image {
                     blit_tiled(&mut canvas, atlas, *src, *dst, *clip);
                 }
             }
+            Op::Stretch {
+                atlas,
+                src,
+                dst,
+                clip,
+            } => {
+                if let Some(atlas) = skin.image(atlas) {
+                    blit_scaled(&mut canvas, atlas, *src, *dst, *clip);
+                }
+            }
             Op::Fill { rect, color } => fill(&mut canvas, *rect, *color),
             Op::Text(text) => draw_text(&mut canvas, fonts, text),
         }
     }
     canvas
+}
+
+/// The opaque parts of a display list (alpha above 0) as rectangles, as
+/// `x,y,w,h;...` for a window's shape (M9: VLC's windows are the union of
+/// their drawn pixels). Equal runs of neighbouring rows join; texts do not
+/// count.
+#[must_use]
+pub fn opaque_region(list: &DisplayList, skin: &Skin) -> String {
+    let image = rasterize(list, skin, &mut Fonts::new(Vec::new()));
+    let (width, height) = (image.width() as usize, image.height() as usize);
+    let data = image.data();
+    let mut open: Vec<(usize, usize, usize, usize)> = Vec::new();
+    let mut done: Vec<(usize, usize, usize, usize)> = Vec::new();
+    for y in 0..height {
+        let mut runs = Vec::new();
+        let mut x = 0;
+        while x < width {
+            if data[(y * width + x) * 4 + 3] == 0 {
+                x += 1;
+                continue;
+            }
+            let start = x;
+            while x < width && data[(y * width + x) * 4 + 3] != 0 {
+                x += 1;
+            }
+            runs.push((start, x - start));
+        }
+        let mut next = Vec::with_capacity(runs.len());
+        for (start, length) in runs {
+            match open
+                .iter()
+                .position(|(x, _, w, _)| *x == start && *w == length)
+            {
+                Some(index) => {
+                    let mut rect = open.swap_remove(index);
+                    rect.3 += 1;
+                    next.push(rect);
+                }
+                None => next.push((start, y, length, 1)),
+            }
+        }
+        done.append(&mut open);
+        open = next;
+    }
+    done.append(&mut open);
+    done.sort_unstable();
+    done.iter()
+        .map(|(x, y, w, h)| format!("{x},{y},{w},{h}"))
+        .collect::<Vec<_>>()
+        .join(";")
 }
 
 fn bounds(image: &Image) -> Rect {
@@ -71,6 +131,25 @@ fn blend(dst: &mut [u8; 4], src: [u8; 4], coverage: u8) {
 
 /// Tiles `src` of `atlas` over `dst`, clipped to `clip` and the canvas.
 /// Parts of `src` outside the atlas are transparent.
+/// Scales `src` to `dst` (nearest pixel), clipped.
+fn blit_scaled(canvas: &mut Image, atlas: &Image, src: Rect, dst: Rect, clip: Rect) {
+    let area = dst.intersect(&clip).intersect(&bounds(canvas));
+    if area.is_empty() || src.is_empty() || dst.is_empty() {
+        return;
+    }
+    for y in area.y..area.bottom() {
+        let source_y = src.y + (y - dst.y) * src.h / dst.h;
+        for x in area.x..area.right() {
+            let source_x = src.x + (x - dst.x) * src.w / dst.w;
+            let pixel = atlas.pixel(source_x, source_y);
+            let target = span(canvas, x, y, 1);
+            if let Some(dst_pixel) = canvas.data_mut()[target].as_chunks_mut::<4>().0.first_mut() {
+                blend(dst_pixel, pixel, 255);
+            }
+        }
+    }
+}
+
 fn blit_tiled(canvas: &mut Image, atlas: &Image, src: Rect, dst: Rect, clip: Rect) {
     let area = dst.intersect(&clip).intersect(&bounds(canvas));
     let atlas_bounds = bounds(atlas);

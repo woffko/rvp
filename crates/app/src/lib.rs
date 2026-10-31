@@ -72,6 +72,7 @@ pub mod tomsteady;
 pub mod video;
 pub mod view;
 pub mod visual;
+pub mod vlc;
 pub mod volume;
 pub mod window;
 pub mod ytdl;

@@ -24,6 +24,7 @@
 #include <QtCore/QTimer>
 #include <QtGui/QClipboard>
 #include <QtGui/QDesktopServices>
+#include <QtGui/QFontDatabase>
 #include <QtGui/QFontMetrics>
 #include <QtGui/QGuiApplication>
 #include <QtGui/QIcon>
@@ -479,6 +480,21 @@ void Tools::set_window_mask(QWindow *window, const QString &polygons, double sca
     window->setMask(region);
 }
 
+void Tools::set_window_mask_rects(QWindow *window, const QString &rects, double scale) const
+{
+    if (window == nullptr)
+        return;
+    QRegion region;
+    for (const QString &rect : rects.split(QLatin1Char(';'), Qt::SkipEmptyParts)) {
+        const QStringList parts = rect.split(QLatin1Char(','));
+        if (parts.size() != 4)
+            continue;
+        region += QRect(qRound(parts[0].toDouble() * scale), qRound(parts[1].toDouble() * scale),
+                        qRound(parts[2].toDouble() * scale), qRound(parts[3].toDouble() * scale));
+    }
+    window->setMask(region);
+}
+
 QString Tools::screen_json(QWindow *window) const
 {
     QScreen *screen = window != nullptr ? window->screen() : QGuiApplication::primaryScreen();
@@ -796,6 +812,33 @@ void rvp_atlas_insert(rust::Str name, rust::Slice<const std::uint8_t> rgba, std:
                              .convertToFormat(QImage::Format_ARGB32_Premultiplied);
     const QMutexLocker lock(&atlasMutex);
     atlases.insert(fromStr(name), image);
+}
+
+bool rvp_add_font(rust::Slice<const std::uint8_t> data)
+{
+    const QByteArray bytes(reinterpret_cast<const char *>(data.data()), static_cast<qsizetype>(data.size()));
+    return QFontDatabase::addApplicationFontFromData(bytes) >= 0;
+}
+
+void rvp_paint_stretch(QPainter &painter, rust::Str name, std::array<std::int32_t, 4> src,
+                       std::array<std::int32_t, 4> dst, std::array<std::int32_t, 4> clip)
+{
+    QImage image;
+    {
+        const QMutexLocker lock(&atlasMutex);
+        image = atlases.value(fromStr(name));
+    }
+    const QRect source = toRect(src);
+    const QRect target = toRect(dst);
+    const QRect area = target.intersected(toRect(clip));
+    if (image.isNull() || source.isEmpty() || target.isEmpty() || area.isEmpty()) {
+        return;
+    }
+    painter.save();
+    painter.setClipRect(area);
+    painter.setRenderHint(QPainter::SmoothPixmapTransform, true);
+    painter.drawImage(QRectF(target), image, QRectF(source));
+    painter.restore();
 }
 
 void rvp_paint_atlas(QPainter &painter, rust::Str name, std::array<std::int32_t, 4> src,

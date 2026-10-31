@@ -8,6 +8,7 @@
 //! (the `damaged` signal and `Tools.repaint`), which applies them with mpv's
 //! next video frame while a video plays (goal C rule 1).
 
+use std::collections::BTreeMap;
 use std::fmt::Write as _;
 use std::path::{Path, PathBuf};
 use std::pin::Pin;
@@ -169,8 +170,26 @@ fn loaded_skin(key: &SkinKey) -> Option<&'static Skin> {
         .map(|(_, skin)| *skin)
 }
 
-/// Keeps `skin` for the process under `key`.
+/// VLC themes' font files (M9) by theme and name: `Some` waits for the
+/// window's thread, `None` is Qt's. Qt's font database takes them only once
+/// the application exists, and the first skin loads before it does, on a
+/// thread of its own.
+static FONTS: Mutex<ThemeFonts> = Mutex::new(BTreeMap::new());
+
+type ThemeFonts = BTreeMap<(PathBuf, String), Option<Vec<u8>>>;
+
+/// Keeps `skin` for the process under `key` (on the window's thread), with
+/// the fonts its theme brought.
 fn keep_skin(key: SkinKey, skin: Skin) -> &'static Skin {
+    if let Ok(mut fonts) = FONTS.lock() {
+        for ((theme, name), data) in fonts.iter_mut() {
+            if let Some(data) = data.take()
+                && !crate::ffi::bridge::rvp_add_font(&data)
+            {
+                eprintln!("rvp: cannot use the font {name} of {}", theme.display());
+            }
+        }
+    }
     let skin: &'static Skin = Box::leak(Box::new(skin));
     if let Ok(mut loaded) = LOADED.lock() {
         loaded.push((key, skin));
@@ -347,6 +366,8 @@ struct Panel {
 }
 
 /// Everything that exists once `start` ran.
+// Its flags are the window's, each on its own: no state machine.
+#[allow(clippy::struct_excessive_bools)]
 struct Core {
     app: App,
     engine: &'static Engine,
@@ -403,8 +424,12 @@ struct Core {
     disc: Option<m16::Playing>,
     /// mpv's on-screen controller (M9).
     controller: Option<m9::Controller>,
-    /// The skin's other windows (M9: a classic skin's).
+    /// The skin's other windows (M9: a classic skin's, a VLC theme's).
     extras: Vec<extras::Extra>,
+    /// A VLC theme's conditions and texts (M9).
+    vlc: m9::VlcCache,
+    /// The main window's shape waits for the next tick (M9).
+    mask_dirty: bool,
     /// When the file started: the classic skins' title scrolls and their
     /// paused time blinks from here (M9).
     file_clock: Instant,
@@ -480,6 +505,9 @@ pub struct PlayerRust {
     pub(crate) message: QString,
     pub(crate) has_skin: bool,
     pub(crate) extra_windows: QString,
+    pub(crate) window_mask: QString,
+    pub(crate) max_width: i32,
+    pub(crate) max_height: i32,
     pub(crate) extra_tooltip: QString,
     pub(crate) has_video: bool,
     pub(crate) restore_x: i32,
@@ -651,6 +679,22 @@ fn open_skin_file(source: &SkinSource, file: Option<&str>, touch: bool) -> Resul
     {
         return rvp_skin::winamp::open(path)
             .map_err(|error| format!("{}: {error}", path.display()));
+    }
+    // A VLC theme (M9): its fonts join the system's ([`keep_skin`]), and
+    // `file` is the main window's layout.
+    if let SkinSource::File(path) = source
+        && rvp_skin::vlc::is_vlc(path)
+    {
+        let error = |error: rvp_skin::SkinError| format!("{}: {error}", path.display());
+        let theme = rvp_skin::vlc::Theme::open(path).map_err(error)?;
+        if let Ok(mut fonts) = FONTS.lock() {
+            for (name, data) in &theme.font_files {
+                fonts
+                    .entry((path.clone(), name.clone()))
+                    .or_insert_with(|| Some(data.clone()));
+            }
+        }
+        return rvp_skin::vlc::build::skin(&theme, file).map_err(error);
     }
     let mut skin = match (source, file) {
         (SkinSource::File(path), None) => Skin::open_with(path, variables)
@@ -887,6 +931,9 @@ fn extra_mpv_options(cli: &Cli) -> Vec<(String, String)> {
         .collect()
 }
 
+/// How many rectangles the main window's shape has (M9; the self-test).
+static WINDOW_MASK_LEN: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+
 impl qobject::Player {
     fn core(&self) -> Option<&Core> {
         self.rust().core.as_ref()
@@ -1041,6 +1088,8 @@ impl qobject::Player {
             disc: None,
             controller,
             extras: Vec::new(),
+            vlc: m9::VlcCache::default(),
+            mask_dirty: true,
             file_clock: Instant::now(),
         });
         self.as_mut().rebuild_extras();
@@ -1255,6 +1304,7 @@ impl qobject::Player {
     /// [`CHROME_INTERVAL`] is shown.
     pub(crate) fn flush_chrome(mut self: Pin<&mut Self>) {
         self.as_mut().disc_tick();
+        self.as_mut().sync_window_mask();
         let Some(core) = self.as_mut().core_mut() else {
             return;
         };
@@ -1273,6 +1323,7 @@ impl qobject::Player {
         self.as_mut().follow_disc();
         self.as_mut().controller_tick();
         self.as_mut().publish_remote();
+        let (fullscreen, on_top) = (*self.fullscreen(), *self.on_top());
         let Some(core) = self.as_mut().core_mut() else {
             return;
         };
@@ -1294,11 +1345,21 @@ impl qobject::Player {
             data.set_text("CMD_SYSTEM_TIME_MESSAGE", core.clock.as_str());
         }
         core.app.panel_data(&mut data);
-        // A classic skin's texts and states (M9).
+        // A classic skin's texts and states, a VLC theme's (M9).
         if !core.extras.is_empty() {
             core.app
                 .classic_data(&mut data, &mut chrome.state, core.file_clock.elapsed());
         }
+        let window = (fullscreen, on_top, core.maximized);
+        m9::vlc_data(
+            &core.app,
+            &mut core.vlc,
+            &core.extras,
+            chrome.skin(),
+            window,
+            &mut data,
+            &mut chrome.state,
+        );
         // The spectrum's bars move on their own tick (`tick_spectrum`).
         data.visual = std::mem::take(&mut chrome.data.visual);
         data.visual_peaks = std::mem::take(&mut chrome.data.visual_peaks);
@@ -1631,6 +1692,9 @@ impl qobject::Player {
         self.as_mut().emit_damage(&damage, synced);
         if !overlay {
             self.as_mut().sync_limits();
+        }
+        if let Some(core) = self.as_mut().core_mut() {
+            core.mask_dirty = true;
         }
         self.sync_chrome();
     }
@@ -2003,13 +2067,15 @@ impl qobject::Player {
             .into_iter()
             .find(|rect| rect.contains(x, y));
         let effects = core.pointer.moved(chrome, ctx, x, y);
-        let tooltip = core.pointer.tooltip.unwrap_or("");
+        let tooltip = core
+            .vlc
+            .tooltip(&core.app, core.pointer.tooltip.unwrap_or(""));
         let cursor = cursor_shape(core.pointer.cursor);
         let dragging = core.pointer.dragging();
         let osc = core.app.settings.skins.osc;
         // General: "Show tooltips" (M14).
         let tooltip = if core.app.settings.general.tooltips {
-            tooltip
+            tooltip.as_str()
         } else {
             ""
         };

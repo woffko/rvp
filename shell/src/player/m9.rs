@@ -532,6 +532,83 @@ impl qobject::Player {
     }
 }
 
+/// A VLC theme's conditions and texts (`rvp_skin::vlc::Runtime`), read
+/// once per skin.
+#[derive(Debug, Default)]
+pub(super) struct VlcCache {
+    skin: u64,
+    runtime: Option<rvp_skin::vlc::Runtime>,
+}
+
+impl VlcCache {
+    /// A tooltip with VLC's text codes filled in, when a VLC theme shows.
+    pub(super) fn tooltip(&self, app: &App, tooltip: &str) -> String {
+        if self.runtime.is_some() {
+            app.vlc_text(tooltip)
+        } else {
+            tooltip.to_owned()
+        }
+    }
+
+    /// How many conditions the theme has.
+    pub(super) fn conditions(&self) -> usize {
+        self.runtime
+            .as_ref()
+            .map_or(0, |runtime| runtime.conditions.len())
+    }
+}
+
+/// Fills a VLC theme's flags and texts for the main window: `fullscreen`,
+/// `on_top` and `maximized` are the window's.
+#[allow(clippy::too_many_arguments)] // The window's state, field by field.
+pub(super) fn vlc_data(
+    app: &App,
+    cache: &mut VlcCache,
+    extras: &[super::extras::Extra],
+    skin: &rvp_skin::Skin,
+    window: (bool, bool, bool),
+    data: &mut rvp_skin::DataModel,
+    state: &mut rvp_skin::UiState,
+) {
+    if cache.skin != skin.id() {
+        let runtime = rvp_skin::vlc::Runtime::of(skin);
+        cache.skin = skin.id();
+        cache.runtime =
+            (!runtime.conditions.is_empty() || !runtime.texts.is_empty()).then_some(runtime);
+    }
+    let Some(runtime) = cache.runtime.as_ref() else {
+        return;
+    };
+    let area = skin.area("MainSkinArea");
+    let attr = |name: &str| {
+        area.and_then(|area| area.attrs.get(name))
+            .unwrap_or("")
+            .to_owned()
+    };
+    let (fullscreen, on_top, maximized) = window;
+    let window = rvp_app::vlc::WindowState {
+        fullscreen,
+        on_top,
+        maximized,
+        main: attr("RvpWindowId"),
+        shown: extras
+            .iter()
+            .filter_map(super::extras::Extra::shown_id)
+            .map(str::to_owned)
+            .collect(),
+        layout: attr("RvpLayout"),
+    };
+    runtime.set_flags(&mut state.flags, &mut |name| {
+        app.vlc_variable(name, &window) == Some(true)
+    });
+    for (n, template) in &runtime.texts {
+        data.set_text(
+            &format!("{}{n}", rvp_skin::vlc::build::TEXT),
+            app.vlc_text(template),
+        );
+    }
+}
+
 /// M9's part of `Player::status` (the self-test reads it): the controller
 /// and the skin's other windows.
 pub(super) fn status(core: &Core) -> Vec<(&'static str, String)> {
@@ -547,5 +624,31 @@ pub(super) fn status(core: &Core) -> Vec<(&'static str, String)> {
     });
     let mut fields = vec![("controller", controller.to_string())];
     fields.extend(super::extras::status(core));
+    // A VLC theme's conditions that hold and its texts.
+    let vlc = core.chrome.as_ref().map_or(Value::Null, |chrome| {
+        let on = chrome
+            .state
+            .flags
+            .iter()
+            .filter(|flag| flag.starts_with(rvp_skin::vlc::build::CONDITION))
+            .count();
+        let texts: Vec<&str> = chrome
+            .data
+            .texts
+            .iter()
+            .filter(|(command, _)| command.starts_with(rvp_skin::vlc::build::TEXT))
+            .map(|(_, text)| text.as_str())
+            .collect();
+        json!({
+            "conditions": core.vlc.conditions(),
+            "on": on,
+            "texts": texts,
+        })
+    });
+    fields.push(("vlc", vlc.to_string()));
+    fields.push((
+        "window_mask",
+        json!(super::WINDOW_MASK_LEN.load(std::sync::atomic::Ordering::Relaxed)).to_string(),
+    ));
     fields
 }

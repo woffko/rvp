@@ -40,6 +40,9 @@ pub mod qobject {
         /// The skin's other windows (M9), JSON: a list of `area`, `width`,
         /// `height`, `dock`, `shown`, `step` and `region`.
         #[qproperty(QString, extra_windows)]
+        /// The main window's shape (M9: a VLC theme's drawn pixels) as
+        /// `x,y,w,h;...` in the skin's pixels; empty: rectangular.
+        #[qproperty(QString, window_mask)]
         /// The tooltip of the control under the pointer in one of them.
         #[qproperty(QString, extra_tooltip)]
         #[qproperty(bool, has_video)]
@@ -98,6 +101,9 @@ pub mod qobject {
         /// 0 until a skin is laid out, which QML reads as 320x200).
         #[qproperty(i32, min_width)]
         #[qproperty(i32, min_height)]
+        /// A VLC layout's largest window (M9); 0: none.
+        #[qproperty(i32, max_width)]
+        #[qproperty(i32, max_height)]
         /// The logo over the video area (M14, `App::logo`): a picture's
         /// URL, empty while the skin draws its own (`skin_logo`), and where
         /// it goes (`skins.logo-position`).
@@ -202,6 +208,10 @@ pub mod qobject {
         fn extra_wheel(self: Pin<&mut Self>, index: i32, x: f64, y: f64, delta: i32);
         #[qinvokable]
         fn extra_leave(self: Pin<&mut Self>, index: i32);
+        /// Where a self-test can click a command's control in any window
+        /// (JSON `window`, `x`, `y`; else `bound`).
+        #[qinvokable]
+        fn control_point(self: &Self, command: &QString) -> QString;
         /// One of them has a new size (the classic playlist resizes).
         #[qinvokable]
         fn extra_resized(self: Pin<&mut Self>, index: i32, width: i32, height: i32);

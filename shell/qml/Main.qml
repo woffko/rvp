@@ -16,6 +16,9 @@ Window {
     // The skin's limits (M14); 0 until the skin is laid out.
     minimumWidth: player.min_width > 0 ? player.min_width : 320
     minimumHeight: player.min_height > 0 ? player.min_height : 200
+    // A VLC layout's largest size (M9).
+    maximumWidth: player.max_width > 0 ? player.max_width : 16777215
+    maximumHeight: player.max_height > 0 ? player.max_height : 16777215
     visible: false
     color: "black"
     flags: Qt.Window | Qt.FramelessWindowHint | (player.on_top ? Qt.WindowStaysOnTopHint : 0)
@@ -1271,6 +1274,13 @@ Window {
             Component.onCompleted: setSource("SkinWindow.qml", { player: player, owner: root, index: index })
         }
     }
+    // A VLC theme's window is the shape of its drawn pixels (M9).
+    Connections {
+        target: player
+        function onWindow_maskChanged() {
+            Tools.set_window_mask_rects(root, player.window_mask, 1)
+        }
+    }
     // A classic skin's title scrolls and its paused time blinks.
     Timer {
         interval: 200
@@ -1621,6 +1631,11 @@ Window {
     //                         beside it, mpv's fullscreen request, the
     //                         window without the skin, its menu's keys;
     //                         the file: fixture-60s.mkv
+    //   --selftest=vlc        a VLC theme (SelfTestVlc.qml) from
+    //                         --skin=THEME.vlt: its conditions and texts,
+    //                         its pause and play buttons, its volume
+    //                         slider, the window's shape; the file:
+    //                         fixture-60s.mkv
     //   --selftest=classic    a classic Winamp skin (SelfTestClassic.qml)
     //                         from --skin=SKIN.wsz: its windows, their
     //                         toggles, transport, volume, an equalizer
@@ -1768,7 +1783,23 @@ Window {
             return m9Tick()
         if (selftest.mode === "classic")
             return classicTick()
+        if (selftest.mode === "vlc")
+            return vlcTick()
         functionalTick()
+    }
+
+    // --selftest=vlc: VLC's skins (SelfTestVlc.qml).
+    Loader {
+        id: vlcLoader
+        active: false
+        Component.onCompleted: setSource("SelfTestVlc.qml", { player: player, t: selftest, host: root })
+    }
+    function vlcTick() {
+        if (!vlcLoader.item) {
+            vlcLoader.active = true
+            return
+        }
+        vlcLoader.item.tick()
     }
 
     // --selftest=classic: classic Winamp skins (SelfTestClassic.qml).

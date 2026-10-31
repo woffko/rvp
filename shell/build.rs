@@ -129,7 +129,8 @@ fn main() {
         .qml_file("qml/SelfTestM16.qml")
         .qml_file("qml/SelfTestM9.qml")
         .qml_file("qml/SkinWindow.qml")
-        .qml_file("qml/SelfTestClassic.qml");
+        .qml_file("qml/SelfTestClassic.qml")
+        .qml_file("qml/SelfTestVlc.qml");
     CxxQtBuilder::new_qml_module(module)
         .qt_module("Gui")
         .qt_module("Qml")

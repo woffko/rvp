@@ -102,6 +102,9 @@ public:
     // "x,y x,y ...;..." in its pixels, scaled by `scale` (the skin's
     // zoom), united; empty: rectangular.
     Q_INVOKABLE void set_window_mask(QWindow *window, const QString &polygons, double scale) const;
+    // A window's shape from rectangles "x,y,w,h;..." (M9: VLC's windows,
+    // their drawn pixels), scaled; empty: rectangular.
+    Q_INVOKABLE void set_window_mask_rects(QWindow *window, const QString &rects, double scale) const;
     // Shows a file in the system's file manager: selected in Explorer on
     // Windows, its folder elsewhere.
     Q_INVOKABLE bool show_file(const QString &path) const;
@@ -180,9 +183,12 @@ bool rvp_save_image(rust::Slice<const std::uint8_t> rgba, std::int32_t width, st
                     rust::Str path, std::int32_t quality, rust::Str texts);
 bool rvp_copy_image(rust::Slice<const std::uint8_t> rgba, std::int32_t width, std::int32_t height);
 rust::String rvp_local_time();
+void rvp_paint_stretch(QPainter &painter, rust::Str name, std::array<std::int32_t, 4> src,
+                       std::array<std::int32_t, 4> dst, std::array<std::int32_t, 4> clip);
 void rvp_paint_atlas(QPainter &painter, rust::Str name, std::array<std::int32_t, 4> src,
                      std::array<std::int32_t, 4> dst, std::array<std::int32_t, 4> clip);
 void rvp_paint_translate(QPainter &painter, std::int32_t dx, std::int32_t dy);
+bool rvp_add_font(rust::Slice<const std::uint8_t> data);
 void rvp_paint_scale(QPainter &painter, double factor);
 void rvp_paint_fill(QPainter &painter, std::array<std::int32_t, 4> rect, std::uint32_t rgba);
 void rvp_paint_text(QPainter &painter, rust::Str text, rust::Str trailing, rust::Str family,

@@ -1,6 +1,7 @@
 //! M9's other skin windows: the `RvpWindow='1'` areas of the skin RVP
-//! built from a classic Winamp skin (`rvp_skin::winamp::build`): its main
-//! window, equalizer and playlist. Each is a `Chrome` of its own in
+//! built from a classic Winamp skin (`rvp_skin::winamp::build`: its main
+//! window, equalizer and playlist) or from a VLC theme's windows beside the
+//! one with the video (`rvp_skin::vlc::build`). Each is a `Chrome` of its own in
 //! `Mode::Extra`, painted whole (`SkinView` surfaces from 10 on), with its
 //! own pointer; QML places them docked to the main window
 //! (`SkinWindow.qml`) and moves them with it. A window's toggle command
@@ -45,6 +46,16 @@ pub(super) struct Extra {
     resizable: bool,
 }
 
+impl Extra {
+    /// The window's id in a VLC theme (its toggle's `RVPWIN:` name), when
+    /// it shows.
+    pub(super) fn shown_id(&self) -> Option<&'static str> {
+        self.toggle
+            .filter(|_| self.shown)
+            .and_then(|toggle| toggle.strip_prefix(WINDOW_COMMAND))
+    }
+}
+
 impl qobject::Player {
     /// The skin's other windows, made again for a new skin; a window keeps
     /// whether it showed when the new skin has one of the same area.
@@ -71,10 +82,11 @@ impl qobject::Player {
                 continue;
             }
             let lists = chrome.list_geometry().is_some();
+            let mask = shape(&chrome, window.area);
             let shown = before
                 .iter()
                 .find(|(area, _)| *area == window.area)
-                .map_or(window.toggle.is_none(), |(_, shown)| *shown);
+                .map_or(window.shown, |(_, shown)| *shown);
             windows.push(json!({
                 "area": window.area,
                 "width": window.width,
@@ -82,6 +94,10 @@ impl qobject::Player {
                 "dock": window.dock,
                 "shown": shown,
                 "step": window.step.map(|(w, h)| [w, h]),
+                "offset": [window.offset.0, window.offset.1],
+                "min": [window.min.0, window.min.1],
+                "max": [window.max.0, window.max.1],
+                "mask": mask,
                 "region": window
                     .region
                     .iter()
@@ -102,7 +118,7 @@ impl qobject::Player {
                 shown,
                 toggle: window.toggle,
                 lists,
-                resizable: window.step.is_some(),
+                resizable: window.step.is_some() || window.min != window.max,
             });
         }
         core.extras = extras;
@@ -154,16 +170,15 @@ impl qobject::Player {
             }
             let state = &mut extra.chrome.state;
             view::apply_playback_state(state, &core.app.model);
+            // The main window's states: a classic skin's (`RVP:`) and a VLC
+            // theme's conditions (`VLCX:`).
+            let shared = |flag: &String| flag.starts_with("RVP:") || flag.starts_with("VLCX:");
             state
                 .flags
-                .retain(|flag| !flag.starts_with("RVP:") && !flag.starts_with(WINDOW_COMMAND));
-            state.flags.extend(
-                main.state
-                    .flags
-                    .iter()
-                    .filter(|flag| flag.starts_with("RVP:"))
-                    .cloned(),
-            );
+                .retain(|flag| !shared(flag) && !flag.starts_with(WINDOW_COMMAND));
+            state
+                .flags
+                .extend(main.state.flags.iter().filter(|flag| shared(flag)).cloned());
             state
                 .flags
                 .extend(shown.iter().map(|toggle| (*toggle).to_owned()));
@@ -186,20 +201,26 @@ impl qobject::Player {
         }
     }
 
-    /// Shows or hides the window whose toggle is `command` (`RVPWIN:`).
+    /// Shows or hides the window whose toggle is `command` (`RVPWIN:`);
+    /// `RVPWIN:ID:show` and `:hide` only show or hide (VLC's).
     pub(super) fn toggle_extra(mut self: Pin<&mut Self>, command: &str) {
         let Some(core) = self.as_mut().core_mut() else {
             return;
         };
+        let (toggle, wanted) = match command.rsplit_once(':') {
+            Some((toggle, "show")) => (toggle, Some(true)),
+            Some((toggle, "hide")) => (toggle, Some(false)),
+            _ => (command, None),
+        };
         let Some(index) = core
             .extras
             .iter()
-            .position(|extra| extra.toggle == Some(command))
+            .position(|extra| extra.toggle == Some(toggle))
         else {
             return;
         };
         let extra = &mut core.extras[index];
-        extra.shown = !extra.shown;
+        extra.shown = wanted.unwrap_or(!extra.shown);
         let shown = extra.shown;
         let windows = self.extra_windows().to_string();
         if let Ok(mut list) = serde_json::from_str::<serde_json::Value>(&windows)
@@ -230,10 +251,21 @@ impl qobject::Player {
         if extra
             .chrome
             .resize(Mode::Extra(extra.area), width, height)
-            .is_ok()
+            .is_err()
         {
-            self.sync_extras(true);
+            return;
         }
+        let mask = shape(&extra.chrome, extra.area);
+        let windows = self.extra_windows().to_string();
+        if let Ok(mut list) = serde_json::from_str::<serde_json::Value>(&windows)
+            && let Some(window) = usize::try_from(index).ok().and_then(|i| list.get_mut(i))
+            && window["mask"] != json!(mask)
+        {
+            window["mask"] = json!(mask);
+            self.as_mut()
+                .set_extra_windows(QString::from(&list.to_string()));
+        }
+        self.sync_extras(true);
     }
 
     /// The window system closed a window: it stays hidden.
@@ -366,8 +398,10 @@ impl qobject::Player {
             chrome_pixel(x, 1.0),
             chrome_pixel(y, 1.0),
         );
-        let tooltip = extra.pointer.tooltip.unwrap_or("");
-        self.as_mut().set_extra_tooltip(QString::from(tooltip));
+        let tooltip = core
+            .vlc
+            .tooltip(&core.app, extra.pointer.tooltip.unwrap_or(""));
+        self.as_mut().set_extra_tooltip(QString::from(&tooltip));
         self.as_mut().apply_extra_effects(index, &effects);
         self.sync_extras(false);
     }
@@ -406,6 +440,133 @@ impl qobject::Player {
         }
         self.as_mut().set_extra_tooltip(QString::default());
         self.sync_extras(false);
+    }
+
+    /// Where a self-test can click the control bound to `command`: a point
+    /// of it where the hit test finds it (VLC's buttons take only their
+    /// opaque pixels), in the main window (`window` -1, its pixels) or in a
+    /// shown other window (its index). Without one, `bound` says whether the
+    /// skin has such a control at all.
+    pub(crate) fn control_point(&self, command: &QString) -> QString {
+        const STEPS: i32 = 16;
+        let command = command.to_string();
+        let Some(core) = self.core() else {
+            return QString::from("{}");
+        };
+        let main = core
+            .chrome
+            .as_ref()
+            .map(|chrome| (-1, chrome, super::zoom()));
+        let others = core
+            .extras
+            .iter()
+            .enumerate()
+            .filter(|(_, extra)| extra.shown)
+            .map(|(index, extra)| (i32::try_from(index).unwrap_or(-1), &extra.chrome, 1.0));
+        for (window, chrome, zoom) in main.into_iter().chain(others) {
+            let Some(placed) = chrome.layout() else {
+                continue;
+            };
+            for node in placed
+                .nodes
+                .iter()
+                .filter(|node| node.command() == Some(&command))
+            {
+                let rect = node.rect;
+                // From the middle out: the window's edges resize it.
+                let mut points: Vec<(i32, i32)> = (1..STEPS)
+                    .flat_map(|row| (1..STEPS).map(move |column| (column, row)))
+                    .collect();
+                points.sort_by_key(|&(column, row)| {
+                    (column * 2 - STEPS).pow(2) + (row * 2 - STEPS).pow(2)
+                });
+                for (column, row) in points {
+                    let (x, y) = (
+                        rect.x + rect.w * column / STEPS,
+                        rect.y + rect.h * row / STEPS,
+                    );
+                    if let Some(rvp_skin::hit::Hit::Control {
+                        command: Some(found),
+                        ..
+                    }) = chrome.hit(x, y)
+                        && found == command
+                    {
+                        let value = json!({
+                            "window": window,
+                            "x": f64::from(x) * zoom,
+                            "y": f64::from(y) * zoom,
+                        });
+                        return QString::from(&value.to_string());
+                    }
+                }
+            }
+        }
+        let mut bound = false;
+        if let Some(chrome) = &core.chrome {
+            chrome.skin().root().walk(&mut |element| {
+                bound |= element.attrs.get("CmdID") == Some(command.as_str());
+            });
+        }
+        QString::from(&json!({ "bound": bound }).to_string())
+    }
+}
+
+/// A window's shape when its area asks for one (`RvpShape='alpha'`: a
+/// VLC theme's drawn pixels), as `rvp_skin::render::opaque_region` gives
+/// it; empty: rectangular.
+pub(super) fn shape(chrome: &Chrome, area: &str) -> String {
+    let skin = chrome.skin();
+    if skin.area(area).and_then(|area| area.attrs.get("RvpShape")) != Some("alpha") {
+        return String::new();
+    }
+    rvp_skin::render::opaque_region(&chrome.frame().list, skin)
+}
+
+/// Rectangles `x,y,w,h;...` scaled by the skin's zoom.
+fn scaled(rects: &str, zoom: f64) -> String {
+    if (zoom - 1.0).abs() < f64::EPSILON {
+        return rects.to_owned();
+    }
+    rects
+        .split(';')
+        .filter(|rect| !rect.is_empty())
+        .map(|rect| {
+            rect.split(',')
+                .map(|value| {
+                    // Window pixels: small.
+                    #[allow(clippy::cast_possible_truncation)]
+                    let scaled = (value.parse::<f64>().unwrap_or(0.0) * zoom).round() as i64;
+                    scaled.to_string()
+                })
+                .collect::<Vec<_>>()
+                .join(",")
+        })
+        .collect::<Vec<_>>()
+        .join(";")
+}
+
+impl qobject::Player {
+    /// The main window's shape after a new layout, once a tick (M9).
+    pub(super) fn sync_window_mask(mut self: Pin<&mut Self>) {
+        let overlay = *self.overlay();
+        let Some(core) = self.as_mut().core_mut() else {
+            return;
+        };
+        if !std::mem::take(&mut core.mask_dirty) {
+            return;
+        }
+        // The video alone fills the screen in fullscreen.
+        let mask = match core.chrome.as_ref() {
+            Some(chrome) if !overlay => scaled(&shape(chrome, "MainSkinArea"), super::zoom()),
+            _ => String::new(),
+        };
+        super::WINDOW_MASK_LEN.store(
+            mask.split(';').filter(|rect| !rect.is_empty()).count(),
+            std::sync::atomic::Ordering::Relaxed,
+        );
+        if self.window_mask().to_string() != mask {
+            self.set_window_mask(QString::from(&mask));
+        }
     }
 }
 

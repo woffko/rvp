@@ -825,3 +825,75 @@ fn fullscreen_bars_leave_the_video_slot_out() {
     // The control bar, not the client part that holds the video.
     assert_eq!(chrome.bars(), vec![Rect::new(0, HEIGHT - 20, WIDTH, 20)]);
 }
+
+/// Controls as RVP builds them from a VLC theme (M9): a title bar with its
+/// own double click, a guarded toggle, and two stacked buttons that take
+/// the pointer where their pictures are opaque.
+const VLC_SKIN: &str = "<Skin Version='1.0'>
+<MainSkinArea Image='atlas.png' Width='100' Height='60'>
+<Control>
+\t<Static Align='Client'>
+\t\t<Static Left='0' Top='0' Width='100' Height='10' IsTitleBar='1' RvpDoubleCmd='RVP:toggle-fullscreen' ImageLeft='0' ImageTop='0' ImageWidth='30' ImageHeight='10' />
+\t\t<Button CmdID='RVP:toggle-equalizer' RvpUnless='VLCX:0' Left='20' Top='20' Width='8' Height='8' ImageLeft='0' ImageTop='10' />
+\t\t<Button CmdID='RVP:next' RvpHit='alpha' Left='20' Top='40' Width='16' Height='8' ImageLeft='0' ImageTop='10' ImageWidth='16' ImageHeight='8' />
+\t\t<Button CmdID='RVP:previous' RvpHit='alpha' Image='holes.png' Left='20' Top='40' Width='16' Height='8' ImageLeft='0' ImageTop='0' ImageWidth='16' ImageHeight='8' />
+\t</Static>
+</Control>
+</MainSkinArea>
+</Skin>
+";
+
+#[test]
+fn vlc_controls_take_their_own_clicks() {
+    // Three button states of 16x8, each opaque in its left half only.
+    let mut holes = Image::new(48, 8);
+    for state in 0..3 {
+        put(&mut holes, Rect::new(state * 16, 0, 8, 8), [200, 0, 0, 255]);
+    }
+    let mut atlas = Image::new(64, 32);
+    put(&mut atlas, Rect::new(0, 0, 64, 32), [90, 90, 90, 255]);
+    let archive = SkinArchive::from_files(
+        "VLC",
+        [
+            ("VideoSkin.xml", VLC_SKIN.as_bytes().to_vec()),
+            ("atlas.png", atlas.encode_png().expect("png")),
+            ("holes.png", holes.encode_png().expect("png")),
+        ],
+    );
+    let skin = Skin::load(archive, "VideoSkin.xml").expect("load the skin");
+    let mut chrome = Chrome::new(Box::leak(Box::new(skin)));
+    chrome.resize(Mode::Window, 100, 60).expect("layout");
+    let ctx = Context {
+        width: 100,
+        height: 60,
+        ..window()
+    };
+    let bindings = Bindings::potplayer_defaults();
+    let mut pointer = Pointer::default();
+    let action = |name| Action::from_name(name).expect(name);
+    let mut click = |chrome: &mut Chrome, x, y| {
+        pointer.press(chrome, ctx, x, y, Button::Left);
+        pointer.release(chrome, &bindings, ctx, x, y, Button::Left)
+    };
+    // The upper button's opaque half, then its hole over the lower one.
+    assert_eq!(
+        click(&mut chrome, 22, 44),
+        vec![Effect::Action(action("previous"))]
+    );
+    assert_eq!(
+        click(&mut chrome, 32, 44),
+        vec![Effect::Action(action("next"))]
+    );
+    // `equalizer.enable()` does nothing while the equalizer is on.
+    assert_eq!(
+        click(&mut chrome, 24, 24),
+        vec![Effect::Action(action("toggle-equalizer"))]
+    );
+    chrome.state.flags.insert("VLCX:0".to_owned());
+    assert!(click(&mut chrome, 24, 24).is_empty());
+    // The title bar's double click runs the theme's action.
+    assert_eq!(
+        Pointer::default().double_click(&mut chrome, &bindings, ctx, 50, 5, Button::Left),
+        vec![Effect::Action(action("toggle-fullscreen"))]
+    );
+}

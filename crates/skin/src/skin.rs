@@ -37,6 +37,14 @@ pub struct ExtraWindow<'a> {
     pub dock: &'a str,
     /// The `RVPWIN:` command that shows and hides it; `None`: always shown.
     pub toggle: Option<&'a str>,
+    /// Whether it shows at first (`RvpShown`; without one, when it has no
+    /// toggle).
+    pub shown: bool,
+    /// Its place from the main window's corner (`RvpDock='offset'`).
+    pub offset: (i32, i32),
+    /// Its smallest and largest sizes.
+    pub min: (i32, i32),
+    pub max: (i32, i32),
     /// Sizes go in these steps (a classic playlist's 25 by 29 pixels).
     pub step: Option<(i32, i32)>,
     /// The window's shape: polygons in its pixels (empty: rectangular).
@@ -319,12 +327,31 @@ impl Skin {
                             .collect()
                     })
                     .unwrap_or_default();
+                let (width, height) = (attrs.int_or("Width", 0), attrs.int_or("Height", 0));
                 ExtraWindow {
                     area: area.name.as_str(),
-                    width: attrs.int_or("Width", 0),
-                    height: attrs.int_or("Height", 0),
+                    width,
+                    height,
                     dock: attrs.get("RvpDock").unwrap_or("below"),
                     toggle: attrs.get("RvpToggle"),
+                    shown: attrs
+                        .int("RvpShown")
+                        .map_or(!attrs.has("RvpToggle"), |shown| shown != 0),
+                    offset: (attrs.int_or("RvpOffsetX", 0), attrs.int_or("RvpOffsetY", 0)),
+                    min: (
+                        attrs.int("WidthLimit").filter(|w| *w > 0).unwrap_or(width),
+                        attrs
+                            .int("HeightLimit")
+                            .filter(|h| *h > 0)
+                            .unwrap_or(height),
+                    ),
+                    max: (
+                        attrs.int("RvpMaxWidth").filter(|w| *w > 0).unwrap_or(width),
+                        attrs
+                            .int("RvpMaxHeight")
+                            .filter(|h| *h > 0)
+                            .unwrap_or(height),
+                    ),
                     step,
                     region,
                 }

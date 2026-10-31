@@ -137,6 +137,18 @@ pub mod bridge {
             dst: [i32; 4],
             clip: [i32; 4],
         );
+        /// Scales `src` of an atlas to `dst`, clipped to `clip` (M9: VLC's
+        /// stretched images).
+        fn rvp_paint_stretch(
+            painter: Pin<&mut QPainter>,
+            name: &str,
+            src: [i32; 4],
+            dst: [i32; 4],
+            clip: [i32; 4],
+        );
+        /// Adds a font file's faces to the application's fonts (M9: VLC's
+        /// themes bring theirs); false when Qt cannot read it.
+        fn rvp_add_font(data: &[u8]) -> bool;
         fn rvp_paint_translate(painter: Pin<&mut QPainter>, dx: i32, dy: i32);
         /// Draws larger by `factor` from here (M14's skin zoom).
         fn rvp_paint_scale(painter: Pin<&mut QPainter>, factor: f64);

@@ -431,6 +431,21 @@ fn the_blackspace_report_is_current() {
     );
 }
 
+#[test]
+fn the_vlc_report_is_current() {
+    // Every action the builder maps names an action or command RVP has.
+    for action in rvp_skin::vlc::build::ACTIONS {
+        if let Some((command, _)) = rvp_skin::vlc::build::action_command(action) {
+            let known = command.strip_prefix(rvp_app::RVP_COMMAND).map_or_else(
+                || skin_covered(command),
+                |name| Action::from_name(name).is_some() || ListAction::from_name(name).is_some(),
+            );
+            assert!(known, "{action} runs {command}, which RVP does not have");
+        }
+    }
+    check("vlc.md", &rvp_app::coverage::vlc_report());
+}
+
 /// The one command RVP Default keeps for the classic layout's sake although
 /// RVP opens the subtitle font in a dialog; any other must work.
 const DEFAULT_SKIN_GAPS: [&str; 1] = ["CMD_POPUPMENU_CAPTION_FONT"];

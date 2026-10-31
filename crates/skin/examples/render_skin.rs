@@ -35,7 +35,11 @@ fn run(args: &[String]) -> Result<(), String> {
         .extension()
         .and_then(|ext| ext.to_str())
         .is_some_and(|ext| ext.eq_ignore_ascii_case("wsz") || ext.eq_ignore_ascii_case("zip"));
-    let skin = if classic {
+    let vlc = rvp_skin::vlc::is_vlc(path);
+    let skin = if vlc {
+        let theme = rvp_skin::vlc::Theme::open(path).map_err(|e| e.to_string())?;
+        rvp_skin::vlc::build::skin(&theme, None).map_err(|e| e.to_string())?
+    } else if classic {
         let winamp = rvp_skin::winamp::WinampSkin::open(path).map_err(|e| e.to_string())?;
         rvp_skin::winamp::build::skin(&winamp).map_err(|e| e.to_string())?
     } else {
@@ -72,6 +76,29 @@ fn run(args: &[String]) -> Result<(), String> {
             .collect();
         for flag in ["RVP:playing", "RVP:stereo", "RVP:no-mono"] {
             state.flags.insert(flag.to_owned());
+        }
+        state.media_loaded = true;
+    }
+    if vlc {
+        // A file playing.
+        let runtime = rvp_skin::vlc::Runtime::of(&skin);
+        runtime.set_flags(&mut state.flags, &mut |name| {
+            matches!(
+                name,
+                "vlc.isPlaying" | "vlc.isSeekable" | "vlc.hasVout" | "vlc.hasAudio"
+            ) || name.ends_with(".isVisible")
+                || name.ends_with(".isActive")
+        });
+        for (n, template) in &runtime.texts {
+            data.set_text(
+                &format!("VLCTEXT:{n}"),
+                template
+                    .replace("$N", "Sample Film")
+                    .replace("$T", "0:42")
+                    .replace("$D", "1:30:00")
+                    .replace("$L", "-1:29:18")
+                    .replace("$V", "100"),
+            );
         }
         state.media_loaded = true;
     }

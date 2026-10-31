@@ -39,12 +39,16 @@ Window {
 
     width: info.width || 1
     height: info.height || 1
-    minimumWidth: info.step ? 275 : width
-    minimumHeight: info.step ? 116 : height
-    maximumWidth: info.step ? 16384 : width
-    maximumHeight: info.step ? 16384 : height
-    x: owner.x
-    y: info.dock === "above" ? owner.y - height : owner.y + owner.height + offsetBelow()
+    minimumWidth: info.step ? 275 : (info.min ? info.min[0] : width)
+    minimumHeight: info.step ? 116 : (info.min ? info.min[1] : height)
+    maximumWidth: info.step ? 16384 : (info.max ? info.max[0] : width)
+    maximumHeight: info.step ? 16384 : (info.max ? info.max[1] : height)
+    // Docked above or below the main window, or (a VLC theme's windows)
+    // where the theme puts them beside it.
+    x: owner.x + (info.dock === "offset" ? info.offset[0] : 0)
+    y: info.dock === "above" ? owner.y - height
+       : info.dock === "offset" ? owner.y + info.offset[1]
+       : owner.y + owner.height + offsetBelow()
     flags: Qt.Tool | Qt.FramelessWindowHint | (player.on_top ? Qt.WindowStaysOnTopHint : 0)
     transientParent: owner
     color: "black"
@@ -54,11 +58,19 @@ Window {
 
     onVisibleChanged: {
         if (visible) {
-            Tools.set_window_mask(win, info.region || "", 1)
+            applyShape()
             Tools.repaint(view, false)
         }
     }
     onClosing: (close) => player.extra_closed(index)
+    // A classic skin's region.txt, or a VLC theme's drawn pixels.
+    function applyShape() {
+        if (info.mask)
+            Tools.set_window_mask_rects(win, info.mask, 1)
+        else
+            Tools.set_window_mask(win, info.region || "", 1)
+    }
+    onInfoChanged: if (visible) applyShape()
     // The classic playlist's sizes go in its skin's steps.
     onWidthChanged: resizeTimer.restart()
     onHeightChanged: resizeTimer.restart()

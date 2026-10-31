@@ -17,7 +17,7 @@
 
 use std::sync::Arc;
 
-use rvp_skin::hit::{Hit, hit_test};
+use rvp_skin::hit::{Hit, hit_test_in};
 use rvp_skin::layout::Kind;
 use rvp_skin::paint::Op;
 use rvp_skin::{DataModel, DisplayList, Layout, Rect, Skin, SkinError, UiState, layout, paint};
@@ -156,7 +156,7 @@ pub struct Chrome {
 /// Bounds of what an operation can touch.
 fn op_bounds(op: &Op) -> Rect {
     match op {
-        Op::Image { dst, clip, .. } => dst.intersect(clip),
+        Op::Image { dst, clip, .. } | Op::Stretch { dst, clip, .. } => dst.intersect(clip),
         Op::Fill { rect, .. } => *rect,
         Op::Text(text) => text.rect.intersect(&text.clip),
     }
@@ -376,7 +376,27 @@ impl Chrome {
     pub fn hit(&self, x: i32, y: i32) -> Option<Hit<'static>> {
         self.layout
             .as_ref()
-            .and_then(|placed| hit_test(placed, x, y))
+            .and_then(|placed| hit_test_in(placed, Some(self.skin), x, y))
+    }
+
+    /// An attribute of a layout node's element.
+    #[must_use]
+    pub fn node_attr(&self, node: usize, name: &str) -> Option<&'static str> {
+        self.layout
+            .as_ref()
+            .and_then(|placed| placed.nodes.get(node))
+            .and_then(|node| node.element.attrs.get(name))
+    }
+
+    /// The control of `element` does nothing now: its `RvpUnless` flag is
+    /// on (M9: a VLC theme's `enable()`-style action while already enabled).
+    #[must_use]
+    pub fn held_back(&self, element: usize) -> bool {
+        self.layout
+            .as_ref()
+            .and_then(|placed| placed.nodes.iter().find(|node| node.element.id == element))
+            .and_then(|node| node.element.attrs.get("RvpUnless"))
+            .is_some_and(|flag| self.state.flags.contains(flag))
     }
 
     /// The rectangle of a layout node.

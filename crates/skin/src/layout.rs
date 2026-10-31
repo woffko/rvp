@@ -278,10 +278,17 @@ impl<'a> Builder<'a, '_> {
             {
                 self.attached_playlist(placed, node_clip, index, depth + 1);
             }
+            // VLC's panels (M9) are boxes for placing, not clips: their
+            // children may lie outside them (`RvpNoClip`).
+            let child_clip = if child.attrs.flag("RvpNoClip") {
+                clip
+            } else {
+                node_clip
+            };
             self.children(
                 child,
                 placed,
-                node_clip,
+                child_clip,
                 Some(index),
                 depth + 1,
                 atlas,
@@ -410,6 +417,10 @@ fn place(attrs: &Attrs, parent: Rect, free: &mut Rect) -> Rect {
                 parent.h,
                 attrs.flag("VertCenter"),
             );
+            // VLC's corners (M9): an edge tied to the parent's far edge,
+            // at a signed distance from it, even outside the parent.
+            let (x, w) = far(attrs, "RvpLeftFar", "RvpRightFar", parent.w, x, w);
+            let (y, h) = far(attrs, "RvpTopFar", "RvpBottomFar", parent.h, y, h);
             Rect::new(parent.x + x, parent.y + y, w, h)
         }
     };
@@ -420,6 +431,29 @@ fn place(attrs: &Attrs, parent: Rect, free: &mut Rect) -> Rect {
         rect.h + attrs.int_or("OffsetHeight", 0),
     );
     rect
+}
+
+/// One axis with VLC's far edges (`RvpLeftFar` and the like): the start
+/// or end at that signed distance from the parent's far edge.
+fn far(
+    attrs: &crate::markup::Attrs,
+    start: &str,
+    end: &str,
+    parent: i32,
+    offset: i32,
+    size: i32,
+) -> (i32, i32) {
+    let begin = attrs
+        .int(start)
+        .map_or(offset, |distance| parent + distance);
+    let finish = attrs
+        .int(end)
+        .map_or(begin + size, |distance| parent + distance);
+    if attrs.has(start) || attrs.has(end) {
+        (begin, (finish - begin).max(0))
+    } else {
+        (offset, size)
+    }
 }
 
 /// Resolves one axis of an undocked element: returns (offset, size).

@@ -527,6 +527,28 @@ smoothing for users without SVP, after a study of the engines.
   to RVP's own drawn in code (`fallback.rs`), which is also the tests'
   synthetic skin; a bitmap's first attribute occurrence wins in the
   markup (`El::rect` already sets `Left`).
+- VLC's themes (`crates/skin/src/vlc`): `mod.rs` reads a `.vlt` (tar.gz
+  or zip; `theme.xml` with `markup::parse_xml`, where quotes protect `>`
+  as in libxml2) into a model, `build.rs` writes PotPlayer-format markup
+  and pictures in memory, as for Winamp. The window with the video is
+  the main window (its layouts `main.N.xml`, `W.setLayout(L)` loads one
+  with `CMD_LOAD_SKIN_XML`), the others `RvpWindow='1'` areas placed at
+  `RvpDock='offset'`. `visible` and checkbox states are flags `VLCX:N`
+  (`RvpConditions`) and texts `VLCTEXT:N` (`RvpTexts`) that
+  `crates/app/src/vlc.rs` computes; corners tied to the box's far edges
+  are `RvpLeftFar`...`RvpBottomFar`, `RvpNoClip` panels, `RvpStretch`
+  images, `RvpShape='alpha'` windows (`render::opaque_region`).
+  Buttons take the pointer where their pictures are opaque
+  (`RvpHit='alpha'`, `hit::hit_test_in`); VLC's `enable()`-style actions
+  are RVP's toggles held back by `RvpUnless`; a title-bar picture's
+  `action2` is `RvpDoubleCmd`. An action VLC knows but RVP cannot run
+  leaves its control inert; one VLC does not know drops it, as VLC does.
+  The theme's fonts are queued in `open_skin_file` and given to Qt in
+  `keep_skin` on the window's thread: the first skin loads on a thread
+  of its own before `QGuiApplication` exists, and `QFontDatabase` crashed
+  there. `docs/coverage/vlc.md` comes from the builder's `ACTIONS` and
+  `vlc.rs`'s tables (`RVP_BLESS=1 cargo test -p rvp-app --test
+  coverage`), and its test checks that every mapped action exists.
 - Tests: `rvp --selftest=m9 --controller=osc|scripts FILE`
   (`--controller-bar=FRACTION` where the seek bar lies higher: ModernZ
   0.915; scripts put into the test's `RVP_CONFIG_DIR/mpv`); the VM's
@@ -537,7 +559,11 @@ smoothing for users without SVP, after a study of the engines.
   the synthetic skin and, with `RVP_WINAMP_SKINS`, every local `.wsz`
   (the museum's sample in `~/rvp-reference/s6/winamp/skins`);
   `cargo run -p rvp-skin --example render_skin -- SKIN.wsz OUT.png W H ""
-  AREA` renders a window headless.
+  AREA` renders a window headless (`.vlt` too).
+  `rvp --selftest=vlc --skin=THEME.vlt FILE` clicks the theme's pause and
+  play buttons wherever they show (`Player.control_point`) and its volume;
+  `tests/vlc.rs` builds every layout of each theme in `RVP_VLC_SKINS`
+  (the gallery's sample in `~/rvp-reference/s6/vlc/skins`).
 
 ## Playback, playlist and opening (M11)
 

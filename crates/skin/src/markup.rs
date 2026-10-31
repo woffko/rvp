@@ -19,6 +19,10 @@
 //! * Attribute names are case-insensitive; the first occurrence wins.
 //! * Closing tags close the nearest open element with the same name; stray
 //!   closing tags are ignored and open elements are closed at the end.
+//!
+//! VLC's themes (M9) are XML that VLC reads with libxml2: [`parse_xml`]
+//! keeps the rules above except that quotes protect `>` and `<`
+//! (`tooltiptext="Show Info >> ..."`).
 
 /// The attributes of one element, in document order.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -239,6 +243,17 @@ impl Element {
 /// a synthetic element named `#document`.
 #[must_use]
 pub fn parse_document(text: &str) -> Element {
+    parse(text, false)
+}
+
+/// Parses an XML file (VLC's `theme.xml`) as [`parse_document`] does, with
+/// quoted values that may hold `>` and `<`.
+#[must_use]
+pub fn parse_xml(text: &str) -> Element {
+    parse(text, true)
+}
+
+fn parse(text: &str, quotes: bool) -> Element {
     let bytes = text.as_bytes();
     let mut stack: Vec<Element> = vec![Element::new("#document", Attrs::default(), 0)];
     let mut line = 0;
@@ -279,7 +294,11 @@ pub fn parse_document(text: &str) -> Element {
             while name_end < bytes.len() && is_name_byte(bytes[name_end]) {
                 name_end += 1;
             }
-            let (body_end, resume) = tag_end(bytes, name_end);
+            let (body_end, resume) = if quotes {
+                quoted_tag_end(bytes, name_end)
+            } else {
+                tag_end(bytes, name_end)
+            };
             let mut body = text[name_end..body_end].trim_end();
             let self_closing = body.ends_with('/');
             if self_closing {
@@ -337,6 +356,20 @@ fn tag_end(bytes: &[u8], from: usize) -> (usize, usize) {
     (bytes.len(), bytes.len())
 }
 
+/// [`tag_end`] for XML: the first `>` outside quotes.
+fn quoted_tag_end(bytes: &[u8], from: usize) -> (usize, usize) {
+    let mut quote = None;
+    for (j, &byte) in bytes.iter().enumerate().skip(from) {
+        match (quote, byte) {
+            (None, b'\'' | b'"') => quote = Some(byte),
+            (Some(open), _) if open == byte => quote = None,
+            (None, b'>') => return (j, j + 1),
+            _ => {}
+        }
+    }
+    (bytes.len(), bytes.len())
+}
+
 fn append(stack: &mut [Element], element: Element) {
     if let Some(parent) = stack.last_mut() {
         parent.children.push(element);
@@ -360,7 +393,7 @@ fn close(stack: &mut Vec<Element>, name: &str) {
 
 #[cfg(test)]
 mod tests {
-    use super::{atoi, parse_attrs, parse_document};
+    use super::{atoi, parse_attrs, parse_document, parse_xml};
 
     #[test]
     fn atoi_matches_c() {
@@ -442,5 +475,20 @@ mod tests {
         assert_eq!(doc.children.len(), 1);
         assert_eq!(doc.children[0].attrs.int("X"), Some(1));
         assert!(doc.children[0].children[0].is("B"));
+    }
+
+    #[test]
+    fn xml_quotes_protect_brackets() {
+        let text = "<W><B T=\"Info >> site\" X='1'/><B T='a<b' X='2'/></W>";
+        let doc = parse_xml(text);
+        let buttons = &doc.children[0].children;
+        assert_eq!(buttons.len(), 2);
+        assert_eq!(buttons[0].attrs.get("T"), Some("Info >> site"));
+        assert_eq!(buttons[1].attrs.int("X"), Some(2));
+        // PotPlayer's markup ends the tag at the quoted `>`.
+        assert_eq!(
+            parse_document(text).children[0].children[0].attrs.get("T"),
+            Some("Info")
+        );
     }
 }

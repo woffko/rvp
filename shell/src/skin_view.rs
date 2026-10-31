@@ -14,7 +14,7 @@ use rvp_skin::paint::{HAlign, Op, VAlign};
 
 use crate::ffi::bridge::{
     rvp_atlas_contains, rvp_atlas_insert, rvp_paint_atlas, rvp_paint_fill, rvp_paint_scale,
-    rvp_paint_text, rvp_paint_translate,
+    rvp_paint_stretch, rvp_paint_text, rvp_paint_translate,
 };
 use crate::skin_view_qobject::qobject;
 
@@ -65,6 +65,17 @@ fn draw(mut painter: Pin<&mut qobject::QPainter>, skin: &Skin, op: &Op) {
             let key = atlas_key(skin, atlas);
             if ensure_atlas(skin, &key, atlas) {
                 rvp_paint_atlas(painter.as_mut(), &key, rect(*src), rect(*dst), rect(*clip));
+            }
+        }
+        Op::Stretch {
+            atlas,
+            src,
+            dst,
+            clip,
+        } => {
+            let key = atlas_key(skin, atlas);
+            if ensure_atlas(skin, &key, atlas) {
+                rvp_paint_stretch(painter.as_mut(), &key, rect(*src), rect(*dst), rect(*clip));
             }
         }
         Op::Fill { rect: area, color } => {
