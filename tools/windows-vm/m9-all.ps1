@@ -22,10 +22,13 @@
 # Then `--selftest=classic` with each classic Winamp skin in
 # C:\rvp-test\m9\winamp (*.wsz) and `--selftest=vlc` with each VLC theme
 # in C:\rvp-test\m9\vlc (*.vlt): third-party skins from the study's
-# sample, kept out of the repository too.
+# sample, kept out of the repository too. `-Part controllers` or
+# `-Part skins` runs one half.
 param(
     [string]$Exe = 'C:\rvp-test\rvp-bundle\rvp.exe',
-    [string]$Data = 'C:\rvp-test\m9'
+    [string]$Data = 'C:\rvp-test\m9',
+    [ValidateSet('all', 'controllers', 'skins')]
+    [string]$Part = 'all'
 )
 $filter = 'DPI|DpiAware|^grabbed=|^qt\.|pw\.conf|ametadata|astats|Parsed_'
 $file = "$Data\fixture-60s.mkv"
@@ -39,6 +42,9 @@ $runs = @(
     @{ Name = 'uosc'; Kind = 'scripts'; Scripts = "$Data\uosc"; Extra = @() },
     @{ Name = 'modernz'; Kind = 'scripts'; Scripts = "$Data\modernz"; Extra = @('--controller-bar=0.915') }
 )
+if ($Part -eq 'skins') {
+    $runs = @()
+}
 foreach ($run in $runs) {
     Write-Host "== the M9 self-test with $($run.Name)"
     if (-not (Test-Path $file)) {
@@ -67,13 +73,14 @@ foreach ($run in $runs) {
 }
 
 $skins = @()
-foreach ($kind in @('winamp', 'vlc')) {
+$kinds = if ($Part -eq 'controllers') { @() } else { @('winamp', 'vlc') }
+foreach ($kind in $kinds) {
     $pattern = if ($kind -eq 'winamp') { '*.wsz' } else { '*.vlt' }
     $test = if ($kind -eq 'winamp') { 'classic' } else { 'vlc' }
     Get-ChildItem -Path "$Data\$kind" -Filter $pattern -ErrorAction SilentlyContinue |
         ForEach-Object { $skins += @{ Test = $test; Skin = $_.FullName; Name = $_.BaseName } }
 }
-if ($skins.Count -eq 0) {
+if ($skins.Count -eq 0 -and $Part -ne 'controllers') {
     Check 'm9_skins' $false "no skins in $Data\winamp or $Data\vlc"
 }
 foreach ($run in $skins) {

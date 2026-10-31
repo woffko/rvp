@@ -553,7 +553,10 @@ smoothing for users without SVP, after a study of the engines.
   (`--controller-bar=FRACTION` where the seek bar lies higher: ModernZ
   0.915; scripts put into the test's `RVP_CONFIG_DIR/mpv`); the VM's
   check is `tools/windows-vm/m9-all.ps1` (OSC, uosc and ModernZ from
-  `C:\rvp-test\m9`). Running downloaded scripts in tests needs the
+  `C:\rvp-test\m9`, then `--selftest=classic` and `=vlc` with the skins
+  in its `winamp` and `vlc` folders; `-Part controllers` or `skins` runs
+  one half). The VM is shared with other sessions and has two CPUs: a
+  double click through mpv can time out while it is busy. Running downloaded scripts in tests needs the
   owner's permission (given for uosc and ModernZ, 2026-10-31).
   `rvp --selftest=classic --skin=SKIN.wsz FILE`; `tests/winamp.rs` loads
   the synthetic skin and, with `RVP_WINAMP_SKINS`, every local `.wsz`

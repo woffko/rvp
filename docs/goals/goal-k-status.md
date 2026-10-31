@@ -1,10 +1,11 @@
 # Goal K status: milestone M9 (other players' skins)
 
-Date: 2026-10-31. Result: **built and checked in WSL; the Windows VM's
-checks are partly done**. The VM (`<windows-vm>`) stopped answering during
-the ModernZ run (after mpv's OSC and uosc had passed there) and was still
-unreachable when this file was written: ModernZ and the Winamp and VLC
-self-tests on Windows wait for it (see "Open").
+Date: 2026-10-31. Result: **done**. The three parts the owner chose are
+built, checked in WSL and on the Windows VM. The VM took no new
+connections from about 09:33 UTC: another session's `route add` on the VM
+had cut SSH and ping (nothing of RVP's). The SSH session that was
+already open ran mpv's OSC and uosc there; the owner restarted the VM at
+about 20:58 UTC, and the rest ran then.
 
 Precondition met: `goal-r-status.md` records goal R as done.
 
@@ -67,10 +68,12 @@ layout, `winamp\*.wsz` and `vlc\*.vlt` from the study's sample):
 
 | Run | Result |
 |-----|--------|
-| mpv's OSC (mpv 0.41's, with RVP's commands on its buttons) | 17 of 17 |
-| uosc | 17 of 17 |
-| ModernZ | not run: the VM stopped answering at its start |
-| Classic Winamp skins, VLC's themes | not run: the VM has answered neither SSH nor ping since then (checked for another 30 minutes at 13:50); the build of 02ba007 and a sample (4 Winamp skins, 10 VLC themes) are ready to copy |
+| mpv's OSC (mpv 0.41's, with RVP's commands on its buttons) | 17 of 17, three times |
+| uosc | 17 of 17 in the morning and alone after the restart; in the two full runs just after the restart one double-click step timed out each time (entering fullscreen once, leaving it once), see "Findings" |
+| ModernZ (`--controller-bar=0.915`) | 15 of 15, twice |
+| Classic Winamp: base 2.91, Garfield, Yufo06 | 10 of 10 each |
+| Classic Winamp: Zelda Amp 3 | 9 of 10 in the first run (the play click resumed playback later than the step's 5 s), then 10 of 10 twice alone |
+| VLC: VLC's default, PsVLC, Blissta, Dalin Media Player, WMP11, Alienware Darkstar, Darkvoodoo, darklounge, eDark, Win VLC 11 | 10 of 10 each |
 
 ## Findings
 
@@ -89,6 +92,14 @@ layout, `winamp\*.wsz` and `vlc\*.vlt` from the study's sample):
   `null`, which an observation does not report: menus are read when a key
   comes. mpv makes a double click of any two presses: RVP takes one only
   when both presses were its own.
+- **Double clicks through mpv need time:** over a controller both
+  presses go through mpv and come back as RVP's double click. On the VM
+  (two CPUs, software OpenGL) right after its restart, while Defender
+  scanned the new files, uosc (the heaviest of the three controllers)
+  missed one double click per run; alone on the quiet VM, in WSL (three
+  runs) and in the morning it passed. A loaded machine can drop such a
+  double click; the single clicks and the controllers' own buttons are
+  not affected.
 - **Names the builder used that RVP lacks:** `RVP:open-playlist` and
   `RVP:save-playlist` are playlist actions; playlist actions now take
   `RVP:` names too, and the coverage test fails a mapped action RVP does
@@ -141,11 +152,10 @@ On the next build:
 
 ## CI
 
-Run 41200210267 for ed480f8 to 21a065c (pushed together): green, with
-the checks on Ubuntu 24.04 and Windows Server 2025, both packages and
-`cargo deny`.
+Run 41200210267 for ed480f8 to 21a065c and run 41208660485 for 028e4b1:
+green, with the checks on Ubuntu 24.04 and Windows Server 2025, both
+packages and `cargo deny`.
 
 ## Open
 
-- The Windows VM is unreachable: run `m9-all.ps1` (ModernZ, the Winamp
-  skins and VLC's themes) when it answers again.
+- Nothing for goal K. The Linux side is goal S's (above).
