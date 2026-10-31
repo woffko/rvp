@@ -146,6 +146,7 @@ impl Settings {
         self.accessibility.validate(&mut notes);
         self.skins.validate(&mut notes);
         self.remote.validate(&mut notes);
+        self.controller.validate(&mut notes);
         notes
     }
 
@@ -750,6 +751,9 @@ impl App {
             "logos_folder": self.logos_folder().display().to_string(),
             "menu_files": names(self.menu_files()),
             "menus_folder": self.menus_folder().display().to_string(),
+            // M9: mpv's on-screen controllers.
+            "mpv_folder": self.mpv_folder().display().to_string(),
+            "mpv_scripts": names(crate::controller::scripts(&self.mpv_folder())),
         })
     }
 

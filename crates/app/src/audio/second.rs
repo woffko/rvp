@@ -138,6 +138,8 @@ impl Second {
             .into_iter()
             .map(|(name, value)| (name.to_owned(), value.to_owned()))
             .collect(),
+            optional: Vec::new(),
+            builtin_scripts: false,
         };
         options.extra.extend_from_slice(extra);
         let engine = Engine::new(&options).map_err(|error| error.to_string())?;

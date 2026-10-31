@@ -354,3 +354,26 @@ Plus the shared window host (X1-X5).
    - otherwise RVP's own art.
 
    Fullscreen shows the video alone, as Winamp does.
+
+## The owner's decisions (2026-10-31)
+
+- **Scope:** all three, in the order above:
+  1. mpv's controllers;
+  2. classic Winamp, with the shared window host;
+  3. VLC.
+- **RVP's own skin stays.** A controller is one more choice, not a
+  replacement. It can show:
+  - **over the video**, with the skin around it; in fullscreen it takes
+    the place of the skin's bars;
+  - **without the skin**: the window holds only the video and the
+    controller.
+- **Controllers:** mpv's OSC and the user's own scripts. The owner allowed
+  running the downloaded uosc and ModernZ for tests, headless in WSL and on
+  the Windows VM.
+- **Winamp's video:** a video window docked under the main window, framed
+  by:
+  - the skin's `video.bmp`;
+  - otherwise the skin's playlist frame pieces;
+  - otherwise RVP's own art.
+
+  Fullscreen shows the video alone.

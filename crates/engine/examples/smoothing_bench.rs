@@ -300,6 +300,8 @@ fn engine(options: &Options, vf: &str, extra: &[(&str, &str)]) -> Result<Engine,
         hwdec: options.hwdec.clone(),
         ipc_server: None,
         extra: Vec::new(),
+        optional: Vec::new(),
+        builtin_scripts: false,
     };
     for (name, value) in extra {
         settings

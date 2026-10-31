@@ -174,6 +174,8 @@ pub struct Settings {
     pub speech: crate::speech::SpeechSettings,
     /// M15: the control API for remotes (the Remote page).
     pub remote: crate::control::RemoteSettings,
+    /// M9: mpv's on-screen controllers (the Skins page).
+    pub controller: crate::controller::ControllerSettings,
 }
 
 impl Default for Settings {
@@ -247,6 +249,7 @@ impl Default for Settings {
             skins: crate::skins::SkinsSettings::default(),
             speech: crate::speech::SpeechSettings::default(),
             remote: crate::control::RemoteSettings::default(),
+            controller: crate::controller::ControllerSettings::default(),
         }
     }
 }

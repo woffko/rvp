@@ -71,7 +71,10 @@ pub fn encode(job: &EncodeJob, timeout: Duration) -> Result<(), EngineError> {
         init.set_option("osd-level", "0")?;
         init.set_option("input-default-bindings", "no")?;
         init.set_option("terminal", "no")?;
-        for name in ["osc", "ytdl", "load-scripts"] {
+        for name in ["osc", "ytdl", "load-scripts"]
+            .into_iter()
+            .chain(crate::engine::BUILTIN_SCRIPTS)
+        {
             drop(init.set_option(name, "no"));
         }
         for (name, value) in &job.extra {

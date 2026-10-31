@@ -633,7 +633,23 @@ impl App {
         options
             .extra
             .extend(crate::playback::engine_options(&settings.playback));
+        let (builtin_scripts, controller) = crate::controller::engine_options(
+            &settings.controller,
+            &self.mpv_folder(),
+            self.native_video,
+        );
+        options.builtin_scripts = builtin_scripts;
+        options.optional.extend(controller);
         options
+    }
+
+    /// RVP's mpv folder beside the settings (M9): the user's scripts,
+    /// their options and fonts (`crate::controller`).
+    #[must_use]
+    pub fn mpv_folder(&self) -> PathBuf {
+        self.settings_path()
+            .and_then(Path::parent)
+            .map_or_else(|| self.state_dir().join("mpv"), |dir| dir.join("mpv"))
     }
 
     /// Where the settings are saved (`None` in tests that give settings
@@ -1917,7 +1933,10 @@ impl App {
                 EngineEvent::Error(message) => {
                     requests.push(UiRequest::Message(format!("Cannot play: {message}")));
                 }
-                EngineEvent::PlaybackRestart | EngineEvent::Shutdown => {}
+                // The shell's (M9).
+                EngineEvent::PlaybackRestart
+                | EngineEvent::Shutdown
+                | EngineEvent::ClientMessage(_) => {}
             }
         }
         (save_now, failed)

@@ -39,6 +39,7 @@ mod m13;
 mod m14;
 mod m15;
 mod m16;
+mod m9;
 
 /// `ui_request` kinds.
 pub mod request {
@@ -386,6 +387,8 @@ struct Core {
     remote: m15::Remote,
     /// The DVD that plays with its menus (M16).
     disc: Option<m16::Playing>,
+    /// mpv's on-screen controller (M9).
+    controller: Option<m9::Controller>,
 }
 
 /// Who gives the GPU power budget its readings.
@@ -933,6 +936,10 @@ impl qobject::Player {
             app.skip_first_import();
         }
         crate::metrics::mark("settings_loaded_ms");
+        // M9: `--controller=KIND` for this run (the self-test).
+        if let Some(kind) = cli.value("controller") {
+            app.settings.controller.choose(kind);
+        }
         let chrome = load_chrome(&cli, &app.settings, &mut messages);
         command_line_skin(&cli, &mut app);
         crate::metrics::mark("skin_loaded_ms");
@@ -949,6 +956,8 @@ impl qobject::Player {
         let Some(engine) = ENGINE.get() else {
             return;
         };
+        let (controller, message) = m9::start(&app, engine);
+        messages.extend(message);
         let ready_thread = Mutex::new(self.qt_thread());
         crate::video::on_ready(move || {
             if let Ok(thread) = ready_thread.lock() {
@@ -992,6 +1001,7 @@ impl qobject::Player {
             look: m14::Look::default(),
             remote: m15::Remote::default(),
             disc: None,
+            controller,
         });
         self.as_mut().sync_look();
         if let Some(message) = messages.first() {
@@ -1176,6 +1186,8 @@ impl qobject::Player {
             self.as_mut().handle_request(request);
         }
         self.as_mut().disc_drained(&drained.events);
+        self.as_mut()
+            .controller_drained(&drained.events, drained.changes);
         // A file with or without video: the audio or video skin (M14).
         if file_changed {
             self.as_mut().sync_skin();
@@ -1219,6 +1231,7 @@ impl qobject::Player {
     /// Recomputes the chrome from the model and signals what to repaint.
     fn sync_chrome(mut self: Pin<&mut Self>) {
         self.as_mut().follow_disc();
+        self.as_mut().controller_tick();
         self.as_mut().publish_remote();
         let Some(core) = self.as_mut().core_mut() else {
             return;
@@ -1709,6 +1722,27 @@ impl qobject::Player {
         {
             return;
         }
+        // An on-screen controller over the video (M9).
+        if self
+            .as_mut()
+            .controller_button(x, y, button, phase, modifiers)
+        {
+            self.sync_chrome();
+            return;
+        }
+        self.rvp_pointer(x, y, button, phase, modifiers);
+    }
+
+    /// RVP's own pointer: the skin's controls, the window's moves and the
+    /// video's gestures. `phase` as for [`Self::pointer_event`].
+    fn rvp_pointer(
+        mut self: Pin<&mut Self>,
+        x: f64,
+        y: f64,
+        button: Button,
+        phase: u8,
+        modifiers: Modifiers,
+    ) {
         let Some(ctx) = self.pointer_context(modifiers) else {
             return;
         };
@@ -1899,6 +1933,8 @@ impl qobject::Player {
 
     pub(crate) fn mouse_move(mut self: Pin<&mut Self>, x: f64, y: f64) {
         self.as_mut().disc_pointer(x, y, false);
+        let edge_cursor = self.as_mut().controller_move(x, y);
+        let controller = self.controller_active();
         let Some(ctx) = self.pointer_context(Modifiers::default()) else {
             return;
         };
@@ -1927,8 +1963,10 @@ impl qobject::Player {
         };
         core.look.bars_moved = Some(Instant::now());
         self.as_mut().set_tooltip(QString::from(tooltip));
-        self.as_mut().set_cursor_shape(cursor);
-        if overlay {
+        self.as_mut()
+            .set_cursor_shape(edge_cursor.unwrap_or(cursor));
+        // A controller takes the place of the skin's bars (M9).
+        if overlay && !controller {
             // The bar the pointer is on shows (auto-hide), alone, as in
             // PotPlayer's fullscreen: the title bar at the top edge, the
             // control bar at the bottom; a drag keeps its bar. Nothing
@@ -1947,7 +1985,16 @@ impl qobject::Player {
         self.sync_chrome();
     }
 
-    pub(crate) fn mouse_wheel(mut self: Pin<&mut Self>, x: f64, y: f64, delta: i32) {
+    pub(crate) fn mouse_wheel(self: Pin<&mut Self>, x: f64, y: f64, delta: i32) {
+        // An on-screen controller over the video (M9).
+        if self.controller_wheel(x, y, delta) {
+            return;
+        }
+        self.rvp_wheel(x, y, delta);
+    }
+
+    /// RVP's own wheel: the skin's controls or the bindings.
+    fn rvp_wheel(mut self: Pin<&mut Self>, x: f64, y: f64, delta: i32) {
         let Some(ctx) = self.pointer_context(Modifiers::default()) else {
             return;
         };
@@ -1981,6 +2028,7 @@ impl qobject::Player {
     }
 
     pub(crate) fn mouse_leave(mut self: Pin<&mut Self>) {
+        self.as_mut().controller_leave();
         let Some(core) = self.as_mut().core_mut() else {
             return;
         };
@@ -3236,6 +3284,7 @@ impl qobject::Player {
             .chain(self.playlist_status(core))
             .chain(m11::status(self, core))
             .chain(m16::status(self, core))
+            .chain(m9::status(core))
             .map(|(name, value)| format!("\"{name}\":{value}"))
             .collect();
         QString::from(&format!("{{{}}}", body.join(",")))

@@ -512,7 +512,10 @@ fn create(options: &ThumbnailOptions) -> Result<Mpv, String> {
         init.set_option("input-default-bindings", "no")?;
         init.set_option("input-vo-keyboard", "no")?;
         init.set_option("terminal", "no")?;
-        for name in ["osc", "ytdl", "load-scripts"] {
+        for name in ["osc", "ytdl", "load-scripts"]
+            .into_iter()
+            .chain(crate::engine::BUILTIN_SCRIPTS)
+        {
             drop(init.set_option(name, "no"));
         }
         for (name, value) in &options.extra {

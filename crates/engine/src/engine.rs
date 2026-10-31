@@ -46,7 +46,25 @@ pub struct EngineOptions {
     pub ipc_server: Option<String>,
     /// Further `name=value` options, applied last.
     pub extra: Vec<(String, String)>,
+    /// `name=value` options applied after `extra` and skipped when this
+    /// libmpv does not know them: versions differ (M9's controllers).
+    pub optional: Vec<(String, String)>,
+    /// mpv's built-in scripts besides the OSC (console, stats, select and
+    /// the rest; `BUILTIN_SCRIPTS`): only an on-screen controller (M9)
+    /// uses them for its menus, and each is a Lua state of its own.
+    pub builtin_scripts: bool,
 }
+
+/// The options that load mpv's built-in scripts; older libmpv lacks some.
+pub(crate) const BUILTIN_SCRIPTS: [&str; 7] = [
+    "load-stats-overlay",
+    "load-console",
+    "load-auto-profiles",
+    "load-select",
+    "load-positioning",
+    "load-commands",
+    "load-context-menu",
+];
 
 impl EngineOptions {
     /// Options for the player window.
@@ -58,6 +76,8 @@ impl EngineOptions {
             hwdec: "auto-copy".to_owned(),
             ipc_server: Some(default_ipc_server().to_owned()),
             extra: Vec::new(),
+            optional: Vec::new(),
+            builtin_scripts: false,
         }
     }
 
@@ -70,6 +90,8 @@ impl EngineOptions {
             hwdec: "no".to_owned(),
             ipc_server: None,
             extra: Vec::new(),
+            optional: Vec::new(),
+            builtin_scripts: false,
         }
     }
 }
@@ -117,6 +139,9 @@ pub enum EngineEvent {
     PlaybackRestart,
     /// An error reported by libmpv, for example a file that cannot be opened.
     Error(String),
+    /// A message to RVP's client (`script-message-to main ...`, or
+    /// `key-binding` from `script-binding main/...`; M9).
+    ClientMessage(Vec<String>),
     Shutdown,
 }
 
@@ -259,11 +284,19 @@ impl Engine {
             for name in ["osc", "ytdl"] {
                 drop(init.set_option(name, "no"));
             }
+            if !options.builtin_scripts {
+                for name in BUILTIN_SCRIPTS {
+                    drop(init.set_option(name, "no"));
+                }
+            }
             if let Some(server) = &options.ipc_server {
                 init.set_option("input-ipc-server", server.as_str())?;
             }
             for (name, value) in &options.extra {
                 init.set_option(name.as_str(), value.as_str())?;
+            }
+            for (name, value) in &options.optional {
+                drop(init.set_option(name.as_str(), value.as_str()));
             }
             Ok(())
         })
@@ -377,6 +410,9 @@ impl Engine {
             }
             Ok(Event::PlaybackRestart) => events.push(EngineEvent::PlaybackRestart),
             Ok(Event::Shutdown) => events.push(EngineEvent::Shutdown),
+            Ok(Event::ClientMessage(args)) => events.push(EngineEvent::ClientMessage(
+                args.into_iter().map(str::to_owned).collect(),
+            )),
             Ok(_) => {}
             // libmpv2 reports an end-file with an error code (an unplayable
             // file) and failed asynchronous replies this way.

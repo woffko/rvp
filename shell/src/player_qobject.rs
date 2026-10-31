@@ -172,6 +172,14 @@ pub mod qobject {
         fn mouse_wheel(self: Pin<&mut Self>, x: f64, y: f64, delta: i32);
         #[qinvokable]
         fn mouse_leave(self: Pin<&mut Self>);
+        /// A key for an on-screen controller's open menu (M9): true when
+        /// it went to mpv, before `key`.
+        #[qinvokable]
+        fn controller_key(self: &Player, key: i32, modifiers: i32, text: &QString) -> bool;
+        /// Self-tests only (`--selftest`): runs an mpv command given as a
+        /// JSON list of strings, as a controller's script would (M9).
+        #[qinvokable]
+        fn selftest_mpv(self: &Player, command: &QString) -> bool;
 
         /// Pointer input in the control panel's window (F7), in its
         /// coordinates, as the `mouse_*` calls of the main window.

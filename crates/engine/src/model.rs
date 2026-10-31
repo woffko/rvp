@@ -98,6 +98,14 @@ properties! {
     VideoRotation = "video-params/rotate", Int;
     // M14: the subtitle's text, for reading it aloud.
     SubText = "sub-text", Text;
+    // M9: the window state an on-screen controller asks for.
+    Fullscreen = "fullscreen", Flag;
+    WindowMaximized = "window-maximized", Flag;
+    WindowMinimized = "window-minimized", Flag;
+    OnTop = "ontop", Flag;
+    // M9: the OSD's size in pixels (the video's): the pointer's scale.
+    OsdWidth = "osd-dimensions/w", Int;
+    OsdHeight = "osd-dimensions/h", Int;
 }
 
 impl PropertyId {

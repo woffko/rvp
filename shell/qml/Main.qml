@@ -991,6 +991,11 @@ Window {
                 Qt.quit()
                 return
             }
+            // An on-screen controller's open menu takes the keys (M9).
+            if (player.controller_key(event.key, event.modifiers, event.text)) {
+                event.accepted = true
+                return
+            }
             event.accepted = player.key(event.key, event.modifiers)
         }
     }
@@ -1577,6 +1582,14 @@ Window {
     //                         HDMV menu, the top menu, the streams and
     //                         chapters its buttons choose; each part
     //                         skipped without its library
+    //   --selftest=m9         M9's on-screen controller (SelfTestM9.qml) with
+    //                         --controller=osc (mpv's OSC) or
+    //                         --controller=scripts (the scripts in the
+    //                         settings' mpv folder): a click on its seek
+    //                         bar, RVP's clicks, double click and wheel
+    //                         beside it, mpv's fullscreen request, the
+    //                         window without the skin, its menu's keys;
+    //                         the file: fixture-60s.mkv
     //   --selftest=speech     subtitles from a file's audio (SelfTestM13.qml,
     //                         the host session): the whole file with
     //                         --speech-engine and --speech-model, timed,
@@ -1715,7 +1728,23 @@ Window {
             return m15Tick()
         if (selftest.mode === "m16")
             return m16Tick()
+        if (selftest.mode === "m9")
+            return m9Tick()
         functionalTick()
+    }
+
+    // --selftest=m9: mpv's on-screen controllers (SelfTestM9.qml).
+    Loader {
+        id: m9Loader
+        active: false
+        Component.onCompleted: setSource("SelfTestM9.qml", { player: player, t: selftest, host: root })
+    }
+    function m9Tick() {
+        if (!m9Loader.item) {
+            m9Loader.active = true
+            return
+        }
+        m9Loader.item.tick()
     }
 
     // --selftest=m16: M16's DVD menus (SelfTestM16.qml).

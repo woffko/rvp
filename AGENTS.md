@@ -484,6 +484,38 @@ smoothing for users without SVP, after a study of the engines.
   `rvp --selftest=m16 --dvd-menus=DIR --bd-menus=DIR`; the VM's check is
   `tools/windows-vm/m16-all.ps1` (the discs in `C:\rvp-test\m16`).
 
+## Other players' skins (M9)
+
+- The study is `docs/spikes/s6-other-skins.md`; the owner chose all three
+  parts (mpv's controllers, classic Winamp, VLC). The downloads, notes and
+  probes are in `~/rvp-reference/s6`: third-party skins and
+  scripts are never committed, nor renders of them.
+- mpv's on-screen controllers (`crates/app/src/controller.rs`,
+  `shell/src/player/m9.rs`): mpv's OSC or the user's scripts from
+  `<settings>/mpv` (`scripts`, `script-opts`, `fonts`, as mpv's own
+  folder), chosen on the Skins page for the next start; over the skin's
+  video area or, "without the skin", alone in the window. libmpv's
+  `mpv_set_option_string` knows no `-append` forms: whole values for
+  `scripts` (the system's path separator) and `script-opts` (values
+  quoted `%N%`). Over the video the pointer goes to mpv (`mouse`,
+  `MOUSE_ENTER`/`LEAVE`, `keydown`/`keyup`, never a single press, which
+  the controllers ignore); clicks no controller takes come back through
+  RVP's bindings in mpv's `default` section (`key-binding` messages to the
+  client `main`) and run RVP's own pointer. mpv makes a double click of
+  any two presses: RVP takes one only when both presses were its own.
+  `user-data` reads as JSON (uosc closes its menu by setting `null`, which
+  an observation does not report): menus are read when a key comes. The
+  window's state goes both ways through mpv's `fullscreen`,
+  `window-maximized`, `window-minimized` and `ontop`; `quit` closes RVP.
+  RVP's helper cores load none of mpv's built-in scripts
+  (`BUILTIN_SCRIPTS`).
+- Tests: `rvp --selftest=m9 --controller=osc|scripts FILE`
+  (`--controller-bar=FRACTION` where the seek bar lies higher: ModernZ
+  0.915; scripts put into the test's `RVP_CONFIG_DIR/mpv`); the VM's
+  check is `tools/windows-vm/m9-all.ps1` (OSC, uosc and ModernZ from
+  `C:\rvp-test\m9`). Running downloaded scripts in tests needs the
+  owner's permission (given for uosc and ModernZ, 2026-10-31).
+
 ## Playback, playlist and opening (M11)
 
 - The thumbnail core (`crates/engine/src/thumbnail.rs`) is a second

@@ -3304,6 +3304,46 @@ in %2 seconds</source>
             <translation>Анимация окон (панели и панель управления плавно появляются)</translation>
         </message>
         <message>
+            <source>mpv's on-screen controller</source>
+            <translation>Экранная панель mpv</translation>
+        </message>
+        <message>
+            <source>Controller</source>
+            <translation>Панель</translation>
+        </message>
+        <message>
+            <source>None (the skin's controls)</source>
+            <translation>Нет (кнопки скина)</translation>
+        </message>
+        <message>
+            <source>mpv's OSC</source>
+            <translation>OSC mpv</translation>
+        </message>
+        <message>
+            <source>Scripts from RVP's mpv folder</source>
+            <translation>Скрипты из папки mpv RVP</translation>
+        </message>
+        <message>
+            <source>Without the skin: the window shows only the video and the controller</source>
+            <translation>Без скина: в окне только видео и панель</translation>
+        </message>
+        <message>
+            <source>Open mpv Folder</source>
+            <translation>Открыть папку mpv</translation>
+        </message>
+        <message>
+            <source>Rescan Scripts</source>
+            <translation>Пересканировать скрипты</translation>
+        </message>
+        <message>
+            <source>The controller draws over the video and takes the pointer there; in fullscreen it takes the place of the skin's bars. Scripts such as uosc or ModernZ go into the scripts folder of RVP's mpv folder (%1), their fonts into fonts and their options into script-opts, as in mpv's own folder. Scripts found: %2. A new choice takes effect when RVP starts again.</source>
+            <translation>Панель рисуется поверх видео и забирает там указатель; в полноэкранном режиме она заменяет полосы скина. Скрипты вроде uosc или ModernZ кладутся в папку scripts папки mpv RVP (%1), их шрифты — в fonts, настройки — в script-opts, как в папке самого mpv. Найдено скриптов: %2. Новый выбор действует после перезапуска RVP.</translation>
+        </message>
+        <message>
+            <source>none</source>
+            <translation>нет</translation>
+        </message>
+        <message>
             <source>Context menu</source>
             <translation>Контекстное меню</translation>
         </message>

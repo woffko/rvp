@@ -344,6 +344,8 @@ impl qobject::Player {
         };
         fullscreen
             || (core.app.settings.skins.auto_hide && *self.has_video() && core.chrome.is_some())
+            // M9: the window holds only the video and the controller.
+            || self.controller_without_skin()
     }
 
     /// Whether a video shows: "Auto hide main skin" follows it.
@@ -451,6 +453,8 @@ impl qobject::Player {
     /// resize video depending on fullscreen pop-ups" the video makes room
     /// for the bar that shows.
     pub(super) fn show_bars(mut self: Pin<&mut Self>, shown: bool) {
+        // An on-screen controller takes the bars' place (M9).
+        let shown = shown && !self.controller_active();
         if *self.chrome_shown() != shown {
             self.as_mut().set_chrome_shown(shown);
         }
@@ -1005,6 +1009,8 @@ impl qobject::Player {
             "skins" => core.app.skins_folder(),
             "logos" => core.app.logos_folder(),
             "menus" => core.app.menus_folder(),
+            // M9: the user's scripts for mpv's on-screen controllers.
+            "mpv" => core.app.mpv_folder(),
             _ => return QString::default(),
         };
         if let Err(error) = std::fs::create_dir_all(&folder) {

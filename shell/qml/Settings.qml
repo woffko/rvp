@@ -2266,6 +2266,23 @@ ApplicationWindow {
                         Check { path: "skins.auto-hide"; text: qsTr("Auto hide the main window's skin while a video shows (its bars come over the video)") }
                         Check { path: "skins.fullscreen-resize"; text: qsTr("In fullscreen the video makes room for the bars while they show") }
                         Check { path: "skins.animations"; text: qsTr("Enable window animations (the bars and the control panel fade)") }
+                        Heading { text: qsTr("mpv's on-screen controller") }
+                        Choice {
+                            label: qsTr("Controller")
+                            path: "controller.kind"
+                            values: ["", "osc", "scripts"]
+                            texts: ({ "": qsTr("None (the skin's controls)"), "osc": qsTr("mpv's OSC"),
+                                      "scripts": qsTr("Scripts from RVP's mpv folder") })
+                        }
+                        Check { path: "controller.without-skin"; text: qsTr("Without the skin: the window shows only the video and the controller") }
+                        RowLayout {
+                            Button {
+                                text: qsTr("Open mpv Folder")
+                                onClicked: Qt.openUrlExternally(win.player.settings_folder_url("mpv"))
+                            }
+                            Button { text: qsTr("Rescan Scripts"); onClicked: win.reload(false) }
+                        }
+                        Note { text: qsTr("The controller draws over the video and takes the pointer there; in fullscreen it takes the place of the skin's bars. Scripts such as uosc or ModernZ go into the scripts folder of RVP's mpv folder (%1), their fonts into fonts and their options into script-opts, as in mpv's own folder. Scripts found: %2. A new choice takes effect when RVP starts again.").arg(win.view.mpv_folder || "").arg((win.view.mpv_scripts || []).join(", ") || qsTr("none")) }
                         Heading { text: qsTr("Context menu") }
                         Choice {
                             label: qsTr("Context menu design")
