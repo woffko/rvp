@@ -35,6 +35,9 @@ pub enum Mode {
     /// The skin's logo over the video area while nothing plays or a file
     /// starts (`<Logo>`, M14).
     Logo,
+    /// One of the skin's other windows (`RvpWindow='1'` areas: the
+    /// classic skins' main window, equalizer and playlist, M9).
+    Extra(&'static str),
 }
 
 impl Mode {
@@ -45,6 +48,7 @@ impl Mode {
             Mode::Fullscreen => "MainSkinAreaOscInside",
             Mode::ControlBox => "ControlBoxSkinArea",
             Mode::Logo => "Logo",
+            Mode::Extra(area) => area,
         }
     }
 
@@ -190,7 +194,12 @@ fn dynamic_regions(layout: &Layout<'_>) -> Vec<Rect> {
         .nodes
         .iter()
         .filter(|node| match node.kind {
-            Kind::Button | Kind::Slider | Kind::Label | Kind::PicLabel | Kind::Visual => true,
+            Kind::Button
+            | Kind::Slider
+            | Kind::Label
+            | Kind::PicLabel
+            | Kind::Visual
+            | Kind::Graph => true,
             Kind::Image => node.command().is_some(),
             Kind::Static | Kind::Spacer => node.slot() == Some("CMD_PLAY_LIST_ALBUM_TAB"),
         })

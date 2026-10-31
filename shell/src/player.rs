@@ -33,6 +33,7 @@ use rvp_skin::{Skin, SkinArchive};
 use crate::player_qobject::qobject;
 use crate::video::ENGINE;
 
+mod extras;
 mod m11;
 mod m12;
 mod m13;
@@ -118,6 +119,11 @@ pub mod request {
     pub const SYSTEM_INFO: i32 = 40;
     /// The dropped files' menu (M14); `dialog` holds the paths.
     pub const DROP_MENU: i32 = 41;
+    /// Let one of the skin's other windows (M9) move its docked group;
+    /// the argument is its index.
+    pub const EXTRA_MOVE: i32 = 42;
+    /// Let one resize itself: its index * 100 + `Qt::Edges` bits.
+    pub const EXTRA_RESIZE: i32 = 43;
 }
 
 /// The skin the main window shows (the painters read it on the render
@@ -259,6 +265,14 @@ fn publish(frame: Arc<Frame>) {
 /// The frame the control panel's painter draws.
 static PANEL_FRAME: Mutex<Option<Arc<Frame>>> = Mutex::new(None);
 
+/// The first `SkinView` surface of the skin's other windows (M9).
+pub const EXTRA_SURFACE: i32 = extras::SURFACE;
+
+/// The frame of the skin's other window `index` (M9).
+pub fn extra_frame(index: usize) -> Option<Arc<Frame>> {
+    extras::frame(index)
+}
+
 pub fn panel_frame() -> Option<Arc<Frame>> {
     PANEL_FRAME.lock().ok().and_then(|frame| frame.clone())
 }
@@ -389,6 +403,11 @@ struct Core {
     disc: Option<m16::Playing>,
     /// mpv's on-screen controller (M9).
     controller: Option<m9::Controller>,
+    /// The skin's other windows (M9: a classic skin's).
+    extras: Vec<extras::Extra>,
+    /// When the file started: the classic skins' title scrolls and their
+    /// paused time blinks from here (M9).
+    file_clock: Instant,
 }
 
 /// Who gives the GPU power budget its readings.
@@ -460,6 +479,8 @@ pub struct PlayerRust {
     pub(crate) chrome_shown: bool,
     pub(crate) message: QString,
     pub(crate) has_skin: bool,
+    pub(crate) extra_windows: QString,
+    pub(crate) extra_tooltip: QString,
     pub(crate) has_video: bool,
     pub(crate) restore_x: i32,
     pub(crate) restore_y: i32,
@@ -533,6 +554,15 @@ fn button(value: i32) -> Option<Button> {
         16 => Button::Forward,
         _ => return None,
     })
+}
+
+/// Qt's keyboard modifiers (`Qt::KeyboardModifiers`) as the pointer's.
+fn modifiers(value: i32) -> Modifiers {
+    Modifiers {
+        ctrl: value & QT_CONTROL != 0,
+        shift: value & QT_SHIFT != 0,
+        alt: value & QT_ALT != 0,
+    }
 }
 
 /// Qt's cursor shapes (`Qt::CursorShape`).
@@ -614,6 +644,14 @@ fn open_skin(source: &SkinSource) -> Result<Skin, String> {
 /// A skin's `file` (`None`: its video skin) with RVP's logo (D10).
 fn open_skin_file(source: &SkinSource, file: Option<&str>, touch: bool) -> Result<Skin, String> {
     let variables: &[(&str, &str)] = if touch { &[("SkinType", "Touch")] } else { &[] };
+    // A classic Winamp skin (M9): RVP builds its own from it; it has no
+    // other modes.
+    if let SkinSource::File(path) = source
+        && rvp_skin::winamp::is_classic(path)
+    {
+        return rvp_skin::winamp::open(path)
+            .map_err(|error| format!("{}: {error}", path.display()));
+    }
     let mut skin = match (source, file) {
         (SkinSource::File(path), None) => Skin::open_with(path, variables)
             .map_err(|error| format!("{}: {error}", path.display()))?,
@@ -1002,7 +1040,10 @@ impl qobject::Player {
             remote: m15::Remote::default(),
             disc: None,
             controller,
+            extras: Vec::new(),
+            file_clock: Instant::now(),
         });
+        self.as_mut().rebuild_extras();
         self.as_mut().sync_look();
         if let Some(message) = messages.first() {
             self.as_mut().show_message(message);
@@ -1186,8 +1227,7 @@ impl qobject::Player {
             self.as_mut().handle_request(request);
         }
         self.as_mut().disc_drained(&drained.events);
-        self.as_mut()
-            .controller_drained(&drained.events, drained.changes);
+        self.as_mut().m9_drained(&drained.events, drained.changes);
         // A file with or without video: the audio or video skin (M14).
         if file_changed {
             self.as_mut().sync_skin();
@@ -1254,6 +1294,11 @@ impl qobject::Player {
             data.set_text("CMD_SYSTEM_TIME_MESSAGE", core.clock.as_str());
         }
         core.app.panel_data(&mut data);
+        // A classic skin's texts and states (M9).
+        if !core.extras.is_empty() {
+            core.app
+                .classic_data(&mut data, &mut chrome.state, core.file_clock.elapsed());
+        }
         // The spectrum's bars move on their own tick (`tick_spectrum`).
         data.visual = std::mem::take(&mut chrome.data.visual);
         data.visual_peaks = std::mem::take(&mut chrome.data.visual_peaks);
@@ -1278,7 +1323,17 @@ impl qobject::Player {
             self.as_mut().set_spectrum_shown(spectrum);
         }
         self.as_mut().sync_panel(false);
+        self.as_mut().sync_extras(false);
         self.sync_logo();
+    }
+
+    /// A classic skin's displays move on their own (M9): its title
+    /// scrolls and its paused time blinks; QML calls this a few times a
+    /// second while the skin shows.
+    pub(crate) fn classic_tick(self: Pin<&mut Self>) {
+        if self.core().is_some_and(|core| !core.extras.is_empty()) {
+            self.sync_chrome();
+        }
     }
 
     /// Recomputes the control panel while it shows; it repaints whole.
@@ -1684,11 +1739,7 @@ impl qobject::Player {
         button_value: i32,
         modifiers: i32,
     ) {
-        let modifiers = Modifiers {
-            ctrl: modifiers & QT_CONTROL != 0,
-            shift: modifiers & QT_SHIFT != 0,
-            alt: modifiers & QT_ALT != 0,
-        };
+        let modifiers = self::modifiers(modifiers);
         self.pointer_event(x, y, button_value, 0, modifiers);
     }
 
@@ -1846,6 +1897,7 @@ impl qobject::Player {
                         core.app.turn_vr(core.engine, f64::from(dx), f64::from(dy));
                     }
                 }
+                Effect::Window(command) => self.as_mut().toggle_extra(command),
                 Effect::Adjust { kind, dx, dy } => {
                     let request = self
                         .as_mut()

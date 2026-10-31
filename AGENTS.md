@@ -509,12 +509,35 @@ smoothing for users without SVP, after a study of the engines.
   `window-maximized`, `window-minimized` and `ontop`; `quit` closes RVP.
   RVP's helper cores load none of mpv's built-in scripts
   (`BUILTIN_SCRIPTS`).
+- Classic Winamp skins (`crates/skin/src/winamp`): `.wsz` files in the
+  skin list load as an RVP skin built in memory (`build.rs`: markup in
+  PotPlayer's format and PNGs), so RVP's engine lays out, paints and
+  hit-tests them. The video window is RVP's main window (`video.bmp`'s
+  frame, else the playlist frame's pieces); the main window, equalizer
+  and playlist are `RvpWindow='1'` areas shown as windows of their own
+  (`shell/src/player/extras.rs`, `shell/qml/SkinWindow.qml`, surfaces
+  from 10), docked to the main window; a drag on one moves the group.
+  The engine's extensions for them: `RvpFrames` sliders, `RvpChars`
+  bitmap fonts (Unicode numbers: the markup has no escapes),
+  `RvpRowColorsX` visuals, `RvpOnImageLeft` toggles,
+  `ThumbPressedImageLeft`, the `RvpGraph` equalizer curve, `RvpRegion`
+  shapes (`Tools.set_window_mask`). `CmdID='RVP:name'` runs an action by
+  its settings name, `RVPWIN:` shows and hides a window, and the `RVP:`
+  texts and states come from `crate::classic`. Missing bitmaps fall back
+  to RVP's own drawn in code (`fallback.rs`), which is also the tests'
+  synthetic skin; a bitmap's first attribute occurrence wins in the
+  markup (`El::rect` already sets `Left`).
 - Tests: `rvp --selftest=m9 --controller=osc|scripts FILE`
   (`--controller-bar=FRACTION` where the seek bar lies higher: ModernZ
   0.915; scripts put into the test's `RVP_CONFIG_DIR/mpv`); the VM's
   check is `tools/windows-vm/m9-all.ps1` (OSC, uosc and ModernZ from
   `C:\rvp-test\m9`). Running downloaded scripts in tests needs the
   owner's permission (given for uosc and ModernZ, 2026-10-31).
+  `rvp --selftest=classic --skin=SKIN.wsz FILE`; `tests/winamp.rs` loads
+  the synthetic skin and, with `RVP_WINAMP_SKINS`, every local `.wsz`
+  (the museum's sample in `~/rvp-reference/s6/winamp/skins`);
+  `cargo run -p rvp-skin --example render_skin -- SKIN.wsz OUT.png W H ""
+  AREA` renders a window headless.
 
 ## Playback, playlist and opening (M11)
 

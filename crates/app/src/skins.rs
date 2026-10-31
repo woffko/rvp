@@ -413,7 +413,8 @@ fn toggle(flag: &mut bool, what: &str) -> String {
     format!("{what}: {}", if *flag { "on" } else { "off" })
 }
 
-/// The `.dsf` files in `folder`.
+/// The skin files in `folder`: PotPlayer's `.dsf` and classic Winamp
+/// skins (`.wsz`, M9).
 fn skins_in(folder: &Path, out: &mut std::collections::BTreeSet<PathBuf>) {
     let Ok(entries) = std::fs::read_dir(folder) else {
         return;
@@ -422,7 +423,7 @@ fn skins_in(folder: &Path, out: &mut std::collections::BTreeSet<PathBuf>) {
         let path = entry.path();
         if path
             .extension()
-            .is_some_and(|ext| ext.eq_ignore_ascii_case("dsf"))
+            .is_some_and(|ext| ext.eq_ignore_ascii_case("dsf") || ext.eq_ignore_ascii_case("wsz"))
         {
             out.insert(path);
         }

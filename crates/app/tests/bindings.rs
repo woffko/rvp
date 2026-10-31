@@ -193,6 +193,15 @@ impl Harness {
                 self.dispatch(action);
                 self.wait("paused", |m| m.flag(PropertyId::Pause) == Some(true));
             }
+            // M9: Play only plays.
+            Action::Play => {
+                assert_eq!(self.dispatch(action), None);
+                self.wait("playing", PlayerModel::playing);
+                assert_eq!(self.dispatch(action), None);
+                self.wait("still playing", PlayerModel::playing);
+                self.dispatch(Action::PlayPause);
+                self.wait("paused", |m| m.flag(PropertyId::Pause) == Some(true));
+            }
             Action::SeekBackward(step) | Action::SeekForward(step) => {
                 // Only the short step fits the 60 s fixture both ways.
                 if step == SeekStep::Short {

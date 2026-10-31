@@ -50,13 +50,15 @@ pub enum Kind {
     Slider,
     /// `Visual`: the audio's spectrum as bars (M14).
     Visual,
+    /// `RvpGraph`: the equalizer's response curve (M9, classic skins).
+    Graph,
     /// `Layout`: an invisible spacer.
     Spacer,
 }
 
 impl Kind {
     fn of(element: &Element) -> Option<Self> {
-        const KINDS: [(&str, Kind); 8] = [
+        const KINDS: [(&str, Kind); 9] = [
             ("Static", Kind::Static),
             ("Button", Kind::Button),
             ("Label", Kind::Label),
@@ -64,6 +66,7 @@ impl Kind {
             ("Image", Kind::Image),
             ("Slider", Kind::Slider),
             ("Visual", Kind::Visual),
+            ("RvpGraph", Kind::Graph),
             ("Layout", Kind::Spacer),
         ];
         KINDS

@@ -25,6 +25,24 @@ pub struct LogoSlot {
     pub height: i32,
 }
 
+/// One of a skin's other windows ([`Skin::extra_windows`], M9).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ExtraWindow<'a> {
+    /// The area's element name.
+    pub area: &'a str,
+    /// Its first size.
+    pub width: i32,
+    pub height: i32,
+    /// `above` or `below` the main window.
+    pub dock: &'a str,
+    /// The `RVPWIN:` command that shows and hides it; `None`: always shown.
+    pub toggle: Option<&'a str>,
+    /// Sizes go in these steps (a classic playlist's 25 by 29 pixels).
+    pub step: Option<(i32, i32)>,
+    /// The window's shape: polygons in its pixels (empty: rectangular).
+    pub region: Vec<Vec<(i32, i32)>>,
+}
+
 /// The next skin's [`Skin::id`].
 static NEXT_ID: AtomicU64 = AtomicU64::new(1);
 
@@ -265,6 +283,53 @@ impl Skin {
     #[must_use]
     pub fn area_atlas<'a>(&'a self, area: &'a Element) -> &'a str {
         area.attrs.get("Image").unwrap_or("")
+    }
+
+    /// The skin's windows besides the main one (M9): its `RvpWindow='1'`
+    /// areas in document order.
+    #[must_use]
+    pub fn extra_windows(&self) -> Vec<ExtraWindow<'_>> {
+        let mut areas = Vec::new();
+        self.root.walk(&mut |element| {
+            if element.attrs.flag("RvpWindow") {
+                areas.push(element);
+            }
+        });
+        areas
+            .into_iter()
+            .map(|area| {
+                let attrs = &area.attrs;
+                let step = attrs.get("RvpResizeStep").and_then(|step| {
+                    let (w, h) = step.split_once(',')?;
+                    Some((w.trim().parse().ok()?, h.trim().parse().ok()?))
+                });
+                let region = attrs
+                    .get("RvpRegion")
+                    .map(|text| {
+                        text.split(';')
+                            .map(|polygon| {
+                                polygon
+                                    .split_whitespace()
+                                    .filter_map(|point| {
+                                        let (x, y) = point.split_once(',')?;
+                                        Some((x.parse().ok()?, y.parse().ok()?))
+                                    })
+                                    .collect()
+                            })
+                            .collect()
+                    })
+                    .unwrap_or_default();
+                ExtraWindow {
+                    area: area.name.as_str(),
+                    width: attrs.int_or("Width", 0),
+                    height: attrs.int_or("Height", 0),
+                    dock: attrs.get("RvpDock").unwrap_or("below"),
+                    toggle: attrs.get("RvpToggle"),
+                    step,
+                    region,
+                }
+            })
+            .collect()
     }
 
     /// The skin's context menu style: `<CustomPopupMenuDef>` (`alt`

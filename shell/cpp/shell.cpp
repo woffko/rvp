@@ -33,6 +33,8 @@
 #include <QtGui/QOpenGLFunctions>
 #include <QtGui/QPainter>
 #include <QtGui/QScreen>
+#include <QtGui/QPolygon>
+#include <QtGui/QRegion>
 #include <QtGui/QWindow>
 #include <QtNetwork/QLocalServer>
 #include <QtNetwork/QLocalSocket>
@@ -456,6 +458,25 @@ QString Tools::list_files(const QString &folder) const
 {
     const QStringList names = QDir(folder).entryList(QDir::Files, QDir::Name);
     return QString::fromUtf8(QJsonDocument(QJsonArray::fromStringList(names)).toJson(QJsonDocument::Compact));
+}
+
+void Tools::set_window_mask(QWindow *window, const QString &polygons, double scale) const
+{
+    if (window == nullptr)
+        return;
+    QRegion region;
+    const QStringList shapes = polygons.split(QLatin1Char(';'), Qt::SkipEmptyParts);
+    for (const QString &shape : shapes) {
+        QPolygon polygon;
+        for (const QString &point : shape.split(QLatin1Char(' '), Qt::SkipEmptyParts)) {
+            const QStringList xy = point.split(QLatin1Char(','));
+            if (xy.size() == 2)
+                polygon << QPoint(qRound(xy[0].toDouble() * scale), qRound(xy[1].toDouble() * scale));
+        }
+        if (polygon.size() >= 3)
+            region = region.united(QRegion(polygon, Qt::WindingFill));
+    }
+    window->setMask(region);
 }
 
 QString Tools::screen_json(QWindow *window) const

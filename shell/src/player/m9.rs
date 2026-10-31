@@ -345,6 +345,19 @@ impl qobject::Player {
             .is_some_and(|core| core.engine.command(name, &rest).is_ok())
     }
 
+    /// M9's part of a drain: the controller's events, and the classic
+    /// skins' clock from a new file on.
+    pub(super) fn m9_drained(mut self: Pin<&mut Self>, events: &[EngineEvent], changes: Changes) {
+        if events
+            .iter()
+            .any(|event| matches!(event, EngineEvent::FileLoaded { .. }))
+            && let Some(core) = self.as_mut().core_mut()
+        {
+            core.file_clock = Instant::now();
+        }
+        self.controller_drained(events, changes);
+    }
+
     /// mpv's events for the controller: the clicks it left, the commands
     /// RVP gave the OSC's buttons, its window requests and `quit`.
     pub(super) fn controller_drained(
@@ -519,7 +532,8 @@ impl qobject::Player {
     }
 }
 
-/// The controller's part of `Player::status` (the self-test reads it).
+/// M9's part of `Player::status` (the self-test reads it): the controller
+/// and the skin's other windows.
 pub(super) fn status(core: &Core) -> Vec<(&'static str, String)> {
     let controller = core.controller.as_ref().map_or(Value::Null, |state| {
         json!({
@@ -531,5 +545,7 @@ pub(super) fn status(core: &Core) -> Vec<(&'static str, String)> {
             "held": state.held.len(),
         })
     });
-    vec![("controller", controller.to_string())]
+    let mut fields = vec![("controller", controller.to_string())];
+    fields.extend(super::extras::status(core));
+    fields
 }

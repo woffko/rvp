@@ -1185,6 +1185,19 @@ impl App {
                     engine.toggle_pause()
                 }
             }
+            Action::Play => {
+                self.forget_attention();
+                if !self.model.media_loaded() {
+                    return self.play_shown(engine);
+                }
+                if self.model.flag(PropertyId::EofReached) == Some(true) {
+                    engine
+                        .seek(Seek::Absolute(0.0))
+                        .and_then(|()| engine.set_pause(false))
+                } else {
+                    engine.set_pause(false)
+                }
+            }
             Action::CloseMedia => engine.stop(),
             Action::Previous => self.step(engine, -1),
             Action::Next => self.step(engine, 1),

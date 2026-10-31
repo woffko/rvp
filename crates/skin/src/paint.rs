@@ -214,6 +214,7 @@ pub fn paint(skin: &Skin, layout: &Layout<'_>, state: &UiState, data: &DataModel
             Kind::Image => paint_image(&mut list, node, data),
             Kind::Slider => paint_slider(&mut list, node, state, data),
             Kind::Visual => paint_visual(&mut list, skin, node, data),
+            Kind::Graph => paint_graph(&mut list, skin, node, data),
             Kind::Spacer => {}
         }
     }
@@ -317,8 +318,27 @@ fn paint_button(list: &mut DisplayList, skin: &Skin, node: &Node<'_>, state: &Ui
         list.image(image, src, node.rect, node.clip);
         return;
     }
-    let left = attrs.int_or("ImageLeft", 0);
-    let top = attrs.int_or("ImageTop", 0);
+    // A toggle that is on draws from its own states (`RvpOnImageLeft`,
+    // classic skins' lit buttons, M9): normal, hover, pressed.
+    let on = toggled && attrs.has("RvpOnImageLeft");
+    let (left, top, index) = if on {
+        let index = if state.pressed == Some(node.element.id) {
+            2
+        } else {
+            i32::from(state.hover == Some(node.element.id))
+        };
+        (
+            attrs.int_or("RvpOnImageLeft", 0),
+            attrs.int_or("RvpOnImageTop", 0),
+            index,
+        )
+    } else {
+        (
+            attrs.int_or("ImageLeft", 0),
+            attrs.int_or("ImageTop", 0),
+            index,
+        )
+    };
     let atlas_width = skin
         .image(node.atlas)
         .map_or(0, |image| i32::try_from(image.width()).unwrap_or(i32::MAX));
@@ -430,6 +450,40 @@ fn paint_pic_label(list: &mut DisplayList, node: &Node<'_>, data: &DataModel) {
                 Rect::new(node.rect.x, node.rect.y, width, height),
                 node.clip,
             );
+        }
+        return;
+    }
+    // RVP's extension for classic skins (M9): `RvpChars` lists the
+    // characters of the cells as Unicode numbers (`65,66,...`: the markup
+    // has no escapes for quotes), each cell `RvpCellWidth` wide; others
+    // draw the cell of a space.
+    if let Some(chars) = attrs.get("RvpChars") {
+        let cell = attrs.int_or("RvpCellWidth", 5).max(1);
+        let cells: Vec<char> = chars
+            .split(',')
+            .filter_map(|code| code.trim().parse::<u32>().ok())
+            .filter_map(char::from_u32)
+            .collect();
+        let blank = cells.iter().position(|c| *c == ' ');
+        let total = cell * i32::try_from(text.chars().count()).unwrap_or(0);
+        let mut x = match attrs.int_or("HoriAlignment", 0) {
+            1 => node.rect.x + (node.rect.w - total) / 2,
+            2 => node.rect.right() - total,
+            _ => node.rect.x,
+        };
+        for ch in text.chars() {
+            let upper = ch.to_uppercase().next().unwrap_or(ch);
+            let index = cells.iter().position(|c| *c == upper).or(blank);
+            if let Some(index) = index {
+                let index = i32::try_from(index).unwrap_or(0);
+                list.image(
+                    node.atlas,
+                    Rect::new(left + index * cell, top, cell, height),
+                    Rect::new(x, node.rect.y, cell, height),
+                    node.clip,
+                );
+            }
+            x += cell;
         }
         return;
     }
@@ -594,12 +648,24 @@ fn paint_visual(list: &mut DisplayList, skin: &Skin, node: &Node<'_>, data: &Dat
                     (f64::from(from) + (f64::from(to) - f64::from(from)) * mix).round() as u8;
                 value
             };
-            let color = [
-                channel(start[0], end[0]),
-                channel(start[1], end[1]),
-                channel(start[2], end[2]),
-                255,
-            ];
+            let color = if attrs.has("RvpRowColorsX") {
+                // A colour per line from the bottom (classic skins'
+                // `viscolor.txt`, M9).
+                let mut color = skin.atlas_color(
+                    node.atlas,
+                    attrs.int_or("RvpRowColorsX", 0) + line,
+                    attrs.int_or("RvpRowColorsY", 0),
+                );
+                color[3] = 255;
+                color
+            } else {
+                [
+                    channel(start[0], end[0]),
+                    channel(start[1], end[1]),
+                    channel(start[2], end[2]),
+                    255,
+                ]
+            };
             let line_rect =
                 Rect::new(x, line_top(line), bar_width, line_height).intersect(&node.clip);
             if !line_rect.is_empty() {
@@ -625,6 +691,121 @@ fn paint_visual(list: &mut DisplayList, skin: &Skin, node: &Node<'_>, data: &Dat
     }
 }
 
+/// The equalizer bands' sliders (`CMD_EQULIZER_0` to `_9`) and the
+/// preamp's (`RVP:preamp`).
+const GRAPH_BANDS: [&str; 10] = [
+    "CMD_EQULIZER_0",
+    "CMD_EQULIZER_1",
+    "CMD_EQULIZER_2",
+    "CMD_EQULIZER_3",
+    "CMD_EQULIZER_4",
+    "CMD_EQULIZER_5",
+    "CMD_EQULIZER_6",
+    "CMD_EQULIZER_7",
+    "CMD_EQULIZER_8",
+    "CMD_EQULIZER_9",
+];
+
+/// A Kochanek-Bartels spline (tension 0.1, no continuity or bias) through
+/// `keys` at `t` (key index, fractional), as classic Winamp draws its
+/// equalizer's curve.
+fn kb_spline(keys: &[f64], t: f64) -> f64 {
+    let last = keys.len().saturating_sub(1);
+    if last == 0 {
+        return keys.first().copied().unwrap_or(0.0);
+    }
+    // Small non-negative numbers: the cast keeps them.
+    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+    let i = (t.floor().max(0.0) as usize).min(last - 1);
+    let s = t - f64::from(u32::try_from(i).unwrap_or(0));
+    let key = |k: isize| {
+        let k = k.clamp(0, isize::try_from(last).unwrap_or(isize::MAX));
+        keys[usize::try_from(k).unwrap_or(0)]
+    };
+    let i = isize::try_from(i).unwrap_or(0);
+    let (p0, p1, p2, p3) = (key(i - 1), key(i), key(i + 1), key(i + 2));
+    let tension = 0.1;
+    let m1 = (1.0 - tension) * (p2 - p0) / 2.0;
+    let m2 = (1.0 - tension) * (p3 - p1) / 2.0;
+    let (s2, s3) = (s * s, s * s * s);
+    (2.0 * s3 - 3.0 * s2 + 1.0) * p1
+        + (s3 - 2.0 * s2 + s) * m1
+        + (-2.0 * s3 + 3.0 * s2) * p2
+        + (s3 - s2) * m2
+}
+
+/// `RvpGraph` (classic skins' equalizer window, M9): the bands' curve as
+/// one-pixel columns, each pixel coloured from the atlas column at
+/// `ColorsX`/`ColorsY` by its row, joined vertically; the preamp as a line
+/// from `PreampImageLeft`/`Top` (+12 dB at the bottom, as Winamp draws it).
+fn paint_graph(list: &mut DisplayList, skin: &Skin, node: &Node<'_>, data: &DataModel) {
+    let attrs = &node.element.attrs;
+    let rect = node.rect;
+    if rect.w < 2 || rect.h < 2 {
+        return;
+    }
+    let value = |command: &str| {
+        f64::from(
+            data.sliders
+                .get(command)
+                .map_or(0.5, |slider| slider.value.clamp(0.0, 1.0)),
+        )
+    };
+    let rows = f64::from(rect.h - 1);
+    if attrs.has("PreampImageLeft") {
+        // Fractions of the height: small.
+        #[allow(clippy::cast_possible_truncation)]
+        let y = rect.y + (value("RVP:preamp") * rows).round() as i32;
+        list.image(
+            node.atlas,
+            Rect::new(
+                attrs.int_or("PreampImageLeft", 0),
+                attrs.int_or("PreampImageTop", 0),
+                rect.w,
+                1,
+            ),
+            Rect::new(rect.x, y, rect.w, 1),
+            node.clip,
+        );
+    }
+    // Each band's height from the top: +12 dB at the top row.
+    let mut keys: Vec<f64> = GRAPH_BANDS
+        .iter()
+        .map(|band| (1.0 - value(band)) * rows)
+        .collect();
+    // The end keys doubled, as Winamp does.
+    keys.insert(0, keys[0]);
+    keys.push(keys[keys.len() - 1]);
+    let color = |row: i32| {
+        let mut color = skin.atlas_color(
+            node.atlas,
+            attrs.int_or("ColorsX", 0),
+            attrs.int_or("ColorsY", 0) + row,
+        );
+        color[3] = 255;
+        color
+    };
+    let span = f64::from(rect.w - 1);
+    let mut previous: Option<i32> = None;
+    for x in 0..rect.w {
+        let t = 1.0 + f64::from(x) / span * 9.0;
+        // Within the graph's rows.
+        #[allow(clippy::cast_possible_truncation)]
+        let y = kb_spline(&keys, t).round().clamp(0.0, rows) as i32;
+        let (from, to) = previous.map_or((y, y), |p| (p.min(y), p.max(y)));
+        for row in from..=to {
+            let pixel = Rect::new(rect.x + x, rect.y + row, 1, 1).intersect(&node.clip);
+            if !pixel.is_empty() {
+                list.ops.push(Op::Fill {
+                    rect: pixel,
+                    color: color(row),
+                });
+            }
+        }
+        previous = Some(y);
+    }
+}
+
 fn paint_slider(list: &mut DisplayList, node: &Node<'_>, state: &UiState, data: &DataModel) {
     let attrs = &node.element.attrs;
     let command = node.command().unwrap_or("");
@@ -639,6 +820,26 @@ fn paint_slider(list: &mut DisplayList, node: &Node<'_>, state: &UiState, data: 
     let height = attrs.int_or("ImageHeight", 0);
     let rect = node.rect;
     let vertical = attrs.flag("Vert");
+    // RVP's extension for classic skins (M9): a picture per value,
+    // `RvpFrames` of them stacked from `BackImageTop` down, no fill.
+    if let Some(frames) = attrs.int("RvpFrames").filter(|frames| *frames > 1) {
+        let index = fraction(frames - 1, slider.value);
+        list.image(
+            node.atlas,
+            Rect::new(
+                attrs.int_or("BackImageLeft", 0),
+                attrs.int_or("BackImageTop", 0) + index * height,
+                width,
+                height,
+            ),
+            Rect::new(rect.x, rect.y, width, height),
+            node.clip,
+        );
+        if slider.enabled {
+            paint_thumb(list, node, slider.value, state);
+        }
+        return;
+    }
     if width > 0 && height > 0 {
         let [left_margin, top_margin, right_margin, bottom_margin] = margins(attrs);
         let (track, slice) = if vertical {
@@ -699,13 +900,21 @@ fn paint_slider(list: &mut DisplayList, node: &Node<'_>, state: &UiState, data: 
         paint_marks(list, node, data);
     }
     if slider.enabled {
-        paint_thumb(list, node, slider.value);
+        paint_thumb(list, node, slider.value, state);
     }
 }
 
 /// A slider's thumb at `value`.
-fn paint_thumb(list: &mut DisplayList, node: &Node<'_>, value: f32) {
+fn paint_thumb(list: &mut DisplayList, node: &Node<'_>, value: f32, state: &UiState) {
     let attrs = &node.element.attrs;
+    // The thumb while it is held (`ThumbPressedImageLeft`, RVP's for
+    // classic skins, M9).
+    let pressed = state.pressed == Some(node.element.id) && attrs.has("ThumbPressedImageLeft");
+    let (thumb_left, thumb_top) = if pressed {
+        ("ThumbPressedImageLeft", "ThumbPressedImageTop")
+    } else {
+        ("ThumbImageLeft", "ThumbImageTop")
+    };
     let rect = node.rect;
     let vertical = attrs.flag("Vert");
     let thumb_width = attrs.int_or("ThumbWidth", 0);
@@ -728,8 +937,8 @@ fn paint_thumb(list: &mut DisplayList, node: &Node<'_>, value: f32) {
         list.image(
             node.atlas,
             Rect::new(
-                attrs.int_or("ThumbImageLeft", 0),
-                attrs.int_or("ThumbImageTop", 0),
+                attrs.int_or(thumb_left, 0),
+                attrs.int_or(thumb_top, 0),
                 thumb_width,
                 thumb_height,
             ),

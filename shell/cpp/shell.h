@@ -98,6 +98,10 @@ public:
     // The screen `window` is on: its size in device pixels and in
     // millimetres (QScreen's physical size, which QML does not show).
     Q_INVOKABLE QString screen_json(QWindow *window) const;
+    // A window's shape (M9: classic skins' region.txt): polygons as
+    // "x,y x,y ...;..." in its pixels, scaled by `scale` (the skin's
+    // zoom), united; empty: rectangular.
+    Q_INVOKABLE void set_window_mask(QWindow *window, const QString &polygons, double scale) const;
     // Shows a file in the system's file manager: selected in Explorer on
     // Windows, its folder elsewhere.
     Q_INVOKABLE bool show_file(const QString &path) const;

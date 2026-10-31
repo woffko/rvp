@@ -48,7 +48,7 @@ pub fn hit_test<'a>(layout: &Layout<'a>, x: i32, y: i32) -> Option<Hit<'a>> {
             Kind::Image | Kind::Label | Kind::PicLabel => {
                 command.is_some() && attrs.flag("Enabled")
             }
-            Kind::Static | Kind::Spacer | Kind::Visual => false,
+            Kind::Static | Kind::Spacer | Kind::Visual | Kind::Graph => false,
         };
         if interactive {
             return Some(Hit::Control {

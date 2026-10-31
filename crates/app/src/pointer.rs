@@ -141,7 +141,14 @@ pub enum Effect {
         dx: f64,
         dy: f64,
     },
+    /// Show or hide the skin's window this `RVPWIN:` command names (M9:
+    /// classic skins' equalizer and playlist).
+    Window(&'static str),
 }
+
+/// The prefix of a `CmdID` that shows or hides one of the skin's windows
+/// (M9; the windows' `RvpToggle`).
+pub const WINDOW_COMMAND: &str = "RVPWIN:";
 
 /// What a drag with modifiers on the video changes (PotPlayer's Mouse
 /// page).
@@ -455,6 +462,9 @@ fn control_effect(
     }
     if is_control_command(command) {
         return vec![Effect::Popup { command, menu }];
+    }
+    if command.starts_with(WINDOW_COMMAND) {
+        return vec![Effect::Window(command)];
     }
     Vec::new()
 }

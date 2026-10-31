@@ -55,6 +55,8 @@ Window {
     readonly property int requestColorTheme: 39
     readonly property int requestSystemInfo: 40
     readonly property int requestDropMenu: 41
+    readonly property int requestExtraMove: 42
+    readonly property int requestExtraResize: 43
     readonly property int requestRecordAs: 27
     readonly property int requestRecordFolder: 28
     readonly property int requestDialog: 29
@@ -437,6 +439,17 @@ Window {
             if (panelLoader.item)
                 panelLoader.item.startMove()
             break
+        // M9: the skin's other windows move the group or resize.
+        case requestExtraMove:
+            if (extraWindows.itemAt(argument) && extraWindows.itemAt(argument).item)
+                extraWindows.itemAt(argument).item.startMove()
+            break
+        case requestExtraResize: {
+            const holder = extraWindows.itemAt(Math.floor(argument / 100))
+            if (holder && holder.item)
+                holder.item.startResize(argument % 100)
+            break
+        }
         case requestSaveFrameAs:
             dialogLoader.active = true
             dialogLoader.item.askFrame(player.frame_path)
@@ -1248,6 +1261,24 @@ Window {
             item.anchors.fill = sceneLoader
         }
     }
+    // The skin's other windows (M9: a classic Winamp skin's main window,
+    // equalizer and playlist), docked to this one.
+    Repeater {
+        id: extraWindows
+        model: player.extra_windows ? JSON.parse(player.extra_windows).length : 0
+        delegate: Loader {
+            required property int index
+            Component.onCompleted: setSource("SkinWindow.qml", { player: player, owner: root, index: index })
+        }
+    }
+    // A classic skin's title scrolls and its paused time blinks.
+    Timer {
+        interval: 200
+        repeat: true
+        running: extraWindows.count > 0
+        onTriggered: player.classic_tick()
+    }
+
     // The control panel's window (F7), created the first time it shows.
     Loader {
         id: panelLoader
@@ -1590,6 +1621,11 @@ Window {
     //                         beside it, mpv's fullscreen request, the
     //                         window without the skin, its menu's keys;
     //                         the file: fixture-60s.mkv
+    //   --selftest=classic    a classic Winamp skin (SelfTestClassic.qml)
+    //                         from --skin=SKIN.wsz: its windows, their
+    //                         toggles, transport, volume, an equalizer
+    //                         band, the playlist's resize; the file:
+    //                         fixture-60s.mkv
     //   --selftest=speech     subtitles from a file's audio (SelfTestM13.qml,
     //                         the host session): the whole file with
     //                         --speech-engine and --speech-model, timed,
@@ -1730,7 +1766,23 @@ Window {
             return m16Tick()
         if (selftest.mode === "m9")
             return m9Tick()
+        if (selftest.mode === "classic")
+            return classicTick()
         functionalTick()
+    }
+
+    // --selftest=classic: classic Winamp skins (SelfTestClassic.qml).
+    Loader {
+        id: classicLoader
+        active: false
+        Component.onCompleted: setSource("SelfTestClassic.qml", { player: player, t: selftest, host: root })
+    }
+    function classicTick() {
+        if (!classicLoader.item) {
+            classicLoader.active = true
+            return
+        }
+        classicLoader.item.tick()
     }
 
     // --selftest=m9: mpv's on-screen controllers (SelfTestM9.qml).

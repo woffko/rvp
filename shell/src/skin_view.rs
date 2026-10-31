@@ -2,8 +2,9 @@
 //! (D5). In the main window (`surface` 0) with `region_index` -1 it is the
 //! static layer and covers the window; otherwise it covers one dynamic
 //! region and paints only what touches it (`rvp_app::chrome`). The control
-//! panel's window (`surface` 1) and the skin's logo (`surface` 2, M14) are
-//! small and paint everything at once.
+//! panel's window (`surface` 1), the skin's logo (`surface` 2, M14) and
+//! the skin's other windows (`surface` 10 and on, M9) are small and paint
+//! everything at once.
 
 use std::pin::Pin;
 
@@ -158,6 +159,17 @@ impl qobject::SkinView {
         }
         if *self.surface() == 2 {
             if let Some(frame) = crate::player::logo_frame() {
+                paint_all(painter, &frame, 1.0);
+            }
+            return;
+        }
+        // M9: the skin's other windows.
+        if let Some(index) = self
+            .surface()
+            .checked_sub(crate::player::EXTRA_SURFACE)
+            .and_then(|index| usize::try_from(index).ok())
+        {
+            if let Some(frame) = crate::player::extra_frame(index) {
                 paint_all(painter, &frame, 1.0);
             }
             return;

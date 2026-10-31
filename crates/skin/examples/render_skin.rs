@@ -5,7 +5,9 @@
 //! ```
 //!
 //! `DEMO.txt` uses the format of `rvp_skin::demo`; without it a generic
-//! sample is shown. `AREA` defaults to `MainSkinArea`.
+//! sample is shown. `AREA` defaults to `MainSkinArea`. A classic Winamp
+//! skin (`.wsz`, M9) renders through the skin RVP builds from it, with
+//! sample texts for its displays.
 
 use std::path::Path;
 use std::process::ExitCode;
@@ -28,7 +30,17 @@ fn main() -> ExitCode {
 }
 
 fn run(args: &[String]) -> Result<(), String> {
-    let skin = Skin::open(Path::new(&args[0])).map_err(|e| e.to_string())?;
+    let path = Path::new(&args[0]);
+    let classic = path
+        .extension()
+        .and_then(|ext| ext.to_str())
+        .is_some_and(|ext| ext.eq_ignore_ascii_case("wsz") || ext.eq_ignore_ascii_case("zip"));
+    let skin = if classic {
+        let winamp = rvp_skin::winamp::WinampSkin::open(path).map_err(|e| e.to_string())?;
+        rvp_skin::winamp::build::skin(&winamp).map_err(|e| e.to_string())?
+    } else {
+        Skin::open(path).map_err(|e| e.to_string())?
+    };
     for warning in skin.warnings() {
         eprintln!("warning: {warning}");
     }
@@ -42,6 +54,27 @@ fn run(args: &[String]) -> Result<(), String> {
         }
         None => (DataModel::sample(), UiState::default()),
     };
+    let (mut data, mut state) = (data, state);
+    if classic {
+        for (command, text) in [
+            ("RVP:marquee", "1. RVP FIXTURE 60 S (1:00)"),
+            ("RVP:time-minutes", "00"),
+            ("RVP:time-seconds", "42"),
+            ("RVP:kbps", "128"),
+            ("RVP:khz", "44"),
+            ("RVP:time-short", "0:42"),
+            ("RVP:playlist-info", "0:42/1:00"),
+        ] {
+            data.set_text(command, text);
+        }
+        data.visual = (0..16_u8)
+            .map(|band| 0.2 + 0.05 * f32::from(band))
+            .collect();
+        for flag in ["RVP:playing", "RVP:stereo", "RVP:no-mono"] {
+            state.flags.insert(flag.to_owned());
+        }
+        state.media_loaded = true;
+    }
     let area = args.get(5).map_or("MainSkinArea", String::as_str);
     let mut fonts = Fonts::from_environment();
     let image = render_area(&skin, area, width, height, &state, &data, &mut fonts)

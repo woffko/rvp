@@ -29,6 +29,7 @@ pub mod skin;
 pub mod state;
 pub mod text;
 pub mod theme;
+pub mod winamp;
 
 pub use archive::SkinArchive;
 pub use error::SkinError;
@@ -38,7 +39,7 @@ pub use image::Image;
 pub use layout::{Layout, layout};
 pub use paint::{DisplayList, paint};
 pub use render::rasterize;
-pub use skin::{LogoSlot, Skin};
+pub use skin::{ExtraWindow, LogoSlot, Skin};
 pub use state::{DataModel, Mark, MarkKind, Playlist, PlaylistEntry, SliderValue, UiState};
 
 /// Lays out, paints and rasterizes one skin area in a single call.

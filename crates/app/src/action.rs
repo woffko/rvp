@@ -549,6 +549,9 @@ pub enum Action {
     /// Quit RVP.
     Exit,
     PlayPause,
+    /// Plays: resumes a paused file, starts the shown album when nothing
+    /// is loaded (a classic skin's Play button, M9; RVP's own action).
+    Play,
     Previous,
     Next,
     SeekBackward(SeekStep),
@@ -752,6 +755,10 @@ const fn info(
 
 /// Every action with its names and PotPlayer's IDs, in the order of
 /// PotPlayer's menus.
+/// The prefix of a `CmdID` that names an action by its settings name
+/// (`RVP:play`): the skins RVP builds from other players' formats (M9).
+pub const RVP_COMMAND: &str = "RVP:";
+
 pub const ACTIONS: &[ActionInfo] = &[
     // Open.
     info(
@@ -827,6 +834,7 @@ pub const ACTIONS: &[ActionInfo] = &[
         &[10014],
         &["CMD_MEDIA_PLAY", "CMD_MEDIA_PAUSE", "ID_PLAY_PAUSE"],
     ),
+    info(Action::Play, "play", "Play", None, &[], &[]),
     info(
         Action::Previous,
         "previous",
@@ -6250,6 +6258,10 @@ impl Action {
     /// shell handles them directly.
     #[must_use]
     pub fn from_skin_command(command: &str) -> Option<Action> {
+        // RVP's skins built from other formats (M9) name actions directly.
+        if let Some(name) = command.strip_prefix(RVP_COMMAND) {
+            return Self::from_name(name);
+        }
         ACTIONS
             .iter()
             .find(|info| info.skin.contains(&command))

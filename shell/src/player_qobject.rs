@@ -37,6 +37,11 @@ pub mod qobject {
         #[qproperty(bool, chrome_shown)]
         #[qproperty(QString, message)]
         #[qproperty(bool, has_skin)]
+        /// The skin's other windows (M9), JSON: a list of `area`, `width`,
+        /// `height`, `dock`, `shown`, `step` and `region`.
+        #[qproperty(QString, extra_windows)]
+        /// The tooltip of the control under the pointer in one of them.
+        #[qproperty(QString, extra_tooltip)]
         #[qproperty(bool, has_video)]
         #[qproperty(i32, restore_x)]
         #[qproperty(i32, restore_y)]
@@ -176,6 +181,37 @@ pub mod qobject {
         /// it went to mpv, before `key`.
         #[qinvokable]
         fn controller_key(self: &Player, key: i32, modifiers: i32, text: &QString) -> bool;
+        /// Pointer input in the skin's other windows (M9), in their
+        /// coordinates, as the `mouse_*` calls of the main window.
+        #[qinvokable]
+        fn extra_press(
+            self: Pin<&mut Self>,
+            index: i32,
+            x: f64,
+            y: f64,
+            button: i32,
+            modifiers: i32,
+        );
+        #[qinvokable]
+        fn extra_double(self: Pin<&mut Self>, index: i32, x: f64, y: f64, button: i32);
+        #[qinvokable]
+        fn extra_release(self: Pin<&mut Self>, index: i32, x: f64, y: f64, button: i32);
+        #[qinvokable]
+        fn extra_move(self: Pin<&mut Self>, index: i32, x: f64, y: f64);
+        #[qinvokable]
+        fn extra_wheel(self: Pin<&mut Self>, index: i32, x: f64, y: f64, delta: i32);
+        #[qinvokable]
+        fn extra_leave(self: Pin<&mut Self>, index: i32);
+        /// One of them has a new size (the classic playlist resizes).
+        #[qinvokable]
+        fn extra_resized(self: Pin<&mut Self>, index: i32, width: i32, height: i32);
+        /// The window system closed one.
+        #[qinvokable]
+        fn extra_closed(self: Pin<&mut Self>, index: i32);
+        /// A classic skin's displays move on (M9): a few times a second.
+        #[qinvokable]
+        fn classic_tick(self: Pin<&mut Self>);
+
         /// Self-tests only (`--selftest`): runs an mpv command given as a
         /// JSON list of strings, as a controller's script would (M9).
         #[qinvokable]
@@ -688,6 +724,11 @@ pub mod qobject {
         #[qsignal]
         #[cxx_name = "panelDamaged"]
         fn panel_damaged(self: Pin<&mut Self>);
+
+        /// One of the skin's other windows repaints, all of it (M9).
+        #[qsignal]
+        #[cxx_name = "extraDamaged"]
+        fn extra_damaged(self: Pin<&mut Self>, index: i32);
 
         /// The skin's logo repaints (M14, `SkinView.surface` 2).
         #[qsignal]

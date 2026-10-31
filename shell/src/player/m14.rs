@@ -172,6 +172,8 @@ impl qobject::Player {
         let audio = want.audio;
         core.look.skin_want = Some(want);
         self.as_mut().relayout();
+        // The new skin's other windows (M9).
+        self.as_mut().rebuild_extras();
         if panel && *self.panel_shown() {
             self.as_mut().show_panel(true);
         }

@@ -16,6 +16,7 @@ pub mod audio;
 pub mod binding_editor;
 pub mod capture;
 pub mod chrome;
+pub mod classic;
 mod cli;
 mod commands;
 pub mod control;
@@ -77,9 +78,9 @@ pub mod ytdl;
 
 pub use action::{
     ACTIONS, AbRepeat, Action, ActionInfo, AfterPlayback, Aspect, BookmarkCommand, CopyName,
-    DefaultOpen, Delay, Fit, ImageFormat, Jump, ListAction, OnTop, PowerAction, PowerTimer, Repeat,
-    Scenes, SeekStep, SettingsPage, Skip, SortField, Source, Speed, SubtitleStyle, WhenOpened,
-    WindowScale, Zoom,
+    DefaultOpen, Delay, Fit, ImageFormat, Jump, ListAction, OnTop, PowerAction, PowerTimer,
+    RVP_COMMAND, Repeat, Scenes, SeekStep, SettingsPage, Skip, SortField, Source, Speed,
+    SubtitleStyle, WhenOpened, WindowScale, Zoom,
 };
 pub use app::{App, Drained, UiRequest};
 pub use cli::Cli;
