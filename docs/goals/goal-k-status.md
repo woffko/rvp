@@ -141,7 +141,9 @@ On the next build:
 
 ## CI
 
-Recorded after the push.
+Run 41200210267 for ed480f8 to 21a065c (pushed together): green, with
+the checks on Ubuntu 24.04 and Windows Server 2025, both packages and
+`cargo deny`.
 
 ## Open
 
