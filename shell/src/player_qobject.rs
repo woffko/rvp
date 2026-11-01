@@ -263,6 +263,11 @@ pub mod qobject {
         #[qinvokable]
         fn panel_moved(self: Pin<&mut Self>, x: i32, y: i32);
 
+        /// The settings window shows the page `key`: Preferences opens
+        /// there next time.
+        #[qinvokable]
+        fn settings_page_shown(self: Pin<&mut Self>, key: &QString);
+
         /// A key press (`QKeyEvent::key()`, `modifiers()`); true when bound.
         #[qinvokable]
         fn key(self: Pin<&mut Self>, key: i32, modifiers: i32) -> bool;

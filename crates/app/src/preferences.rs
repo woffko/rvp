@@ -757,6 +757,18 @@ impl App {
         })
     }
 
+    /// The settings window showed the page `key`: Preferences opens there
+    /// next time, also after a restart.
+    pub fn settings_page_shown(&mut self, key: &str) {
+        self.store_mut().set_settings_page(key);
+    }
+
+    /// The page Preferences opens on, when the window showed one before.
+    #[must_use]
+    pub fn last_settings_page(&self) -> Option<&str> {
+        self.store().state().settings_page.as_deref()
+    }
+
     /// The skins to choose from (`App::skin_list`, RVP Default left out).
     #[must_use]
     pub fn skin_choices(&self) -> Vec<std::path::PathBuf> {

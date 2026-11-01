@@ -139,6 +139,8 @@ ApplicationWindow {
             notice = ""
         }
         current = index
+        // Preferences opens on this page next time, also after a restart.
+        player.settings_page_shown(pages[index].key)
         const group = groupOf(pages[index].key)
         if (expanded[group.title] !== true)
             expanded = Object.assign({}, expanded, { [group.title]: true })

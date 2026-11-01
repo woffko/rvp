@@ -2770,7 +2770,24 @@ Window {
             t.waitFor("settings_window_closes", () => !settingsLoader.item.visible && !s.editor_open, 2000)
             break
         case 213:
-            root.settled("settings_close")
+            if (root.settled("settings_close"))
+                player.key(Qt.Key_F5, 0)
+            break
+        case 214:
+            // F5 again opens the page shown last (the Audio page above).
+            t.waitFor("settings_reopen_last_page", () => settingsLoader.item.visible
+                          && settingsLoader.item.currentKey === "audio", 3000,
+                      () => "page " + settingsLoader.item.currentKey)
+            break
+        case 215:
+            if (root.settled("settings_reopen"))
+                settingsLoader.item.close()
+            break
+        case 216:
+            t.waitFor("settings_window_closes_again", () => !settingsLoader.item.visible, 2000)
+            break
+        case 217:
+            root.settled("settings_close_again")
             break
         default:
             // M6: the control panel, video processing and SVP.

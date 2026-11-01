@@ -270,12 +270,16 @@ fn the_subtitle_font_reaches_mpv_and_the_control_panel() {
         engine.get_text("sub-font"),
         engine.get_text("option-info/sub-font/default-value")
     );
-    // The control panel's place survives a restart.
+    // The control panel's place and the settings window's last page
+    // survive a restart.
     app.set_subtitle_font(&engine, "DejaVu Sans");
     app.set_panel_position(120, 340);
+    assert_eq!(app.last_settings_page(), None);
+    app.settings_page_shown("audio-sync");
     app.shutdown(&engine, Instant::now()).expect("shutdown");
     let again = App::load(&dirs).expect("reload");
     assert_eq!(again.settings.subtitle_font, "DejaVu Sans");
     assert_eq!(again.panel_position(), Some((120, 340)));
+    assert_eq!(again.last_settings_page(), Some("audio-sync"));
     let _ = std::fs::remove_dir_all(&dir);
 }

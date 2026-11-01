@@ -74,6 +74,10 @@ pub struct ResumeState {
     /// own.
     #[serde(default)]
     pub mode_windows: BTreeMap<String, WindowGeometry>,
+    /// The settings window's page shown last (its key in
+    /// `shell/qml/Settings.qml`): Preferences opens there again.
+    #[serde(default)]
+    pub settings_page: Option<String>,
 }
 
 /// The subtitles chosen in one file: the first (`None`: off) and the
@@ -109,6 +113,7 @@ impl Default for ResumeState {
             subtitle_tracks: BTreeMap::new(),
             audio_skin: false,
             mode_windows: BTreeMap::new(),
+            settings_page: None,
         }
     }
 }
@@ -314,6 +319,13 @@ impl ResumeStore {
     pub fn set_panel(&mut self, position: (i32, i32)) {
         if self.state.panel != Some(position) {
             self.state.panel = Some(position);
+            self.dirty = true;
+        }
+    }
+
+    pub fn set_settings_page(&mut self, key: &str) {
+        if self.state.settings_page.as_deref() != Some(key) {
+            self.state.settings_page = Some(key.to_owned());
             self.dirty = true;
         }
     }

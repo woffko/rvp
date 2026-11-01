@@ -55,7 +55,8 @@ pub mod request {
     pub const START_MOVE: i32 = 7;
     /// Argument: `Qt::Edges` bits.
     pub const START_RESIZE: i32 = 8;
-    /// The settings window at `settings_page` (empty: the first page).
+    /// The settings window at `settings_page` (empty: the first page, when
+    /// the window showed none before).
     pub const SETTINGS: i32 = 9;
     /// The file dialog, adding to the shown album.
     pub const ADD_FILES: i32 = 10;
@@ -1602,6 +1603,12 @@ impl qobject::Player {
         self.sync_chrome();
     }
 
+    pub(crate) fn settings_page_shown(mut self: Pin<&mut Self>, key: &QString) {
+        if let Some(core) = self.as_mut().core_mut() {
+            core.app.settings_page_shown(&key.to_string());
+        }
+    }
+
     pub(crate) fn panel_moved(mut self: Pin<&mut Self>, x: i32, y: i32) {
         if let Some(core) = self.as_mut().core_mut() {
             core.app.set_panel_position(x, y);
@@ -2288,8 +2295,12 @@ impl qobject::Player {
                 self.relayout();
             }
             UiRequest::Preferences(page) => {
-                self.as_mut()
-                    .set_settings_page(QString::from(page.unwrap_or("")));
+                // Preferences alone opens on the page shown last.
+                let page = page
+                    .or_else(|| core.app.last_settings_page())
+                    .map(QString::from)
+                    .unwrap_or_default();
+                self.as_mut().set_settings_page(page);
                 self.ui_request(request::SETTINGS, 0);
             }
             UiRequest::About => self.ui_request(request::ABOUT, 0),
