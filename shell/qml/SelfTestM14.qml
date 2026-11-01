@@ -22,6 +22,9 @@ Item {
     property int videoHeight: 0
     property var rememberBefore: true
     property bool audioChecked: false
+    // When the test restored a maximized window (0: it did not).
+    property real restored: 0
+    property var fitBefore: null
     // Where the pointer went over the bars (case 11).
     property real pointerY: 0
     // The tooltip case 12 opens.
@@ -67,9 +70,22 @@ Item {
                 player.run_action("opacity-100")
             break
         case 5:
-            if (t.waitFor("m14_window_opaque_again", () => Math.abs(host.opacity - 1) < 0.01, 3000, () => shown(s))) {
+            // GNOME maximizes a first window that covers most of the
+            // screen, and a maximized window keeps its size when the audio
+            // skin comes (as on Windows): restored, and settled (a Wayland
+            // compositor answers with the size it restores).
+            if (host.visibility === Window.Maximized) {
+                host.requestVisibility(Window.Windowed)
+                restored = Date.now()
+            }
+            if (t.waitFor("m14_window_opaque_again", () => Math.abs(host.opacity - 1) < 0.01
+                              && host.visibility === Window.Windowed && Date.now() - restored > 1500,
+                          5000, () => shown(s) + " visibility " + host.visibility)) {
                 // Each skin mode keeps its window; a mode that forces its
-                // smallest size (BlackSpace's audio skin) gets it.
+                // smallest size (BlackSpace's audio skin) gets it. The fit
+                // to a newly opened video would size the window again.
+                fitBefore = view().settings["fit-window-to-video"]
+                setSetting("fit-window-to-video", false)
                 setSetting("skins.keep-size", false)
                 setSetting("skins.remember-mode-window", true)
                 videoHeight = host.height
@@ -136,8 +152,10 @@ Item {
             break
         case 10:
             if (t.waitFor("m14_video_window_again", () => Math.abs(host.height - videoHeight) <= 2, 5000,
-                          () => host.width + "x" + host.height + " video " + videoHeight))
+                          () => host.width + "x" + host.height + " video " + videoHeight)) {
+                setSetting("fit-window-to-video", fitBefore)
                 setSetting("skins.auto-hide", true)
+            }
             break
         case 11:
             // "Auto hide main skin": the video takes the window and the
@@ -170,12 +188,14 @@ Item {
             break
         case 13:
             if (tipShown !== null) {
-                // It opens above the pointer, inside the window: Qt moves
+                // It opens by the pointer, inside the window (below it
+                // where it fits: a docked playlist leaves room): Qt moves
                 // a tooltip window that runs off the screen to its top.
                 const at = tipShown.contentItem.mapToGlobal(0, 0)
                 const y = at.y - host.contentItem.mapToGlobal(0, 0).y
-                t.check("m14_tooltip_by_the_pointer", tipShown.opened && y >= 0 && y < pointerY
-                            && pointerY - y < 3 * tipShown.implicitHeight,
+                t.check("m14_tooltip_by_the_pointer", tipShown.opened && y >= 0
+                            && y + tipShown.implicitHeight <= host.height
+                            && Math.abs(pointerY - y) < 3 * tipShown.implicitHeight,
                         "tip text at " + Math.round(y) + " height " + tipShown.implicitHeight + " pointer at "
                             + pointerY + " window " + host.width + "x" + host.height)
                 tipShown.close()
@@ -270,7 +290,9 @@ Item {
             break
         }
         case 20:
-            t.waitFor("m14_system_info_window", () => Tools.windows_json().indexOf("Playback/System Info") >= 0,
+            // By its window's type: the title is in the interface's language.
+            t.waitFor("m14_system_info_window", () => JSON.parse(Tools.windows_json())
+                          .some(w => w.visible && String(w["class"]).indexOf("SystemInfo") === 0),
                       5000, () => Tools.windows_json())
             break
         case 21: {

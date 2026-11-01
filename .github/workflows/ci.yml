@@ -18,6 +18,13 @@ jobs:
         os: [ubuntu-24.04, windows-2025]
     runs-on: ${{ matrix.os }}
     steps:
+      - name: Disk space (Linux)
+        # The hosted runner's preinstalled SDKs leave too little for the
+        # workspace's debug build and tests (the link ran out of space).
+        if: runner.os == 'Linux'
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
+          df -h /
       - uses: actions/checkout@v5
       - name: Toolchain
         run: |
@@ -86,6 +93,11 @@ jobs:
     env:
       RVP_KIT_DIR: ${{ github.workspace }}/../rvp-kit
     steps:
+      - name: Disk space
+        # The kit's SDK, libmpv, RVP's build and the packages need room.
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
+          df -h /
       - uses: actions/checkout@v5
       - name: Toolchain
         run: |

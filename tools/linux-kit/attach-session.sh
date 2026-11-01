@@ -10,10 +10,11 @@
 #
 # attach gives the kit's user access to SESSION_USER's runtime folder (to
 # pass through it), the Wayland socket and XWayland's authority file, and
-# prints WAYLAND_DISPLAY (the socket's absolute path), DISPLAY and
-# XAUTHORITY for `eval`. The kit's user keeps its own runtime folder,
-# session bus and sound server: MPRIS and the screen-saver checks use a
-# private bus where the desktop's refuses another user.
+# prints WAYLAND_DISPLAY (the socket's absolute path), DISPLAY,
+# XAUTHORITY and PULSE_SERVER for `eval`. The kit's user keeps its own
+# runtime folder, session bus and sound server (named in PULSE_SERVER):
+# MPRIS and the screen-saver checks use a private bus where the desktop's
+# refuses another user.
 set -euo pipefail
 
 action=${1:?usage: attach-session.sh attach|detach SESSION_USER}
@@ -34,6 +35,10 @@ case $action in
         echo "export DISPLAY=:0"
         [ -n "$auth" ] && echo "export XAUTHORITY=$auth"
         echo "export XDG_SESSION_TYPE=wayland XDG_CURRENT_DESKTOP=ubuntu:GNOME"
+        # The kit's user's own sound server: with DISPLAY set, libpulse
+        # would take the session's from XWayland's root window, which
+        # refuses another user.
+        echo "export PULSE_SERVER=unix:/run/user/$(id -u)/pulse/native"
         ;;
     detach)
         sudo -n setfacl -x "u:$me" "$runtime/wayland-0" 2> /dev/null || true

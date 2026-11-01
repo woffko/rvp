@@ -7,6 +7,10 @@
 //! so that thread serves MPRIS's calls, sends the signals and makes the
 //! inhibit calls; its messages come through an async channel, and the
 //! screen lock's signals through a message stream it polls beside it.
+//! An inhibit request runs beside them too: a service the bus has to
+//! start may answer only after the bus's start timeout (a portal that
+//! cannot start in the session took minutes), and MPRIS's state kept
+//! waiting for it.
 
 use std::collections::{BTreeMap, HashMap};
 use std::future::{Future, poll_fn};
@@ -463,9 +467,14 @@ enum Inhibit {
     Portal(OwnedObjectPath),
 }
 
+/// An inhibit request on its way.
+type Request<'a> = Pin<Box<dyn Future<Output = Option<Inhibit>> + 'a>>;
+
 /// What the desktop thread waits for.
 enum Event {
     Message(Message),
+    /// The inhibit request ended: what the desktop granted.
+    Inhibited(Option<Inhibit>),
     /// A screen saver's `ActiveChanged`.
     Signal(zbus::Message),
     /// The screen savers' signals ended (the bus went away).
@@ -510,13 +519,16 @@ async fn run(
     let mut signals = screen_saver_signals(&connection).await;
     drop(started.send(Ok(bus_name)));
     let mut held: Option<Inhibit> = None;
+    // Whether RVP wants the screen kept on, and the request that asks.
+    let mut wanted = false;
+    let mut request: Option<Request<'_>> = None;
     let mut shown = Shown {
         visible: false,
         value: 0.0,
     };
     let mut locked = None;
     loop {
-        match next_event(&receiver, &mut signals).await {
+        match next_event(&receiver, &mut signals, &mut request).await {
             Event::Closed => break,
             Event::SignalsEnded => signals = None,
             Event::Signal(signal) => {
@@ -539,15 +551,23 @@ async fn run(
                     drop(Player::seeked(player.signal_emitter(), micros(position)).await);
                 }
             }
-            Event::Message(Message::Inhibit(true)) if held.is_none() => {
-                held = inhibit(&connection, &options).await;
-            }
-            Event::Message(Message::Inhibit(false)) => {
-                if let Some(inhibit) = held.take() {
+            Event::Message(Message::Inhibit(on)) => {
+                wanted = on;
+                if on && held.is_none() && request.is_none() {
+                    request = Some(Box::pin(inhibit(&connection, &options)));
+                } else if let Some(inhibit) = held.take_if(|_| !on) {
                     release(&connection, inhibit).await;
                 }
             }
-            Event::Message(Message::Inhibit(true)) => {}
+            Event::Inhibited(granted) => {
+                request = None;
+                match granted {
+                    Some(inhibit) if wanted => held = Some(inhibit),
+                    // Playback stopped while the desktop answered.
+                    Some(inhibit) => release(&connection, inhibit).await,
+                    None => {}
+                }
+            }
             Event::Message(Message::Progress(state, progress)) => {
                 let visible = state != 0 && progress >= 0.0;
                 let value = if visible {
@@ -563,6 +583,12 @@ async fn run(
                 }
             }
         }
+    }
+    // What a request still on its way grants is let go as well.
+    if let Some(pending) = request.take()
+        && let Some(inhibit) = pending.await
+    {
+        held.get_or_insert(inhibit);
     }
     if let Some(inhibit) = held.take() {
         release(&connection, inhibit).await;
@@ -619,13 +645,23 @@ async fn take_name(connection: &Connection, name: &str) -> zbus::Result<()> {
         .map(drop)
 }
 
-/// The next message from the [`Desktop`], or screen saver signal.
-async fn next_event(receiver: &Receiver<Message>, signals: &mut Option<MessageStream>) -> Event {
+/// The next message from the [`Desktop`], screen saver signal, or the
+/// inhibit request's answer.
+async fn next_event(
+    receiver: &Receiver<Message>,
+    signals: &mut Option<MessageStream>,
+    request: &mut Option<Request<'_>>,
+) -> Event {
     // Dropping a pending receive takes no message from the channel.
     let mut message = pin!(receiver.recv());
     poll_fn(|context| {
         if let Poll::Ready(received) = message.as_mut().poll(context) {
             return Poll::Ready(received.map_or(Event::Closed, Event::Message));
+        }
+        if let Some(pending) = request.as_mut()
+            && let Poll::Ready(granted) = pending.as_mut().poll(context)
+        {
+            return Poll::Ready(Event::Inhibited(granted));
         }
         if let Some(stream) = signals.as_mut() {
             loop {

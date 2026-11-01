@@ -107,6 +107,8 @@ fn is_name(label: &str) -> bool {
         || rvp_app::speech::ENGINES
             .iter()
             .any(|(_, engine)| *engine == label)
+        // A model that is present shows its bare name (RVP_WHISPER_MODELS).
+        || rvp_app::speech::MODELS.contains(&label)
 }
 
 #[test]

@@ -187,12 +187,16 @@ Window {
     onWidthChanged: {
         player.resized(width, height)
         aspectTimer.restart()
+        if (pendingWindowRequest !== null)
+            windowRequestTimer.restart()
         if (logGeometry)
             Tools.log("window_size=" + width + "x" + height)
     }
     onHeightChanged: {
         player.resized(width, height)
         aspectTimer.restart()
+        if (pendingWindowRequest !== null)
+            windowRequestTimer.restart()
         if (logGeometry)
             Tools.log("window_size=" + width + "x" + height)
     }
@@ -293,8 +297,13 @@ Window {
         onTriggered: root.startNoFocus = false
     }
     onVisibilityChanged: {
-        // General: pause while minimized (M14).
-        player.window_attention(0, root.visibility === Window.Minimized)
+        if (logGeometry)
+            Tools.log("window_visibility=" + root.visibility)
+        // General: pause while minimized (M14). A self-test reports it, and
+        // the focus, through Player's handlers: the window system's own
+        // (another window of RVP's taking the focus) would undo its steps.
+        if (selftest.mode === "")
+            player.window_attention(0, root.visibility === Window.Minimized)
         player.window_state(root.visibility === Window.Maximized, root.active)
         if (Date.now() - root.stateRequested < 2000)
             stateCheck.restart()
@@ -304,7 +313,8 @@ Window {
     }
     onActiveChanged: {
         // General: pause while the focus is elsewhere (M14).
-        player.window_attention(1, root.active)
+        if (selftest.mode === "")
+            player.window_attention(1, root.active)
         player.window_state(root.visibility === Window.Maximized, root.active)
         player.confine_cursor(root.isFullscreen && root.active)
     }
@@ -589,8 +599,11 @@ Window {
         }
         if (root.visibility === Window.FullScreen)
             return
-        if (root.visibility !== Window.Windowed)
+        if (root.visibility !== Window.Windowed) {
             root.requestVisibility(Window.Windowed)
+            if (root.laterWindowRequest(r))
+                return
+        }
         const area = root.screenArea()
         switch (r.kind) {
         case "minimum":
@@ -697,12 +710,41 @@ Window {
             root.setGeometry(x, y, width, height)
     }
 
+    // A Wayland compositor answers a restore later, with the size it
+    // restores: a size given before that answer was undone. On Wayland the
+    // request waits until the window's size has settled (true: it waits).
+    property var pendingWindowRequest: null
+    function laterWindowRequest(r) {
+        if (Qt.platform.pluginName !== "wayland")
+            return false
+        root.pendingWindowRequest = r
+        windowRequestTimer.restart()
+        return true
+    }
+    Timer {
+        id: windowRequestTimer
+        interval: 400
+        onTriggered: {
+            const r = root.pendingWindowRequest
+            root.pendingWindowRequest = null
+            if (r === null || root.visibility !== Window.Windowed)
+                return
+            if (r.kind === "control-numbers")
+                root.placeWindow(r.width, r.height, r.x, r.y)
+            else
+                root.windowRequest(r)
+        }
+    }
+
     // The Window Size Control dialog's numbers.
     function placeWindow(width, height, x, y) {
         if (root.visibility === Window.FullScreen)
             return
-        if (root.visibility !== Window.Windowed)
+        if (root.visibility !== Window.Windowed) {
             root.requestVisibility(Window.Windowed)
+            if (root.laterWindowRequest({ kind: "control-numbers", width: width, height: height, x: x, y: y }))
+                return
+        }
         const there = root.onScreen(x, y)
         root.setWindowGeometry(there ? x : root.x, there ? y : root.y, Math.max(root.minimumWidth, width),
                                Math.max(root.minimumHeight, height), "dialog")
@@ -788,6 +830,10 @@ Window {
     // A newly opened video at 100 %, within the screen and keeping the
     // video's aspect ratio when it has to shrink.
     function fit(targetWidth, targetHeight) {
+        if (logGeometry)
+            Tools.log("window_fit=" + targetWidth + "x" + targetHeight + " window " + root.width + "x" + root.height
+                      + " video " + player.video_rect.width + "x" + player.video_rect.height
+                      + " visibility " + root.visibility)
         if (root.visibility !== Window.Windowed)
             return
         const screen = root.screen

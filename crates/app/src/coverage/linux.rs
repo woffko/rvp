@@ -142,7 +142,11 @@ pub const ITEMS: &[Item] = &[
     ),
     item(
         "Window opacity",
-        Key::Settings(&["skins.opacity", "skins.panel-opacity"]),
+        Key::Settings(&[
+            "skins.opacity",
+            "skins.panel-opacity",
+            "subtitles.browser.opacity",
+        ]),
         Linux::Partly(
             "X11's window opacity (and RVP under XWayland); Wayland has no window opacity for programs",
         ),
@@ -323,6 +327,13 @@ pub const ITEMS: &[Item] = &[
         Key::Settings(&["vapoursynth.avs-plugins"]),
         Linux::Partly(
             "`.avs` files open through FFmpeg's AviSynth demuxer in the packages' libmpv once the user installs AviSynth+ for Linux (`libavisynth.so`); AviSynth plugins inside VapourSynth scripts (`avs.LoadPlugin`) need VapourSynth's AviSynth bridge, which it has on Windows only",
+        ),
+    ),
+    item(
+        "Blu-ray Java menus (BD-J)",
+        Key::Part,
+        Linux::Partly(
+            "libbluray runs BD-J with the user's Java runtime and its own Java part (Debian's and Ubuntu's libbluray-bdj package, `/usr/share/java`), which the packages do not carry",
         ),
     ),
     item(

@@ -187,8 +187,9 @@ AVISYNTH_COMMIT=21fdc997f9724b994896ba5520ddf64d677976b3
 # libplacebo, Vulkan, Lua, the disc libraries (DVD, Blu-ray, CD), GnuTLS in
 # place of OpenSSL (mpv-build's OpenSSL made FFmpeg --enable-nonfree, which
 # no package may carry) and the audio filters' libraries; 4 libplacebo
-# with the kit's shaderc.
-MPV_BUILD=4
+# with the kit's shaderc; 5 the encoders of Record Video and the
+# captures (x264, x265, vpx, aom, opus, lame, vorbis, webp).
+MPV_BUILD=5
 VS_TAG=R73
 # The version in the Windows bundle (spikes/tools/windows-deps.sh).
 MVTOOLS_TAG=v24
@@ -252,7 +253,8 @@ zlib1g-dev libssl-dev liblcms2-dev libjpeg-dev \
 libvulkan-dev glslang-dev libunwind-dev libfftw3-dev librubberband-dev \
 libgnutls28-dev libdvdnav-dev libdvdread-dev libbluray-dev libcdio-paranoia-dev \
 libmysofa-dev libbs2b-dev libsoxr-dev libzimg-dev libxml2-dev libuchardet-dev libarchive-dev \
-libluajit-5.1-dev \
+libluajit-5.1-dev libx264-dev libx265-dev libvpx-dev libaom-dev libopus-dev libmp3lame-dev libvorbis-dev \
+libwebp-dev \
 libxcb-cursor0 libxcb-icccm4 libxcb-image0 libxcb-keysyms1 libxcb-render-util0 libxcb-xinerama0 \
 libxcb-xkb1 libxkbcommon-x11-0 libopengl0 libwayland-cursor0 libwayland-egl1 \
 lsof mesa-utils ffmpeg dvdauthor pulseaudio-utils patchelf"
@@ -437,6 +439,7 @@ mpv_lacks() {
     fi
     for marker in --enable-gnutls --enable-libmysofa --enable-libbs2b --enable-librubberband \
         --enable-libdav1d --enable-avisynth --enable-vapoursynth --enable-libzimg \
+        --enable-libx264 --enable-libwebp \
         dvdnav_ bd_open cdio_ luaL_ fruc_vulkan osc.lua; do
         grep -q -- "$marker" <<< "$text" || missing="$missing $marker"
     done
@@ -488,6 +491,8 @@ step_mpv() {
         printf '%s\n' --disable-programs --disable-doc --enable-version3 --enable-gnutls \
             --enable-libdav1d --enable-libmysofa --enable-libbs2b --enable-librubberband --enable-libsoxr \
             --enable-libzimg --enable-libxml2 --enable-avisynth --enable-vapoursynth \
+            --enable-libx264 --enable-libx265 --enable-libvpx --enable-libaom --enable-libopus \
+            --enable-libmp3lame --enable-libvorbis --enable-libwebp \
             --enable-vulkan "--glslc=$sdk/bin/glslang" "--extra-cflags=-I$sdk/include -I$KIT_DIR/vs-sdk/include" \
             > ffmpeg_options
         printf '%s\n' -Dvulkan=enabled "-Dvulkan-registry=$sdk/share/vulkan/registry/vk.xml" \
@@ -1831,6 +1836,18 @@ step_m12() {
     kit_run m12 shaders --selftest=shaders "--out=$out" "--mpv-log=$out/mpv-shaders.log" \
         "--mpv-options=ao=null,log-file=$out/mpv-shaders.log" "$media/fixture-60s.mkv"
     word=$(kit_judge m12 shaders) || bad=$((bad + 1))
+    summary="$summary $word"
+    # The Vulkan renderer: mpv's gpu-next in RVP's X11 child window (RVP
+    # starts through XWayland on Wayland); without a GPU on Mesa's software
+    # Vulkan (lavapipe, which mpv takes with gpu-sw).
+    local sw=""
+    gpu_checks || sw=,gpu-sw=yes
+    (
+        KIT_RUN_SETTINGS='"render": { "renderer": "vulkan" }'
+        kit_run m12 vulkan --selftest=vulkan "--out=$out/vulkan" "--mpv-log=$out/mpv-vulkan.log" \
+            "--mpv-options=ao=null$sw,log-file=$out/mpv-vulkan.log" "$media/fixture-60s.mkv"
+    )
+    word=$(kit_judge m12 vulkan renderer_mpv_window) || bad=$((bad + 1))
     summary="$summary $word"
     (
         export RVP_TESTDATA=$media

@@ -98,7 +98,8 @@ Item {
             if (!t.waitFor("settings_open_smoothing", () => loader && loader.visible, 3000))
                 break
             loader.showKey("smoothing")
-            t.check("settings_smoothing_page", loader.currentGroup.title === "Video"
+            // By the group's page: its title is in the interface's language.
+            t.check("settings_smoothing_page", loader.currentGroup.page === "video"
                         && loader.tabKeys.indexOf("smoothing") >= 0 && loader.view.smoothing === "Off",
                     loader.currentGroup.title + ": " + loader.tabKeys.join(",") + " now " + loader.view.smoothing)
             loader.close()

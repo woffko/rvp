@@ -18,7 +18,13 @@ pub(crate) fn change(change: SystemVolume) -> Result<String, String> {
     }
     #[cfg(target_os = "linux")]
     {
-        rvp_platform::pulse::change_master(change)
+        rvp_platform::pulse::change_master(change).map_err(|error| {
+            if error.starts_with("Master volume") {
+                error
+            } else {
+                format!("Master volume: {error}")
+            }
+        })
     }
 }
 

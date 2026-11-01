@@ -230,6 +230,14 @@ Item {
                 setSetting("fit-window-to-video", false)
             break
         case 7:
+            // GNOME maximizes a first window that covers most of the
+            // screen, and a maximized window keeps its size.
+            if (host.visibility !== Window.Windowed) {
+                host.requestVisibility(Window.Windowed)
+                break
+            }
+            if (!steady())
+                break
             host.setGeometry(host.x, host.y, 900, 560)
             t.next()
             break
@@ -290,8 +298,12 @@ Item {
             break
         case 4: {
             const a = area()
-            if (t.waitFor("window_maximum_fills", () => steady() && (host.width >= a.width - 2
-                                                                     || host.height >= a.height - 2),
+            // Wayland tells a program nothing of the desktop's panels: Qt's
+            // area is the whole screen, and the compositor keeps the window
+            // off GNOME's top bar.
+            const panels = Qt.platform.pluginName === "wayland" ? 48 : 2
+            if (t.waitFor("window_maximum_fills", () => steady() && (host.width >= a.width - panels
+                                                                     || host.height >= a.height - panels),
                           5000, () => size() + " area " + a.width + "x" + a.height))
                 player.run_action("window-desktop-1")
             break
@@ -466,7 +478,8 @@ Item {
                 break
             loader.showKey("capture")
             const keys = loader.tabKeys
-            t.check("settings_tree_tabs", loader.currentGroup.title === "Video" && keys[0] === "video"
+            // By the group's page: its title is in the interface's language.
+            t.check("settings_tree_tabs", loader.currentGroup.page === "video" && keys[0] === "video"
                         && keys.indexOf("capture") >= 0 && loader.rows.some(r => r.key === "capture"),
                     loader.currentGroup.title + ": " + keys.join(","))
             loader.close()

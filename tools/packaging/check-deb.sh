@@ -69,9 +69,13 @@ selftest() {
     result=$(grep -E '^failures=' "$log" | tail -1)
     if [ "$result" = failures=0 ]; then
         check "selftest_$name" PASS "$(grep -c '=PASS' "$log") checks"
+    elif [ -z "$result" ]; then
+        # RVP ended before its result: what it printed last.
+        tail -n 25 "$log"
+        check "selftest_$name" FAIL "no result"
     else
         grep -E '=FAIL' "$log" | head -15
-        check "selftest_$name" FAIL "${result:-no result}"
+        check "selftest_$name" FAIL "$result"
     fi
 }
 

@@ -1209,7 +1209,7 @@ in %2 seconds</source>
         </message>
         <message>
             <source>the disc's default</source>
-            <translation>как задано на диске</translation>
+            <translation>как на диске</translation>
         </message>
         <message>
             <source>Go straight to a DVD's menu, past its opening</source>

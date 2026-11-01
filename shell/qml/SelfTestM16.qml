@@ -125,7 +125,10 @@ Item {
             }
             break
         case 4:
-            if (t.waitFor("m16_click_plays_title", () => titlePlays(s), 20000, () => shown(s))) {
+            // The title with the stream the disc's program chose (the
+            // navigator reports it a moment after the title starts).
+            if (t.waitFor("m16_click_plays_title", () => titlePlays(s) && disc(s).audio_source !== null, 20000,
+                          () => shown(s))) {
                 // The machine's first audio stream: AC-3 0x80.
                 t.check("m16_machine_audio", disc(s).audio_source === 0x80, shown(s))
                 player.run_action("dvd-audio-menu")

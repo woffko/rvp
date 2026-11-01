@@ -411,13 +411,20 @@ fn serve(
     .unwrap_or_else(|e| panic!("the fake {name}: {e}"))
 }
 
-/// Inhibits twice and lets go once, then drops the [`Desktop`].
-fn inhibit_and_release(bus: &Bus) {
+/// Inhibits twice and lets go once, then drops the [`Desktop`]; waits for
+/// each call in `log` (the service that answers), since a request still on
+/// its way takes in the changes that come meanwhile.
+fn inhibit_and_release(bus: &Bus, log: &Arc<Mutex<Vec<String>>>) {
+    let base = log.lock().expect("calls").len();
+    let reached = |count: usize| move || log.lock().expect("calls").len() >= base + count;
     let desktop = start(bus, |_| {});
     desktop.inhibit(true);
+    wait_for("the inhibit", reached(1));
     desktop.inhibit(true);
     desktop.inhibit(false);
+    wait_for("the release", reached(2));
     desktop.inhibit(true);
+    wait_for("the second inhibit", reached(3));
     drop(desktop);
 }
 
@@ -446,7 +453,7 @@ fn inhibit_asks_gnome_then_the_screen_saver_then_the_portal() {
         },
     ))
     .expect("the request object");
-    inhibit_and_release(&bus);
+    inhibit_and_release(&bus, &portal_calls);
     wait_for("the portal's calls", || calls(&portal_calls).len() >= 4);
     assert_eq!(
         calls(&portal_calls),
@@ -467,7 +474,7 @@ fn inhibit_asks_gnome_then_the_screen_saver_then_the_portal() {
             calls: Arc::clone(&saver_calls),
         },
     );
-    inhibit_and_release(&bus);
+    inhibit_and_release(&bus, &saver_calls);
     wait_for("the screen saver's calls", || {
         calls(&saver_calls).len() >= 4
     });
@@ -490,7 +497,7 @@ fn inhibit_asks_gnome_then_the_screen_saver_then_the_portal() {
             calls: Arc::clone(&session_calls),
         },
     );
-    inhibit_and_release(&bus);
+    inhibit_and_release(&bus, &session_calls);
     wait_for("the session manager's calls", || {
         calls(&session_calls).len() >= 4
     });
@@ -506,6 +513,59 @@ fn inhibit_asks_gnome_then_the_screen_saver_then_the_portal() {
     // Neither of the others was asked again.
     assert_eq!(calls(&portal_calls).len(), 4);
     assert_eq!(calls(&saver_calls).len(), 4);
+}
+
+/// A portal that never answers, as one the bus cannot start.
+struct SilentPortal;
+
+#[interface(name = "org.freedesktop.portal.Inhibit")]
+impl SilentPortal {
+    // zbus hands method arguments over by value.
+    #[allow(clippy::needless_pass_by_value)]
+    async fn inhibit(
+        &self,
+        window: &str,
+        flags: u32,
+        options: HashMap<String, OwnedVariant>,
+    ) -> OwnedObjectPath {
+        let _ = (window, flags, options);
+        std::future::pending().await
+    }
+}
+
+#[test]
+fn an_unanswered_inhibit_holds_no_state_back() {
+    let Some(bus) = Bus::start("silent") else {
+        return;
+    };
+    let _portal = serve(
+        &bus,
+        "org.freedesktop.portal.Desktop",
+        "/org/freedesktop/portal/desktop",
+        SilentPortal,
+    );
+    let desktop = start(&bus, |_| {});
+    let client = bus.connect();
+    let properties = block_on(
+        PropertiesProxy::builder(&client)
+            .destination("org.mpris.MediaPlayer2.rvp")
+            .path(PATH)
+            .build(),
+    )
+    .expect("a properties proxy");
+    desktop.inhibit(true);
+    desktop.update(playing());
+    wait_for("Playing", || {
+        text(&get(&properties, PLAYER, "PlaybackStatus")) == "Playing"
+    });
+    desktop.inhibit(false);
+    desktop.update(MediaState {
+        status: Status::Paused,
+        ..playing()
+    });
+    wait_for("Paused", || {
+        text(&get(&properties, PLAYER, "PlaybackStatus")) == "Paused"
+    });
 }
 
 /// A screen saver that only announces its state.

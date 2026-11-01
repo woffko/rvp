@@ -465,6 +465,26 @@ impl Core {
             Fit::No
         };
     }
+
+    /// The size the settings give a newly opened video (M12), once its
+    /// size is known. A video that opens in a maximized window leaves it
+    /// so: fitted once the window was restored, it undid the size a Window
+    /// Size command had just given (GNOME maximizes a first window that
+    /// covers most of the screen).
+    fn take_fit(&mut self) -> Option<rvp_app::window::WindowRequest> {
+        if self.fit != Fit::Loaded {
+            return None;
+        }
+        if self.maximized {
+            self.fit = Fit::No;
+            return None;
+        }
+        let width = i32::try_from(self.app.model.int(PropertyId::VideoWidth)?).ok();
+        let height = i32::try_from(self.app.model.int(PropertyId::VideoHeight)?).ok();
+        self.fit = Fit::No;
+        let chrome = self.chrome.as_ref().map_or((0, 0), Chrome::chrome_size);
+        self.app.open_window_size((width?, height?), chrome)
+    }
 }
 
 /// When playback last updated the chrome, and whether an update waits.
@@ -1247,22 +1267,7 @@ impl qobject::Player {
             }
         }
         let new_aspect = drained.changes.contains(PropertyId::VideoAspect) && core.fit == Fit::No;
-        // The size the settings give a newly opened video (M12).
-        let fit = if core.fit == Fit::Loaded
-            && !core.maximized
-            && let (Some(width), Some(height)) = (
-                core.app.model.int(PropertyId::VideoWidth),
-                core.app.model.int(PropertyId::VideoHeight),
-            ) {
-            core.fit = Fit::No;
-            let chrome = core.chrome.as_ref().map_or((0, 0), Chrome::chrome_size);
-            match (i32::try_from(width), i32::try_from(height)) {
-                (Ok(width), Ok(height)) => core.app.open_window_size((width, height), chrome),
-                _ => None,
-            }
-        } else {
-            None
-        };
+        let fit = core.take_fit();
         let ticking_only = drained.events.is_empty()
             && PropertyId::ALL
                 .iter()

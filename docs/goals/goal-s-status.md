@@ -32,8 +32,8 @@ to R, T and K) and from M17 in PLAN.md section 6.
 | zbus 6 for MPRIS and idle inhibit | M | done (zbus 6.2.0; the three RUSTSEC ignores are gone) |
 | M9's skin windows on Wayland: XWayland for skins with windows of their own | K | done, VM check pending |
 | The Unified Remote remote on Linux (token path, platform, the Remote Control page's Add button, the packages' copy) | Q | done, VM check pending |
-| whisper.cpp's CPU and Vulkan build for Linux (`tools/whisper/build-linux.sh`, the kit's `whisper` step) | O | building on the VM |
-| RVP's VapourSynth runtime in the Linux packages (`tools/vapoursynth/build-linux.sh`, the kit's `vapoursynth` step) | T | building on the VM |
+| whisper.cpp's CPU and Vulkan build for Linux (`tools/whisper/build-linux.sh`, the kit's `whisper` step) | O | built on the VM (v1.9.5) |
+| RVP's VapourSynth runtime in the Linux packages (`tools/vapoursynth/build-linux.sh`, the kit's `vapoursynth` step) | T | built on the VM: R73 with MVTools and RIFE, checked from a moved copy, 70 MB |
 | The kit's steps m9 to m16, m18, whisper, vapoursynth and m17all; CHECKLIST.md | K and all | written; VM run pending |
 | The Linux reasons in `docs/coverage/` (`linux.md`) and a test that no code waits for goal S | M17 | done |
 | The packages carry the new parts (AppImage, .deb, PKGBUILD) | M17 | written; VM check pending |
@@ -57,6 +57,34 @@ to R, T and K) and from M17 in PLAN.md section 6.
   mpv's window inside RVP's video window stayed unmapped and mpv waited
   for it, the window's thread waiting on mpv. RVP clears that one bit of
   the window's event mask.
+- **A relocatable Python needs its home without PYTHONHOME.** VSScript
+  starts the embedded Python; `PYTHONHOME` would also reach the programs
+  RVP starts (yt-dlp is a Python program). RVP's VSScript is patched to
+  name the Python beside it (`Py_SetPythonHome`, which VSScript's limited
+  API has up to Python 3.12).
+- **libpulse takes another user's server from X11.** With `DISPLAY` set,
+  libpulse reads the sound server from XWayland's root window: the kit,
+  running as another user in the desktop's session, reached the desktop
+  user's server and was refused. The session attach names the kit user's
+  own server (`PULSE_SERVER`).
+- **An inhibit request held MPRIS's state back.** The desktop thread
+  waited for each inhibit call in its loop. On a session bus whose portal
+  cannot start (the kit user's, beside another user's desktop), the
+  portal's `Inhibit` stayed unanswered until the bus's start timeout, and
+  meanwhile MPRIS kept showing "Playing" after a Pause. The request now
+  runs beside the loop's other messages; a test serves a portal that never
+  answers.
+- **GNOME maximizes a first window that covers most of the screen** (over
+  80 % of the free area: RVP's 1280x720 on the VM's 1280x800 screen). Two
+  things then undid a Window Size command: the fit to the first video,
+  which waited for the window to be restored and came after the command,
+  and the compositor's own restore, which on Wayland arrives after the
+  program's next size. A video that opens in a maximized window now leaves
+  it so, and on Wayland a command that restores the window waits for the
+  size to settle.
+- **Wayland gives a program no free area of the screen**: Qt's available
+  area is the whole screen, and GNOME keeps the window off its top bar.
+  M12's "maximum" check allows for the bar there.
 - **FFmpeg's master wants lcms2 2.13**, newer than Ubuntu 22.04's 2.12:
   FFmpeg's lcms2 is left out; mpv's ICC support keeps it.
 - **The shared Ubuntu VM's network to GitHub stalls** (clones at under

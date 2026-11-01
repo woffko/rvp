@@ -172,7 +172,8 @@ Item {
             if (!t.waitFor("m13_settings_open", () => loader && loader.visible, 3000))
                 break
             loader.showKey("subtitle-browser")
-            t.check("m13_settings_subtitle_pages", loader.currentGroup.title === "Subtitles"
+            // By the group's page: its title is in the interface's language.
+            t.check("m13_settings_subtitle_pages", loader.currentGroup.page === "subtitles"
                         && ["subtitle-style", "subtitle-location", "subtitle-sync", "subtitle-browser", "speech"]
                             .every(key => loader.tabKeys.indexOf(key) >= 0),
                     loader.currentGroup.title + ": " + loader.tabKeys.join(","))
