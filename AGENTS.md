@@ -16,6 +16,10 @@ headless tests green, and list Linux-only parts for M17 (goal S). By the
 end of each parity goal, every PotPlayer item of its area that RVP lacks
 keeps a reason in `crates/app/src/coverage.rs` that says why libmpv,
 FFmpeg, Qt or the platform cannot do it.
+From goal S on (owner, 2026-11-01, D19) "Windows first" ends: every
+change, a goal's parts and the fixes between goals, is built and checked
+on both Windows (the test VM) and Linux (Xvfb in WSL, the Ubuntu VM)
+before it counts as done.
 Goal T (M18, D16, added 2026-10-18) follows goal N: RVP's own motion
 smoothing for users without SVP, after a study of the engines.
 
@@ -637,6 +641,10 @@ smoothing for users without SVP, after a study of the engines.
   GPU, SVP and performance checks, run in separate sessions through this
   repository.
 - Windows test VM `<windows-vm>`: Windows builds and functional tests.
+  Other projects' sessions use it too (one project's timed
+  acceptance runs on a desktop of its own, and others): before a run, ask
+  every session that uses it (`ListAgents`) and wait for their answer;
+  RVP's self-test loads both CPUs and spoils their timings.
 - Windows host: SVP on Windows and PotPlayer reference captures, only with
   permission (see above).
 
