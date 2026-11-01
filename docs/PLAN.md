@@ -1140,7 +1140,8 @@ installed.
 
 ### M17. Linux completion (M)
 
-- **The Linux side of M10-M16**, and of M9 if goal K ran:
+- **The Linux side of M9-M16 and M18** (each goal's status file lists
+  its items under "Linux items for goal S"):
   - the system's volume through PipeWire or PulseAudio;
   - audio recording from RVP's own PipeWire stream;
   - the second audio device; PipeWire can also combine outputs;
@@ -1151,19 +1152,28 @@ installed.
   - power actions through logind;
   - in the kit's libmpv: DVD, Blu-ray and CD support (libdvdnav,
     libbluray, libcdio), the chosen audio filters' libraries (libmysofa,
-    librubberband, libbs2b), and Lua if M9 needs it;
+    librubberband, libbs2b), and Lua with mpv's built-in scripts for
+    M9's on-screen controllers;
+  - M9's skin windows of their own (classic Winamp's and VLC's) docked,
+    moved together and shaped on Wayland, which lets no client place its
+    windows: a way that works, or the reason listed;
   - M16's disc menus with the same libraries;
   - AviSynth through AviSynth+ for Linux, if the user installs it;
   - generated subtitles with whisper.cpp's CUDA or Vulkan build;
   - the window commands Wayland refuses, listed with their reason;
+  - M14's tray icon, pausing when the screen locks, text to speech, the
+    Xbox controller, the file types through the desktop entry and
+    `xdg-mime`, the taskbar's progress and the recent files;
+  - M18's VapourSynth runtime in the packages, NVIDIA Optical Flow in
+    the kit's libmpv, and waiting for SVP for Linux;
   - Unified Remote Server for Linux with the remote;
   - the translations;
   - zbus 6 for MPRIS and idle inhibit (zbus 5's helper crates are
     flagged unmaintained; `deny.toml` ignores them until then).
 - **Checks.** The Ubuntu VM runs the self-test's new sections and kit
-  steps `m10` to `m16` (with `m17all` for all of them). The packages
-  (AppImage, `.deb`, PKGBUILD) carry the new parts. The checklist gains
-  sections for the owner's Ubuntu boot.
+  steps `m9` to `m16` and `m18` (with `m17all` for all of them). The
+  packages (AppImage, `.deb`, PKGBUILD) carry the new parts. The
+  checklist gains sections for the owner's Ubuntu boot.
 - **The Ubuntu boot run.** One session on the Ubuntu boot checks M6 to
   M17 (section 10). It takes the place of the run for M6, M7 and M8 if
   that has not happened by then.
@@ -1344,7 +1354,7 @@ after goal N.
 | 7 | Q | M15 remote control: RVP's API and a Unified Remote remote | WSL, Windows VM, host | Tries the remote from a phone (permission for the host session) |
 | 7 | R | M16 DVD and Blu-ray menus | WSL, Windows VM, host | Approves the disc libraries (D8); discs for the Blu-ray check (permission) |
 | 8 | K | M9 other players' skins (VLC, mpv's on-screen controllers, classic Winamp) | WSL, Windows VM (Linux in S) | Picks the scope after the study |
-| 9 | S | M17 Linux completion | WSL, Ubuntu VM | Afterwards one Ubuntu boot session for M6 to M17 |
+| 9 | S | M17 Linux completion (and M9's and M18's Linux side) | WSL, Ubuntu VM | Afterwards one Ubuntu boot session for M6 to M17 |
 
 A `/goal` condition holds at most 4000 characters; keep each goal's text
 below that (goal H's first text was 4382 and was refused).
@@ -1482,7 +1492,7 @@ Goal K (after goal R; the owner may postpone it):
 
 Goal S:
 ```
-/goal Execute goal S of docs/PLAN.md (milestone M17, Linux completion) in ~/rvp, only if docs/goals/goal-r-status.md records goal R as done and goal K is done or postponed by the owner; otherwise stop and report. Follow AGENTS.md (test environments: GUI programs started in WSL count as host runs; silent tests need no permission), the rules M2-M16 inherited (the goal status files) and D14. Collect the Linux items that goals L to R (and K) listed in their status files and deliver M17 as PLAN.md section 6 lists it: the system's volume through PipeWire or PulseAudio, recording RVP's own PipeWire stream, the second audio device, devices through v4l2, the screen as a source (a study: Wayland needs the screencast portal), the trash, power actions through logind (dry-run tests only), DVD, Blu-ray and CD support, M16's disc menus and the chosen audio filters' libraries (libdvdnav, libbluray, libcdio, libmysofa, librubberband, libbs2b) in the kit's libmpv, Lua if goal K needs it, AviSynth+ for Linux if the user installs it, whisper.cpp's GPU builds, the window commands Wayland refuses listed with their reason, Unified Remote Server for Linux with the remote, the translations, and the packages (AppImage, .deb, PKGBUILD) carrying the new parts. Run it all on the Ubuntu VM (<ubuntu-vm>, tools/linux-kit; access as in ~/another project/AGENTS.md): rvp --selftest's new sections, kit steps m10 to m16 and m17all, the packages installed, run and removed; add CHECKLIST.md sections for the owner's Ubuntu boot, with the checks only real hardware can do (GPU, SVP, Whisper on CUDA, a DVD drive or a webcam if the owner has them). Then bring the /goal text "Ubuntu boot run for M6 to M17" in PLAN.md section 10 in line with the kit's real steps. Coverage: no "not in RVP yet" reason remains for Linux in docs/coverage/; reasons that only Linux has (Wayland's limits) say so. Done when: tests and CI are green, the kit passes on the Ubuntu VM, docs/goals/goal-s-status.md lists results, what only the Ubuntu boot can check and what the owner should try, the owner is reminded of the boot run, and everything is committed and pushed. Do not: shut down, suspend or hibernate a VM (tests use the dry-run hook); use sudo on the Ubuntu VM beyond what tools/linux-kit documents; run anything on the Windows host desktop, including GUI programs from WSL, without advance notice and explicit permission; commit PotPlayer or SVP files or captures; make the repository public, tag or release. Stop on blockers or when an owner decision is needed.
+/goal Execute goal S of docs/PLAN.md (milestone M17, Linux completion) in ~/rvp, only if docs/goals/goal-k-status.md records goal K as done; otherwise stop and report. Follow AGENTS.md (test environments: GUI programs started in WSL count as host runs; silent tests need no permission), the rules M2-M18 inherited (the goal status files) and D14. Collect the Linux items that goals L to R, T and K listed in their status files ("Linux items for goal S") and deliver M17 as PLAN.md section 6 lists it: the system's volume through PipeWire or PulseAudio, recording RVP's own PipeWire stream, the second audio device, devices through v4l2, the screen as a source (a study: Wayland needs the screencast portal), the trash, power actions through logind (dry-run tests only), DVD, Blu-ray and CD support, M16's disc menus and the chosen audio filters' libraries (libdvdnav, libbluray, libcdio, libmysofa, librubberband, libbs2b) in the kit's libmpv, Lua with mpv's built-in scripts for M9's on-screen controllers, M9's skin windows of their own (classic Winamp's and VLC's: docked, moved together and shaped) on Wayland, which lets no client place its windows (a way that works, or the reason listed), M14's tray icon, screen lock, text to speech, Xbox controller, file types through xdg-mime, taskbar progress and recent files, M18's VapourSynth runtime in the packages, NVIDIA Optical Flow in the kit's libmpv and waiting for SVP for Linux, AviSynth+ for Linux if the user installs it, whisper.cpp's GPU builds, the window commands Wayland refuses listed with their reason, Unified Remote Server for Linux with the remote, the translations, and the packages (AppImage, .deb, PKGBUILD) carrying the new parts. Run it all on the Ubuntu VM (<ubuntu-vm>, tools/linux-kit; access as in ~/another project/AGENTS.md): rvp --selftest's new sections (M9's =m9, =classic and =vlc with local sample skins and scripts, never committed), new kit steps m9 to m16 and m18 and m17all for all of them, the packages installed, run and removed; add CHECKLIST.md sections for the owner's Ubuntu boot, with the checks only real hardware can do (GPU, SVP, Whisper on CUDA, a DVD drive or a webcam if the owner has them). Then bring the /goal text "Ubuntu boot run for M6 to M17" in PLAN.md section 10 in line with the kit's real steps. Coverage: no "not in RVP yet" reason remains for Linux in docs/coverage/; reasons that only Linux has (Wayland's limits) say so. Done when: tests and CI are green, the kit passes on the Ubuntu VM, docs/goals/goal-s-status.md lists results, what only the Ubuntu boot can check and what the owner should try, the owner is reminded of the boot run, and everything is committed and pushed. Do not: shut down, suspend or hibernate a VM (tests use the dry-run hook); use sudo on the Ubuntu VM beyond what tools/linux-kit documents; run anything on the Windows host desktop, including GUI programs from WSL, without advance notice and explicit permission; commit PotPlayer or SVP files or captures; make the repository public, tag or release. Stop on blockers or when an owner decision is needed.
 ```
 
 Ubuntu boot run for M6 to M17 (after goal S; the acceptance of M6, M8 and
