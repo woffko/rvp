@@ -353,7 +353,9 @@ def windows(args) -> None:
 # Libraries every desktop system has (glibc, the graphics stack, sound,
 # D-Bus, GLib, compression, crypto): the packages use the system's. The
 # rest RVP's binary reaches is bundled, from Qt's and libmpv's folders or
-# the build system.
+# the build system. GnuTLS's own libraries (nettle, hogweed, GMP, libtasn1,
+# libidn2, libunistring, p11-kit) come with it: the system's GnuTLS failed
+# with a bundled older nettle (Ubuntu 26.10's needs newer symbols).
 SYSTEM = re.compile(
     r"^(ld-linux.*|libc|libm|libdl|libpthread|librt|libresolv|libutil|libanl|libgcc_s|libstdc\+\+"
     r"|libGL|libGLX|libGLdispatch|libOpenGL|libEGL|libgbm|libdrm"
@@ -365,7 +367,8 @@ SYSTEM = re.compile(
     r"|libasound|libpulse|libpulse-simple|libpipewire-0\.3|libjack|libva|libva-drm|libva-x11|libva-wayland|libvdpau"
     r"|libglib-2\.0|libgobject-2\.0|libgio-2\.0|libgthread-2\.0|libgmodule-2\.0|libffi|libpcre|libpcre2-8"
     r"|libssl|libcrypto|liblzma|libzstd|libbz2|libpng16|libuuid|libgcrypt|libgpg-error|libcap|libselinux"
-    r"|libmount|libblkid|libgnutls|libvulkan)\.so(\.|$)"
+    r"|libmount|libblkid|libgnutls|libnettle|libhogweed|libgmp|libtasn1|libidn2|libunistring|libp11-kit"
+    r"|libvulkan)\.so(\.|$)"
 )
 
 # Qt's plugin folders the window needs: Wayland and X11, input methods,
@@ -385,6 +388,8 @@ T64 = {
     "libssl3": "libssl3t64",
     "libpipewire-0.3-0": "libpipewire-0.3-0t64",
     "libgnutls30": "libgnutls30t64",
+    "libnettle8": "libnettle8t64",
+    "libhogweed6": "libhogweed6t64",
 }
 
 
