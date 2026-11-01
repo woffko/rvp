@@ -1,0 +1,34 @@
+--- a/src/vsscript/vsscript.cpp
++++ b/src/vsscript/vsscript.cpp
+@@ -31,6 +31,8 @@
+ #ifdef VS_TARGET_OS_WINDOWS
+ #define WIN32_LEAN_AND_MEAN
+ #include <Windows.h>
++#else
++#include <dlfcn.h>
+ #endif
+ 
+ static std::once_flag flag;
+@@ -94,6 +96,22 @@
+         return;
+ #endif
+     int preInitialized = Py_IsInitialized();
++#ifndef VS_TARGET_OS_WINDOWS
++    // A runtime with its own Python in python/ beside this library (RVP's
++    // Linux packages) starts that Python, found from the library's own
++    // path: the environment stays as it is for the programs the host runs.
++    // (The limited API has no PyConfig; Py_SetPythonHome is in it up to
++    // Python 3.12, and Python keeps the string.)
++    Dl_info self;
++    if (!preInitialized && dladdr(reinterpret_cast<void *>(&real_init), &self) && self.dli_fname) {
++        std::filesystem::path home = std::filesystem::path(self.dli_fname).parent_path() / "python";
++        static wchar_t *homeText = nullptr;
++        if (!homeText && std::filesystem::exists(home / "lib"))
++            homeText = Py_DecodeLocale(home.c_str(), nullptr);
++        if (homeText)
++            Py_SetPythonHome(homeText);
++    }
++#endif
+     if (!preInitialized)
+         Py_InitializeEx(0);
+     s = PyGILState_Ensure();

@@ -1,25 +1,35 @@
-//! MPRIS and idle inhibit on a private session bus (M8): a `dbus-daemon` of
-//! the test's own with no services to start, fake session manager, screen
-//! saver and portal services, and a client that reads and calls what a
-//! desktop would. The tests pass with a note where `dbus-daemon` is
-//! missing.
+//! MPRIS, idle inhibit, the launcher's progress and the screen lock on a
+//! private session bus (M8, M17): a `dbus-daemon` of the test's own with no
+//! services to start, fake session manager, screen saver and portal
+//! services, and a client that reads and calls what a desktop would. The
+//! tests pass with a note where `dbus-daemon` is missing.
+//!
+//! zbus 6 has no blocking API: each call runs in `zbus::block_on`, and the
+//! fake services' connections are served by zbus's helper threads between
+//! those calls.
 
 #![cfg(target_os = "linux")]
 
 use std::collections::HashMap;
+use std::future::poll_fn;
 use std::io::{BufRead, BufReader};
 use std::path::PathBuf;
+use std::pin::Pin;
 use std::process::{Child, Command, Stdio};
 use std::sync::mpsc;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
+use futures_core::Stream;
 use rvp_app::media::{MediaCommand, MediaState, Status};
 use rvp_platform::{Desktop, Options};
-use zbus::blocking::{Connection, connection, fdo::PropertiesProxy};
-use zbus::interface;
+use zbus::fdo::PropertiesProxy;
 use zbus::names::InterfaceName;
-use zbus::zvariant::{ObjectPath, OwnedObjectPath, OwnedValue, Value};
+use zbus::object_server::SignalEmitter;
+use zbus::{
+    Connection, MatchRule, MessageStream, ObjectPath, OwnedObjectPath, OwnedVariant, Proxy,
+    Variant, block_on, connection, interface, message,
+};
 
 const PATH: &str = "/org/mpris/MediaPlayer2";
 const ROOT: &str = "org.mpris.MediaPlayer2";
@@ -71,8 +81,7 @@ impl Bus {
     }
 
     fn connect(&self) -> Connection {
-        connection::Builder::address(self.address.as_str())
-            .and_then(connection::Builder::build)
+        block_on(connection::Builder::address(self.address.as_str()).build())
             .expect("a client on the private bus")
     }
 }
@@ -90,6 +99,16 @@ fn options() -> Options {
         desktop_entry: "rvp".to_owned(),
         inhibit_reason: "Playing video".to_owned(),
     }
+}
+
+/// The next item of a stream (zbus 6 hands out streams only).
+async fn next<S: Stream + Unpin>(stream: &mut S) -> Option<S::Item> {
+    poll_fn(|context| Pin::new(&mut *stream).poll_next(context)).await
+}
+
+/// A desktop that ignores the screen lock.
+fn start(bus: &Bus, on_command: impl Fn(MediaCommand) + Send + Sync + 'static) -> Desktop {
+    Desktop::start_at(&bus.address, options(), on_command, |_| {}).expect("desktop")
 }
 
 fn wait_for(what: &str, done: impl Fn() -> bool) {
@@ -117,13 +136,12 @@ fn playing() -> MediaState {
     }
 }
 
-fn get(properties: &PropertiesProxy<'_>, interface: &'static str, name: &str) -> OwnedValue {
-    properties
-        .get(InterfaceName::from_static_str_unchecked(interface), name)
+fn get(properties: &PropertiesProxy<'_>, interface: &'static str, name: &str) -> OwnedVariant {
+    block_on(properties.get(InterfaceName::from_static_str_unchecked(interface), name))
         .unwrap_or_else(|e| panic!("{interface}.{name}: {e}"))
 }
 
-fn text(value: &OwnedValue) -> String {
+fn text(value: &OwnedVariant) -> String {
     String::try_from(value.clone()).expect("a string")
 }
 
@@ -134,27 +152,33 @@ fn mpris_shows_playback_and_takes_commands() {
     };
     let commands = Arc::new(Mutex::new(Vec::new()));
     let sink = Arc::clone(&commands);
-    let desktop = Desktop::start_at(&bus.address, options(), move |command| {
+    let desktop = start(&bus, move |command| {
         sink.lock().expect("commands").push(command);
-    })
-    .expect("MPRIS on the private bus");
+    });
     assert_eq!(desktop.bus_name(), "org.mpris.MediaPlayer2.rvp");
 
     let client = bus.connect();
-    let properties = PropertiesProxy::builder(&client)
-        .destination("org.mpris.MediaPlayer2.rvp")
-        .and_then(|b| b.path(PATH))
-        .and_then(zbus::blocking::proxy::Builder::build)
-        .expect("a properties proxy");
-    let player = zbus::blocking::Proxy::new(&client, "org.mpris.MediaPlayer2.rvp", PATH, PLAYER)
-        .expect("a player proxy");
+    let properties = block_on(
+        PropertiesProxy::builder(&client)
+            .destination("org.mpris.MediaPlayer2.rvp")
+            .path(PATH)
+            .build(),
+    )
+    .expect("a properties proxy");
+    let player = block_on(Proxy::new(
+        &client,
+        "org.mpris.MediaPlayer2.rvp",
+        PATH,
+        PLAYER,
+    ))
+    .expect("a player proxy");
     check_identity(&properties);
     check_state(&desktop, &properties);
     check_seeked(&desktop, &player);
     check_commands(&client, &properties, &player, &commands);
 
     // A second RVP takes MPRIS's instance name.
-    let second = Desktop::start_at(&bus.address, options(), |_| {}).expect("a second RVP");
+    let second = start(&bus, |_| {});
     assert_eq!(
         second.bus_name(),
         format!("org.mpris.MediaPlayer2.rvp.instance{}", std::process::id())
@@ -173,24 +197,24 @@ fn check_identity(properties: &PropertiesProxy<'_>) {
 }
 
 /// A new state is announced and reads back.
-fn check_state(desktop: &Desktop, properties: &PropertiesProxy<'_>) {
-    let signals = properties
-        .receive_properties_changed()
-        .expect("PropertiesChanged");
+fn check_state(desktop: &Desktop, properties: &PropertiesProxy<'static>) {
+    let mut signals = block_on(properties.receive_properties_changed()).expect("PropertiesChanged");
     let (sender, announced) = mpsc::channel();
     std::thread::spawn(move || {
-        for signal in signals {
-            if let Ok(args) = signal.args() {
-                let names: Vec<String> = args
-                    .changed_properties()
-                    .keys()
-                    .map(|k| (*k).to_owned())
-                    .collect();
-                if sender.send(names).is_err() {
-                    break;
+        block_on(async {
+            while let Some(signal) = next(&mut signals).await {
+                if let Ok(args) = signal.args() {
+                    let names: Vec<String> = args
+                        .changed_properties()
+                        .keys()
+                        .map(|k| (*k).to_owned())
+                        .collect();
+                    if sender.send(names).is_err() {
+                        break;
+                    }
                 }
             }
-        }
+        });
     });
     desktop.update(playing());
     let names = announced
@@ -200,7 +224,7 @@ fn check_state(desktop: &Desktop, properties: &PropertiesProxy<'_>) {
     wait_for("Playing", || {
         text(&get(properties, PLAYER, "PlaybackStatus")) == "Playing"
     });
-    let metadata: HashMap<String, OwnedValue> = get(properties, PLAYER, "Metadata")
+    let metadata: HashMap<String, OwnedVariant> = get(properties, PLAYER, "Metadata")
         .try_into()
         .expect("a{sv}");
     let track: OwnedObjectPath = metadata["mpris:trackid"].clone().try_into().expect("o");
@@ -220,16 +244,18 @@ fn check_state(desktop: &Desktop, properties: &PropertiesProxy<'_>) {
 }
 
 /// `Seeked` reaches the client.
-fn check_seeked(desktop: &Desktop, player: &zbus::blocking::Proxy<'_>) {
-    let seeks = player.receive_signal("Seeked").expect("Seeked");
+fn check_seeked(desktop: &Desktop, player: &Proxy<'static>) {
+    let mut seeks = block_on(player.receive_signal("Seeked")).expect("Seeked");
     let (sender, positions) = mpsc::channel();
     std::thread::spawn(move || {
-        for message in seeks {
-            if let Ok(position) = message.body().deserialize::<i64>() {
-                let _ = sender.send(position);
-                break;
+        block_on(async {
+            while let Some(message) = next(&mut seeks).await {
+                if let Ok(position) = message.body().deserialize::<i64>() {
+                    let _ = sender.send(position);
+                    break;
+                }
             }
-        }
+        });
     });
     desktop.seeked(42.5);
     assert_eq!(
@@ -242,33 +268,26 @@ fn check_seeked(desktop: &Desktop, player: &zbus::blocking::Proxy<'_>) {
 fn check_commands(
     client: &Connection,
     properties: &PropertiesProxy<'_>,
-    player: &zbus::blocking::Proxy<'_>,
+    player: &Proxy<'_>,
     commands: &Mutex<Vec<MediaCommand>>,
 ) {
-    player.call_method("PlayPause", &()).expect("PlayPause");
-    player.call_method("Next", &()).expect("Next");
-    player.call_method("Seek", &(5_000_000i64,)).expect("Seek");
+    block_on(player.call_method("PlayPause", &())).expect("PlayPause");
+    block_on(player.call_method("Next", &())).expect("Next");
+    block_on(player.call_method("Seek", &(5_000_000i64,))).expect("Seek");
     let this = ObjectPath::try_from("/org/rvp/track/3").expect("path");
     let other = ObjectPath::try_from("/org/rvp/track/9").expect("path");
-    player
-        .call_method("SetPosition", &(this, 30_000_000i64))
-        .expect("SetPosition");
-    player
-        .call_method("SetPosition", &(other, 5_000_000i64))
+    block_on(player.call_method("SetPosition", &(this, 30_000_000i64))).expect("SetPosition");
+    block_on(player.call_method("SetPosition", &(other, 5_000_000i64)))
         .expect("SetPosition, another track");
-    player
-        .call_method("OpenUri", &("file:///films/Other.mkv",))
-        .expect("OpenUri");
+    block_on(player.call_method("OpenUri", &("file:///films/Other.mkv",))).expect("OpenUri");
     let interface = InterfaceName::from_static_str_unchecked(PLAYER);
-    properties
-        .set(interface.clone(), "Volume", Value::from(0.5))
-        .expect("Volume");
-    properties
-        .set(interface, "Rate", Value::from(0.0))
-        .expect("Rate 0");
-    zbus::blocking::Proxy::new(client, "org.mpris.MediaPlayer2.rvp", PATH, ROOT)
-        .and_then(|root| root.call_method("Raise", &()))
-        .expect("Raise");
+    block_on(properties.set(interface.clone(), "Volume", &Variant::from(0.5))).expect("Volume");
+    block_on(properties.set(interface, "Rate", &Variant::from(0.0))).expect("Rate 0");
+    block_on(async {
+        let root = Proxy::new(client, "org.mpris.MediaPlayer2.rvp", PATH, ROOT).await?;
+        root.call_method("Raise", &()).await
+    })
+    .expect("Raise");
     let expected = vec![
         MediaCommand::PlayPause,
         MediaCommand::Next,
@@ -350,7 +369,7 @@ impl FakePortal {
         &self,
         window: &str,
         flags: u32,
-        options: HashMap<String, OwnedValue>,
+        options: HashMap<String, OwnedVariant>,
     ) -> OwnedObjectPath {
         let reason = options
             .get("reason")
@@ -383,16 +402,18 @@ fn serve(
     path: &str,
     object: impl zbus::object_server::Interface,
 ) -> Connection {
-    connection::Builder::address(bus.address.as_str())
-        .and_then(|b| b.name(name.to_owned()))
-        .and_then(|b| b.serve_at(path.to_owned(), object))
-        .and_then(connection::Builder::build)
-        .unwrap_or_else(|e| panic!("the fake {name}: {e}"))
+    block_on(
+        connection::Builder::address(bus.address.as_str())
+            .name(name.to_owned())
+            .serve_at(path.to_owned(), object)
+            .build(),
+    )
+    .unwrap_or_else(|e| panic!("the fake {name}: {e}"))
 }
 
 /// Inhibits twice and lets go once, then drops the [`Desktop`].
 fn inhibit_and_release(bus: &Bus) {
-    let desktop = Desktop::start_at(&bus.address, options(), |_| {}).expect("desktop");
+    let desktop = start(bus, |_| {});
     desktop.inhibit(true);
     desktop.inhibit(true);
     desktop.inhibit(false);
@@ -418,15 +439,13 @@ fn inhibit_asks_gnome_then_the_screen_saver_then_the_portal() {
             calls: Arc::clone(&portal_calls),
         },
     );
-    portal
-        .object_server()
-        .at(
-            REQUEST,
-            FakeRequest {
-                calls: Arc::clone(&portal_calls),
-            },
-        )
-        .expect("the request object");
+    block_on(portal.object_server().at(
+        REQUEST,
+        FakeRequest {
+            calls: Arc::clone(&portal_calls),
+        },
+    ))
+    .expect("the request object");
     inhibit_and_release(&bus);
     wait_for("the portal's calls", || calls(&portal_calls).len() >= 4);
     assert_eq!(
@@ -487,4 +506,122 @@ fn inhibit_asks_gnome_then_the_screen_saver_then_the_portal() {
     // Neither of the others was asked again.
     assert_eq!(calls(&portal_calls).len(), 4);
     assert_eq!(calls(&saver_calls).len(), 4);
+}
+
+/// A screen saver that only announces its state.
+struct FakeLockingSaver;
+
+#[interface(name = "org.gnome.ScreenSaver")]
+impl FakeLockingSaver {
+    #[zbus(signal)]
+    async fn active_changed(emitter: &SignalEmitter<'_>, active: bool) -> zbus::Result<()>;
+}
+
+#[test]
+fn the_screen_lock_reaches_rvp_once_per_change() {
+    let Some(bus) = Bus::start("lock") else {
+        return;
+    };
+    let (sender, locks) = mpsc::channel();
+    let sender = Mutex::new(sender);
+    let _desktop = Desktop::start_at(
+        &bus.address,
+        options(),
+        |_| {},
+        move |locked| {
+            let _ = sender.lock().expect("sender").send(locked);
+        },
+    )
+    .expect("desktop");
+    let saver = serve(
+        &bus,
+        "org.gnome.ScreenSaver",
+        "/org/gnome/ScreenSaver",
+        FakeLockingSaver,
+    );
+    let emit = |active: bool| {
+        block_on(async {
+            let emitter = SignalEmitter::new(&saver, "/org/gnome/ScreenSaver")?;
+            FakeLockingSaver::active_changed(&emitter, active).await
+        })
+        .expect("ActiveChanged");
+    };
+    // The same state twice (GNOME and freedesktop.org's both may say so)
+    // reaches RVP once.
+    emit(true);
+    emit(true);
+    emit(false);
+    let wait = Duration::from_secs(5);
+    assert_eq!(locks.recv_timeout(wait), Ok(true));
+    assert_eq!(locks.recv_timeout(wait), Ok(false));
+    assert!(locks.recv_timeout(Duration::from_millis(300)).is_err());
+}
+
+#[test]
+fn the_launcher_shows_the_progress_while_a_file_is_loaded() {
+    let Some(bus) = Bus::start("launcher") else {
+        return;
+    };
+    let client = bus.connect();
+    let rule = MatchRule::builder()
+        .msg_type(message::Type::Signal)
+        .interface("com.canonical.Unity.LauncherEntry")
+        .member("Update")
+        .build()
+        .expect("a match rule");
+    let mut updates =
+        block_on(MessageStream::for_match_rule(rule, &client, None)).expect("Update signals");
+    let (sender, received) = mpsc::channel();
+    std::thread::spawn(move || {
+        block_on(async {
+            while let Some(Ok(signal)) = next(&mut updates).await {
+                let Ok((uri, properties)) = signal
+                    .body()
+                    .deserialize::<(String, HashMap<String, OwnedVariant>)>()
+                else {
+                    continue;
+                };
+                let progress = properties
+                    .get("progress")
+                    .and_then(|v| f64::try_from(v.clone()).ok());
+                let visible = properties
+                    .get("progress-visible")
+                    .and_then(|v| bool::try_from(v.clone()).ok());
+                if sender.send((uri, progress, visible)).is_err() {
+                    break;
+                }
+            }
+        });
+    });
+    let desktop = start(&bus, |_| {});
+    desktop.progress(1, 0.25);
+    // Below half a percent: not worth a signal.
+    desktop.progress(1, 0.252);
+    desktop.progress(2, 0.5);
+    desktop.progress(0, -1.0);
+    let wait = Duration::from_secs(5);
+    let uri = "application://rvp.desktop".to_owned();
+    assert_eq!(
+        received.recv_timeout(wait),
+        Ok((uri.clone(), Some(0.25), Some(true)))
+    );
+    assert_eq!(
+        received.recv_timeout(wait),
+        Ok((uri.clone(), Some(0.5), Some(true)))
+    );
+    assert_eq!(
+        received.recv_timeout(wait),
+        Ok((uri.clone(), Some(0.5), Some(false)))
+    );
+    // Shown again, then hidden when RVP ends.
+    desktop.progress(1, 0.75);
+    assert_eq!(
+        received.recv_timeout(wait),
+        Ok((uri.clone(), Some(0.75), Some(true)))
+    );
+    drop(desktop);
+    assert_eq!(
+        received.recv_timeout(wait),
+        Ok((uri, Some(0.75), Some(false)))
+    );
 }

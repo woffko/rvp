@@ -138,17 +138,22 @@ Item {
     }
 
     // `rvp --selftest=direct3d11` with `render.renderer` "direct3d11" in
-    // the settings (Windows): D4's renderer. mpv's gpu-next draws into the
+    // the settings (Windows): D4's renderer; `=vulkan` with "vulkan"
+    // (Windows, and Linux's X11 child window). mpv's gpu-next draws into the
     // native video window, which follows the video's place, stays disabled
     // (the pointer goes to RVP's window), gets holes for RVP's layers and
-    // covers the screen in fullscreen.
+    // covers the screen in fullscreen. Windows reports the window in
+    // physical pixels, Qt's X11 window in logical ones.
     property var videoWindow: ({})
     // mpv could not make its swapchain (Windows session 0, the VM): the
     // window is then placed but hidden, as without video.
     property bool noSwapchain: false
+    function pixelRatio() {
+        return Qt.platform.os === "windows" && host.screen ? host.screen.devicePixelRatio : 1
+    }
     function windowMatches() {
         const r = player.video_rect
-        const ratio = host.screen ? host.screen.devicePixelRatio : 1
+        const ratio = pixelRatio()
         videoWindow = JSON.parse(Tools.video_window_json())
         return videoWindow.exists && (videoWindow.visible || noSwapchain) && !videoWindow.enabled
             && near(videoWindow.x, r.x * ratio, 2) && near(videoWindow.y, r.y * ratio, 2)
@@ -159,8 +164,9 @@ Item {
         const s = t.status()
         switch (t.step) {
         case 0:
-            if (Qt.platform.os !== "windows") {
-                t.check("renderer_window", true, "SKIPPED Direct3D 11 is Windows' renderer")
+            if (Qt.platform.os !== "windows" && !Tools.native_video) {
+                t.check("renderer_window", true,
+                        "SKIPPED no native video window (Linux: the Vulkan renderer under X11)")
                 t.finish()
                 break
             }
@@ -186,7 +192,9 @@ Item {
                 t.next()
                 break
             }
-            if (t.waitFor("renderer_mpv_window", () => windowMatches() && videoWindow.child === "mpv", 5000,
+            // Windows names mpv's own window inside; Qt's X11 window says x11.
+            if (t.waitFor("renderer_mpv_window", () => windowMatches()
+                              && (videoWindow.child === "mpv" || videoWindow.child === "x11"), 5000,
                           () => JSON.stringify(videoWindow) + " video " + JSON.stringify(player.video_rect))) {
                 t.check("renderer_gpu_next", d.current_vo === "gpu-next",
                         "vo " + d.current_vo + " hwdec " + d.hwdec_current + " display_fps " + d.display_fps)
@@ -232,7 +240,7 @@ Item {
                 player.run_action("toggle-fullscreen")
             break
         case 9: {
-            const ratio = host.screen ? host.screen.devicePixelRatio : 1
+            const ratio = pixelRatio()
             if (t.waitFor("renderer_fullscreen", () => s.fullscreen && windowMatches()
                               && near(videoWindow.width, host.screen.width * ratio, 2), 5000,
                           () => JSON.stringify(videoWindow)))

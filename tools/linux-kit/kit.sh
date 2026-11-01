@@ -11,6 +11,10 @@
 #   mpv     build libmpv (mpv master, FFmpeg, libplacebo) with VapourSynth
 #           loaded at run time
 #   mvtools build the mvtools VapourSynth plugin that PotPlayer's script needs
+#   whisper build whisper.cpp's CPU and Vulkan engine (tools/whisper/
+#           build-linux.sh) for the packages (m8package) and m13
+#   vapoursynth  build RVP's own VapourSynth runtime (tools/vapoursynth/
+#           build-linux.sh, after mvtools) for the packages and m18
 #   build   build the spikes
 #   s2      VapourSynth interpolation through libmpv
 #   s3      Qt shell self-test in the current graphical session
@@ -73,6 +77,43 @@
 #   m8removed  after `sudo apt remove rvp` where m8 could not remove the
 #           .deb itself: nothing of the package is left, RVP's settings
 #           and state are
+#   m9      milestone M9: the M9 self-test with mpv's OSC, then with each
+#           script folder of RVP_M9_SCRIPTS (uosc, ModernZ), the classic
+#           self-test with each .wsz of RVP_WINAMP_SKINS, the VLC self-test
+#           with each .vlt of RVP_VLC_SKINS (local samples, never
+#           committed), and the skin loaders' headless tests on them
+#   m10     milestone M10: the functional self-test's audio steps (the
+#           chain's effects, speakers, the second device, recording RVP's
+#           own stream with parec, the master volume through pactl, Audio
+#           Stretching; it plays sound), the recording's WAV sizes, and the
+#           audio chain's and speakers' level tests
+#   m11     milestone M11: the M11 self-test (the command line's /seek and
+#           /title, previews, scenes, the queue, a DVD folder, external
+#           audio, the clipboard), the power actions through the dry-run
+#           file only, the trash (the step's own XDG_DATA_HOME), and the
+#           thumbnail core's and M11's headless tests
+#   m12     milestone M12: the M12 self-test (window sizes, dialogs,
+#           capture; Wayland places windows itself), RVP's shaders compiled
+#           by mpv, and M12's and the engine's headless tests
+#   m13     milestone M13: the M13 self-test (with --speech-check when
+#           RVP_WHISPER_CLI and RVP_WHISPER_MODELS are set), whisper.cpp on
+#           the speech clip, and the subtitle files' and speech's tests
+#   m14     milestone M14: the M14 self-test on RVP Default and on RVP_SKIN
+#           (no registry part: that is the Windows VM's), the autostart
+#           entry left as it was, and the settings', translations', menus'
+#           and synthetic skin's tests
+#   m15     milestone M15: the M15 self-test; with RVP_URSERVER, Unified
+#           Remote Server for Linux run from its unpacked folder (never
+#           installed) runs the remote's actions in the served RVP, the
+#           token stays out of the log; the control API's and the remote's
+#           tests
+#   m16     milestone M16: the synthetic menu DVD and Blu-ray (made in the
+#           kit's folder with dvdauthor, or RVP_DVD_MENU and RVP_BD_MENU),
+#           the system's libdvdnav and libbluray, the M16 self-test and the
+#           shell's navigation tests
+#   m18     milestone M18: the smoothing and GPU budget self-tests (MVTools
+#           with a VapourSynth runtime, else Blend) and the smoothing tests;
+#           the GPU modes are the Ubuntu boot's (CHECKLIST.md)
 #   m3desktop  optional, not in m3all: an "RVP (kit)" entry in
 #           ~/.local/share/applications so that Files can open videos in
 #           the running RVP (single instance); delete the file to undo
@@ -85,6 +126,7 @@
 #           m2svp m6svp report
 #   m7all   m6all with m7 after m6
 #   m8all   m7all with m8package and m8 after m7
+#   m17all  m8all with whisper, and m9 to m16 and m18 after m8 (goal S)
 #
 # environment:
 #   RVP_KIT_DIR     build and download directory (default ~/.cache/rvp-kit)
@@ -101,24 +143,59 @@
 #                   (default /tmp/.ydotool_socket)
 #   RVP_GPU_CHECKS  1 or 0 to override GPU detection
 #   RVP_KIT_REBUILD 1 to rebuild libmpv even if this commit is already built
+#   RVP_KIT_SOURCES a folder of bare clones the builds clone from first
+#                   (tools/linux-kit/sources.sh mirror DIR makes it)
 #   RVP_M2_SECONDS  playback length of the m2gpu runs (default 25; the
 #                   generated clip is 30 s long and must not loop)
+#   RVP_M9_SCRIPTS  m9: a folder of mpv script folders, each laid out as
+#                   RVP's mpv folder (scripts/, fonts/, script-opts/)
+#   RVP_WINAMP_SKINS, RVP_VLC_SKINS  m9: folders of .wsz and .vlt skins
+#   RVP_WHISPER_CLI, RVP_WHISPER_MODELS  m13: whisper.cpp's whisper-cli and
+#                   a folder with ggml-tiny.bin (RVP downloads no model)
+#   RVP_SPEECH_CLIP m13: the speech clip (default: made with espeak-ng)
+#   RVP_URSERVER    m15: Unified Remote Server for Linux unpacked (its
+#                   .deb's root or its opt/urserver)
+#   RVP_DVD_MENU, RVP_BD_MENU  m16: the synthetic discs (default: made in
+#                   the kit's folder)
 set -u
 
 KIT_SCRIPT=$(readlink -f "${BASH_SOURCE[0]}")
 REPO=$(cd "$(dirname "$KIT_SCRIPT")/../.." && pwd)
+# kit_clone and the source cache (RVP_KIT_SOURCES).
+. "$REPO/tools/linux-kit/sources.sh"
 KIT_DIR=${RVP_KIT_DIR:-$HOME/.cache/rvp-kit}
 LOG_DIR=${RVP_LOG_DIR:-$KIT_DIR/logs}
 QT_VERSION=6.10.3
+# libmpv at the commits of RVP's Windows libmpv (tools/libmpv/build.sh,
+# goal T): mpv, FFmpeg's master (fruc_vulkan, NVIDIA's optical flow, is
+# not in a release yet) and libplacebo, so that both systems play with the
+# same filters (D19). Vulkan's headers, glslang (FFmpeg compiles its
+# Vulkan shaders with it while it builds), dav1d and AviSynth+'s headers
+# are built in the kit at the Windows build's versions: Ubuntu 22.04's are
+# too old for FFmpeg's master.
 MPV_COMMIT=b2c255c13e
+FFMPEG_COMMIT=37515cfd87561e07c5766ea04de5b1ca6f6c0a98
+LIBPLACEBO_COMMIT=a83aaeb4e60fdd7ed01619885f4f42bb0ef34eaa
+VULKAN_HEADERS_TAG=v1.4.366
+GLSLANG_TAG=16.6.0
+SHADERC_COMMIT=4f0683ab2419ecbb9e18c9edfd4ffd70c2ba8cc6
+DAV1D_TAG=1.5.4
+AVISYNTH_COMMIT=21fdc997f9724b994896ba5520ddf64d677976b3
 # The libmpv build's own revision, bumped when its options change (so that a
 # built or cached libmpv of the same commit is built again): 2 added
-# rubberband, which Audio Stretching needs.
-MPV_BUILD=2
+# rubberband, which Audio Stretching needs; 3 the Windows build's FFmpeg and
+# libplacebo, Vulkan, Lua, the disc libraries (DVD, Blu-ray, CD), GnuTLS in
+# place of OpenSSL (mpv-build's OpenSSL made FFmpeg --enable-nonfree, which
+# no package may carry) and the audio filters' libraries; 4 libplacebo
+# with the kit's shaderc.
+MPV_BUILD=4
 VS_TAG=R73
 # The version in the Windows bundle (spikes/tools/windows-deps.sh).
 MVTOOLS_TAG=v24
 JOBS=$(nproc)
+# A clone or fetch whose transfer stalls (the shared VM's network to GitHub
+# hung for half an hour) gives up after a minute below 1 KB/s.
+export GIT_HTTP_LOW_SPEED_LIMIT=1000 GIT_HTTP_LOW_SPEED_TIME=60
 mkdir -p "$KIT_DIR" "$LOG_DIR"
 RESULTS=$LOG_DIR/results.txt
 
@@ -162,6 +239,9 @@ mpv_prefix() { echo "$KIT_DIR/mpv"; }
 # Debian name. Without libpipewire-0.3-dev mpv plays audio through the
 # PulseAudio API, whose coarse timing made it drop 4-5 video frames per second
 # at 60 fps on PipeWire systems (goal D); libffmpeg-nvenc-dev enables NVDEC.
+# dvdauthor makes M16's test DVD; pulseaudio-utils' pactl and parec are
+# RVP's master volume and recording on Linux; patchelf sets the run paths
+# of RVP's VapourSynth runtime.
 PACKAGES="build-essential git curl python3-venv python3-jinja2 pkg-config nasm cmake ninja-build \
 autoconf automake libtool \
 libass-dev libfreetype-dev libfribidi-dev libharfbuzz-dev libfontconfig-dev \
@@ -170,9 +250,12 @@ libxkbcommon-dev libwayland-dev wayland-protocols libegl-dev libgl-dev libgbm-de
 libasound2-dev libpulse-dev libpipewire-0.3-dev libva-dev libvdpau-dev libffmpeg-nvenc-dev \
 zlib1g-dev libssl-dev liblcms2-dev libjpeg-dev \
 libvulkan-dev glslang-dev libunwind-dev libfftw3-dev librubberband-dev \
+libgnutls28-dev libdvdnav-dev libdvdread-dev libbluray-dev libcdio-paranoia-dev \
+libmysofa-dev libbs2b-dev libsoxr-dev libzimg-dev libxml2-dev libuchardet-dev libarchive-dev \
+libluajit-5.1-dev \
 libxcb-cursor0 libxcb-icccm4 libxcb-image0 libxcb-keysyms1 libxcb-render-util0 libxcb-xinerama0 \
 libxcb-xkb1 libxkbcommon-x11-0 libopengl0 libwayland-cursor0 libwayland-egl1 \
-lsof mesa-utils ffmpeg"
+lsof mesa-utils ffmpeg dvdauthor pulseaudio-utils patchelf"
 
 step_check() {
     local log=$LOG_DIR/check.log
@@ -245,13 +328,23 @@ step_deps() {
 }
 
 # VapourSynth headers only: libmpv loads libvapoursynth-script at run time.
+# vs_header NAME: VapourSynth's header NAME at VS_TAG into the kit's
+# vs-sdk, from the source cache when it has VapourSynth.
+vs_header() {
+    local target=$KIT_DIR/vs-sdk/include/vapoursynth/$1
+    [ -s "$target" ] && return 0
+    if [ -d "${RVP_KIT_SOURCES:-/nonexistent}/vapoursynth.git" ]; then
+        git --git-dir="$RVP_KIT_SOURCES/vapoursynth.git" show "$VS_TAG:include/$1" > "$target"
+    else
+        curl -fsSL "https://raw.githubusercontent.com/vapoursynth/vapoursynth/$VS_TAG/include/$1" -o "$target"
+    fi
+}
+
 vs_headers() {
     local dir=$KIT_DIR/vs-sdk
     mkdir -p "$dir/include/vapoursynth" "$dir/lib/pkgconfig"
     for header in VapourSynth4.h VSScript4.h VSHelper4.h VSConstants4.h; do
-        [ -s "$dir/include/vapoursynth/$header" ] ||
-            curl -fsSL "https://raw.githubusercontent.com/vapoursynth/vapoursynth/$VS_TAG/include/$header" \
-                -o "$dir/include/vapoursynth/$header"
+        vs_header "$header"
     done
     cat > "$dir/lib/pkgconfig/vapoursynth-script.pc" << EOF
 prefix=$dir
@@ -264,8 +357,94 @@ EOF
     echo "$dir/lib/pkgconfig"
 }
 
+# Vulkan's headers (with a pkg-config file that links the system's
+# loader), glslang (FFmpeg's shader compiler), shaderc (libplacebo's, as
+# one static library with its own glslang and SPIRV-Tools; and glslc for
+# whisper.cpp), dav1d and AviSynth+'s headers in $KIT_DIR/sdk, built once
+# per set of versions. Prints the folder.
+kit_sdk() {
+    local sdk=$KIT_DIR/sdk src=$KIT_DIR/sdk-src dep revision
+    local stamp="$VULKAN_HEADERS_TAG $GLSLANG_TAG $SHADERC_COMMIT $DAV1D_TAG $AVISYNTH_COMMIT"
+    if [ "$(cat "$sdk/.kit-sdk" 2> /dev/null)" != "$stamp" ]; then
+        rm -rf "$sdk" "$src"
+        mkdir -p "$src" "$sdk/lib/pkgconfig" "$sdk/include" "$sdk/bin"
+        {
+            kit_clone https://github.com/KhronosGroup/Vulkan-Headers.git "$src/vulkan" "$VULKAN_HEADERS_TAG" &&
+                cmake -Wno-dev -G Ninja -S "$src/vulkan" -B "$src/vulkan/build" -DCMAKE_INSTALL_PREFIX="$sdk" \
+                    -DVULKAN_HEADERS_ENABLE_TESTS=OFF -DVULKAN_HEADERS_ENABLE_MODULE=OFF &&
+                cmake --install "$src/vulkan/build" &&
+                printf '%s\n' "prefix=$sdk" 'includedir=${prefix}/include' 'Name: Vulkan-Loader' \
+                    "Description: Vulkan headers $VULKAN_HEADERS_TAG with the system's loader" \
+                    "Version: ${VULKAN_HEADERS_TAG#v}" 'Libs: -lvulkan' 'Cflags: -I${includedir}' \
+                    > "$sdk/lib/pkgconfig/vulkan.pc"
+        } >&2 || return 1
+        {
+            kit_clone https://github.com/KhronosGroup/glslang.git "$src/glslang" "$GLSLANG_TAG" &&
+                cmake -Wno-dev -G Ninja -S "$src/glslang" -B "$src/glslang/build" -DCMAKE_BUILD_TYPE=Release \
+                    -DCMAKE_INSTALL_PREFIX="$sdk" -DENABLE_OPT=OFF -DGLSLANG_TESTS=OFF -DBUILD_TESTING=OFF \
+                    -DBUILD_SHARED_LIBS=OFF &&
+                ninja -C "$src/glslang/build" install
+        } >&2 || return 1
+        {
+            # shaderc with the revisions its DEPS file names of the three
+            # sources it builds (its tests' are left out).
+            kit_clone https://github.com/google/shaderc.git "$src/shaderc" "$SHADERC_COMMIT" || return 1
+            for dep in glslang:glslang SPIRV-Tools:spirv_tools SPIRV-Headers:spirv_headers; do
+                revision=$(sed -n "s/.*'${dep#*:}_revision': '\([0-9a-f]*\)'.*/\1/p" "$src/shaderc/DEPS")
+                kit_clone "https://github.com/KhronosGroup/${dep%%:*}.git" \
+                    "$src/shaderc/third_party/$(echo "${dep%%:*}" | tr 'A-Z' 'a-z')" "$revision" || return 1
+            done
+            cmake -Wno-dev -G Ninja -S "$src/shaderc" -B "$src/shaderc/build" -DCMAKE_BUILD_TYPE=Release \
+                -DCMAKE_INSTALL_PREFIX="$src/shaderc-install" -DSHADERC_SKIP_TESTS=ON \
+                -DSHADERC_SKIP_EXAMPLES=ON -DSHADERC_SKIP_COPYRIGHT_CHECK=ON -DSPIRV_SKIP_TESTS=ON \
+                -DSPIRV_SKIP_EXECUTABLES=ON -DENABLE_GLSLANG_BINARIES=OFF -DSPIRV_TOOLS_BUILD_STATIC=ON &&
+                ninja -C "$src/shaderc/build" -j "$JOBS" install &&
+                # Only the combined static library, as `shaderc`.
+                cp -r "$src/shaderc-install/include/shaderc" "$sdk/include/" &&
+                cp "$src/shaderc-install/lib/libshaderc_combined.a" "$sdk/lib/" &&
+                cp "$src/shaderc-install/bin/glslc" "$sdk/bin/" &&
+                sed -e "s|^prefix=.*|prefix=$sdk|" "$src/shaderc-install/lib/pkgconfig/shaderc_combined.pc" \
+                    > "$sdk/lib/pkgconfig/shaderc.pc"
+        } >&2 || return 1
+        {
+            kit_clone https://code.videolan.org/videolan/dav1d.git "$src/dav1d" "$DAV1D_TAG" &&
+                meson setup "$src/dav1d/build" "$src/dav1d" --prefix="$sdk" --libdir=lib --buildtype=release \
+                    --default-library=static -Denable_tools=false -Denable_tests=false &&
+                ninja -C "$src/dav1d/build" install
+        } >&2 || return 1
+        {
+            kit_clone https://github.com/AviSynth/AviSynthPlus.git "$src/avisynth" "$AVISYNTH_COMMIT" &&
+                cmake -Wno-dev -G Ninja -S "$src/avisynth" -B "$src/avisynth/build" -DCMAKE_INSTALL_PREFIX="$sdk" \
+                    -DHEADERS_ONLY=ON &&
+                ninja -C "$src/avisynth/build" VersionGen &&
+                ninja -C "$src/avisynth/build" install
+        } >&2 || return 1
+        echo "$stamp" > "$sdk/.kit-sdk"
+        rm -rf "$src"
+    fi
+    echo "$sdk"
+}
+
+# What the kit's libmpv lacks of what RVP needs, found in the library's
+# strings (FFmpeg's configure line, the libraries' and mpv's own names):
+# a non-free FFmpeg, Lua with mpv's built-in scripts (the OSC), the disc
+# libraries, the audio filters' libraries, fruc_vulkan.
+mpv_lacks() {
+    local lib=$1 missing="" text
+    text=$(strings "$lib")
+    if grep -q -- "--enable-nonfree" <<< "$text"; then
+        missing="$missing nonfree-ffmpeg"
+    fi
+    for marker in --enable-gnutls --enable-libmysofa --enable-libbs2b --enable-librubberband \
+        --enable-libdav1d --enable-avisynth --enable-vapoursynth --enable-libzimg \
+        dvdnav_ bd_open cdio_ luaL_ fruc_vulkan osc.lua; do
+        grep -q -- "$marker" <<< "$text" || missing="$missing $marker"
+    done
+    echo "${missing# }"
+}
+
 step_mpv() {
-    local log=$LOG_DIR/mpv.log build=$KIT_DIR/mpv-build prefix
+    local log=$LOG_DIR/mpv.log build=$KIT_DIR/mpv-build prefix sdk lib lacking
     prefix=$(mpv_prefix)
     # mpv-build always rebuilds FFmpeg from scratch; skip a finished build of
     # the same commit unless RVP_KIT_REBUILD=1.
@@ -277,8 +456,13 @@ step_mpv() {
         export PATH=$KIT_DIR/venv/bin:$PATH
         # A failing clone must not wait for credentials; rerun the step.
         export GIT_TERMINAL_PROMPT=0
-        PKG_CONFIG_PATH=$(vs_headers):${PKG_CONFIG_PATH:-}
+        sdk=$(kit_sdk) || exit 1
+        export PATH=$sdk/bin:$PATH
+        PKG_CONFIG_PATH=$sdk/lib/pkgconfig:$(vs_headers):${PKG_CONFIG_PATH:-}
         export PKG_CONFIG_PATH
+        # libplacebo compiles its shaders with the kit's shaderc: with glslang
+        # it took some libraries from Ubuntu's glslang 11.8 and libmpv
+        # failed at its first shader (an undefined GetDefaultResources).
         [ -d "$build" ] || git clone --depth 1 https://github.com/mpv-player/mpv-build "$build"
         cd "$build" || exit 1
         # Partial clones: much smaller, and a plain clone of libass fails
@@ -289,34 +473,46 @@ step_mpv() {
             mpv=https://github.com/mpv-player/mpv.git; do
             [ -d "${repo%%=*}/.git" ] || git clone --filter=blob:none "${repo#*=}" "${repo%%=*}"
         done
-        ./use-ffmpeg-release
-        ./use-libplacebo-release
+        ./use-ffmpeg-custom "$FFMPEG_COMMIT"
+        ./use-libplacebo-custom "$LIBPLACEBO_COMMIT"
         ./use-mpv-custom "$MPV_COMMIT"
         printf '%s\n' -Dlibmpv=true -Dcplayer=false -Dvapoursynth=enabled -Drubberband=enabled \
-            -Dlua=disabled -Djavascript=disabled "--prefix=$prefix" > mpv_options
-        printf '%s\n' --disable-programs --disable-doc > ffmpeg_options
-        # FFmpeg's hwcontext_vulkan.h needs Vulkan headers 1.3.277+. With
-        # older headers (Ubuntu 22.04 has 1.3.204) FFmpeg builds without
-        # Vulkan, but libplacebo would still include that header, so Vulkan
-        # is turned off in libplacebo and mpv too. RVP renders with OpenGL.
-        if pkg-config --atleast-version=1.3.277 vulkan; then
-            : > libplacebo_options
-        else
-            echo "Vulkan headers $(pkg-config --modversion vulkan): building without Vulkan"
-            echo -Dvulkan=disabled > libplacebo_options
-            echo -Dvulkan=disabled >> mpv_options
-        fi
+            -Dlua=luajit -Djavascript=disabled -Ddvdnav=enabled -Dlibbluray=enabled -Dcdda=enabled \
+            -Duchardet=enabled -Dlibarchive=enabled -Dlcms2=enabled -Dvulkan=enabled \
+            "--prefix=$prefix" > mpv_options
+        # GnuTLS is named: without it mpv-build picks OpenSSL and makes
+        # FFmpeg --enable-nonfree. FFmpeg's Vulkan shaders are compiled
+        # with the kit's glslang (an older glslc on the PATH comes first).
+        # FFmpeg's master wants lcms2 2.13 (Ubuntu 22.04 has 2.12): its
+        # lcms2 is left out; mpv's own ICC support has it.
+        printf '%s\n' --disable-programs --disable-doc --enable-version3 --enable-gnutls \
+            --enable-libdav1d --enable-libmysofa --enable-libbs2b --enable-librubberband --enable-libsoxr \
+            --enable-libzimg --enable-libxml2 --enable-avisynth --enable-vapoursynth \
+            --enable-vulkan "--glslc=$sdk/bin/glslang" "--extra-cflags=-I$sdk/include -I$KIT_DIR/vs-sdk/include" \
+            > ffmpeg_options
+        printf '%s\n' -Dvulkan=enabled "-Dvulkan-registry=$sdk/share/vulkan/registry/vk.xml" \
+            -Dglslang=disabled -Dshaderc=enabled > libplacebo_options
         ./update
         ./rebuild "-j$JOBS"
         ./install
     } > "$log" 2>&1
-    if [ -e "$prefix/lib/x86_64-linux-gnu/libmpv.so" ] || [ -e "$prefix/lib/libmpv.so" ]; then
-        echo "$MPV_COMMIT build $MPV_BUILD" > "$prefix/.kit-mpv"
-        record mpv PASS "libmpv $MPV_COMMIT build $MPV_BUILD in $prefix"
-    else
+    lib=$(ls "$prefix"/lib/x86_64-linux-gnu/libmpv.so.2* "$prefix"/lib/libmpv.so.2* 2> /dev/null | head -1)
+    if [ -z "$lib" ]; then
         record mpv FAIL "see $log"
         return 1
     fi
+    lacking=$(mpv_lacks "$lib")
+    # Every symbol must resolve now: an undefined one fails only when it is
+    # first called (glslang's GetDefaultResources at the first shader).
+    if ldd -r "$lib" 2>&1 | grep -q 'undefined symbol'; then
+        lacking="$lacking undefined-symbols($(ldd -r "$lib" 2>&1 | grep -m3 -o 'undefined symbol: [^ ]*' | tr '\n' ' '))"
+    fi
+    if [ -n "$lacking" ]; then
+        record mpv FAIL "libmpv lacks: $lacking (see $log)"
+        return 1
+    fi
+    echo "$MPV_COMMIT build $MPV_BUILD" > "$prefix/.kit-mpv"
+    record mpv PASS "libmpv $MPV_COMMIT build $MPV_BUILD (FFmpeg ${FFMPEG_COMMIT:0:10}) in $prefix"
 }
 
 mvtools_lib() { echo "$KIT_DIR/mvtools/build/libmvtools.so"; }
@@ -335,9 +531,7 @@ step_mvtools() {
         export GIT_TERMINAL_PROMPT=0
         vs_headers > /dev/null
         for header in VapourSynth.h VSHelper.h; do
-            [ -s "$KIT_DIR/vs-sdk/include/vapoursynth/$header" ] ||
-                curl -fsSL "https://raw.githubusercontent.com/vapoursynth/vapoursynth/$VS_TAG/include/$header" \
-                    -o "$KIT_DIR/vs-sdk/include/vapoursynth/$header"
+            vs_header "$header"
         done
         mkdir -p "$dir/pkgconfig"
         cat > "$dir/pkgconfig/vapoursynth.pc" << EOF
@@ -349,7 +543,7 @@ Version: ${VS_TAG#R}
 Cflags: -I\${includedir}
 EOF
         [ -d "$dir/src/.git" ] ||
-            git clone --depth 1 --branch "$MVTOOLS_TAG" https://github.com/dubhater/vapoursynth-mvtools "$dir/src"
+            kit_clone https://github.com/dubhater/vapoursynth-mvtools.git "$dir/src" "$MVTOOLS_TAG"
         rm -rf "$dir/build"
         PKG_CONFIG_PATH=$dir/pkgconfig meson setup "$dir/build" "$dir/src" --buildtype=release &&
             ninja -C "$dir/build"
@@ -616,7 +810,7 @@ step_s1() {
 rvp_bin() { echo "$REPO/target/release/rvp"; }
 
 step_m2build() {
-    local log=$LOG_DIR/m2build.log
+    local log=$LOG_DIR/m2build.log built
     (
         cd "$REPO" || exit 1
         export QMAKE MPV_LIB_DIR
@@ -624,10 +818,12 @@ step_m2build() {
         MPV_LIB_DIR=$(mpv_lib_dir)
         cargo build --release -p rvp-shell
     ) > "$log" 2>&1
-    if [ -x "$(rvp_bin)" ]; then
+    built=$?
+    # A failed build leaves the last binary behind: cargo's own result counts.
+    if [ "$built" -eq 0 ] && [ -x "$(rvp_bin)" ]; then
         record m2build PASS "rvp built"
     else
-        record m2build FAIL "see $log"
+        record m2build FAIL "cargo exit $built, see $log"
         return 1
     fi
 }
@@ -982,9 +1178,49 @@ step_m7() {
 # The packages m8package makes.
 m8_dir() { echo "$LOG_DIR/m8-packages"; }
 
+# whisper.cpp's CPU and Vulkan engine, built by the `whisper` step.
+whisper_out() { echo "$KIT_DIR/whisper/whisper-out/whisper"; }
+# RVP's own VapourSynth runtime, built by the `vapoursynth` step.
+vs_runtime() { echo "$KIT_DIR/vs-runtime/vapoursynth"; }
+
+step_vapoursynth() {
+    local log=$LOG_DIR/vapoursynth.log
+    if [ ! -s "$(mvtools_lib)" ]; then
+        record vapoursynth SKIPPED "run mvtools first"
+        return 0
+    fi
+    "$REPO/tools/vapoursynth/build-linux.sh" "$(mvtools_lib)" "$KIT_DIR/vs-work" "$(vs_runtime)" > "$log" 2>&1
+    local code=$?
+    if [ "$code" -eq 0 ] && grep -q "with mv and rife" "$log"; then
+        record vapoursynth PASS "$(grep -m1 "with mv and rife" "$log"), $(du -sh "$(vs_runtime)" | cut -f1)"
+    else
+        record vapoursynth FAIL "exit $code, see $log"
+        return 1
+    fi
+}
+
+step_whisper() {
+    local log=$LOG_DIR/whisper.log sdk
+    {
+        sdk=$(kit_sdk) &&
+            "$REPO/tools/whisper/build-linux.sh" "$sdk" "$KIT_DIR/whisper"
+    } > "$log" 2>&1
+    local code=$?
+    if [ "$code" -eq 0 ] && "$(whisper_out)/whisper-cli" --help > /dev/null 2>&1; then
+        record whisper PASS "$(cat "$(whisper_out)/VERSION.txt")"
+    else
+        record whisper FAIL "exit $code, see $log"
+        return 1
+    fi
+}
+
 step_m8package() {
-    local log=$LOG_DIR/m8package.log out runtime url
+    local log=$LOG_DIR/m8package.log out runtime url KIT_WHISPER="" KIT_VAPOURSYNTH=""
     out=$(m8_dir)
+    # The engine for subtitles from audio and the VapourSynth runtime, when
+    # the `whisper` and `vapoursynth` steps built them.
+    [ -x "$(whisper_out)/whisper-cli" ] && KIT_WHISPER=$(whisper_out)
+    [ -e "$(vs_runtime)/libvapoursynth-script.so.0" ] && KIT_VAPOURSYNTH=$(vs_runtime)
     runtime=$KIT_DIR/appimage-runtime-x86_64
     url=$(sed -n 's/^    "\(https:.*runtime-x86_64\)"$/\1/p' "$REPO/tools/packaging/package.py")
     (
@@ -1004,15 +1240,17 @@ step_m8package() {
         [ -s "$runtime" ] || curl -fsSL "$url" -o "$runtime"
         python3 tools/packaging/package.py linux --exe "$CARGO_TARGET_DIR/release/rvp" \
             --qt "$(qt_dir)" --mpv "$(mpv_lib_dir)" --look "$out/look" --out "$out" \
-            --runtime "$runtime"
+            --runtime "$runtime" ${KIT_WHISPER:+--whisper "$KIT_WHISPER"} \
+            ${KIT_VAPOURSYNTH:+--vapoursynth "$KIT_VAPOURSYNTH"}
     ) > "$log" 2>&1
-    local appimage deb
+    local made=$? appimage deb
     appimage=$(ls "$out"/RVP-*-x86_64.AppImage 2> /dev/null | head -1)
     deb=$(ls "$out"/rvp_*_amd64.deb 2> /dev/null | head -1)
-    if [ -n "$appimage" ] && [ -n "$deb" ]; then
+    # A failed build leaves the last packages behind: the result counts.
+    if [ "$made" -eq 0 ] && [ -n "$appimage" ] && [ -n "$deb" ]; then
         record m8package PASS "$(basename "$appimage") $(du -h "$appimage" | cut -f1), $(basename "$deb") $(du -h "$deb" | cut -f1)"
     else
-        record m8package FAIL "see $log"
+        record m8package FAIL "exit $made, see $log"
         return 1
     fi
 }
@@ -1324,6 +1562,628 @@ step_m3desktop() {
     record m3desktop PASS "$file (delete it to undo)"
 }
 
+# The steps of milestones M9 to M16 and M18 (goal S) follow the Windows
+# VM's checks (tools/windows-vm/m9-all.ps1 to m18-all.ps1) with Linux's
+# counterparts; Windows-only parts (the registry, powercfg, Direct3D 11,
+# the installer) are left out where they come up.
+
+kit_media() { echo "$REPO/testdata/media"; }
+
+# One RVP run of step STEP named NAME: fresh settings and state in the
+# step's folders ($LOG_DIR/STEP-config, -state; KIT_RUN_SETTINGS adds to
+# settings.json, KIT_RUN_MPV is a folder copied in as RVP's mpv folder),
+# RVP's output kept in $LOG_DIR/STEP-NAME.out and added to the step's
+# log. Returns RVP's exit code.
+kit_run() {
+    local step=$1 name=$2 code
+    local log=$LOG_DIR/$1.log run=$LOG_DIR/$1-$2.out
+    shift 2
+    export RVP_CONFIG_DIR=$LOG_DIR/$step-config RVP_STATE_DIR=$LOG_DIR/$step-state
+    rm -rf "$RVP_CONFIG_DIR" "$RVP_STATE_DIR"
+    kit_settings "${KIT_RUN_SETTINGS:-}"
+    if [ -n "${KIT_RUN_MPV:-}" ]; then
+        cp -a "$KIT_RUN_MPV" "$RVP_CONFIG_DIR/mpv"
+    fi
+    echo "== $name" >> "$log"
+    "$(rvp_bin)" "$@" > "$run" 2>&1
+    code=$?
+    echo "kit_exit=$code" >> "$run"
+    cat "$run" >> "$log"
+    return "$code"
+}
+
+# Judges run NAME of STEP: its checks (each MUST passed), none failed, RVP
+# ended well. Prints "NAME:passed/failed" (and what is missing) for the
+# step's summary.
+kit_judge() {
+    local step=$1 name=$2 run passes fails code must missing=""
+    run=$LOG_DIR/$1-$2.out
+    shift 2
+    passes=$(grep -c '^check .*=PASS' "$run" 2> /dev/null)
+    fails=$(grep -c '^check .*=FAIL' "$run" 2> /dev/null)
+    code=$(sed -n 's/^kit_exit=//p' "$run" 2> /dev/null | tail -1)
+    for must in "$@"; do
+        grep -q "^check $must=PASS" "$run" 2> /dev/null || missing="$missing $must"
+    done
+    echo "$name:${passes:-0}/${fails:-0}${missing:+ missing:${missing# }}"
+    [ "${fails:-1}" -eq 0 ] && [ "${passes:-0}" -gt 0 ] && [ -z "$missing" ] && [ "${code:-1}" -eq 0 ]
+}
+
+# A check of the step's own, written to its log as the self-tests write
+# theirs: kit_check LOG NAME OK DETAIL (OK 1 or 0; SKIPPED for a skip).
+kit_check() {
+    local result=FAIL
+    case $3 in 1) result=PASS ;; SKIPPED) result=SKIPPED ;; esac
+    echo "check $2=$result${4:+ $4}" >> "$1"
+    [ "$result" != FAIL ]
+}
+
+# cargo test with the kit's Qt and libmpv (as m2build builds RVP); the
+# caller exports what the tests read. Output to LOG; cargo's exit code.
+kit_cargo_test() {
+    local log=$1
+    shift
+    echo "== cargo test $*" >> "$log"
+    (
+        cd "$REPO" || exit 1
+        export QMAKE MPV_LIB_DIR
+        QMAKE=$(qt_dir)/bin/qmake
+        MPV_LIB_DIR=$(mpv_lib_dir)
+        cargo test --release "$@"
+    ) >> "$log" 2>&1
+}
+
+# The step's result from its runs' and checks' words: PASS when BAD is 0.
+kit_result() {
+    local step=$1 bad=$2 summary=$3 log=$LOG_DIR/$1.log
+    if [ "$bad" -eq 0 ]; then
+        record "$step" PASS "$summary"
+    else
+        record "$step" FAIL "$summary $(grep -E '^check .*=FAIL|FAILED|panicked' "$log" | head -20 | tr '\n' ' ')"
+        return 1
+    fi
+}
+
+step_m9() {
+    local log=$LOG_DIR/m9.log out=$LOG_DIR/m9-out clip bad=0 summary="" word folder name skin
+    local KIT_RUN_MPV=""
+    m2_ready m9 || return 0
+    m2_env
+    clip=$(kit_media)/fixture-60s.mkv
+    rm -rf "$out"
+    : > "$log"
+    # Classic and VLC skins dock windows of their own; on Wayland RVP runs
+    # them through XWayland when DISPLAY reaches it (prefer_x11_for).
+    echo "session=${XDG_SESSION_TYPE:-none} wayland=${WAYLAND_DISPLAY:-none} display=${DISPLAY:-none} qpa=${QT_QPA_PLATFORM:-auto}" >> "$log"
+    # mpv's own OSC (the kit's libmpv carries Lua and mpv's scripts).
+    kit_run m9 osc --selftest=m9 --controller=osc "--out=$out/osc" --skin= --mpv-options=ao=null "$clip"
+    word=$(kit_judge m9 osc m9_controller_takes_click) || bad=$((bad + 1))
+    summary="$summary $word"
+    # The user's scripts: each folder of RVP_M9_SCRIPTS laid out as RVP's mpv
+    # folder (scripts/, fonts/, script-opts/); third-party, never committed.
+    if [ -n "${RVP_M9_SCRIPTS:-}" ] && [ -d "$RVP_M9_SCRIPTS" ]; then
+        for folder in "$RVP_M9_SCRIPTS"/*/; do
+            [ -d "$folder/scripts" ] || continue
+            name=$(basename "$folder")
+            local extra=()
+            # ModernZ's seek bar lies higher than the others'.
+            case ${name,,} in modernz*) extra=(--controller-bar=0.915) ;; esac
+            KIT_RUN_MPV=${folder%/}
+            kit_run m9 "$name" --selftest=m9 --controller=scripts "${extra[@]}" \
+                "--out=$out/$name" --skin= --mpv-options=ao=null "$clip"
+            KIT_RUN_MPV=
+            word=$(kit_judge m9 "$name" m9_controller_takes_click) || bad=$((bad + 1))
+            summary="$summary $word"
+        done
+    else
+        kit_check "$log" m9_scripts SKIPPED "RVP_M9_SCRIPTS names no folder of scripts"
+        summary="$summary scripts:SKIPPED"
+    fi
+    # Classic Winamp skins and VLC's themes from local samples.
+    for skin in "${RVP_WINAMP_SKINS:-/nonexistent}"/*.wsz "${RVP_VLC_SKINS:-/nonexistent}"/*.vlt; do
+        [ -f "$skin" ] || continue
+        name=$(basename "$skin")
+        name=${name//[^A-Za-z0-9]/_}
+        case $skin in
+            *.wsz) kit_run m9 "classic-$name" --selftest=classic "--skin=$skin" "--out=$out/$name" \
+                --mpv-options=ao=null "$clip"
+                word=$(kit_judge m9 "classic-$name") || bad=$((bad + 1)) ;;
+            *) kit_run m9 "vlc-$name" --selftest=vlc "--skin=$skin" "--out=$out/$name" \
+                --mpv-options=ao=null "$clip"
+                word=$(kit_judge m9 "vlc-$name") || bad=$((bad + 1)) ;;
+        esac
+        summary="$summary $word"
+    done
+    [ -n "${RVP_WINAMP_SKINS:-}" ] || summary="$summary winamp:SKIPPED"
+    [ -n "${RVP_VLC_SKINS:-}" ] || summary="$summary vlc:SKIPPED"
+    # The loaders on every local skin, headless (they pass with a note
+    # without the folders).
+    (
+        export RVP_WINAMP_SKINS="${RVP_WINAMP_SKINS:-}" RVP_VLC_SKINS="${RVP_VLC_SKINS:-}"
+        kit_cargo_test "$log" -p rvp-skin --test winamp --test vlc -- --nocapture
+    ) || bad=$((bad + 1))
+    kit_result m9 "$bad" "${summary# }"
+}
+
+# The recording's file: a RIFF WAVE whose sizes match its length. Prints
+# "ok BYTES DATA" or "bad ...".
+kit_wav_sizes() {
+    python3 -I - "$1" << 'PY'
+import struct
+import sys
+
+data = open(sys.argv[1], "rb").read()
+ok = len(data) >= 12 and data[:4] == b"RIFF" and data[8:12] == b"WAVE"
+ok = ok and struct.unpack_from("<I", data, 4)[0] == len(data) - 8
+at, size, start = 12, -1, -1
+while ok and at + 8 <= len(data):
+    chunk, length = data[at:at + 4], struct.unpack_from("<I", data, at + 4)[0]
+    if chunk == b"data":
+        size, start = length, at + 8
+        break
+    at += 8 + length + length % 2
+ok = ok and start >= 0 and start + size == len(data)
+print(("ok" if ok else "bad"), len(data), size)
+PY
+}
+
+step_m10() {
+    local log=$LOG_DIR/m10.log out=$LOG_DIR/m10-out media bad=0 summary word wav sizes
+    m2_ready m10 || return 0
+    m2_env
+    media=$(kit_media)
+    rm -rf "$out"
+    : > "$log"
+    # The main self-test's M10 steps: effects in the chain, the speaker
+    # choices, the individual volume, Freeverb, the sync dialog, the second
+    # device, recording (parec on RVP's own stream: mpv's default output,
+    # so this run plays sound), the system's master volume (pactl: it goes
+    # up a step and back), Audio Stretching.
+    kit_run m10 functional --selftest "--out=$out" --skin= "$media/fixture-60s.mkv" "$media/fixture-3s.mkv"
+    word=$(kit_judge m10 functional second_device_follows recording_starts recording_stops \
+        master_volume_answers shift_j_audio_stretching_up) || bad=$((bad + 1))
+    summary=$word
+    # The master volume's answer is the device's level, not an error.
+    grep -q '^check master_volume_answers=PASS .*Master volume: [0-9]' "$LOG_DIR/m10-functional.out" ||
+        { kit_check "$log" master_volume_level 0 "$(grep '^check master_volume_answers' "$LOG_DIR/m10-functional.out")"; bad=$((bad + 1)); }
+    # Windows' powercfg check of the awake request has m8's idle inhibit as
+    # its Linux counterpart.
+    wav=$out/recording.wav
+    if [ -s "$wav" ]; then
+        sizes=$(kit_wav_sizes "$wav")
+        kit_check "$log" recording_file_sizes "$([ "${sizes%% *}" = ok ] && echo 1 || echo 0)" "$sizes" ||
+            bad=$((bad + 1))
+        summary="$summary wav:$sizes"
+    else
+        kit_check "$log" recording_file_sizes 0 "no $wav"
+        bad=$((bad + 1))
+    fi
+    # The audio chain's levels and the speakers' mix on this libmpv's FFmpeg.
+    kit_cargo_test "$log" -p rvp-app --test audio_chain --test speakers -- --test-threads=2 ||
+        bad=$((bad + 1))
+    kit_result m10 "$bad" "$summary"
+}
+
+step_m11() {
+    local log=$LOG_DIR/m11.log out=$LOG_DIR/m11-out data=$LOG_DIR/m11-data media bad=0 summary word
+    local boot dry info
+    m2_ready m11 || return 0
+    m2_env
+    media=$(kit_media)
+    rm -rf "$out" "$data"
+    : > "$log"
+    boot=$(uptime -s)
+    # The trash goes to the step's own data folder: the user's is left
+    # alone (the log folder's filesystem has it as the home trash).
+    (
+        export XDG_DATA_HOME=$data
+        kit_run m11 selftest --selftest=m11 "--out=$out" "--dvd-folder=$media/dvd" \
+            "--audio=$media/fixture-3s.mkv" "--clip=$media/fixture-60s.mkv" --mpv-options=ao=null \
+            /seek=0:00:03 '/title=M11 title' \
+            "$media/fixture-chapters.mkv" "$media/fixture-60s.mkv" "$media/fixture-3s.mkv"
+    )
+    word=$(kit_judge m11 selftest power_action_dry_run recycle_bin dvd_folder_plays) || bad=$((bad + 1))
+    summary=$word
+    # The kit's libmpv opens DVDs: the DVD step runs, it is not skipped.
+    if grep -q '^check dvd_folder_plays=PASS SKIPPED' "$LOG_DIR/m11-selftest.out"; then
+        kit_check "$log" dvd_not_skipped 0 "this libmpv opens no DVD"
+        bad=$((bad + 1))
+    fi
+    # Power actions only through the dry-run hook, and the machine stays up.
+    dry=$(cat "$LOG_DIR/m11-state/power-dry-run.txt" 2> /dev/null)
+    kit_check "$log" power_dry_run_file "$(case $dry in *"shut down"*) echo 1 ;; *) echo 0 ;; esac)" "$dry" ||
+        bad=$((bad + 1))
+    kit_check "$log" machine_kept_running "$([ "$(uptime -s)" = "$boot" ] && echo 1 || echo 0)" ||
+        bad=$((bad + 1))
+    # The trash: the self-test's own file is gone, in the trash with its
+    # info (rvp_platform::trash).
+    info=$data/Trash/info/recycle-me.mkv.trashinfo
+    kit_check "$log" trashed_file_gone "$([ ! -e "$out/recycle-me.mkv" ] && echo 1 || echo 0)" || bad=$((bad + 1))
+    kit_check "$log" trashed_file_in_trash \
+        "$([ -f "$data/Trash/files/recycle-me.mkv" ] && grep -q '^Path=.*/recycle-me\.mkv$' "$info" 2> /dev/null &&
+            grep -q '^DeletionDate=[0-9]\{4\}-[0-9][0-9]-[0-9][0-9]T' "$info" && echo 1 || echo 0)" \
+        "$(tr '\n' ' ' < "$info" 2> /dev/null)" || bad=$((bad + 1))
+    # The thumbnail core's and M11's headless tests on this libmpv.
+    (
+        export RVP_TESTDATA=$media
+        kit_cargo_test "$log" -p rvp-engine --test thumbnails -- --test-threads=1 --nocapture &&
+            kit_cargo_test "$log" -p rvp-app --test m11 -- --test-threads=1 --nocapture
+    ) || bad=$((bad + 1))
+    kit_result m11 "$bad" "$summary"
+}
+
+step_m12() {
+    local log=$LOG_DIR/m12.log out=$LOG_DIR/m12-out media bad=0 summary word
+    m2_ready m12 || return 0
+    m2_env
+    media=$(kit_media)
+    rm -rf "$out"
+    mkdir -p "$out"
+    : > "$log"
+    # The window's sizes, dialogs and moves (Wayland places windows itself:
+    # the self-test skips the moves there), capture, the settings tree.
+    kit_run m12 selftest --selftest=m12 "--out=$out" --mpv-options=ao=null "$media/fixture-60s.mkv"
+    word=$(kit_judge m12 selftest) || bad=$((bad + 1))
+    summary=$word
+    # RVP's own shaders compiled by mpv with this system's OpenGL (Mesa
+    # compiles what the Windows VM's OpenGL 3.0 cannot). Direct3D 11 is
+    # Windows' renderer: no Linux run.
+    kit_run m12 shaders --selftest=shaders "--out=$out" "--mpv-log=$out/mpv-shaders.log" \
+        "--mpv-options=ao=null,log-file=$out/mpv-shaders.log" "$media/fixture-60s.mkv"
+    word=$(kit_judge m12 shaders) || bad=$((bad + 1))
+    summary="$summary $word"
+    (
+        export RVP_TESTDATA=$media
+        kit_cargo_test "$log" -p rvp-app --test m12 -- --test-threads=1 --nocapture &&
+            kit_cargo_test "$log" -p rvp-engine --test headless -- --test-threads=1 --nocapture
+    ) || bad=$((bad + 1))
+    kit_result m12 "$bad" "$summary"
+}
+
+step_m13() {
+    local log=$LOG_DIR/m13.log out=$LOG_DIR/m13-out media bad=0 summary word clip whisper=0 text
+    local speech=()
+    m2_ready m13 || return 0
+    m2_env
+    media=$(kit_media)
+    rm -rf "$out"
+    mkdir -p "$out"
+    : > "$log"
+    # whisper.cpp: RVP_WHISPER_CLI, else the `whisper` step's build, with
+    # RVP_WHISPER_MODELS (with ggml-tiny.bin); RVP downloads no model.
+    if [ -z "${RVP_WHISPER_CLI:-}" ] && [ -x "$(whisper_out)/whisper-cli" ]; then
+        RVP_WHISPER_CLI=$(whisper_out)/whisper-cli
+    fi
+    if [ -x "${RVP_WHISPER_CLI:-}" ] && [ -s "${RVP_WHISPER_MODELS:-}/ggml-tiny.bin" ]; then
+        whisper=1
+        speech=(--speech-check)
+        export RVP_WHISPER_CLI RVP_WHISPER_MODELS
+    fi
+    clip=${RVP_SPEECH_CLIP:-$KIT_DIR/m13/speech.wav}
+    if [ "$whisper" -eq 1 ] && [ ! -s "$clip" ] && command -v espeak-ng > /dev/null 2>&1; then
+        "$REPO/tools/test-clips/make-m13-speech.sh" "$(dirname "$clip")" >> "$log" 2>&1
+    fi
+    kit_run m13 selftest --selftest=m13 "${speech[@]}" "--out=$out" --mpv-options=ao=null \
+        "$media/fixture-chapters.mkv"
+    word=$(kit_judge m13 selftest) || bad=$((bad + 1))
+    summary=$word
+    kit_check "$log" fixture_subtitles_unchanged \
+        "$(grep -q 'First line' "$media/fixture-chapters.srt" && echo 1 || echo 0)" || bad=$((bad + 1))
+    if [ "$whisper" -eq 1 ] && [ -s "$clip" ]; then
+        "$RVP_WHISPER_CLI" -m "$RVP_WHISPER_MODELS/ggml-tiny.bin" -f "$clip" -l en -osrt \
+            -of "$out/speech" -ng >> "$log" 2>&1
+        text=$(tr -s '[:space:]' ' ' < "$out/speech.srt" 2> /dev/null)
+        kit_check "$log" whisper_hears_the_clip "$(grep -qi hello <<< "$text" && echo 1 || echo 0)" "$text" ||
+            bad=$((bad + 1))
+        summary="$summary whisper:on"
+    else
+        kit_check "$log" whisper_hears_the_clip SKIPPED "no RVP_WHISPER_CLI, RVP_WHISPER_MODELS or clip"
+        summary="$summary whisper:SKIPPED"
+    fi
+    # The subtitle files, RVP's subtitle work on a headless player, and the
+    # subtitles made from speech (with a note without whisper.cpp).
+    (
+        export RVP_TESTDATA=$media
+        [ -s "$clip" ] && export RVP_SPEECH_CLIP=$clip
+        kit_cargo_test "$log" -p rvp-subtitle --test formats --test editor -- --test-threads=1 &&
+            kit_cargo_test "$log" -p rvp-app --test subtitles --test speech -- --test-threads=1 --nocapture
+    ) || bad=$((bad + 1))
+    kit_result m13 "$bad" "$summary"
+}
+
+step_m14() {
+    local log=$LOG_DIR/m14.log out=$LOG_DIR/m14-out media bad=0 summary="" word autostart before after
+    m2_ready m14 || return 0
+    m2_env
+    media=$(kit_media)
+    rm -rf "$out"
+    : > "$log"
+    # The user's autostart entry: the self-test leaves it as it was. The
+    # registry part (--registry-check) is the Windows VM's only.
+    autostart=${XDG_CONFIG_HOME:-$HOME/.config}/autostart/rvp.desktop
+    before=$(cat "$autostart" 2> /dev/null | md5sum)
+    kit_run m14 default --selftest=m14 "--out=$out/default" --mpv-options=ao=null --skin= \
+        "$media/fixture-60s.mkv" "$media/fixture-tone.ogg"
+    word=$(kit_judge m14 default) || bad=$((bad + 1))
+    summary=$word
+    if [ -n "${RVP_SKIN:-}" ] && [ -e "$RVP_SKIN" ]; then
+        kit_run m14 skin --selftest=m14 "--out=$out/skin" --mpv-options=ao=null "--skin=$RVP_SKIN" \
+            "$media/fixture-60s.mkv" "$media/fixture-tone.ogg"
+        word=$(kit_judge m14 skin) || bad=$((bad + 1))
+        summary="$summary $word"
+    else
+        kit_check "$log" m14_skin SKIPPED "RVP_SKIN names no .dsf skin"
+        summary="$summary skin:SKIPPED"
+    fi
+    after=$(cat "$autostart" 2> /dev/null | md5sum)
+    kit_check "$log" autostart_left_as_it_was "$([ "$before" = "$after" ] && echo 1 || echo 0)" || bad=$((bad + 1))
+    (
+        [ -n "${RVP_SKIN:-}" ] && export RVP_TEST_SKIN=$RVP_SKIN
+        kit_cargo_test "$log" -p rvp-app --test settings --test translations --test menus \
+            --test spectrum_live -- --test-threads=1 &&
+            kit_cargo_test "$log" -p rvp-skin --test synthetic -- --test-threads=1
+    ) || bad=$((bad + 1))
+    kit_result m14 "$bad" "$summary"
+}
+
+# Unified Remote's manager for m15 (its web-client protocol, as
+# m15-all.ps1 drives it): `kit_ur_client MANAGER ACTION...` connects,
+# authenticates and runs each action of the remote RVP.Player; prints
+# check and unified_remote_ lines.
+kit_ur_client() {
+    python3 -I - "$@" << 'PY'
+import json
+import re
+import sys
+import time
+import urllib.request
+import uuid
+
+manager, actions = sys.argv[1], sys.argv[2:]
+source = "web-" + str(uuid.uuid4())
+
+
+def get(path):
+    with urllib.request.urlopen(f"{manager}/{path}", timeout=20) as answer:
+        return answer.read().decode()
+
+
+def send(connection, packet):
+    packet["Source"] = source
+    request = urllib.request.Request(
+        f"{manager}/client/request", data=json.dumps(packet).encode(), method="POST",
+        headers={"UR-Connection-ID": connection, "Content-Type": "application/json"})
+    with urllib.request.urlopen(request, timeout=20) as answer:
+        return answer.read().decode()
+
+
+try:
+    connection = json.loads(get("client/connect"))["id"].strip()
+    send(connection, {"Action": 0, "Request": 0, "Version": 10,
+                      "Password": str(uuid.uuid4()), "Platform": "web"})
+    auth = send(connection, {"Action": 1, "Request": 1, "Capabilities": {
+        "Actions": True, "Sync": True, "Grid": True, "Fast": False, "Loading": True,
+        "Encryption2": True}})
+    ok = re.search(r'"Security"\s*:\s*1', auth) is not None
+    print(f"check m15_unified_remote_client_connects={'PASS' if ok else 'FAIL'} {' '.join(auth.split())}")
+    for action in actions:
+        answer = send(connection, {"ID": "RVP.Player", "Action": 7, "Request": 7,
+                                   "Run": {"Name": action}})
+        print(f"unified_remote_run {action} -> {' '.join(answer.split())}")
+        time.sleep(0.7)
+    # The remote stops polling RVP.
+    send(connection, {"ID": "RVP.Player", "Action": 4, "Request": 4})
+    get("client/disconnect")
+except Exception as error:  # noqa: BLE001 - every failure is the check's
+    print(f"check m15_unified_remote_client_connects=FAIL {error}")
+PY
+}
+
+# Waits until RVP's control API on PORT answers with the token in FILE
+# (read here: never on a command line or in the log). Exit 0 when it does.
+kit_api_up() {
+    python3 -I - "$1" "$2" << 'PY'
+import sys
+import time
+import urllib.request
+
+port, path = sys.argv[1], sys.argv[2]
+deadline = time.time() + 60
+while time.time() < deadline:
+    time.sleep(0.5)
+    try:
+        token = open(path).read().strip()
+        request = urllib.request.Request(f"http://127.0.0.1:{port}/api/status",
+                                         headers={"Authorization": "Bearer " + token})
+        with urllib.request.urlopen(request, timeout=5) as answer:
+            if answer.status == 200:
+                sys.exit(0)
+    except (OSError, ValueError):
+        continue
+sys.exit(1)
+PY
+}
+
+step_m15() {
+    local log=$LOG_DIR/m15.log out=$LOG_DIR/m15-out media bad=0 summary word
+    local ur=$LOG_DIR/m15-urserver server="" remotes pidfile state manager=http://127.0.0.1:9510
+    local actions=(play_pause volume_down mute mute play_pause) rvp waited token up candidate
+    m2_ready m15 || return 0
+    m2_env
+    media=$(kit_media)
+    rm -rf "$out" "$ur"
+    : > "$log"
+    # Unified Remote Server for Linux unpacked (never installed): its
+    # binary in RVP_URSERVER (the .deb's opt/urserver, or that folder).
+    for candidate in "${RVP_URSERVER:-/nonexistent}/opt/urserver/urserver" "${RVP_URSERVER:-/nonexistent}/urserver"; do
+        [ -x "$candidate" ] && { server=$candidate; break; }
+    done
+    if [ -z "$server" ]; then
+        # The control API alone.
+        kit_run m15 selftest --selftest=m15 "--out=$out" --mpv-options=ao=null "$media/fixture-60s.mkv"
+        word=$(kit_judge m15 selftest) || bad=$((bad + 1))
+        kit_check "$log" m15_unified_remote SKIPPED "RVP_URSERVER names no unpacked Unified Remote Server"
+        summary="$word unified_remote:SKIPPED"
+    else
+        # The server in user space: its data in the step's folder (HOME),
+        # its remotes the bundled ones and RVP's in custom/RVP, with the
+        # icons m8package drew when they are there. The remote reads RVP's
+        # token where an installed RVP keeps it: $XDG_STATE_HOME/rvp.
+        remotes=$ur/remotes
+        pidfile=$ur/urserver.pid
+        state=$ur/state
+        mkdir -p "$remotes/custom" "$ur/home" "$state"
+        cp -a "$(dirname "$server")/remotes" "$remotes/bundled"
+        cp -a "$REPO/remote/unified-remote/RVP" "$remotes/custom/RVP"
+        cp "$(m8_dir)"/look/remote/unified-remote/RVP/icon*.png "$remotes/custom/RVP/" 2> /dev/null
+        HOME=$ur/home XDG_STATE_HOME=$state "$server" "--remotes=$remotes" --daemon "--pidfile=$pidfile" \
+            >> "$log" 2>&1
+        for _ in $(seq 1 30); do
+            curl -fs "$manager/system/status" > "$ur/status.json" 2> /dev/null && break
+            sleep 1
+        done
+        kit_check "$log" m15_unified_remote_runs \
+            "$(grep -q '"running" *: *true' "$ur/status.json" 2> /dev/null && echo 1 || echo 0)" \
+            "$(grep -o '"version" *: *"[^"]*"' "$ur/status.json" 2> /dev/null)" || bad=$((bad + 1))
+        curl -fs "$manager/system/reload" > /dev/null 2>&1
+        sleep 3
+        # RVP serves first (--remote-serve) on the remote's port, with its
+        # state where the remote reads the token.
+        export RVP_CONFIG_DIR=$LOG_DIR/m15-config RVP_STATE_DIR=$state/rvp
+        rm -rf "$RVP_CONFIG_DIR" "$RVP_STATE_DIR"
+        kit_settings
+        echo "== selftest (served)" >> "$log"
+        "$(rvp_bin)" --selftest=m15 --remote-port=48931 --remote-serve=90 "--remote-expect=${#actions[@]}" \
+            "--out=$out" --mpv-options=ao=null "$media/fixture-60s.mkv" > "$LOG_DIR/m15-selftest.out" 2>&1 &
+        rvp=$!
+        kit_api_up 48931 "$RVP_STATE_DIR/remote-token"
+        up=$?
+        kit_check "$log" m15_api_answers_the_script "$([ "$up" -eq 0 ] && echo 1 || echo 0)" ||
+            bad=$((bad + 1))
+        sleep 2
+        kit_ur_client "$manager" "${actions[@]}" >> "$log" 2>&1
+        grep -q '^check m15_unified_remote_client_connects=PASS' "$log" || bad=$((bad + 1))
+        waited=0
+        while kill -0 "$rvp" 2> /dev/null && [ "$waited" -lt 120 ]; do
+            sleep 1
+            waited=$((waited + 1))
+        done
+        if kill -0 "$rvp" 2> /dev/null; then
+            kill "$rvp"
+            kit_check "$log" m15_selftest_ends 0 killed
+            bad=$((bad + 1))
+        fi
+        wait "$rvp"
+        echo "kit_exit=$?" >> "$LOG_DIR/m15-selftest.out"
+        cat "$LOG_DIR/m15-selftest.out" >> "$log"
+        word=$(kit_judge m15 selftest m15_outside_commands) || bad=$((bad + 1))
+        summary="$word unified_remote:on"
+        # The token stays out of RVP's log (grep reads it from the file).
+        if [ -s "$RVP_STATE_DIR/remote-token" ]; then
+            token=$RVP_STATE_DIR/remote-token
+            # One pattern line: the token without its newline.
+            kit_check "$log" m15_token_not_logged \
+                "$(grep -q -F -f <(tr -d '[:space:]' < "$token"; echo) "$LOG_DIR/m15-selftest.out" &&
+                    echo 0 || echo 1)" || bad=$((bad + 1))
+        fi
+        # The server's log about RVP's remote has no errors.
+        curl -fs "$manager/system/log/6/6" 2> /dev/null | tr '"' '\n' | grep RVP > "$ur/log.txt"
+        tail -12 "$ur/log.txt" | sed 's/^/unified_remote_log /' >> "$log"
+        kit_check "$log" m15_unified_remote_log_clean \
+            "$(grep -qiE 'error|fail' "$ur/log.txt" && echo 0 || echo 1)" || bad=$((bad + 1))
+        # Its own process only, by its pidfile.
+        [ -s "$pidfile" ] && kill "$(cat "$pidfile")" 2> /dev/null
+    fi
+    # The control API and the remote's files, headless.
+    (
+        export RVP_TESTDATA=$media RVP_REMOTE_DIR=$REPO/remote/unified-remote/RVP
+        kit_cargo_test "$log" -p rvp-app --test control --test remote -- --test-threads=1
+    ) || bad=$((bad + 1))
+    kit_result m15 "$bad" "$summary"
+}
+
+step_m16() {
+    local log=$LOG_DIR/m16.log out=$LOG_DIR/m16-out bad=0 summary word dvd bd lib must=(m16_menu_shows)
+    m2_ready m16 || return 0
+    m2_env
+    rm -rf "$out"
+    : > "$log"
+    # The synthetic discs (never committed): made once in the kit's
+    # folder, or the user's (RVP_DVD_MENU, RVP_BD_MENU).
+    dvd=${RVP_DVD_MENU:-$KIT_DIR/m16-dvd}
+    bd=${RVP_BD_MENU:-$KIT_DIR/m16-bd}
+    if [ ! -s "$dvd/VIDEO_TS/VIDEO_TS.IFO" ] && command -v dvdauthor > /dev/null 2>&1 &&
+        command -v spumux > /dev/null 2>&1; then
+        "$REPO/tools/test-clips/make-m16-dvd.sh" "$dvd" >> "$log" 2>&1
+    fi
+    if [ ! -d "$bd/BDMV" ]; then
+        python3 -I "$REPO/tools/test-clips/make-m16-bluray.py" "$bd" >> "$log" 2>&1
+    fi
+    if [ ! -s "$dvd/VIDEO_TS/VIDEO_TS.IFO" ]; then
+        record m16 SKIPPED "no synthetic DVD: install dvdauthor (it has spumux) or set RVP_DVD_MENU"
+        return 0
+    fi
+    # RVP's navigators load the system's libdvdnav and libbluray; no
+    # libdvdcss, libaacs or keys come with RVP.
+    for lib in libdvdnav.so.4 libbluray.so.2; do
+        kit_check "$log" "m16_system_has_$lib" \
+            "$(/sbin/ldconfig -p | awk -v lib="$lib" '$1 == lib { found = 1 } END { exit !found }' &&
+                echo 1 || echo 0)" || bad=$((bad + 1))
+    done
+    [ -d "$bd/BDMV" ] && must+=(m16_bd_menu_shows)
+    kit_run m16 selftest --selftest=m16 "--out=$out" --mpv-options=ao=null "--dvd-menus=$dvd" "--bd-menus=$bd"
+    word=$(kit_judge m16 selftest "${must[@]}") || bad=$((bad + 1))
+    summary=$word
+    # The shell's navigation tests on the same discs; none may be skipped.
+    (
+        export RVP_DVD_MENU=$dvd RVP_BD_MENU=$bd
+        kit_cargo_test "$log" -p rvp-shell --bin rvp -- synthetic --test-threads=1 --nocapture
+    ) || bad=$((bad + 1))
+    if grep -E '^note: .*skipped$' "$log" | grep -q -v RVP_DVD_REAL; then
+        kit_check "$log" headless_disc_ran 0 "$(grep -E '^note: .*skipped$' "$log" | tr '\n' ' ')"
+        bad=$((bad + 1))
+    fi
+    kit_result m16 "$bad" "$summary"
+}
+
+step_m18() {
+    local log=$LOG_DIR/m18.log out=$LOG_DIR/m18-out media bad=0 summary="" word mode vsscript
+    m2_ready m18 || return 0
+    m2_env
+    media=$(kit_media)
+    rm -rf "$out"
+    : > "$log"
+    # A VapourSynth runtime (VSSCRIPT_PATH, the `vapoursynth` step's or the
+    # system's); without one the smoothing is Blend, which the self-tests
+    # check instead of MVTools.
+    vsscript=${VSSCRIPT_PATH:-}
+    if [ -z "$vsscript" ] && [ -e "$(vs_runtime)/libvapoursynth-script.so.0" ]; then
+        vsscript=$(vs_runtime)/libvapoursynth-script.so.0
+    fi
+    [ -n "$vsscript" ] || vsscript=$(find_vsscript)
+    echo "vsscript=${vsscript:-none}" >> "$log"
+    for mode in smoothing gpu; do
+        (
+            export PYTHONDONTWRITEBYTECODE=1
+            [ -n "$vsscript" ] && export VSSCRIPT_PATH=$vsscript
+            kit_run m18 "$mode" "--selftest=$mode" "--out=$out/$mode" --mpv-options=ao=null \
+                "$media/fixture-60s.mkv"
+        )
+        word=$(kit_judge m18 "$mode") || bad=$((bad + 1))
+        summary="$summary $word"
+    done
+    # The moving square at twice the rate (with a note without a runtime);
+    # the GPU modes (RIFE, NVIDIA Optical Flow) need a GPU: the owner's
+    # Ubuntu boot (CHECKLIST.md).
+    (
+        export RVP_TESTDATA=$media PYTHONDONTWRITEBYTECODE=1
+        [ -n "$vsscript" ] && export VSSCRIPT_PATH=$vsscript
+        kit_cargo_test "$log" -p rvp-app --test smoothing -- --test-threads=1 --nocapture
+    ) || bad=$((bad + 1))
+    gpu_checks || summary="$summary gpu_modes:SKIPPED"
+    kit_result m18 "$bad" "vsscript=${vsscript:-none}$summary"
+}
+
 step_report() {
     local file
     file=$REPO/docs/test-runs/$(date +%Y-%m-%d)-$(hostname).md
@@ -1344,7 +2204,8 @@ step_report() {
         echo "| Time | Step | Result | Detail |"
         echo "|------|------|--------|--------|"
         awk -F'\t' '{ printf "| %s | %s | %s | %s |\n", $1, $2, $3, $4 }' "$RESULTS" 2> /dev/null
-        for step in s2 s3 input s1 m2 m3 m4 m6 m7 m2input m2gpu m6gpu m2svp m6svp; do
+        for step in s2 s3 input s1 m2 m3 m4 m6 m7 m8 m9 m10 m11 m12 m13 m14 m15 m16 m18 m2input m2gpu m6gpu \
+            m2svp m6svp; do
             [ -s "$LOG_DIR/$step.log" ] || continue
             echo
             echo "## $step output"
@@ -1358,7 +2219,8 @@ step_report() {
 }
 
 if [ "$#" -eq 0 ]; then
-    sed -n '2,102p' "$KIT_SCRIPT"
+    # The header's comment lines.
+    awk 'NR > 1 && /^#/ { print; next } NR > 1 { exit }' "$KIT_SCRIPT"
     exit 2
 fi
 for step in "$@"; do
@@ -1370,15 +2232,17 @@ for step in "$@"; do
         m6all) set -- check deps mpv mvtools m2build m2 m3 m4 m6 m2input m2gpu m6gpu m2svp m6svp report ;;
         m7all) set -- check deps mpv mvtools m2build m2 m3 m4 m6 m7 m2input m2gpu m6gpu m2svp m6svp report ;;
         m8all) set -- check deps mpv mvtools m2build m2 m3 m4 m6 m7 m8package m8 m2input m2gpu m6gpu m2svp m6svp report ;;
+        m17all) set -- check deps mpv mvtools whisper vapoursynth m2build m2 m3 m4 m6 m7 m8package m8 m9 m10 m11 m12 m13 m14 m15 m16 \
+            m18 m2input m2gpu m6gpu m2svp m6svp report ;;
     esac
 done
 overall=0
 for step in "$@"; do
     case $step in
-        check | deps | mpv | mvtools | build | s1 | s2 | s3 | input | m2build | m2 | m2input | m2gpu | m2svp | m3 | m4 | m6 | m7 | m8package | m8 | m8removed | m6svp | m6gpu | m3desktop | report)
+        check | deps | mpv | mvtools | whisper | vapoursynth | build | s1 | s2 | s3 | input | m2build | m2 | m2input | m2gpu | m2svp | m3 | m4 | m6 | m7 | m8package | m8 | m8removed | m9 | m10 | m11 | m12 | m13 | m14 | m15 | m16 | m18 | m6svp | m6gpu | m3desktop | report)
             "step_$step" || overall=1
             ;;
-        all | m2all | m3all | m4all | m6all | m7all | m8all) ;;
+        all | m2all | m3all | m4all | m6all | m7all | m8all | m17all) ;;
         *) say "unknown step $step"; exit 2 ;;
     esac
 done

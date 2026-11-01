@@ -697,8 +697,9 @@ impl qobject::Player {
         }
     }
 
-    /// A file started: Windows' jump list lists it, and error messages go
-    /// when the General page says so (M14).
+    /// A file started: Windows' jump list or the desktop's recent files
+    /// (Linux) list it, and error messages go when the General page says
+    /// so (M14).
     pub(super) fn file_started(mut self: Pin<&mut Self>) {
         let Some(core) = self.core() else {
             return;
@@ -709,7 +710,21 @@ impl qobject::Player {
             && core.app.settings.open.recent
             && !path.contains("://")
         {
+            // Windows' jump list (nothing elsewhere).
             crate::ffi::bridge::rvp_taskbar_recent(path);
+            // A file write, so off the window's thread.
+            #[cfg(target_os = "linux")]
+            {
+                let path = std::path::PathBuf::from(path);
+                std::thread::spawn(move || {
+                    let added = rvp_platform::recent::user_file().and_then(|list| {
+                        rvp_platform::recent::add(&list, &path, std::time::SystemTime::now())
+                    });
+                    if let Err(error) = added {
+                        eprintln!("rvp: {error}");
+                    }
+                });
+            }
         }
         if general.hide_errors_when_playing && core.app.model.media_loaded() {
             self.as_mut().set_message(QString::default());
@@ -737,7 +752,8 @@ impl qobject::Player {
         }
     }
 
-    /// The taskbar button's progress (Windows), once a second.
+    /// The taskbar's progress, once a second: Windows' taskbar button, the
+    /// launcher on Linux (the desktop integration's).
     pub(super) fn tick_taskbar(self: Pin<&mut Self>) {
         let Some(core) = self.core() else {
             return;
@@ -757,7 +773,17 @@ impl qobject::Player {
             (Some(time), Some(duration)) if duration > 0.0 => time / duration,
             _ => -1.0,
         };
+        // Windows' taskbar (nothing elsewhere).
         crate::ffi::bridge::rvp_taskbar_state(state, progress);
+        // The General page's taskbar option, which Windows' taskbar code
+        // follows too: off hides the launcher's progress.
+        if let Some(desktop) = &core.desktop {
+            if core.app.settings.general.taskbar {
+                desktop.progress(state, progress);
+            } else {
+                desktop.progress(0, -1.0);
+            }
+        }
     }
 
     /// After a settings change: the media controls, the taskbar and the
@@ -895,17 +921,32 @@ impl qobject::Player {
             return QString::from("[]");
         };
         let settings = &core.app.settings.associations;
+        // Linux: the types the desktop entry in effect lists.
+        let (listed, globs) = if cfg!(windows) {
+            (std::collections::BTreeSet::new(), String::new())
+        } else {
+            let entry = linux_desktop_entries()
+                .into_iter()
+                .find_map(|path| std::fs::read_to_string(path).ok())
+                .unwrap_or_default();
+            (rvp_app::registration::listed_types(&entry), mime_globs())
+        };
         let rows: Vec<serde_json::Value> = settings
             .types()
             .iter()
             .map(|file_type| {
-                let key = format!(r"Software\Classes\RVP.{}", file_type.extension);
+                let registered = if cfg!(windows) {
+                    let key = format!(r"Software\Classes\RVP.{}", file_type.extension);
+                    crate::ffi::bridge::rvp_registry_has_key(&key)
+                } else {
+                    rvp_app::registration::listed(&listed, file_type, &globs)
+                };
                 serde_json::json!({
                     "extension": file_type.extension,
                     "kind": file_type.kind,
                     "description": settings.description(file_type),
                     "on": !settings.off.contains(&file_type.extension),
-                    "registered": crate::ffi::bridge::rvp_registry_has_key(&key),
+                    "registered": registered,
                     "extra": settings.extra.contains_key(&file_type.extension),
                 })
             })
@@ -919,14 +960,12 @@ impl qobject::Player {
             rvp_registry_set,
         };
         use rvp_app::registration::{RegistryChange, registration};
-        if !cfg!(windows) {
-            return QString::from(
-                "On Linux the desktop entry (rvp.desktop) lists RVP's types; the desktop's settings choose the defaults.",
-            );
-        }
         let Some(core) = self.core() else {
             return QString::default();
         };
+        if !cfg!(windows) {
+            return QString::from(&apply_linux_associations(&core.app.settings.associations));
+        }
         let Ok(exe) = std::env::current_exe() else {
             return QString::from("The program's path is unknown.");
         };
@@ -1138,4 +1177,67 @@ fn on_battery() -> Option<bool> {
     {
         rvp_app::osd::on_battery_from_sysfs(std::path::Path::new("/sys/class/power_supply"))
     }
+}
+
+/// The desktop entries named `rvp.desktop` in the order the desktop takes
+/// them: the user's, then the system's (`XDG_DATA_DIRS`).
+fn linux_desktop_entries() -> Vec<std::path::PathBuf> {
+    let home = std::env::var_os("XDG_DATA_HOME")
+        .map(std::path::PathBuf::from)
+        .or_else(|| {
+            std::env::var_os("HOME").map(|home| std::path::Path::new(&home).join(".local/share"))
+        });
+    let system = std::env::var("XDG_DATA_DIRS")
+        .ok()
+        .filter(|dirs| !dirs.is_empty())
+        .unwrap_or_else(|| "/usr/local/share:/usr/share".to_owned());
+    home.into_iter()
+        .chain(system.split(':').map(std::path::PathBuf::from))
+        .map(|folder| folder.join("applications/rvp.desktop"))
+        .collect()
+}
+
+/// shared-mime-info's file patterns (empty without it).
+fn mime_globs() -> String {
+    std::fs::read_to_string("/usr/share/mime/globs2").unwrap_or_default()
+}
+
+/// Apply to System on Linux: the user's `rvp.desktop` lists the types that
+/// are on (it takes the place of the packages' entry); the desktop's own
+/// settings choose the defaults.
+fn apply_linux_associations(settings: &rvp_app::registration::AssociationSettings) -> String {
+    // An AppImage runs from a mount that changes: its own file starts it.
+    let Some(exe) = std::env::var_os("APPIMAGE")
+        .map(std::path::PathBuf::from)
+        .or_else(|| std::env::current_exe().ok())
+    else {
+        return "The program's path is unknown.".to_owned();
+    };
+    let Some(entry) = linux_desktop_entries().into_iter().next() else {
+        return "The home folder is unknown.".to_owned();
+    };
+    let text =
+        rvp_app::registration::desktop_entry(settings, &exe.display().to_string(), &mime_globs());
+    let written = entry
+        .parent()
+        .map_or(Ok(()), std::fs::create_dir_all)
+        .and_then(|()| std::fs::write(&entry, &text));
+    if let Err(error) = written {
+        return format!("{}: {error}", entry.display());
+    }
+    // The desktop's cache of handlers, where its tool is installed.
+    if let Some(folder) = entry.parent() {
+        drop(
+            std::process::Command::new("update-desktop-database")
+                .arg(folder)
+                .stdout(std::process::Stdio::null())
+                .stderr(std::process::Stdio::null())
+                .status(),
+        );
+    }
+    format!(
+        "Applied: {} lists {} types for the current user; the desktop's settings choose the defaults.",
+        entry.display(),
+        rvp_app::registration::listed_types(&text).len()
+    )
 }

@@ -7,8 +7,11 @@
 //! opens, chooses those.
 //!
 //! [`registration`] lists the registry changes under `HKEY_CURRENT_USER`
-//! that Apply to System makes (Windows; the shell writes them); Linux's
-//! desktop entry lists RVP's types itself (goal S).
+//! that Apply to System makes (Windows; the shell writes them). On Linux
+//! Apply writes the user's desktop entry ([`desktop_entry`]), which takes
+//! the place of the packages' entry of the same name: it lists the MIME
+//! types of the types that are on, and the desktop's own settings choose
+//! the defaults.
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -314,9 +317,182 @@ fn autoplay_changes(settings: &AssociationSettings, exe: &str, changes: &mut Vec
     }
 }
 
+/// The desktop entry (`rvp.desktop`) the packages install.
+const DESKTOP_ENTRY: &str = include_str!("../../../packaging/linux/rvp.desktop");
+
+/// The disc kinds of [`AUTOPLAY`] as shared-mime-info's `x-content` types,
+/// which GNOME's Removable Media settings offer the programs of; video and
+/// audio files on a new drive have none.
+const AUTOPLAY_CONTENT: &[(&str, &str)] = &[
+    ("cd", "x-content/audio-cdda"),
+    ("vcd", "x-content/video-vcd"),
+    ("svcd", "x-content/video-svcd"),
+    ("dvd", "x-content/video-dvd"),
+    ("bluray", "x-content/video-bluray"),
+];
+
+/// Linux's user desktop entry for `settings` with RVP at `exe`: the
+/// packages' entry with the MIME types of the types that are on (a type
+/// the user added takes its type from shared-mime-info's `globs`, the
+/// text of `globs2`) and the `x-content` types of the chosen autoplay
+/// discs.
+#[must_use]
+pub fn desktop_entry(settings: &AssociationSettings, exe: &str, globs: &str) -> String {
+    let table = crate::associations::associations();
+    let mut mime: Vec<String> = Vec::new();
+    for file_type in settings.types() {
+        if settings.off.contains(&file_type.extension) {
+            continue;
+        }
+        let known = table
+            .iter()
+            .find(|association| association.extension == file_type.extension);
+        let types: Vec<String> = match known {
+            Some(association) => association
+                .mime_types
+                .iter()
+                .map(|&t| t.to_owned())
+                .collect(),
+            None => glob_types(globs, &file_type.extension),
+        };
+        for name in types {
+            if !mime.contains(&name) {
+                mime.push(name);
+            }
+        }
+    }
+    for (kind, content) in AUTOPLAY_CONTENT {
+        if settings.autoplay.contains(*kind) {
+            mime.push((*content).to_owned());
+        }
+    }
+    let types = if mime.is_empty() {
+        String::new()
+    } else {
+        format!("{};", mime.join(";"))
+    };
+    DESKTOP_ENTRY
+        .replace("Exec=rvp %F", &format!("Exec={} %F", desktop_exec(exe)))
+        .replace("@MIME_TYPES@", &types)
+}
+
+/// The MIME types a desktop entry lists (its `MimeType` key).
+#[must_use]
+pub fn listed_types(entry: &str) -> BTreeSet<String> {
+    entry
+        .lines()
+        .find_map(|line| line.strip_prefix("MimeType="))
+        .map(|types| {
+            types
+                .split(';')
+                .filter(|name| !name.is_empty())
+                .map(str::to_owned)
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+/// Whether a desktop entry's types include one of `file_type`'s.
+#[must_use]
+pub fn listed(listed: &BTreeSet<String>, file_type: &FileType, globs: &str) -> bool {
+    let types = crate::associations::associations()
+        .into_iter()
+        .find(|association| association.extension == file_type.extension)
+        .map_or_else(
+            || glob_types(globs, &file_type.extension),
+            |association| {
+                association
+                    .mime_types
+                    .iter()
+                    .map(|&t| t.to_owned())
+                    .collect()
+            },
+        );
+    types.iter().any(|name| listed.contains(name))
+}
+
+/// shared-mime-info's types for `*.extension` (`weight:type:pattern`
+/// lines of `globs2`).
+fn glob_types(globs: &str, extension: &str) -> Vec<String> {
+    let pattern = format!("*.{extension}");
+    let mut found = Vec::new();
+    for line in globs.lines().filter(|line| !line.starts_with('#')) {
+        let mut cells = line.split(':');
+        let (Some(_), Some(name), Some(glob)) = (cells.next(), cells.next(), cells.next()) else {
+            continue;
+        };
+        if glob.eq_ignore_ascii_case(&pattern) && !found.iter().any(|known: &String| known == name)
+        {
+            found.push(name.to_owned());
+        }
+    }
+    found
+}
+
+/// A program path as a desktop entry's `Exec` takes it: quoted when it
+/// holds a reserved character, with `"`, `` ` `` and `$` escaped, and a
+/// backslash as four (the string's escape comes before the quoting's).
+fn desktop_exec(exe: &str) -> String {
+    if exe
+        .chars()
+        .all(|c| c.is_ascii_alphanumeric() || "/-_.+".contains(c))
+    {
+        return exe.to_owned();
+    }
+    let mut quoted = String::from("\"");
+    for c in exe.chars() {
+        match c {
+            '"' | '`' | '$' => quoted.push('\\'),
+            '\\' => quoted.push_str(r"\\\"),
+            _ => {}
+        }
+        quoted.push(c);
+    }
+    quoted.push('"');
+    quoted
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn linuxs_entry_lists_the_types_that_are_on() {
+        let mut settings = AssociationSettings::default();
+        settings.off.insert("mkv".to_owned());
+        settings.extra.insert("xyz".to_owned(), "video".to_owned());
+        settings.extra.insert("nope".to_owned(), "video".to_owned());
+        let globs = "# header\n50:video/x-xyz:*.xyz\n50:video/x-matroska:*.mkv\n";
+        let entry = desktop_entry(&settings, "/tmp/My Apps/RVP-x86_64.AppImage", globs);
+        assert!(
+            entry.contains("Exec=\"/tmp/My Apps/RVP-x86_64.AppImage\" %F\n"),
+            "{entry}"
+        );
+        let types = listed_types(&entry);
+        assert!(!types.contains("video/x-matroska"));
+        assert!(types.contains("video/webm") && types.contains("video/x-xyz"));
+        let file = |extension: &str| FileType {
+            extension: extension.to_owned(),
+            kind: "video".to_owned(),
+        };
+        assert!(listed(&types, &file("webm"), globs));
+        assert!(listed(&types, &file("xyz"), globs));
+        assert!(!listed(&types, &file("mkv"), globs));
+        assert!(!listed(&types, &file("nope"), globs));
+        let plain = desktop_entry(&settings, "/opt/rvp/bin/rvp", globs);
+        assert!(plain.contains("\nExec=/opt/rvp/bin/rvp %F\n"));
+        assert!(!listed_types(&plain).contains("x-content/video-dvd"));
+        settings.autoplay.insert("dvd".to_owned());
+        settings.autoplay.insert("video".to_owned());
+        let discs = listed_types(&desktop_entry(&settings, "/opt/rvp/bin/rvp", globs));
+        assert!(discs.contains("x-content/video-dvd"));
+        assert!(
+            !discs
+                .iter()
+                .any(|name| name.starts_with("x-content/video-") && name != "x-content/video-dvd")
+        );
+        assert_eq!(desktop_exec(r"/a/b$c\d"), r#""/a/b\$c\\\\d""#);
+    }
 
     #[test]
     fn the_table_holds_video_and_audio_types() {

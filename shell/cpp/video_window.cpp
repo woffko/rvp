@@ -14,6 +14,15 @@
 //   passes their rectangles as holes, cut out of the window's region.
 // - Only the GUI thread calls these functions; they post the change and
 //   return.
+//
+// On Linux (goal S) the window is a native child QWindow of the main
+// window under X11 (XWayland on a Wayland desktop: Wayland has no child
+// windows of another program, so RVP starts as an X11 program when this
+// renderer is chosen): mpv's `x11vk` makes its window inside it. Qt keeps
+// it transparent for the pointer (an empty input shape), so the pointer
+// reaches RVP's window under it, and cuts the holes with the window's
+// mask (the X11 shape). It lives on the GUI thread: X11 has no messages
+// for mpv to wait on.
 
 #include "rvp-shell/cpp/shell.h"
 
@@ -21,7 +30,16 @@
 #include <QtCore/QJsonDocument>
 #include <QtCore/QJsonObject>
 #include <QtGui/QGuiApplication>
+#include <QtGui/QRegion>
 #include <QtGui/QWindow>
+
+#ifdef Q_OS_LINUX
+#include <QtGui/qguiapplication_platform.h>
+
+#include <cstdlib>
+
+#include <xcb/xcb.h>
+#endif
 
 #ifdef Q_OS_WIN
 #include <algorithm>
@@ -148,6 +166,26 @@ QWindow *mainWindow()
 } // namespace
 #endif
 
+#ifdef Q_OS_LINUX
+namespace {
+
+QWindow *&linuxWindow()
+{
+    static QWindow *window = nullptr;
+    return window;
+}
+
+QWindow *mainWindow()
+{
+    for (QWindow *window : QGuiApplication::topLevelWindows())
+        if (window->objectName() == QLatin1String("rvpMain"))
+            return window;
+    return nullptr;
+}
+
+} // namespace
+#endif
+
 std::size_t rvp_video_window_create()
 {
 #ifdef Q_OS_WIN
@@ -171,6 +209,37 @@ std::size_t rvp_video_window_create()
         return 0;
     }
     return reinterpret_cast<std::size_t>(video.window);
+#elif defined(Q_OS_LINUX)
+    QWindow *&window = linuxWindow();
+    if (window != nullptr)
+        return static_cast<std::size_t>(window->winId());
+    QWindow *parent = mainWindow();
+    if (parent == nullptr || QGuiApplication::platformName() != QLatin1String("xcb"))
+        return 0;
+    window = new QWindow(parent);
+    window->setObjectName(QStringLiteral("rvpVideo"));
+    window->setFlags(Qt::Widget | Qt::WindowTransparentForInput | Qt::WindowDoesNotAcceptFocus);
+    // Mapped at once and never unmapped: mpv's X11 code waits until its
+    // window inside is mapped before it draws. While no video shows it
+    // lies outside the main window instead (place_video_window).
+    window->setGeometry(-10, -10, 1, 1);
+    window->show();
+    // Qt's input transparency on X11 also takes its children's map requests
+    // (SubstructureRedirect) and never grants them: mpv's window inside
+    // would stay unmapped and mpv wait for it. That one bit goes again.
+    if (auto *x11 = qGuiApp->nativeInterface<QNativeInterface::QX11Application>()) {
+        xcb_connection_t *connection = x11->connection();
+        const auto id = static_cast<xcb_window_t>(window->winId());
+        xcb_get_window_attributes_reply_t *attributes = xcb_get_window_attributes_reply(
+            connection, xcb_get_window_attributes(connection, id), nullptr);
+        if (attributes != nullptr) {
+            const uint32_t mask = attributes->your_event_mask & ~XCB_EVENT_MASK_SUBSTRUCTURE_REDIRECT;
+            std::free(attributes);
+            xcb_change_window_attributes(connection, id, XCB_CW_EVENT_MASK, &mask);
+            xcb_flush(connection);
+        }
+    }
+    return static_cast<std::size_t>(window->winId());
 #else
     return 0;
 #endif
@@ -185,6 +254,10 @@ void rvp_video_window_close()
     if (video.thread.joinable())
         video.thread.join();
     video.window = nullptr;
+#elif defined(Q_OS_LINUX)
+    QWindow *&window = linuxWindow();
+    if (window != nullptr)
+        window->setGeometry(-10, -10, 1, 1);
 #endif
 }
 
@@ -192,6 +265,8 @@ bool Tools::native_video() const
 {
 #ifdef Q_OS_WIN
     return state().window != nullptr;
+#elif defined(Q_OS_LINUX)
+    return linuxWindow() != nullptr;
 #else
     return false;
 #endif
@@ -229,6 +304,31 @@ void Tools::place_video_window(const QString &place) const
         video.wanted = std::move(wanted);
     }
     PostMessageW(video.window, applyMessage, 0, 0);
+#elif defined(Q_OS_LINUX)
+    QWindow *window = linuxWindow();
+    if (window == nullptr)
+        return;
+    const QJsonObject object = QJsonDocument::fromJson(place.toUtf8()).object();
+    const auto number = [&object](const char *name) {
+        return object.value(QLatin1String(name)).toDouble();
+    };
+    // The parent's logical pixels, as QML gives them; Qt scales them.
+    const QRect rect(qRound(number("x")), qRound(number("y")), qRound(number("width")),
+                     qRound(number("height")));
+    QRegion shown(0, 0, rect.width(), rect.height());
+    for (const QJsonValue &value : object.value(QStringLiteral("holes")).toArray()) {
+        const QJsonArray hole = value.toArray();
+        if (hole.size() == 4)
+            shown -= QRect(qRound(hole.at(0).toDouble() - rect.x()), qRound(hole.at(1).toDouble() - rect.y()),
+                           qRound(hole.at(2).toDouble()), qRound(hole.at(3).toDouble()));
+    }
+    const bool visible = object.value(QStringLiteral("visible")).toBool() && !rect.isEmpty();
+    if (visible) {
+        window->setGeometry(rect);
+        window->setMask(shown);
+    } else {
+        window->setGeometry(-10, -10, 1, 1);
+    }
 #else
     (void)place;
 #endif
@@ -267,6 +367,24 @@ QString Tools::video_window_json() const
         if (child != nullptr)
             GetClassNameW(child, name, 64);
         object.insert(QStringLiteral("child"), QString::fromWCharArray(name));
+    }
+#elif defined(Q_OS_LINUX)
+    const QWindow *window = linuxWindow();
+    object.insert(QStringLiteral("exists"), window != nullptr);
+    if (window != nullptr) {
+        const QRect rect = window->geometry();
+        object.insert(QStringLiteral("x"), rect.x());
+        object.insert(QStringLiteral("y"), rect.y());
+        object.insert(QStringLiteral("width"), rect.width());
+        object.insert(QStringLiteral("height"), rect.height());
+        // Outside the main window while no video shows.
+        object.insert(QStringLiteral("visible"), window->x() >= 0 && window->y() >= 0);
+        // Transparent for the pointer, as Windows' window is disabled.
+        object.insert(QStringLiteral("enabled"), !window->flags().testFlag(Qt::WindowTransparentForInput));
+        // As Windows' region: 0 while the window has no holes.
+        const QRegion whole(0, 0, rect.width(), rect.height());
+        object.insert(QStringLiteral("region_pieces"), window->mask() == whole ? 0 : window->mask().rectCount());
+        object.insert(QStringLiteral("child"), QStringLiteral("x11"));
     }
 #else
     object.insert(QStringLiteral("exists"), false);

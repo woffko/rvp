@@ -2,24 +2,23 @@
 //! control" method and its System Volume menu change the default output
 //! device's volume, through Windows' Core Audio (one FFI block, AGENTS.md).
 //! The wave volume is mpv's `ao-volume` (`rvp_app::audio::commands`).
-//! Linux's master volume comes with goal S.
+//! On Linux the default output's volume goes through PulseAudio's `pactl`,
+//! which PipeWire answers too (`rvp_platform::pulse`).
 
 use rvp_app::audio::commands::SystemVolume;
 
 /// Changes the default output device's volume; returns what the OSD shows.
 ///
 /// # Errors
-/// Fails when the system has no device or refuses the change, and on
-/// systems RVP does not change the volume of yet.
+/// Fails when the system has no device or refuses the change.
 pub(crate) fn change(change: SystemVolume) -> Result<String, String> {
     #[cfg(windows)]
     {
         windows_change(change).map_err(|error| format!("Master volume: {error}"))
     }
-    #[cfg(not(windows))]
+    #[cfg(target_os = "linux")]
     {
-        let _ = change;
-        Err("The system's master volume: on Windows for now".to_owned())
+        rvp_platform::pulse::change_master(change)
     }
 }
 

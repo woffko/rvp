@@ -3,6 +3,7 @@
 //! why the others are not. `tests/coverage.rs` writes the reports to
 //! `docs/coverage/` (`RVP_BLESS=1`) and checks that they are current.
 
+pub mod linux;
 pub mod preferences;
 
 use std::collections::BTreeMap;

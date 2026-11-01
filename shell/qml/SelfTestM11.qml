@@ -284,11 +284,9 @@ Item {
                                              JSON.stringify(dialogs.data.entries))
                 // The entry goes with its file: a status read after it.
                 const after = t.status()
-                if (Qt.platform.os === "windows")
-                    t.check("recycle_bin", error === "" && after.shown_entries === 3,
-                            "error " + error + " entries " + after.shown_entries)
-                else
-                    t.check("recycle_bin", true, "SKIPPED (Linux: goal S) " + error)
+                // Windows' Recycle Bin, Linux's freedesktop.org trash.
+                t.check("recycle_bin", error === "" && after.shown_entries === 3,
+                        "error " + error + " entries " + after.shown_entries)
                 // mpv's own DVD playback: the menus (M16) stay off here.
                 setSetting("devices.dvd-menus", false)
                 player.open_disc(player.option("dvd-folder"), false)
@@ -296,8 +294,9 @@ Item {
             break
         }
         case 34:
-            // The Linux packages' libmpv is built without libdvdnav (goal S):
-            // RVP refuses the disc, and the audio joins a file that plays.
+            // A libmpv without libdvdnav (Ubuntu's in the WSL sysroot has
+            // it; some distributions' do not): RVP refuses the disc, and the
+            // audio joins a file that plays.
             if (!s.dvd_supported) {
                 if (!m11.dvdSkipped) {
                     m11.dvdSkipped = true

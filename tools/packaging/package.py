@@ -13,6 +13,10 @@ linux: the AppDir, the AppImage and the .deb. Build on the oldest system
     `-Wl,-rpath,$ORIGIN/../lib -Wl,--disable-new-dtags` (see
     tools/linux-kit/kit.sh m8package), so the bundled libraries load
     without LD_LIBRARY_PATH, which programs RVP starts would inherit.
+    With --whisper, whisper.cpp's CPU and Vulkan engine in `bin/whisper/`
+    (tools/whisper/build-linux.sh); with --vapoursynth, RVP's VapourSynth
+    runtime in `bin/vapoursynth/` (tools/vapoursynth/build-linux.sh); the
+    Unified Remote remote in `share/rvp`.
 
 Both read the registered types from packaging/associations.tsv. The
 version is the workspace's plus the commit (no tags): 0.0.1+git.<hash>
@@ -26,7 +30,7 @@ usage:
       [--nsisdir DIR]
       [--objdump PATH]
   package.py linux --exe rvp --qt QT --mpv DIR --look DIR --out DIR
-      --runtime APPIMAGE_RUNTIME [--mksquashfs PATH]
+      --runtime APPIMAGE_RUNTIME [--whisper DIR] [--vapoursynth DIR] [--mksquashfs PATH]
 """
 
 import argparse
@@ -361,7 +365,7 @@ SYSTEM = re.compile(
     r"|libasound|libpulse|libpulse-simple|libpipewire-0\.3|libjack|libva|libva-drm|libva-x11|libva-wayland|libvdpau"
     r"|libglib-2\.0|libgobject-2\.0|libgio-2\.0|libgthread-2\.0|libgmodule-2\.0|libffi|libpcre|libpcre2-8"
     r"|libssl|libcrypto|liblzma|libzstd|libbz2|libpng16|libuuid|libgcrypt|libgpg-error|libcap|libselinux"
-    r"|libmount|libblkid)\.so(\.|$)"
+    r"|libmount|libblkid|libgnutls|libvulkan)\.so(\.|$)"
 )
 
 # Qt's plugin folders the window needs: Wayland and X11, input methods,
@@ -380,6 +384,7 @@ T64 = {
     "libglib2.0-0": "libglib2.0-0t64",
     "libssl3": "libssl3t64",
     "libpipewire-0.3-0": "libpipewire-0.3-0t64",
+    "libgnutls30": "libgnutls30t64",
 }
 
 
@@ -413,6 +418,13 @@ def linux_appdir(args, appdir: Path) -> set[str]:
     (usr / "lib").mkdir()
     qt = Path(args.qt)
     shutil.copy2(args.exe, usr / "bin" / "rvp")
+    if args.whisper:
+        # M13's engine beside rvp, where rvp_app::speech looks for it; its
+        # libraries find each other there ($ORIGIN).
+        shutil.copytree(args.whisper, usr / "bin" / "whisper", symlinks=True)
+    if args.vapoursynth:
+        # M18's runtime beside rvp, where rvp_app::svp looks for VSScript.
+        shutil.copytree(args.vapoursynth, usr / "bin" / "vapoursynth", symlinks=True)
     (usr / "bin" / "qt.conf").write_text(
         "[Paths]\nPrefix = ..\nLibraries = lib\nPlugins = plugins\nQmlImports = qml\n"
     )
@@ -470,6 +482,9 @@ def linux_appdir(args, appdir: Path) -> set[str]:
     shutil.copy2(icons / "rvp.svg", scalable / "rvp.svg")
     (share / "doc" / "rvp").mkdir(parents=True)
     shutil.copy2(ROOT / "LICENSE", share / "doc" / "rvp" / "copyright")
+    # M15's Unified Remote remote, which the Remote Control page copies into
+    # the server's custom remotes (rvp_app::control::unified).
+    remote_folder(Path(args.look), share / "rvp")
     print(f"appdir: {len(bundled)} libraries bundled, {len(relied)} from the system")
     return relied
 
@@ -521,13 +536,14 @@ def debian_depends(relied: set[str]) -> str:
 
 
 def deb(appdir: Path, relied: set[str], target: Path, epoch: int) -> None:
-    """/opt/rvp (the AppDir's usr), /usr/bin/rvp, the desktop entry, the
-    icons and the copyright."""
+    """/opt/rvp (the AppDir's usr, with RVP's own share/rvp), /usr/bin/rvp,
+    the desktop entry, the icons and the copyright."""
     with tempfile.TemporaryDirectory() as scratch:
         root = Path(scratch) / "root"
         shutil.copytree(appdir / "usr", root / "opt" / "rvp", symlinks=True)
-        for moved in ("share",):
-            shutil.move(str(root / "opt" / "rvp" / moved), str(root / "usr" / moved))
+        (root / "usr" / "share").mkdir(parents=True)
+        for moved in ("applications", "icons", "doc"):
+            shutil.move(str(root / "opt" / "rvp" / "share" / moved), str(root / "usr" / "share" / moved))
         (root / "usr" / "bin").mkdir(parents=True)
         (root / "usr" / "bin" / "rvp").symlink_to("/opt/rvp/bin/rvp")
         size = sum(p.stat().st_size for p in root.rglob("*") if p.is_file() and not p.is_symlink())
@@ -540,6 +556,10 @@ def deb(appdir: Path, relied: set[str], target: Path, epoch: int) -> None:
             "Maintainer: RVP <rvp@localhost>\n"
             f"Installed-Size: {size // 1024}\n"
             f"Depends: {debian_depends(relied)}\n"
+            # The programs RVP runs: the master volume and recording
+            # (pactl, parec), text to speech (spd-say), the desktop's
+            # handler cache (update-desktop-database).
+            "Recommends: pulseaudio-utils, speech-dispatcher, desktop-file-utils\n"
             "Section: video\n"
             "Priority: optional\n"
             "Description: PotPlayer-style media player\n"
@@ -588,6 +608,8 @@ def main() -> int:
     lin.add_argument("--look", required=True)
     lin.add_argument("--out", required=True)
     lin.add_argument("--runtime", required=True)
+    lin.add_argument("--whisper", help="whisper.cpp's CPU and Vulkan engine (tools/whisper/build-linux.sh)")
+    lin.add_argument("--vapoursynth", help="RVP's VapourSynth runtime (tools/vapoursynth/build-linux.sh)")
     lin.add_argument("--mksquashfs", default="mksquashfs")
     kinds.add_parser("version")
     kinds.add_parser("mime-types", help="the desktop entry's MimeType value")

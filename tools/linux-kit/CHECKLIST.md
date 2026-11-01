@@ -393,13 +393,110 @@ Then try by hand (M8's acceptance on Linux):
 - [ ] `rvp --crash-test=native` ends at once and leaves
       `crash-<time>-native.log` in `~/.local/state/rvp`; delete it after.
 
+## 10. Milestones M9 to M18 on Linux (goal S)
+
+One session for the parity milestones' Linux side, after section 9's
+preparation.
+
+On the shared Ubuntu VM the kit runs as the kit's user over SSH in the owner's GNOME
+session: `eval "$(tools/linux-kit/attach-session.sh attach <user>)"` gives
+the kit user's access to the session's Wayland socket and XWayland's authority
+file (ACL entries, with sudo) and sets `WAYLAND_DISPLAY`, `DISPLAY` and
+`XAUTHORITY`; `tools/linux-kit/attach-session.sh detach <user>` takes the
+entries back after the run. Where the network to GitHub is poor,
+`tools/linux-kit/sources.sh mirror DIR` on another machine makes a source
+cache to copy over and name in `RVP_KIT_SOURCES`; the steps `mpv`,
+`mvtools`, `whisper` and `vapoursynth` clone from it first. Optional pieces for these steps (each is SKIPPED with a note
+when absent; none of them is ever committed):
+
+- [ ] **mpv's on-screen controllers** for `m9`: a folder holding one folder
+      per script, each laid out as RVP's mpv folder (`scripts/`, `fonts/`,
+      `script-opts/`), for example uosc's release archive unpacked into
+      `uosc/` and ModernZ into `modernz/`:
+      `export RVP_M9_SCRIPTS=/path/to/scripts`. mpv's own OSC needs nothing.
+- [ ] **Classic Winamp skins and VLC themes** for `m9`:
+      `export RVP_WINAMP_SKINS=/path/to/wsz-folder RVP_VLC_SKINS=/path/to/vlt-folder`.
+- [ ] **whisper.cpp** for `m13`: your `whisper-cli` and a folder with
+      `ggml-tiny.bin` (RVP downloads no model):
+      `export RVP_WHISPER_CLI=/path/to/whisper-cli RVP_WHISPER_MODELS=/path/to/models`.
+      The speech clip is made with `espeak-ng` when it is installed, or
+      `RVP_SPEECH_CLIP` names one.
+- [ ] **Unified Remote Server for Linux** for `m15`: its `.deb` unpacked,
+      never installed (`dpkg-deb -x urserver-*.deb ~/urserver`), then
+      `export RVP_URSERVER=~/urserver`. The step runs it from there with its
+      data in the log folder and stops it at the end.
+- [ ] **dvdauthor** for `m16` (`sudo apt-get install -y dvdauthor`, which
+      has `spumux`): the step makes the synthetic menu DVD and Blu-ray in the
+      kit's folder once. `RVP_DVD_MENU` and `RVP_BD_MENU` name other copies.
+
+From a terminal inside the GNOME session:
+
+```sh
+cd ~/rvp && git pull
+tools/linux-kit/kit.sh m17all
+```
+
+`m17all` is `m8all` with `m9` to `m16` and `m18` after `m8`; each step
+also runs alone (`kit.sh m11 report`). What appears on screen:
+
+- `m9`: RVP's window several times with mpv's controller over the video,
+  then each classic skin (main window, equalizer and playlist docked under
+  each other) and each VLC theme, about 30 seconds each. A classic or VLC
+  skin runs through XWayland when the session has it, since Wayland lets no
+  program dock its windows.
+- `m10`: the functional self-test, about 3 minutes, **with sound**: the
+  test tones play through the default output, and the master volume goes
+  one step up and back.
+- `m11` to `m16` and `m18`: RVP's window for one to three minutes each,
+  without sound; `m12` resizes and moves it (on Wayland the moves are
+  skipped), `m16` shows the synthetic discs' menus.
+- `m15` with `RVP_URSERVER`: Unified Remote's manager listens on port
+  9510 for the step's duration.
+
+Then try by hand (the parts only a desktop and its hardware can check):
+
+- [ ] **The tray** (General > "Taskbar/Tray icon"): with Ubuntu's
+      AppIndicator extension on, RVP's icon is in the top bar with its menu;
+      "minimize to tray" hides the window and the icon brings it back.
+- [ ] **The screen lock**: with "Pause playback when screen locked" on,
+      locking the screen (Super+L) pauses a playing film and unlocking
+      plays on.
+- [ ] **The taskbar**: Ubuntu's dock shows the film's progress on RVP's
+      icon; Files' "Recent" lists a film RVP played.
+- [ ] **Text to speech** (Accessibility): with speech-dispatcher installed,
+      the voices list shows its voices and RVP reads its notices aloud.
+- [ ] **A gamepad** (Accessibility > XInput) if you have one: an Xbox
+      controller's A pauses, the pad seeks; with the mouse emulation the
+      stick moves the pointer on X11 (Wayland does not let a program move
+      it).
+- [ ] **The trash**: delete a played file from the playlist (Delete Files);
+      it is in Files' trash and restores to its folder.
+- [ ] **File types** (Association, Apply to System): RVP's Open With entry
+      lists the chosen types; your default player stays the default.
+- [ ] **The remote**: Remote Control, "Add to Unified Remote" with Unified
+      Remote Server installed; the phone's remote plays and pauses RVP.
+- [ ] **A webcam or capture card** if you have one: Open > Webcam/Other
+      Device lists it by name and plays it.
+- [ ] **The screen** (Open > Screen Capture): in an X11 session it plays the
+      desktop; in the Wayland session RVP says why it cannot.
+- [ ] **A DVD drive** if you have one: a film DVD's menu shows and its
+      buttons work; an audio CD plays (Open > Audio CD).
+- [ ] **GPU checks** (only real hardware): the shaders and HDR tone mapping
+      on an HDR file; Whisper on the GPU (Vulkan, or your CUDA build in
+      `~/.config/rvp/whisper/cuda`); M18's RIFE and, in an X11 session with
+      the Vulkan renderer, NVIDIA Optical Flow raising the rate; the GPU
+      power budget's readings (Video page) with `nvidia-smi` beside it.
+- [ ] **SVP 4 for Linux** with RVP's own smoothing: with SVP 4 Manager
+      running SVP attaches to a file, and RVP's smoothing stays off while
+      SVP's filter plays (and for SVP's first 8 s).
+
 ## Steps and what they record
 
 | Step | Needs | PASS means |
 |------|-------|------------|
 | `check` | packages, cargo | all build packages present |
 | `deps` | network | meson, aqtinstall and Qt 6.10.3 in the kit directory |
-| `mpv` | `deps` | libmpv (mpv `b2c255c13e`, FFmpeg and libplacebo releases) with VapourSynth loaded at run time |
+| `mpv` | `deps` | libmpv at the commits of RVP's Windows libmpv (mpv `b2c255c13e`, FFmpeg `37515cfd87`, libplacebo `a83aaeb4`) with VapourSynth loaded at run time, Lua and mpv's scripts, the disc libraries, GnuTLS and the audio filters' libraries, `fruc_vulkan`, and no `--enable-nonfree` |
 | `mvtools` | `deps` | mvtools v24 built against the VapourSynth R73 headers |
 | `build` | `mpv` | the three spikes build against that libmpv and Qt |
 | `s2` | SVP's VapourSynth, `RVP_VPY` | with the `get_core` wrapper the script reaches about 60 fps; the unchanged script is expected to fail on VapourSynth R73 and is recorded in the detail |
@@ -420,6 +517,15 @@ Then try by hand (M8's acceptance on Linux):
 | `m8package` | `mpv`, network once (the AppImage runtime) | the AppImage and the .deb were made |
 | `m8` | graphical session, `m8package` | the AppImage's self-test passes; with the .deb installed: its files, a valid desktop entry, the registration for the media types with the default unchanged, the self-test, MPRIS (playing, metadata, Pause, Quit), the screen kept on while video plays (SKIPPED without GNOME's session manager on the bus), the crash logs, and, where the step installed it, its removal |
 | `m8removed` | `sudo apt remove rvp` | nothing of the package is left |
+| `m9` | graphical session, cargo; `RVP_M9_SCRIPTS`, `RVP_WINAMP_SKINS`, `RVP_VLC_SKINS` for their runs | the M9 self-test with mpv's OSC (the controller takes its click) and with each script folder, the classic and VLC self-tests with each skin, and the skin loaders' tests pass |
+| `m10` | graphical session, sound server, cargo | the functional self-test passes with M10's steps (the second device follows, the recording starts and stops, the master volume answers with its level, Audio Stretching), the recording is a WAV whose sizes match, and the level tests pass |
+| `m11` | graphical session, cargo | the M11 self-test passes (with the DVD folder played, not skipped), the dry-run file says "shut down" and the machine kept running, the self-test's file is in the step's trash with its `.trashinfo`, and the thumbnail and M11 tests pass |
+| `m12` | graphical session, cargo | the M12 self-test and RVP's shaders pass, and M12's and the engine's headless tests pass |
+| `m13` | graphical session, cargo; whisper.cpp optional | the M13 self-test passes (with subtitles from speech when whisper.cpp is set), the fixture's subtitles are unchanged, whisper.cpp hears the clip, and the subtitle tests pass |
+| `m14` | graphical session, cargo | the M14 self-test passes on RVP Default (and on `RVP_SKIN`), the autostart entry is as it was, and the settings, translations, menus and synthetic skin tests pass |
+| `m15` | graphical session, cargo; `RVP_URSERVER` optional | the M15 self-test passes; with Unified Remote Server: it runs, its web client connects, the remote's actions reach RVP, the token is not in RVP's log, the server's log has no errors; the control API's and the remote's tests pass |
+| `m16` | graphical session, cargo, dvdauthor | the system has libdvdnav and libbluray, the M16 self-test shows and works both discs' menus, and the shell's navigation tests ran on them |
+| `m18` | graphical session, cargo | the smoothing and GPU budget self-tests pass (MVTools with a VapourSynth runtime, else Blend) and the smoothing tests pass |
 | `m3desktop` | `m2build` | the desktop entry was written |
 | `report` | — | the Markdown report was written |
 

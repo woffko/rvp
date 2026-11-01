@@ -259,6 +259,11 @@ pub mod qobject {
         #[qinvokable]
         fn apply_subtitle_font(self: Pin<&mut Self>, family: &QString);
 
+        /// Linux: puts RVP's remote into Unified Remote Server's custom
+        /// remotes; returns what to show.
+        #[qinvokable]
+        fn add_unified_remote(self: &Self) -> QString;
+
         /// The control panel's window moved (screen coordinates).
         #[qinvokable]
         fn panel_moved(self: Pin<&mut Self>, x: i32, y: i32);

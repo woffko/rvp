@@ -1494,6 +1494,10 @@ ApplicationWindow {
                                       "direct3d11": qsTr("Direct3D 11 window (mpv's gpu-next, HDR output)"),
                                       "vulkan": qsTr("Vulkan window (mpv's gpu-next, HDR output, NVIDIA Optical Flow smoothing)") })
                         }
+                        Note {
+                            visible: Qt.platform.os !== "windows"
+                            text: qsTr("The Vulkan window is an X11 window: on a Wayland desktop RVP then starts through XWayland.")
+                        }
                         Check {
                             visible: Qt.platform.os === "windows"
                             path: "render.hdr-output"
@@ -3136,6 +3140,8 @@ ApplicationWindow {
                         // its token while shown.
                         property var info: ({})
                         property string token: ""
+                        // What Add to Unified Remote did (Linux).
+                        property string added: ""
                         function refresh() { info = JSON.parse(win.player.control_info()) }
                         Timer {
                             interval: 1000
@@ -3213,7 +3219,27 @@ ApplicationWindow {
                                   : remotePage.info.listening ? qsTr("Listening on this computer only (127.0.0.1).")
                                                               : qsTr("Off.")
                         }
-                        Note { text: qsTr("Remotes on a phone reach RVP through a program on this computer, such as Unified Remote's server: give its RVP remote the port and the token. RVP's remote for Unified Remote is in the “remote” folder beside rvp.exe; the installer copies it into Unified Remote when that is installed. Renew makes a new token: remotes with the old one are refused.") }
+                        Note {
+                            visible: Qt.platform.os === "windows"
+                            text: qsTr("Remotes on a phone reach RVP through a program on this computer, such as Unified Remote's server: give its RVP remote the port and the token. RVP's remote for Unified Remote is in the “remote” folder beside rvp.exe; the installer copies it into Unified Remote when that is installed. Renew makes a new token: remotes with the old one are refused.")
+                        }
+                        Note {
+                            visible: Qt.platform.os !== "windows"
+                            text: qsTr("Remotes on a phone reach RVP through a program on this computer, such as Unified Remote's server: give its RVP remote the port and the token. Add to Unified Remote copies RVP's remote into the server's custom remotes. Renew makes a new token: remotes with the old one are refused.")
+                        }
+                        RowLayout {
+                            visible: Qt.platform.os !== "windows"
+                            Button {
+                                text: qsTr("Add to Unified Remote")
+                                onClicked: remotePage.added = win.player.add_unified_remote()
+                            }
+                            Label {
+                                Layout.fillWidth: true
+                                text: remotePage.added
+                                wrapMode: Text.Wrap
+                                textFormat: Text.PlainText
+                            }
+                        }
                     }
                 }
             }

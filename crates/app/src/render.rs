@@ -79,7 +79,8 @@ pub enum Renderer {
     /// mpv's `gpu-next` with Direct3D 11 in a native window (Windows).
     #[serde(rename = "direct3d11")]
     Direct3d11,
-    /// mpv's `gpu-next` with Vulkan in the same window (Windows; M18).
+    /// mpv's `gpu-next` with Vulkan in the same window (M18; on Linux an
+    /// X11 child window, goal S).
     #[serde(rename = "vulkan")]
     Vulkan,
 }
@@ -219,7 +220,8 @@ impl RenderSettings {
             ));
             self.power_budget = repaired;
         }
-        if self.renderer.native_window() && !cfg!(windows) {
+        // Linux has the Vulkan renderer (X11) but not Direct3D 11.
+        if self.renderer == Renderer::Direct3d11 && !cfg!(windows) {
             notes.push(format!(
                 "render.renderer {:?} is for Windows: \"opengl\" used",
                 serde_json::to_value(self.renderer).unwrap_or_default()
@@ -282,9 +284,20 @@ impl RenderSettings {
     }
 
     /// mpv's options for the native window's renderer (with
-    /// `rvp_engine::VideoOutput::Window`): Direct3D 11 or Vulkan.
+    /// `rvp_engine::VideoOutput::Window`): Direct3D 11 or Vulkan. On Linux
+    /// the window is X11's: mpv takes neither the pointer nor the keys
+    /// there (RVP's window under it does).
     #[must_use]
     pub fn window_options(&self) -> Vec<(&'static str, String)> {
+        if self.renderer == Renderer::Vulkan && !cfg!(windows) {
+            return vec![
+                ("gpu-api", "vulkan".to_owned()),
+                ("gpu-context", "x11vk".to_owned()),
+                ("target-colorspace-hint", self.colorspace_hint().to_owned()),
+                ("input-cursor", "no".to_owned()),
+                ("input-vo-keyboard", "no".to_owned()),
+            ];
+        }
         if self.renderer == Renderer::Vulkan {
             return vec![
                 ("gpu-api", "vulkan".to_owned()),
@@ -544,21 +557,18 @@ mod tests {
             serde_json::from_str(r#"{ "renderer": "vulkan" }"#).expect("settings");
         let mut notes = Vec::new();
         vulkan.validate(&mut notes);
-        if cfg!(windows) {
-            assert_eq!(vulkan.renderer, Renderer::Vulkan);
-            assert!(vulkan.renderer.native_window());
-            assert_eq!(
-                vulkan.window_options(),
-                vec![
-                    ("gpu-api", "vulkan".to_owned()),
-                    ("gpu-context", "winvk".to_owned()),
-                    ("target-colorspace-hint", "yes".to_owned()),
-                ]
-            );
-        } else {
-            assert_eq!(vulkan.renderer, Renderer::OpenGl);
-            assert_eq!(notes.len(), 1, "{notes:?}");
-        }
+        assert_eq!(vulkan.renderer, Renderer::Vulkan);
+        assert!(vulkan.renderer.native_window());
+        assert!(notes.is_empty(), "{notes:?}");
+        let context = if cfg!(windows) { "winvk" } else { "x11vk" };
+        assert_eq!(
+            vulkan.window_options()[..3],
+            [
+                ("gpu-api", "vulkan".to_owned()),
+                ("gpu-context", context.to_owned()),
+                ("target-colorspace-hint", "yes".to_owned()),
+            ]
+        );
     }
 
     #[test]

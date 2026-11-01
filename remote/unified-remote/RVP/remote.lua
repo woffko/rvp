@@ -5,7 +5,8 @@
 -- Settings (settings.prop, editable in Unified Remote's manager): port,
 -- RVP's port (48931 unless the page changed it), and token. With an empty
 -- token the remote reads the one an installed RVP keeps in
--- %APPDATA%\RVP\remote-token; a portable RVP's token is copied from its
+-- %APPDATA%\RVP\remote-token (Windows) or $XDG_STATE_HOME/rvp/remote-token
+-- (Linux, ~/.local/state/rvp); a portable RVP's token is copied from its
 -- Remote Control page.
 --
 -- Every action RVP carries out is named as in RVP's own list of actions
@@ -26,12 +27,35 @@ local listed = {}
 
 local update
 
+-- Where an installed RVP keeps its state and its settings.
+local function state_folder()
+	if OS_WINDOWS then
+		return "%APPDATA%\\RVP"
+	end
+	local state = os.getenv("XDG_STATE_HOME")
+	if state == nil or state == "" then
+		state = (os.getenv("HOME") or "") .. "/.local/state"
+	end
+	return state .. "/rvp"
+end
+
+local function config_folder()
+	if OS_WINDOWS then
+		return "%APPDATA%\\RVP"
+	end
+	local config = os.getenv("XDG_CONFIG_HOME")
+	if config == nil or config == "" then
+		config = (os.getenv("HOME") or "") .. "/.config"
+	end
+	return config .. "/rvp"
+end
+
 local function token()
 	local own = settings.token
 	if own ~= nil and own ~= "" then
 		return own
 	end
-	local path = "%APPDATA%\\RVP\\remote-token"
+	local path = state_folder() .. (OS_WINDOWS and "\\" or "/") .. "remote-token"
 	if fs.exists(path) then
 		return (string.gsub(fs.read(path), "%s", ""))
 	end
@@ -140,7 +164,7 @@ local function tick()
 end
 
 events.detect = function ()
-	return fs.exists("%APPDATA%\\RVP")
+	return fs.exists(config_folder())
 end
 
 events.focus = function ()

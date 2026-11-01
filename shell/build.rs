@@ -167,4 +167,9 @@ fn main() {
     if let Ok(dir) = std::env::var("MPV_LIB_DIR") {
         println!("cargo::rustc-link-search=native={dir}");
     }
+    // Linux's native video window changes its X11 event mask
+    // (cpp/video_window.cpp): libxcb, which Qt's X11 platform loads too.
+    if std::env::var("CARGO_CFG_TARGET_OS").as_deref() == Ok("linux") {
+        println!("cargo::rustc-link-lib=xcb");
+    }
 }

@@ -1784,6 +1784,10 @@ in %2 seconds</source>
             <translation>Окно Vulkan (gpu-next mpv, вывод HDR, сглаживание NVIDIA Optical Flow)</translation>
         </message>
         <message>
+            <source>The Vulkan window is an X11 window: on a Wayland desktop RVP then starts through XWayland.</source>
+            <translation>Окно Vulkan — это окно X11: на рабочем столе Wayland RVP тогда запускается через XWayland.</translation>
+        </message>
+        <message>
             <source>Send HDR video to an HDR display as HDR (Direct3D 11)</source>
             <translation>Выводить HDR-видео на HDR-экран как HDR (Direct3D 11)</translation>
         </message>
@@ -4510,6 +4514,14 @@ in %2 seconds</source>
         <message>
             <source>Remotes on a phone reach RVP through a program on this computer, such as Unified Remote's server: give its RVP remote the port and the token. RVP's remote for Unified Remote is in the “remote” folder beside rvp.exe; the installer copies it into Unified Remote when that is installed. Renew makes a new token: remotes with the old one are refused.</source>
             <translation>Пульты на телефоне обращаются к RVP через программу на этом компьютере, например через сервер Unified Remote: укажите в его пульте RVP порт и токен. Пульт RVP для Unified Remote лежит в папке «remote» рядом с rvp.exe; установщик копирует его в Unified Remote, если тот установлен. «Заменить» создаёт новый токен: пульты со старым токеном получают отказ.</translation>
+        </message>
+        <message>
+            <source>Remotes on a phone reach RVP through a program on this computer, such as Unified Remote's server: give its RVP remote the port and the token. Add to Unified Remote copies RVP's remote into the server's custom remotes. Renew makes a new token: remotes with the old one are refused.</source>
+            <translation>Пульты на телефоне обращаются к RVP через программу на этом компьютере, например через сервер Unified Remote: укажите в его пульте RVP порт и токен. «Добавить в Unified Remote» копирует пульт RVP в собственные пульты сервера. «Заменить» создаёт новый токен: пульты со старым токеном получают отказ.</translation>
+        </message>
+        <message>
+            <source>Add to Unified Remote</source>
+            <translation>Добавить в Unified Remote</translation>
         </message>
         <message>
             <source>Restart RVP to apply it.</source>

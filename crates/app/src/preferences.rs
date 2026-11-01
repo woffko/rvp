@@ -660,12 +660,12 @@ impl App {
                 "deinterlacer": crate::render::DEINTERLACERS,
                 "field-order": crate::render::FIELD_ORDERS,
                 "tone-mapping": crate::render::TONE_MAPPINGS,
-                // Direct3D 11 is Windows' only.
+                // Direct3D 11 is Windows' only; Linux has OpenGL and Vulkan.
                 "super-resolution": crate::render::SUPER_RESOLUTIONS,
                 "renderer": if cfg!(windows) {
-                    crate::render::RENDERERS
+                    crate::render::RENDERERS.to_vec()
                 } else {
-                    &crate::render::RENDERERS[..1]
+                    vec![crate::render::RENDERERS[0], crate::render::RENDERERS[2]]
                 },
                 "hardware-codecs": crate::decoders::HARDWARE_CODECS
                     .iter()

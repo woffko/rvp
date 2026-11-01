@@ -768,6 +768,8 @@ pub fn preload_skin() -> Settings {
         crate::ffi::bridge::rvp_set_env("QT_ENABLE_HIGHDPI_SCALING", "0");
     }
     let source = skin_source(&cli, &settings);
+    #[cfg(target_os = "linux")]
+    prefer_x11(&settings, &source);
     let thread_source = source.clone();
     let spawned = std::thread::Builder::new()
         .name("rvp-skin".to_owned())
@@ -776,6 +778,26 @@ pub fn preload_skin() -> Settings {
         *slot = Some((source, handle));
     }
     settings
+}
+
+/// What Wayland lets no program do: a skin with windows of its own (a
+/// classic Winamp skin, a VLC theme of more than one window, M9) docks
+/// them to the main window and moves them with it, and the Vulkan
+/// renderer draws in a child window of RVP's. On a Wayland desktop with
+/// XWayland, RVP then runs as an X11 program (`QT_QPA_PLATFORM=xcb`, set
+/// before Qt or any thread starts), unless the user chose a platform.
+#[cfg(target_os = "linux")]
+fn prefer_x11(settings: &Settings, source: &SkinSource) {
+    let set = |name: &str| std::env::var_os(name).is_some_and(|value| !value.is_empty());
+    if !set("WAYLAND_DISPLAY") || !set("DISPLAY") || set("QT_QPA_PLATFORM") {
+        return;
+    }
+    let windows = matches!(source, SkinSource::File(path) if rvp_skin::winamp::is_classic(path)
+        || (rvp_skin::vlc::is_vlc(path)
+            && rvp_skin::vlc::Theme::open(path).is_ok_and(|theme| theme.windows.len() > 1)));
+    if windows || settings.render.renderer.native_window() {
+        crate::ffi::bridge::rvp_set_env("QT_QPA_PLATFORM", "xcb");
+    }
 }
 
 fn load_skin(source: &SkinSource) -> Result<&'static Skin, String> {

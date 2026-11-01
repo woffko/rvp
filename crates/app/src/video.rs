@@ -854,9 +854,16 @@ impl App {
             && let Some(script) = &vs.script
         {
             let wrapper = self.state_dir().join("vapoursynth").join("rvp-script.vpy");
+            // PotPlayer's script wants MVTools: RVP's own runtime's too.
+            let mut plugins = vs.plugins.clone();
+            if let Some(plugin) = &self.smoothing.runtime.mvtools_plugin
+                && !plugins.contains(plugin)
+            {
+                plugins.push(plugin.clone());
+            }
             crate::storage::write_atomic(
                 &wrapper,
-                script_wrapper(script, &vs.plugins, &vs.avs_plugins).as_bytes(),
+                script_wrapper(script, &plugins, &vs.avs_plugins).as_bytes(),
             )
             .map_err(|error| format!("{}: {error}", wrapper.display()))?;
         }

@@ -1,12 +1,16 @@
 // Text to speech for M14's Accessibility page: Windows' speech (SAPI 5)
 // reads RVP's notices, text subtitles and tooltips aloud with the chosen
 // voice, output, rate and volume. Each new text replaces the one being
-// read. Elsewhere there are no voices (Linux's speech is goal S's).
+// read. On Linux speech-dispatcher's spd-say reads them (its voices; it
+// has no choice of output: the voice server plays on the desktop's sound),
+// started without waiting, a new text cancelling the one being read.
 
 #include "shell.h"
 
 #include <QtCore/QJsonArray>
 #include <QtCore/QJsonDocument>
+#include <QtCore/QProcess>
+#include <QtCore/QStringList>
 
 #ifdef Q_OS_WIN
 #include <windows.h>
@@ -77,12 +81,37 @@ void choose(const wchar_t *category, const QString &wanted, Use use)
 }
 #endif
 
+#ifdef Q_OS_LINUX
+// spd-say -L's voices: a header line, then NAME LANGUAGE VARIANT.
+QString linuxVoices()
+{
+    QProcess list;
+    list.start(QStringLiteral("spd-say"), {QStringLiteral("-L")});
+    QJsonArray names;
+    if (list.waitForFinished(3000) && list.exitStatus() == QProcess::NormalExit) {
+        const QStringList lines = QString::fromUtf8(list.readAllStandardOutput()).split(u'\n');
+        for (const QString &line : lines) {
+            const QString name = line.section(u' ', 0, 0, QString::SectionSkipEmpty);
+            if (!name.isEmpty() && name != QStringLiteral("NAME") && !names.contains(name))
+                names.append(name);
+        }
+    } else {
+        list.kill();
+        list.waitForFinished(500);
+    }
+    return QString::fromUtf8(QJsonDocument(names).toJson(QJsonDocument::Compact));
+}
+#endif
+
 } // namespace
 
 rust::String rvp_tts_voices()
 {
 #ifdef Q_OS_WIN
     const QByteArray json = namesJson(SPCAT_VOICES).toUtf8();
+    return rust::String(json.constData(), static_cast<std::size_t>(json.size()));
+#elif defined(Q_OS_LINUX)
+    const QByteArray json = linuxVoices().toUtf8();
     return rust::String(json.constData(), static_cast<std::size_t>(json.size()));
 #else
     return rust::String("[]");
@@ -115,6 +144,19 @@ bool rvp_tts_speak(rust::Str text, rust::Str voiceName, rust::Str output, std::i
     speaker->SetVolume(static_cast<USHORT>(volume));
     const std::wstring wide = qt(text).toStdWString();
     return SUCCEEDED(speaker->Speak(wide.c_str(), SPF_ASYNC | SPF_PURGEBEFORESPEAK | SPF_IS_NOT_XML, nullptr));
+#elif defined(Q_OS_LINUX)
+    (void)output;
+    const auto qt = [](rust::Str value) {
+        return QString::fromUtf8(value.data(), static_cast<qsizetype>(value.size()));
+    };
+    // SAPI's rate (-10 to 10) and volume (0 to 100) in spd-say's -100 to 100.
+    QStringList arguments{QStringLiteral("-C"), QStringLiteral("-r"), QString::number(rate * 10),
+                          QStringLiteral("-i"), QString::number(volume * 2 - 100)};
+    const QString name = qt(voiceName);
+    if (!name.isEmpty())
+        arguments << QStringLiteral("-y") << name;
+    arguments << QStringLiteral("--") << qt(text);
+    return QProcess::startDetached(QStringLiteral("spd-say"), arguments);
 #else
     (void)text;
     (void)voiceName;

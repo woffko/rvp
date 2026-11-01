@@ -2,8 +2,11 @@
 //! after its whole chain and its volume, captured from Windows' audio
 //! engine for RVP's own process only (process loopback, Windows 10 build
 //! 20348 or later) and written as a 32-bit float stereo WAV at 48 kHz.
-//! Windows converts RVP's stream to that format. Linux records RVP's
-//! PipeWire stream in goal S.
+//! Windows converts RVP's stream to that format. On Linux PulseAudio's
+//! `parec` (which PipeWire's pulse server answers too) records the monitor
+//! of RVP's own playback stream (`rvp_platform::pulse`), found by RVP's
+//! process ID and found again when mpv opens a new stream; while RVP plays
+//! nothing, nothing is written, as with Windows' loopback.
 //!
 //! A thread of its own captures; the window's thread only starts and stops
 //! it.
@@ -91,15 +94,11 @@ impl Drop for Recorder {
 }
 
 /// A WAV file written as it grows; the sizes go in at the end.
-// Only Windows captures yet (Linux records PipeWire's stream in goal S);
-// the tests use it everywhere.
-#[cfg_attr(not(windows), allow(dead_code))]
 struct WavWriter {
     file: std::io::BufWriter<std::fs::File>,
     frames: u64,
 }
 
-#[cfg_attr(not(windows), allow(dead_code))]
 impl WavWriter {
     fn create(path: &Path) -> std::io::Result<Self> {
         use std::io::Write as _;
@@ -128,6 +127,8 @@ impl WavWriter {
         Ok(())
     }
 
+    // Windows' loopback flags silent packets; Linux's stream has none.
+    #[cfg_attr(not(windows), allow(dead_code))]
     fn silence(&mut self, frames: u32) -> std::io::Result<()> {
         use std::io::Write as _;
         let zeros = vec![0u8; frames as usize * usize::from(CHANNELS) * 4];
@@ -149,15 +150,87 @@ impl WavWriter {
     }
 }
 
-#[cfg(not(windows))]
+#[cfg(target_os = "linux")]
 fn capture(
-    _path: &Path,
-    _stop: &AtomicBool,
+    path: &Path,
+    stop: &AtomicBool,
     started: &std::sync::mpsc::Sender<Result<(), String>>,
 ) -> Result<u64, String> {
-    let error = "Audio recording: on Windows for now".to_owned();
-    drop(started.send(Err(error.clone())));
-    Err(error)
+    use rvp_platform::pulse;
+    use std::io::Read as _;
+    use std::sync::mpsc::{self, RecvTimeoutError};
+    use std::time::Duration;
+
+    let pid = std::process::id();
+    // Before the start counts: the file, and a sound server that answers.
+    let opened = WavWriter::create(path)
+        .map_err(|error| format!("Audio recording: {error}"))
+        .and_then(|wav| pulse::stream_of(pid).map(|_| wav));
+    let mut wav = match opened {
+        Ok(wav) => wav,
+        Err(error) => {
+            drop(std::fs::remove_file(path));
+            drop(started.send(Err(error.clone())));
+            return Err(error);
+        }
+    };
+    drop(started.send(Ok(())));
+    let frame = usize::from(pulse::CHANNELS) * 4;
+    let mut pending: Vec<u8> = Vec::new();
+    let mut failure = None;
+    while !stop.load(Ordering::Relaxed) {
+        let Some(index) = pulse::stream_of(pid).ok().flatten() else {
+            std::thread::sleep(Duration::from_millis(500));
+            continue;
+        };
+        let mut child = match pulse::record_stream(index) {
+            Ok(child) => child,
+            Err(error) => {
+                failure = Some(error);
+                break;
+            }
+        };
+        let Some(mut output) = child.stdout.take() else {
+            drop(child.kill());
+            drop(child.wait());
+            break;
+        };
+        let (sender, chunks) = mpsc::channel::<Vec<u8>>();
+        let reader = std::thread::spawn(move || {
+            let mut buffer = vec![0u8; 16 * 1024];
+            while let Ok(read @ 1..) = output.read(&mut buffer) {
+                if sender.send(buffer[..read].to_vec()).is_err() {
+                    break;
+                }
+            }
+        });
+        // Until the stream ends (mpv opened another) or the stop.
+        while !stop.load(Ordering::Relaxed) {
+            match chunks.recv_timeout(Duration::from_millis(100)) {
+                Ok(chunk) => {
+                    pending.extend_from_slice(&chunk);
+                    let whole = pending.len() / frame * frame;
+                    if let Err(error) = wav.write_bytes(&pending[..whole]) {
+                        failure = Some(format!("Audio recording: {error}"));
+                        break;
+                    }
+                    pending.drain(..whole);
+                }
+                Err(RecvTimeoutError::Timeout) => {}
+                Err(RecvTimeoutError::Disconnected) => break,
+            }
+        }
+        drop(child.kill());
+        drop(child.wait());
+        drop(reader.join());
+        if failure.is_some() {
+            break;
+        }
+    }
+    let frames = wav
+        .finish()
+        .map_err(|error| format!("Audio recording: {error}"))?;
+    failure.map_or(Ok(frames), Err)
 }
 
 #[cfg(windows)]

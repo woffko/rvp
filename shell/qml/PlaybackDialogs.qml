@@ -488,7 +488,7 @@ Item {
                 model: holder.data.devices || []
                 delegate: RadioButton {
                     required property var modelData
-                    text: modelData.name
+                    text: modelData.label ? modelData.label + " (" + modelData.name + ")" : modelData.name
                     checked: deviceField.text === modelData.name
                     onToggled: deviceField.text = modelData.name
                 }

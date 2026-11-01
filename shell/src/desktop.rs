@@ -2,7 +2,10 @@
 //! (`rvp_platform::Desktop`), the System Media Transport Controls on
 //! Windows (`crate::media_controls`). Both show `App::media_state` and send
 //! their commands to the window's thread (`Player::media_command`). Windows'
-//! counterpart of the idle inhibit is `crate::awake`.
+//! counterpart of the idle inhibit is `crate::awake`. On Linux the desktop
+//! also shows the taskbar's progress (the launcher API; Windows' is
+//! `cpp/taskbar.cpp`) and reports the screen lock, as Windows' session
+//! notifications do (`Player::window_attention`).
 
 use cxx_qt::CxxQtThread;
 use rvp_app::App;
@@ -35,6 +38,7 @@ impl Integration {
         #[cfg(target_os = "linux")]
         {
             let _ = window;
+            let locks = thread.clone();
             let desktop = rvp_platform::Desktop::start(
                 rvp_platform::Options {
                     desktop_entry: "rvp".to_owned(),
@@ -43,6 +47,10 @@ impl Integration {
                 move |command| {
                     // Fails only once the window is gone.
                     let _ = thread.queue(move |player| player.media_command(command));
+                },
+                move |locked| {
+                    // Kind 2: the screen lock (Windows' session notification).
+                    let _ = locks.queue(move |player| player.window_attention(2, locked));
                 },
             )?;
             Ok(Self {
@@ -64,6 +72,18 @@ impl Integration {
             let _ = (thread, window);
             Err("no media controls on this system".to_owned())
         }
+    }
+
+    /// The taskbar's progress (Linux's launcher; Windows' is the taskbar
+    /// button's): `state` 0 nothing loaded, 1 playing, 2 paused, `progress`
+    /// below 0 when unknown.
+    // Windows' taskbar is the shell's own (`cpp/taskbar.cpp`).
+    #[cfg_attr(not(target_os = "linux"), allow(clippy::unused_self))]
+    pub(crate) fn progress(&self, state: i32, progress: f64) {
+        #[cfg(target_os = "linux")]
+        self.desktop.progress(state, progress);
+        #[cfg(not(target_os = "linux"))]
+        let _ = (state, progress);
     }
 
     /// Shows what changed after a drain. On Linux it also reports seeks

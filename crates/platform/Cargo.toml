@@ -1,6 +1,6 @@
 [package]
 name = "rvp-platform"
-description = "Desktop integration on Linux: MPRIS and idle inhibit over D-Bus (milestone M8)."
+description = "Desktop integration on Linux: MPRIS, idle inhibit, the trash, power and the system's sound (milestones M8 and M17)."
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -11,6 +11,8 @@ publish.workspace = true
 [target.'cfg(target_os = "linux")'.dependencies]
 rvp-app = { path = "../app" }
 zbus.workspace = true
+futures-core.workspace = true
+zruntime.workspace = true
 
 [lints]
 workspace = true

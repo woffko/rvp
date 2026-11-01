@@ -198,6 +198,35 @@ impl qobject::Player {
             .map_or_else(QString::default, |token| QString::from(&token))
     }
 
+    /// Linux: copies RVP's remote into Unified Remote Server's custom
+    /// remotes and asks the server to read them again (the Remote Control
+    /// page's button; Windows' installer does this). Returns what to show.
+    // A QML invokable, so a method even though it touches files only.
+    #[allow(clippy::unused_self)]
+    pub(crate) fn add_unified_remote(&self) -> QString {
+        use rvp_app::control::unified;
+        let Some(source) = std::env::current_exe()
+            .ok()
+            .and_then(|exe| unified::remote_source(&exe))
+        else {
+            return QString::from("RVP's remote folder is missing beside RVP.");
+        };
+        let Some(home) = std::env::var_os("HOME") else {
+            return QString::from("The home folder is unknown.");
+        };
+        let text = match unified::install(&source, &std::path::Path::new(&home).join(".urserver")) {
+            Ok(target) if unified::reload() => {
+                format!("RVP's remote is in Unified Remote ({}).", target.display())
+            }
+            Ok(target) => format!(
+                "RVP's remote is in {}; Unified Remote Server shows it when it starts again.",
+                target.display()
+            ),
+            Err(error) => error,
+        };
+        QString::from(&text)
+    }
+
     /// A new token; the API restarts with it, so the old one stops working.
     pub(crate) fn renew_control_token(mut self: Pin<&mut Self>) -> QString {
         let Some(core) = self.as_mut().core_mut() else {

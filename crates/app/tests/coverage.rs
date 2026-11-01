@@ -475,3 +475,104 @@ fn the_rvp_default_report_is_current() {
         &skin_report("RVP Default", DEFAULT_SKIN_INTRO, &commands),
     );
 }
+
+/// Words that would say a Linux part is merely not done.
+const NOT_DONE: [&str; 6] = [
+    "not in RVP yet",
+    "goal S",
+    "for now",
+    "later",
+    "planned",
+    "TODO",
+];
+
+#[test]
+fn the_linux_report_is_current_and_names_what_exists() {
+    use rvp_app::coverage::linux::{ITEMS, Key, Linux};
+    let settings = serde_json::to_value(rvp_app::Settings::default()).expect("json");
+    for item in ITEMS {
+        match item.key {
+            Key::Actions(names) => {
+                for name in names {
+                    assert!(
+                        Action::from_name(name).is_some() || ListAction::from_name(name).is_some(),
+                        "{}: no action {name}",
+                        item.what
+                    );
+                }
+            }
+            Key::Settings(places) => {
+                for place in places {
+                    let mut value = &settings;
+                    for part in place.split('.') {
+                        value = value
+                            .get(part)
+                            .unwrap_or_else(|| panic!("{}: {place} is not a setting", item.what));
+                    }
+                }
+            }
+            Key::Part => {}
+        }
+        let (Linux::Same(text) | Linux::Partly(text) | Linux::Not(text)) = item.linux;
+        for words in NOT_DONE {
+            assert!(
+                !text.contains(words),
+                "{}: {text:?} says {words:?}",
+                item.what
+            );
+        }
+    }
+    check("linux.md", &rvp_app::coverage::linux::report());
+}
+
+/// No code path of RVP's waits for Linux any more: the texts and comments
+/// that said a part comes with goal S are gone (M17).
+#[test]
+fn no_part_waits_for_linux() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let mut pending = Vec::new();
+    let mut folders = vec![
+        root.join("shell/src"),
+        root.join("shell/cpp"),
+        root.join("shell/qml"),
+        root.join("crates"),
+    ];
+    while let Some(folder) = folders.pop() {
+        for entry in std::fs::read_dir(&folder)
+            .expect("a source folder")
+            .flatten()
+        {
+            let path = entry.path();
+            if path.is_dir() {
+                if path.file_name().is_none_or(|name| name != "target") {
+                    folders.push(path);
+                }
+                continue;
+            }
+            let source = path.extension().is_some_and(|extension| {
+                ["rs", "cpp", "h", "qml"]
+                    .iter()
+                    .any(|kind| extension == *kind)
+            });
+            if !source || path.ends_with("tests/coverage.rs") {
+                continue;
+            }
+            let text = std::fs::read_to_string(&path).unwrap_or_default();
+            for words in [
+                "on Windows for now",
+                "goal S's",
+                "comes with goal S",
+                "come with goal S",
+                "Linux: goal S",
+            ] {
+                if text.contains(words) {
+                    pending.push(format!("{}: {words}", path.display()));
+                }
+            }
+        }
+    }
+    assert!(
+        pending.is_empty(),
+        "parts still wait for goal S: {pending:#?}"
+    );
+}

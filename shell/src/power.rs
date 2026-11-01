@@ -1,24 +1,22 @@
 //! Shutting the computer down, sleeping or hibernating (M11's "When
 //! Playback Finished" and the shutdown timer). Tests never get here: they
 //! use the dry-run hook (`player::m11::power_dry_run`), which `--selftest`
-//! always turns on. Linux's power actions come with goal S.
+//! always turns on. Linux asks systemd-logind (`rvp_platform::power`).
 
 use rvp_app::PowerAction;
 
 /// Carries out the action now.
 ///
 /// # Errors
-/// Fails when the system refuses it, and on systems RVP does not power
-/// off yet.
+/// Fails when the system refuses it.
 pub(crate) fn perform(action: PowerAction) -> Result<(), String> {
     #[cfg(windows)]
     {
         windows_perform(action).map_err(|error| error.to_string())
     }
-    #[cfg(not(windows))]
+    #[cfg(target_os = "linux")]
     {
-        let _ = action;
-        Err("power actions: on Windows for now".to_owned())
+        rvp_platform::power::perform(action)
     }
 }
 

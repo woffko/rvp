@@ -1,14 +1,15 @@
 //! The Recycle Bin (M11's played files and the playlist's Delete files),
 //! after the user confirmed in RVP's own dialog: Windows' shell file
-//! operation with undo. Linux's trash comes with goal S.
+//! operation with undo; on Linux the freedesktop.org trash
+//! (`rvp_platform::trash`).
 
 use std::path::PathBuf;
 
 /// Sends files to the Recycle Bin.
 ///
 /// # Errors
-/// Fails when the shell refuses (an open file, a missing one), and on
-/// systems RVP has no Recycle Bin for yet.
+/// Fails when the shell refuses (an open file, a missing one), or the
+/// trash cannot take a file.
 pub(crate) fn send(files: &[PathBuf]) -> Result<(), String> {
     if files.is_empty() {
         return Ok(());
@@ -17,9 +18,19 @@ pub(crate) fn send(files: &[PathBuf]) -> Result<(), String> {
     {
         windows_send(files)
     }
-    #[cfg(not(windows))]
+    #[cfg(target_os = "linux")]
     {
-        Err("the Recycle Bin: on Windows for now".to_owned())
+        let trash = rvp_platform::trash::Trash::for_user()?;
+        // The local time as the trash wants it: `yyyy-MM-ddTHH:mm:ss`.
+        let clock = crate::ffi::bridge::rvp_local_time();
+        let deleted = match clock.split_once(' ') {
+            Some((day, time)) => format!("{day}T{}", time.replace('.', ":")),
+            None => clock,
+        };
+        for file in files {
+            trash.send(file, &deleted)?;
+        }
+        Ok(())
     }
 }
 

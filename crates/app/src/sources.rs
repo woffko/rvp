@@ -6,9 +6,10 @@
 //!   playlist: `bd://mpls/N`) and an audio CD (`cdda://`), each with its
 //!   device in the address (`dvd://longest/D:/`), so an album entry plays
 //!   the same disc again; the discs' menus are M16's;
-//! * capture: the screen (FFmpeg's `gdigrab`, or `ddagrab` through lavfi)
-//!   and webcams and other devices (`dshow` on Windows), listed by the
-//!   shell from the system;
+//! * capture: the screen (FFmpeg's `gdigrab`, or `ddagrab` through lavfi;
+//!   on Linux `x11grab` in an X11 session) and webcams and other devices
+//!   (`dshow` on Windows, `v4l2` on Linux), listed by the shell from the
+//!   system;
 //! * addresses FFmpeg opens (HTTP, HTTPS, FTP, `WebDAV` as `dav://`), and
 //!   streaming sites through the user's yt-dlp ([`crate::ytdl`]);
 //! * the clipboard (file paths, `file://` URLs and other addresses, one a
@@ -194,6 +195,10 @@ pub enum Paste {
 pub struct CaptureDevice {
     /// The name FFmpeg opens it by.
     pub name: String,
+    /// The name shown beside it, where that is not the same (a `v4l2`
+    /// device's name for its `/dev/video` path).
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub label: String,
     pub audio: bool,
 }
 
@@ -465,6 +470,56 @@ pub fn screen_address(devices: &Devices) -> String {
     }
 }
 
+/// The screen on Linux: FFmpeg's X11 grabber in an X11 session. A Wayland
+/// session gives other programs the screen only through its portal as a
+/// PipeWire stream, which FFmpeg has no source for (and XWayland's screen
+/// shows only X11 programs' windows).
+///
+/// # Errors
+/// The reason, in a Wayland session or without a display.
+pub fn linux_screen_address(
+    session: Option<&str>,
+    display: Option<&str>,
+) -> Result<String, String> {
+    if session == Some("wayland") {
+        return Err("Screen capture: a Wayland desktop gives its screen only through its portal as a PipeWire stream, which FFmpeg cannot open; it works in an X11 session".to_owned());
+    }
+    match display.filter(|display| !display.is_empty()) {
+        Some(display) => Ok(format!("av://x11grab:{display}")),
+        None => Err("Screen capture: no X11 display".to_owned()),
+    }
+}
+
+/// Linux's capture devices from sysfs (`/sys/class/video4linux`): each
+/// device's first node (`index` 0; a webcam's second is its metadata), by
+/// its `/dev` path, in the order of their numbers.
+#[must_use]
+pub fn v4l2_devices(class: &Path) -> Vec<CaptureDevice> {
+    let mut nodes: Vec<(u32, String)> = std::fs::read_dir(class)
+        .into_iter()
+        .flatten()
+        .flatten()
+        .filter_map(|entry| {
+            let name = entry.file_name().to_string_lossy().into_owned();
+            let number = name.strip_prefix("video")?.parse().ok()?;
+            Some((number, name))
+        })
+        .collect();
+    nodes.sort_unstable();
+    let read = |node: &str, file: &str| {
+        std::fs::read_to_string(class.join(node).join(file)).map(|text| text.trim().to_owned())
+    };
+    nodes
+        .into_iter()
+        .filter(|(_, node)| read(node, "index").map_or(true, |index| index == "0"))
+        .map(|(_, node)| CaptureDevice {
+            label: read(&node, "name").unwrap_or_default(),
+            name: format!("/dev/{node}"),
+            audio: false,
+        })
+        .collect()
+}
+
 /// The address of a capture device: `dshow` on Windows, `v4l2` elsewhere.
 #[must_use]
 pub fn device_address(name: &str) -> String {
@@ -540,7 +595,16 @@ impl App {
                 if !self.protocol_available(engine, "av") {
                     return Some(self.cannot_open("Screen capture", "FFmpeg's devices"));
                 }
-                self.open_now(engine, &[screen_address(&devices)])
+                if cfg!(windows) {
+                    return self.open_now(engine, &[screen_address(&devices)]);
+                }
+                match linux_screen_address(
+                    std::env::var("XDG_SESSION_TYPE").ok().as_deref(),
+                    std::env::var("DISPLAY").ok().as_deref(),
+                ) {
+                    Ok(address) => self.open_now(engine, &[address]),
+                    Err(reason) => Some(UiRequest::Message(reason)),
+                }
             }
             Source::Device => {
                 if !devices.webcam.is_empty() {
@@ -993,6 +1057,40 @@ impl App {
 mod tests {
     use super::*;
 
+    #[test]
+    fn v4l2_lists_each_devices_first_node() {
+        let class = folder("v4l2", &[]);
+        for (node, name, index) in [
+            ("video10", "Capture card", Some("0")),
+            ("video0", "Integrated Camera: Integrated C", Some("0")),
+            ("video1", "Integrated Camera: Integrated C", Some("1")),
+            ("video2", "Old driver", None),
+        ] {
+            std::fs::create_dir_all(class.join(node)).expect("node");
+            std::fs::write(class.join(node).join("name"), format!("{name}\n")).expect("name");
+            if let Some(index) = index {
+                std::fs::write(class.join(node).join("index"), format!("{index}\n"))
+                    .expect("index");
+            }
+        }
+        std::fs::create_dir_all(class.join("v4l-subdev0")).expect("subdev");
+        let devices = v4l2_devices(&class);
+        let shown: Vec<(&str, &str)> = devices
+            .iter()
+            .map(|d| (d.name.as_str(), d.label.as_str()))
+            .collect();
+        assert_eq!(
+            shown,
+            [
+                ("/dev/video0", "Integrated Camera: Integrated C"),
+                ("/dev/video2", "Old driver"),
+                ("/dev/video10", "Capture card"),
+            ]
+        );
+        assert!(v4l2_devices(&class.join("missing")).is_empty());
+        let _ = std::fs::remove_dir_all(&class);
+    }
+
     fn folder(name: &str, files: &[&str]) -> PathBuf {
         let dir = std::env::temp_dir().join(format!("rvp-sources-{name}-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
@@ -1141,5 +1239,11 @@ mod tests {
         );
         let camera = device_address("USB Camera");
         assert!(camera.ends_with("USB Camera"), "{camera}");
+        assert_eq!(
+            linux_screen_address(Some("x11"), Some(":0")).as_deref(),
+            Ok("av://x11grab::0")
+        );
+        assert!(linux_screen_address(Some("wayland"), Some(":0")).is_err());
+        assert!(linux_screen_address(None, None).is_err());
     }
 }

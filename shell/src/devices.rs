@@ -1,6 +1,7 @@
 //! Webcams and other capture devices for Open Webcam/Other Device (M11):
 //! DirectShow's video input category on Windows, the names FFmpeg's
-//! `dshow` opens them by. Linux's `v4l2` devices come with goal S.
+//! `dshow` opens them by; on Linux the `v4l2` devices sysfs lists, by
+//! their `/dev` paths (`rvp_app::sources::v4l2_devices`).
 
 use rvp_app::sources::CaptureDevice;
 
@@ -13,7 +14,7 @@ pub(crate) fn list() -> Vec<CaptureDevice> {
     }
     #[cfg(not(windows))]
     {
-        Vec::new()
+        rvp_app::sources::v4l2_devices(std::path::Path::new("/sys/class/video4linux"))
     }
 }
 
@@ -75,6 +76,7 @@ fn windows_list() -> windows::core::Result<Vec<CaptureDevice>> {
                     if !text.is_empty() {
                         devices.push(CaptureDevice {
                             name: text,
+                            label: String::new(),
                             audio: false,
                         });
                     }

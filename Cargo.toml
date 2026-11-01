@@ -41,9 +41,20 @@ encoding_rs = "=0.8.35"
 # bytes, which std does not offer; already in the tree through tempfile and
 # jobserver; MIT or Apache-2.0.
 getrandom = "=0.4.3"
-# D-Bus for MPRIS and idle inhibit on Linux (M8, crates/platform): pure Rust,
-# so the packages need no libdbus; MIT.
-zbus = "=5.19.0"
+# D-Bus for MPRIS, idle inhibit, the launcher's progress and the screen lock
+# on Linux (M8, M17, crates/platform): pure Rust, so the packages need no
+# libdbus; MIT. zbus 6 (goal S) merged zvariant and zbus_names, whose 5.x
+# crates were flagged unmaintained, and runs its connections on its own
+# small runtime (zruntime), driven by a helper thread when no thread waits
+# in `zbus::block_on`. Only the runtime, proxies and served interfaces.
+zbus = { version = "=6.2.0", default-features = false, features = ["default-rt", "proxy", "service"] }
+# Polls zbus's message streams (the screen lock's signals) without
+# futures-util; already in the tree through zbus; MIT or Apache-2.0.
+futures-core = { version = "=0.3.34", default-features = false }
+# zbus 6's runtime, for its async channel: the desktop thread waits on its
+# messages and serves D-Bus at once (crates/platform); already in the tree
+# through zbus; MIT.
+zruntime = { version = "=0.2.2", default-features = false, features = ["mpmc"] }
 # Fatal signal handlers for the crash log on Linux (M8, shell/src/crash.rs);
 # already in the tree.
 libc = "=0.2.190"

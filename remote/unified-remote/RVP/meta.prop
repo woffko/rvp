@@ -2,5 +2,5 @@ meta.id: RVP.Player
 meta.name: RVP
 meta.author: RVP
 meta.description: Controls RVP, the media player, through its control API on this computer.
-meta.platform: windows
+meta.platform: windows linux
 meta.tags.category: media

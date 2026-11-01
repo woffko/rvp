@@ -12,9 +12,22 @@
 //! Windows' media controls need the window's handle and COM calls, which
 //! RVP keeps in the shell (`shell/src/media_controls.rs`, AGENTS.md's
 //! `unsafe` rule).
+//!
+//! Linux's counterparts of the shell's Windows calls (goal S): the trash
+//! ([`trash`]), power actions through logind ([`power`]), the system's
+//! volume and RVP's own stream through PulseAudio's tools ([`pulse`]), and
+//! the desktop's recent files ([`recent`]).
 
 #[cfg(target_os = "linux")]
 mod linux;
+#[cfg(target_os = "linux")]
+pub mod power;
+#[cfg(target_os = "linux")]
+pub mod pulse;
+#[cfg(target_os = "linux")]
+pub mod recent;
+#[cfg(target_os = "linux")]
+pub mod trash;
 
 #[cfg(target_os = "linux")]
 pub use linux::{Desktop, Options};

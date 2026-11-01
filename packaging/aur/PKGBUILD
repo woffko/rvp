@@ -11,6 +11,12 @@ arch=('x86_64')
 url='https://github.com/woffko/rvp'
 license=('GPL-3.0-or-later')
 depends=('mpv' 'qt6-base' 'qt6-declarative' 'qt6-wayland' 'hicolor-icon-theme')
+optdepends=('libpulse: the master volume and audio recording (pactl, parec)'
+            'speech-dispatcher: text to speech'
+            'libdvdnav: DVD menus'
+            'libbluray: Blu-ray menus'
+            'desktop-file-utils: the Association page updates the handler cache'
+            'whisper.cpp: subtitles from audio')
 makedepends=('rustup' 'clang' 'python')
 options=('!lto')
 source=("rvp-$pkgver.tar.gz")
@@ -46,4 +52,13 @@ package() {
     done
     install -Dm644 "$srcdir/look/icons/rvp.svg" "$pkgdir/usr/share/icons/hicolor/scalable/apps/rvp.svg"
     install -Dm644 LICENSE "$pkgdir/usr/share/licenses/rvp/LICENSE"
+    # M15's Unified Remote remote: the Remote Control page copies it into the
+    # server's custom remotes (/usr/bin/../share/rvp).
+    local remote=remote/unified-remote/RVP file
+    for file in "$remote"/*; do
+        install -Dm644 "$file" "$pkgdir/usr/share/rvp/$remote/${file##*/}"
+    done
+    for file in icon.png icon_hires.png; do
+        install -Dm644 "$srcdir/look/$remote/$file" "$pkgdir/usr/share/rvp/$remote/$file"
+    done
 }

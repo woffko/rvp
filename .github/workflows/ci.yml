@@ -102,7 +102,7 @@ jobs:
       - name: The kit's versions
         id: kit
         run: |
-          echo "key=$(grep -E '^(QT_VERSION|MPV_COMMIT|MPV_BUILD)=' tools/linux-kit/kit.sh | tr '\n' '-')" >> "$GITHUB_OUTPUT"
+          echo "key=$(grep -E '^(QT_VERSION|MPV_COMMIT|MPV_BUILD|FFMPEG_COMMIT|LIBPLACEBO_COMMIT)=' tools/linux-kit/kit.sh | tr '\n' '-')" >> "$GITHUB_OUTPUT"
       - name: Qt and libmpv cache
         uses: actions/cache@v4
         with:

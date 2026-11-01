@@ -1580,8 +1580,10 @@ Window {
     //                         --mpv-log=FILE and --mpv-options=log-file=FILE
     //                         (mpv's errors say whether each compiled)
     //   --selftest=direct3d11 D4's renderer (render.renderer "direct3d11"
-    //                         in the settings, Windows): mpv's native video
-    //                         window, its place, holes and fullscreen
+    //                         in the settings, Windows; =vulkan with
+    //                         "vulkan", also Linux's X11 window): mpv's
+    //                         native video window, its place, holes and
+    //                         fullscreen
     //   --selftest=gpu        the GPU power budget (SelfTestGpu.qml, D17):
     //                         readings it gives make RVP take the lighter
     //                         scalers and the shaders off, give them back
@@ -1763,7 +1765,7 @@ Window {
             return m11Tick()
         if (selftest.mode === "m12")
             return m12Tick()
-        if (selftest.mode === "shaders" || selftest.mode === "direct3d11")
+        if (selftest.mode === "shaders" || selftest.mode === "direct3d11" || selftest.mode === "vulkan")
             return m12Tick(selftest.mode)
         if (selftest.mode === "gpu")
             return gpuTick()
@@ -1943,7 +1945,7 @@ Window {
         }
         if (kind === "shaders")
             m12Loader.item.shaderTick()
-        else if (kind === "direct3d11")
+        else if (kind === "direct3d11" || kind === "vulkan")
             m12Loader.item.rendererTick()
         else
             m12Loader.item.tick()
@@ -3059,9 +3061,10 @@ Window {
                 player.start_recording(t.outDir + "/recording.wav")
             break
         case 332: {
-            // Windows records RVP's own sound (process loopback); Linux
-            // with goal S, and a system without audio refuses: its refusal
-            // is on the OSD, and the recorder never starts.
+            // Windows records RVP's own sound (process loopback), Linux its
+            // playback stream through parec; a system without a sound
+            // server refuses: its refusal is on the OSD, and the recorder
+            // never starts.
             if (s.recording === true) {
                 if (Date.now() - t.stepStarted > 2000) {
                     t.check("recording_starts", true, String(s.osd))
