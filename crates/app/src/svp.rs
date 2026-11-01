@@ -202,8 +202,12 @@ pub fn manager_running() -> Option<bool> {
     }
     #[cfg(windows)]
     {
+        use std::os::windows::process::CommandExt as _;
+        // CREATE_NO_WINDOW: without it each check (every file that starts
+        // in SVP mode) flashed a console window up over the player.
         let output = std::process::Command::new("tasklist")
             .args(["/FI", "IMAGENAME eq SVPManager.exe", "/NH"])
+            .creation_flags(0x0800_0000)
             .output()
             .ok()?;
         Some(String::from_utf8_lossy(&output.stdout).contains("SVPManager.exe"))
