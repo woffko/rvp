@@ -23,8 +23,8 @@ set -euo pipefail
 
 TAG=v1.9.5
 COMMIT=d1be6fde11ac6e0407606b4e42fe72d34add8037
-# ggml's Vulkan backend wants SPIRV-Headers' CMake package: the revision
-# the SDK's shaderc builds with.
+# ggml's Vulkan backend wants SPIRV-Headers' CMake package and includes
+# its headers by name: the revision the SDK's shaderc builds with.
 SPIRV_HEADERS_COMMIT=86f980c731e62ae4eaf383d320449d71687936bf
 SDK=${1:?usage: build-linux.sh SDK [WORK [OUT]]}
 WORK=${2:-$HOME/.cache/rvp-whisper}
@@ -50,7 +50,7 @@ BUILD=$WORK/whisper-build
 loader=$(ls /usr/lib/x86_64-linux-gnu/libvulkan.so 2> /dev/null || ls /usr/lib/libvulkan.so)
 cmake -Wno-dev -G Ninja -S "$SRC" -B "$BUILD" \
     -DCMAKE_BUILD_TYPE=Release \
-    -DCMAKE_PREFIX_PATH="$WORK/spirv-prefix" \
+    -DCMAKE_PREFIX_PATH="$WORK/spirv-prefix" -DCMAKE_CXX_FLAGS="-isystem $WORK/spirv-prefix/include" \
     -DBUILD_SHARED_LIBS=ON \
     -DGGML_NATIVE=OFF -DGGML_BACKEND_DL=ON -DGGML_CPU_ALL_VARIANTS=ON -DGGML_OPENMP=OFF \
     -DGGML_VULKAN=ON \

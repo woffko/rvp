@@ -21,7 +21,8 @@ owner=${2:?usage: attach-session.sh attach|detach SESSION_USER}
 me=$(id -un)
 uid=$(id -u "$owner")
 runtime=/run/user/$uid
-auth=$(sudo -n find "$runtime" -maxdepth 1 -name '.mutter-Xwaylandauth.*' | head -1)
+# (find cannot enter some of the session's folders, such as gvfs.)
+auth=$(sudo -n find "$runtime" -maxdepth 1 -name '.mutter-Xwaylandauth.*' 2> /dev/null | head -1 || true)
 
 case $action in
     attach)

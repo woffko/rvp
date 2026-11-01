@@ -9,12 +9,17 @@
 # library the package's files load resolves, and the functional self-test
 # passes for the installed copy and for the AppImage (extracted, as a
 # container has no FUSE) under Xvfb: software OpenGL, no sound, no session
-# bus; M11's self-test runs on the installed copy too. Arguments: the
-# folder with rvp_*_amd64.deb and RVP-*-x86_64.AppImage, and testdata/media
-# (fixture-60s.mkv, fixture-3s.mkv, fixture-chapters.mkv and .srt, dvd).
+# bus; M11's self-test runs on the installed copy too, and M16's with the
+# synthetic menu discs when a third argument names their folder (dvd/ and
+# bd/, from tools/test-clips/make-m16-dvd.sh and make-m16-bluray.py): the
+# disc libraries the package carries. Arguments: the folder with
+# rvp_*_amd64.deb and RVP-*-x86_64.AppImage, testdata/media
+# (fixture-60s.mkv, fixture-3s.mkv, fixture-chapters.mkv and .srt, dvd) and
+# optionally the discs' folder.
 set -u
 packages=$1
 fixtures=$2
+discs=${3:-}
 failures=0
 
 check() {
@@ -78,5 +83,9 @@ selftest m11 /usr/bin/rvp --selftest=m11 --out=/tmp/rvp/out --skin= --mpv-option
     "--dvd-folder=$fixtures/dvd" "--audio=$fixtures/fixture-3s.mkv" "--clip=$fixtures/fixture-60s.mkv" \
     /seek=0:00:03 "/title=M11 title" "$fixtures/fixture-chapters.mkv" "$fixtures/fixture-60s.mkv" \
     "$fixtures/fixture-3s.mkv"
+if [ -n "$discs" ]; then
+    selftest m16 /usr/bin/rvp --selftest=m16 --out=/tmp/rvp/out --mpv-options=ao=null,hwdec=no \
+        "--dvd-menus=$discs/dvd" "--bd-menus=$discs/bd"
+fi
 echo "failures=$failures"
 [ "$failures" -eq 0 ]

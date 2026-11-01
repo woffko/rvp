@@ -572,6 +572,47 @@ smoothing for users without SVP, after a study of the engines.
   `tests/vlc.rs` builds every layout of each theme in `RVP_VLC_SKINS`
   (the gallery's sample in `~/rvp-reference/s6/vlc/skins`).
 
+## Linux (M17)
+
+- Linux's counterparts of the shell's Windows calls live in
+  `crates/platform` (zbus 6: each thread that serves a connection stays in
+  one `zbus::block_on`; the desktop thread takes its messages from a
+  zruntime channel): the trash (`trash.rs`, the freedesktop.org
+  specification, a rename on the file's own filesystem), logind's power
+  actions (`power.rs`), PulseAudio's `pactl` and `parec` for the master
+  volume and recording RVP's own stream (`pulse.rs`, which PipeWire's
+  pulse server answers), the recent files (`recent.rs`), the Unity
+  launcher's progress and the screen saver's `ActiveChanged` (`linux.rs`).
+  No code may say a part waits for Linux: `tests/coverage.rs` fails "on
+  Windows for now" and its kind; `docs/coverage/linux.md` (from
+  `crates/app/src/coverage/linux.rs`) lists what differs and why.
+- Wayland lets no program place its windows or have child windows of
+  another's: a skin with windows of its own and the Vulkan renderer start
+  RVP through XWayland (`player::prefer_x11`, `QT_QPA_PLATFORM=xcb` before
+  Qt starts, unless the user chose a platform).
+- The Vulkan renderer on Linux is a native child QWindow (X11) that mpv's
+  `x11vk` draws into. `Qt::WindowTransparentForInput` keeps the pointer
+  for RVP's window under it, and also selects SubstructureRedirect, with
+  which Qt swallows mpv's map request: `video_window.cpp` clears that bit
+  (libxcb). The window stays mapped (outside the main window while no
+  video shows): mpv waits until its own window is mapped.
+- The kit's libmpv (`kit.sh mpv`) is built at the Windows build's commits
+  (mpv, FFmpeg's master, libplacebo) from an SDK the kit builds (Vulkan's
+  headers, glslang for FFmpeg's shaders, shaderc for libplacebo's, dav1d,
+  AviSynth+'s headers); the step fails a non-free FFmpeg, a missing part
+  and an undefined symbol (`ldd -r`). Bump `MPV_BUILD` with any change of
+  its options. On a machine whose network to GitHub stalls, clone through
+  the source cache (`RVP_KIT_SOURCES`, `tools/linux-kit/sources.sh`).
+- The Linux packages carry whisper.cpp's CPU and Vulkan engine
+  (`tools/whisper/build-linux.sh`, `bin/whisper/`) and RVP's own
+  VapourSynth runtime (`tools/vapoursynth/build-linux.sh`,
+  `bin/vapoursynth/`: VapourSynth R73 with VSScript patched to start the
+  relocatable Python beside it, never through `PYTHONHOME`, which would
+  reach the programs RVP starts). The runtime's compiled-in plugin folder
+  is the build's: RVP's scripts load MVTools and RIFE by their paths.
+- On the shared Ubuntu VM the kit runs as the kit's user in the owner's GNOME session
+  through `tools/linux-kit/attach-session.sh` (ACL entries it takes back).
+
 ## Playback, playlist and opening (M11)
 
 - The thumbnail core (`crates/engine/src/thumbnail.rs`) is a second

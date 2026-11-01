@@ -1653,7 +1653,7 @@ step_m9() {
     rm -rf "$out"
     : > "$log"
     # Classic and VLC skins dock windows of their own; on Wayland RVP runs
-    # them through XWayland when DISPLAY reaches it (prefer_x11_for).
+    # them through XWayland when DISPLAY reaches it (shell: prefer_x11).
     echo "session=${XDG_SESSION_TYPE:-none} wayland=${WAYLAND_DISPLAY:-none} display=${DISPLAY:-none} qpa=${QT_QPA_PLATFORM:-auto}" >> "$log"
     # mpv's own OSC (the kit's libmpv carries Lua and mpv's scripts).
     kit_run m9 osc --selftest=m9 --controller=osc "--out=$out/osc" --skin= --mpv-options=ao=null "$clip"

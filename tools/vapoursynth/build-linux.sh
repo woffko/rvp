@@ -68,6 +68,9 @@ mkdir -p "$OUT/vs-plugins" "$OUT/rife/models/$MODEL"
 tar -xzf "$(fetch "$PYTHON_URL" "$PYTHON" "$PYTHON_SHA256")" -C "$OUT"
 PY=$OUT/python/bin/python3
 "$PY" --version
+# The relocatable Python's pkg-config files name its build's prefix: they
+# name this one, so meson links VSScript with its libpython.
+sed -i "s|^prefix=.*|prefix=$OUT/python|" "$OUT"/python/lib/pkgconfig/python-3*.pc
 
 # Cython for the build only: in a virtual environment of its own.
 if [ ! -x "$WORK/build-venv/bin/cython" ]; then
@@ -92,12 +95,12 @@ SRC=$WORK/vapoursynth
 rm -rf "$SRC" "$WORK/vs-build"
 kit_clone https://github.com/vapoursynth/vapoursynth.git "$SRC" "$VS_TAG"
 git -C "$SRC" apply "$HERE/vsscript-own-python.patch"
-PKG_CONFIG_PATH=$ZIMG/lib/pkgconfig meson setup "$WORK/vs-build" "$SRC" --prefix="$OUT/python" --libdir=lib \
+PKG_CONFIG_PATH=$ZIMG/lib/pkgconfig:$OUT/python/lib/pkgconfig meson setup "$WORK/vs-build" "$SRC" --prefix="$OUT/python" --libdir=lib \
     --buildtype=release -Denable_vspipe=false "-Dpython3_bin=$PY" -Dplugindir="$OUT/vs-plugins"
 ninja -C "$WORK/vs-build" -j "$JOBS" install
 # The core and VSScript beside each other at the runtime's top, where RVP
 # looks for VSScript; the Python module finds the core there.
-mv "$OUT/python/lib/libvapoursynth.so" "$OUT/python/lib/libvapoursynth-script.so"* "$OUT/"
+mv "$OUT"/python/lib/libvapoursynth.so* "$OUT"/python/lib/libvapoursynth-script.so* "$OUT/"
 rm -rf "$OUT/python/include/vapoursynth" "$OUT/python/lib/pkgconfig/vapoursynth"*.pc
 module=$(find "$OUT/python/lib" -name 'vapoursynth*.so' -path '*site-packages*' | head -1)
 [ -n "$module" ]
@@ -125,13 +128,17 @@ gomp=$(ldconfig -p | sed -n 's/.*libgomp\.so\.1 (libc6,x86-64) => \(.*\)/\1/p' |
 cp -L "$gomp" "$OUT/rife/libgomp.so.1"
 patchelf --set-rpath "\$ORIGIN" "$OUT/rife/librife_linux_x86-64.so"
 
-# What a player does not need: the Python's own tests, its tools' caches
-# and headers, IDLE and Tk.
-rm -rf "$OUT"/python/lib/python3.12/test "$OUT"/python/lib/python3.12/idlelib \
-    "$OUT"/python/lib/python3.12/tkinter "$OUT"/python/lib/python3.12/turtledemo \
-    "$OUT"/python/lib/tcl* "$OUT"/python/lib/tk* "$OUT"/python/lib/itcl* "$OUT"/python/lib/thread* \
-    "$OUT"/python/share "$OUT"/python/include
+# What a player does not need: the Python's own tests, IDLE and Tk, pip
+# and its installer, its headers, static library and caches; the libraries
+# without their debugging symbols (the Python's carried 100 MB).
+P=$OUT/python/lib/python3.12
+rm -rf "$P"/test "$P"/idlelib "$P"/tkinter "$P"/turtledemo "$P"/ensurepip "$P"/lib2to3 "$P"/pydoc_data \
+    "$P"/config-3.12-x86_64-linux-gnu "$P"/site-packages/pip "$P"/site-packages/pip-*.dist-info \
+    "$OUT"/python/lib/tcl* "$OUT"/python/lib/tk* "$OUT"/python/lib/libtcl* "$OUT"/python/lib/libtk* \
+    "$OUT"/python/lib/itcl* "$OUT"/python/lib/thread* "$OUT"/python/share "$OUT"/python/include \
+    "$OUT"/python/lib/pkgconfig
 find "$OUT/python" -name '__pycache__' -type d -prune -exec rm -rf {} +
+find "$OUT" -name '*.so*' -type f -exec strip --strip-unneeded {} +
 
 cat > "$OUT/NOTICE.txt" << NOTICE
 RVP's VapourSynth runtime for Linux (motion smoothing, goals T and S; never SVP's)
@@ -147,16 +154,25 @@ RIFE ncnn-Vulkan $RIFE_TAG (rife/)           MIT                 https://github.
   with GCC's OpenMP runtime (libgomp)         GPL-3.0 with the GCC Runtime Library Exception
 NOTICE
 
-# The runtime works on its own: its Python imports VapourSynth, and the
-# core loads both plugins (no bytecode written into the runtime).
-PYTHONDONTWRITEBYTECODE=1 "$PY" - "$OUT" << 'CHECK'
+# The runtime works on its own and where it is moved to (as the packages
+# do): a copy elsewhere imports VapourSynth in its Python, and the core
+# loads both plugins by their paths (no bytecode written).
+rm -rf "$WORK/moved"
+cp -a "$OUT" "$WORK/moved"
+PYTHONDONTWRITEBYTECODE=1 "$WORK/moved/python/bin/python3" - "$WORK/moved" << 'CHECK'
 import sys
 import vapoursynth as vs
 out = sys.argv[1]
 core = vs.core
-core.std.LoadPlugin(out + "/vs-plugins/libmvtools.so")
+# The build's own folder is the compiled-in plugin folder, so MVTools may
+# be loaded already; RVP's scripts load it the same way.
+if not hasattr(core, "mv"):
+    core.std.LoadPlugin(out + "/vs-plugins/libmvtools.so")
 core.std.LoadPlugin(out + "/rife/librife_linux_x86-64.so")
 assert hasattr(core, "mv") and hasattr(core, "rife"), "plugins missing"
 print("VapourSynth", vs.__version__, "with mv and rife")
 CHECK
+rm -rf "$WORK/moved"
+# The Python's programs: VSScript embeds its library.
+rm -rf "$OUT/python/bin"
 du -sh "$OUT"

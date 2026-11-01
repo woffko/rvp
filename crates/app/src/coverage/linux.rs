@@ -319,6 +319,13 @@ pub const ITEMS: &[Item] = &[
         ),
     ),
     item(
+        "AviSynth scripts and plugins",
+        Key::Settings(&["vapoursynth.avs-plugins"]),
+        Linux::Partly(
+            "`.avs` files open through FFmpeg's AviSynth demuxer in the packages' libmpv once the user installs AviSynth+ for Linux (`libavisynth.so`); AviSynth plugins inside VapourSynth scripts (`avs.LoadPlugin`) need VapourSynth's AviSynth bridge, which it has on Windows only",
+        ),
+    ),
+    item(
         "Subtitles from audio (whisper.cpp)",
         Key::Part,
         Linux::Same(
