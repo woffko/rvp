@@ -801,8 +801,9 @@ mod tests {
         assert!(text.contains(" WARN  kept\n"), "{text}");
         assert!(!text.contains("not at warning") && !text.contains("after off"));
         assert!(recent().ends_with("WARN  kept"));
-        // A file at the size moves aside when it opens.
-        let file = File::options().append(true).open(&path).expect("log");
+        // A file at the size moves aside when it opens (Windows sets no
+        // length through a handle that only appends).
+        let file = File::options().write(true).open(&path).expect("log");
         file.set_len(ROTATE_AT).expect("size");
         drop(file);
         assert_eq!(configure(Some(Level::Debug), &path), Ok(true));
