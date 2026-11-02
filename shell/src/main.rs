@@ -20,6 +20,7 @@
 
 mod awake;
 mod bluray_ffi;
+mod cpu;
 mod crash;
 mod desktop;
 mod devices;
@@ -80,7 +81,10 @@ fn main() {
     }
     metrics::mark("qml_loaded_ms");
     if !ffi::bridge::rvp_has_windows() {
-        eprintln!("rvp: the window could not be created (see the QML errors above)");
+        rvp_app::log::report(
+            rvp_app::log::Level::Critical,
+            "the window could not be created (see the QML errors above)",
+        );
         std::process::exit(2);
     }
     let code = app.as_mut().map_or(1, |app| app.exec());
@@ -141,7 +145,10 @@ fn single_instance(cli: &Cli, settings: &rvp_app::Settings) {
         std::process::exit(0);
     }
     if !ffi::bridge::rvp_instance_listen(&channel) {
-        eprintln!("rvp: cannot listen for other instances on {channel}");
+        rvp_app::log::report(
+            rvp_app::log::Level::Warning,
+            &format!("cannot listen for other instances on {channel}"),
+        );
     }
 }
 

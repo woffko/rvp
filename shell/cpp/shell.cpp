@@ -800,6 +800,11 @@ rust::String rvp_local_time()
     return rust::String(text.constData(), static_cast<std::size_t>(text.size()));
 }
 
+std::int32_t rvp_utc_offset()
+{
+    return QDateTime::currentDateTime().offsetFromUtc();
+}
+
 void rvp_atlas_insert(rust::Str name, rust::Slice<const std::uint8_t> rgba, std::int32_t width,
                       std::int32_t height)
 {

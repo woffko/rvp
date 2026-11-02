@@ -323,10 +323,15 @@ pub mod qobject {
         #[qinvokable]
         fn open_folder(self: Pin<&mut Self>, path: &QString);
 
-        /// RVP's `skins`, `logos` or `menus` folder as a URL for the file
-        /// manager, made when missing (M14's Open ... Folder buttons).
+        /// RVP's `skins`, `logos` or `menus` folder (or `log`, the state
+        /// folder with the log) as a URL for the file manager, made when
+        /// missing (M14's Open ... Folder buttons).
         #[qinvokable]
         fn settings_folder_url(self: &Self, kind: &QString) -> QString;
+
+        /// The log's last lines, oldest first (the Log page).
+        #[qinvokable]
+        fn log_recent(self: &Self) -> QString;
 
         /// How the menus look (M14, Skins > Context Menu Style): JSON with
         /// `native`, `dark`, `opacity`, `scale` and the skin's `colors`.

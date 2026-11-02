@@ -204,7 +204,10 @@ impl Second {
         }
         match self.engine.set_text("af", chain) {
             Ok(()) => self.chain = Some(chain.to_owned()),
-            Err(error) => eprintln!("rvp: the second device's audio filters: {error}"),
+            Err(error) => crate::log::report(
+                crate::log::Level::Warning,
+                &format!("the second device's audio filters: {error}"),
+            ),
         }
     }
 
@@ -317,7 +320,10 @@ impl Second {
                 match self.engine.load(path, false) {
                     Ok(()) => self.path = Some(path.to_owned()),
                     Err(error) => {
-                        eprintln!("rvp: the second device cannot play {path}: {error}");
+                        crate::log::report(
+                            crate::log::Level::Warning,
+                            &format!("the second device cannot play {path}: {error}"),
+                        );
                         self.retry_at = Some(now + RETRY);
                     }
                 }

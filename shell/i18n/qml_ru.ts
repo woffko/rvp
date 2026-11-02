@@ -548,6 +548,10 @@ in %2 seconds</source>
             <translation>Удалённое управление</translation>
         </message>
         <message>
+            <source>Log</source>
+            <translation>Журнал</translation>
+        </message>
+        <message>
             <source>Filter Control</source>
             <translation>Управление фильтрами</translation>
         </message>
@@ -2768,6 +2772,18 @@ in %2 seconds</source>
             <translation>Компенсация движения до</translation>
         </message>
         <message>
+            <source>Step down after dropped frames over</source>
+            <translation>Снижать ступень по потерям кадров за</translation>
+        </message>
+        <message>
+            <source>never</source>
+            <translation>никогда</translation>
+        </message>
+        <message>
+            <source>%1 s</source>
+            <translation>%1 с</translation>
+        </message>
+        <message>
             <source>Now: %1</source>
             <translation>Сейчас: %1</translation>
         </message>
@@ -2776,8 +2792,8 @@ in %2 seconds</source>
             <translation>Здесь: MVTools %1</translation>
         </message>
         <message>
-            <source>Smoothing stays off while SVP is attached, while RVP's own VapourSynth script runs and when the video plays at the target rate already; while SVP 4 Manager runs, it waits 8 s for SVP after a file starts. An engine that cannot run here gives way: RIFE and NVIDIA Optical Flow to MVTools, MVTools to Blend; one that drops frames steps down (a lighter preset, then MVTools, then Blend) until the file ends. Above the GPU power budget, smoothing is lightened first.</source>
-            <translation>Сглаживание выключено, пока подключён SVP, пока работает собственный сценарий VapourSynth RVP и когда видео уже идёт с целевой частотой; пока работает SVP 4 Manager, после старта файла оно ждёт SVP 8 с. Движок, который здесь не может работать, уступает место: RIFE и NVIDIA Optical Flow — MVTools, MVTools — Blend; движок, теряющий кадры, переходит на ступень ниже (более лёгкая предустановка, затем MVTools, затем Blend) до конца файла. Сверх бюджета мощности GPU сглаживание облегчается первым.</translation>
+            <source>Smoothing stays off while SVP is attached, while RVP's own VapourSynth script runs and when the video plays at the target rate already; while SVP 4 Manager runs, it waits 8 s for SVP after a file starts. An engine that cannot run here gives way: RIFE and NVIDIA Optical Flow to MVTools, MVTools to Blend; one whose output drops more than 5 % of its frames over the time above steps down (a lighter preset, then MVTools, then Blend) until the file ends. Above the GPU power budget, smoothing is lightened first. The Log page's Info level records each step and the seconds that dropped frames.</source>
+            <translation>Сглаживание выключено, пока подключён SVP, пока работает собственный сценарий VapourSynth RVP и когда видео уже идёт с целевой частотой; пока работает SVP 4 Manager, после старта файла оно ждёт SVP 8 с. Движок, который здесь не может работать, уступает место: RIFE и NVIDIA Optical Flow — MVTools, MVTools — Blend; движок, на выходе которого теряется больше 5 % кадров за время выше, переходит на ступень ниже (более лёгкая предустановка, затем MVTools, затем Blend) до конца файла. Сверх бюджета мощности GPU сглаживание облегчается первым. Уровень «Сведения» на странице «Журнал» записывает каждую ступень и секунды с потерянными кадрами.</translation>
         </message>
         <message>
             <source>Show subtitles when a file starts</source>
@@ -4562,6 +4578,38 @@ in %2 seconds</source>
         <message>
             <source>Close</source>
             <translation>Закрыть</translation>
+        </message>
+        <message>
+            <source>Critical: errors</source>
+            <translation>Критический: ошибки</translation>
+        </message>
+        <message>
+            <source>Warning: errors and problems worked around</source>
+            <translation>Предупреждения: ошибки и обойдённые проблемы</translation>
+        </message>
+        <message>
+            <source>Info: also files, settings, smoothing, dropped frames</source>
+            <translation>Сведения: также файлы, настройки, сглаживание, потери кадров</translation>
+        </message>
+        <message>
+            <source>Debug: also each second of playback, mpv's details</source>
+            <translation>Отладка: также каждая секунда воспроизведения, подробности mpv</translation>
+        </message>
+        <message>
+            <source>File</source>
+            <translation>Файл</translation>
+        </message>
+        <message>
+            <source>The log keeps what RVP and mpv report, with the time. At 16 MB it moves to rvp.old.log. Debug adds a line for each second of playback: the frame rates, dropped and late frames, the frames drawn and the processors' load.</source>
+            <translation>Журнал хранит сообщения RVP и mpv со временем. При 16 МБ он переносится в rvp.old.log. Отладка добавляет строку на каждую секунду воспроизведения: частоты кадров, потерянные и запоздавшие кадры, отрисованные кадры и загрузку процессоров.</translation>
+        </message>
+        <message>
+            <source>Last lines, newest first</source>
+            <translation>Последние строки, новые сверху</translation>
+        </message>
+        <message>
+            <source>Nothing logged yet.</source>
+            <translation>Пока ничего не записано.</translation>
         </message>
     </context>
     <context>

@@ -141,7 +141,10 @@ impl qobject::Player {
                 let _ = thread.queue(move |player| player.set_osd(QString::from(&notice)));
             });
         if let Err(error) = spawned {
-            eprintln!("rvp: cannot record the video: {error}");
+            rvp_app::log::report(
+                rvp_app::log::Level::Warning,
+                &format!("cannot record the video: {error}"),
+            );
         }
     }
 
@@ -166,7 +169,10 @@ impl qobject::Player {
                 });
             });
         if let Err(error) = spawned {
-            eprintln!("rvp: cannot capture: {error}");
+            rvp_app::log::report(
+                rvp_app::log::Level::Warning,
+                &format!("cannot capture: {error}"),
+            );
         }
     }
 
@@ -197,7 +203,10 @@ impl qobject::Player {
                 let _ = thread.queue(move |player| player.set_osd(QString::from(&notice)));
             });
         if let Err(error) = spawned {
-            eprintln!("rvp: cannot write the thumbnail image: {error}");
+            rvp_app::log::report(
+                rvp_app::log::Level::Warning,
+                &format!("cannot write the thumbnail image: {error}"),
+            );
         }
     }
 

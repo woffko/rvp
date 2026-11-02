@@ -3,8 +3,10 @@
 // plays. With a VapourSynth runtime that has MVTools, RVP's filter
 // (@rvpsmooth) runs and the frame rate rises; without one, smoothing gives
 // way to Blend. The engines and presets change through the actions the
-// Motion Smoothing menu runs, and the settings window has its page. Input
-// goes through Player's handlers, as in the functional check.
+// Motion Smoothing menu runs, and the settings window has its page. The
+// log runs at Debug meanwhile and records the plans, mpv's messages and
+// the seconds of playback. Input goes through Player's handlers, as in the
+// functional check.
 //
 // Files: testdata/media/fixture-60s.mkv.
 import QtQuick
@@ -34,9 +36,12 @@ Item {
         const t = smoothing.t
         const s = t.status()
         switch (t.step) {
-        case 0:
+        case 0: {
+            const set = setSetting("log.level", "debug")
+            t.check("log_level_set", set.error === "", set.error)
             t.next()
             break
+        }
         case 1:
             t.waitFor("smoothing_file_plays", () => s.loaded && s.time > 1, 20000)
             break
@@ -61,10 +66,16 @@ Item {
                 t.waitFor("blend_without_mvtools", () => s.smoothing === "Blend"
                               && chain().indexOf("@rvpsmooth") < 0, 3000, () => shown(s))
             break
-        case 5:
+        case 5: {
+            // The setting and the plan it led to.
+            const recent = player.log_recent()
+            t.check("log_records_the_plan", recent.indexOf("setting log.level") >= 0
+                        && recent.indexOf("smoothing: ") >= 0,
+                    recent.split("\n").slice(-6).join(" | "))
             player.run_action("smoothing-blend")
             t.next()
             break
+        }
         case 6:
             t.waitFor("blend_from_the_menu", () => s.smoothing === "Blend" && chain().indexOf("@rvpsmooth") < 0,
                       5000, () => shown(s))
@@ -102,11 +113,23 @@ Item {
             t.check("settings_smoothing_page", loader.currentGroup.page === "video"
                         && loader.tabKeys.indexOf("smoothing") >= 0 && loader.view.smoothing === "Off",
                     loader.currentGroup.title + ": " + loader.tabKeys.join(",") + " now " + loader.view.smoothing)
+            // The Log page is a group of its own.
+            loader.showKey("log")
+            t.check("settings_log_page", loader.currentGroup.page === "log" && loader.currentKey === "log"
+                        && String(loader.view.log_file).endsWith("rvp.log"),
+                    loader.currentKey + " " + loader.view.log_file)
             loader.close()
             break
         }
         case 13: {
-            const errors = [setSetting("smoothing.preset", "medium")].map(r => r.error).filter(e => e !== "")
+            // mpv's messages and each second of playback.
+            const recent = player.log_recent()
+            t.check("log_records_playback", s.log_lines > 0 && s.log_mpv_lines > 0
+                        && recent.indexOf("playback ") >= 0,
+                    s.log_lines + " lines, " + s.log_mpv_lines + " of mpv's; "
+                        + recent.split("\n").slice(-6).join(" | "))
+            const errors = [setSetting("smoothing.preset", "medium"), setSetting("log.level", "off")]
+                .map(r => r.error).filter(e => e !== "")
             t.check("smoothing_settings_restored", errors.length === 0, errors.join("; "))
             t.finish()
             break

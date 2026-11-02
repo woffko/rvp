@@ -79,6 +79,8 @@ properties! {
     SubVisibility = "sub-visibility", Flag;
     FrameDropCount = "frame-drop-count", Int;
     DecoderFrameDropCount = "decoder-frame-drop-count", Int;
+    VoDelayedFrameCount = "vo-delayed-frame-count", Int;
+    MistimedFrameCount = "mistimed-frame-count", Int;
     AudioFilters = "af", Text;
     VideoAspect = "video-params/aspect", Double;
     Speed = "speed", Double;

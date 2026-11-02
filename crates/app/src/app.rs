@@ -411,6 +411,8 @@ pub struct App {
     pub(crate) gpu: crate::gpu_power::Budget,
     /// M18's motion smoothing.
     pub(crate) smoothing: crate::smoothing::Smoothing,
+    /// The log's mpv client and counters (the Log page).
+    pub(crate) log: crate::log::LogState,
     /// libmpv's defaults of the subtitle options RVP leaves unset, and the
     /// subtitle options mpv has now (`App::apply_subtitles`).
     pub(crate) subtitle_defaults: crate::subtitles::MpvDefaults,
@@ -544,6 +546,7 @@ impl App {
             processor_entry: std::cell::RefCell::new(None),
             gpu: crate::gpu_power::Budget::default(),
             smoothing: crate::smoothing::Smoothing::default(),
+            log: crate::log::LogState::default(),
             subtitle_defaults: crate::subtitles::MpvDefaults::default(),
             applied_subtitle_options: std::collections::BTreeMap::new(),
             subtitle_fps: None,
@@ -708,6 +711,7 @@ impl App {
         engine.set_mute(state.mute)?;
         self.started = true;
         let last_file = state.last_file.clone();
+        self.apply_log(engine);
         if let Some(volume) = self.settings.audio.startup_volume {
             engine.set_volume(crate::volume::mpv_volume(volume))?;
         }
@@ -1523,7 +1527,10 @@ impl App {
         }
         match engine.set_text("af", &text) {
             Ok(()) => self.applied_chain = Some(text),
-            Err(error) => eprintln!("rvp: cannot set the audio filters: {error}"),
+            Err(error) => crate::log::report(
+                crate::log::Level::Warning,
+                &format!("cannot set the audio filters: {error}"),
+            ),
         }
     }
 
@@ -1547,7 +1554,10 @@ impl App {
                         Some(response)
                     }
                     Err(error) => {
-                        eprintln!("rvp: cannot write Freeverb's response: {error}");
+                        crate::log::report(
+                            crate::log::Level::Warning,
+                            &format!("cannot write Freeverb's response: {error}"),
+                        );
                         None
                     }
                 },
@@ -1567,7 +1577,10 @@ impl App {
                         Some(response)
                     }
                     Err(error) => {
-                        eprintln!("rvp: cannot write Crystality's echo: {error}");
+                        crate::log::report(
+                            crate::log::Level::Warning,
+                            &format!("cannot write Crystality's echo: {error}"),
+                        );
                         None
                     }
                 },
@@ -1586,7 +1599,12 @@ impl App {
             .map(|distance| crate::audio::dsp::head_model_file(&folder, distance))
             .and_then(|result| {
                 result
-                    .map_err(|error| eprintln!("rvp: cannot write the head model: {error}"))
+                    .map_err(|error| {
+                        crate::log::report(
+                            crate::log::Level::Warning,
+                            &format!("cannot write the head model: {error}"),
+                        );
+                    })
                     .ok()
             });
         crate::audio::chain::Responses {
@@ -1606,7 +1624,7 @@ impl App {
         }
         self.spectrum = if shown {
             crate::spectrum::Control::start(engine)
-                .map_err(|error| eprintln!("rvp: {error}"))
+                .map_err(|error| crate::log::report(crate::log::Level::Warning, &error))
                 .ok()
         } else {
             None
@@ -1722,7 +1740,10 @@ impl App {
                 bytes.push(b'\n');
                 self.writer.write(path, bytes);
             }
-            Err(error) => eprintln!("rvp: cannot serialize the settings: {error}"),
+            Err(error) => crate::log::report(
+                crate::log::Level::Critical,
+                &format!("cannot serialize the settings: {error}"),
+            ),
         }
     }
 
@@ -1962,6 +1983,7 @@ impl App {
         let mut events = Vec::new();
         let changes = engine.drain(&mut self.model, &mut events);
         let mut requests = Vec::new();
+        self.log_events(&events);
         let (mut save_now, failed) = self.handle_events(engine, &events, now, &mut requests);
         if failed {
             // `<Can't open>`, then the next playable entry (or stop).
@@ -1974,6 +1996,7 @@ impl App {
             self.read_chapters(engine);
         }
         self.picture_changed(engine, changes);
+        self.log_video(changes);
         if changes.any(&[
             PropertyId::VideoHeight,
             PropertyId::ContainerFps,

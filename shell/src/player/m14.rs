@@ -721,7 +721,7 @@ impl qobject::Player {
                         rvp_platform::recent::add(&list, &path, std::time::SystemTime::now())
                     });
                     if let Err(error) = added {
-                        eprintln!("rvp: {error}");
+                        rvp_app::log::report(rvp_app::log::Level::Warning, &error);
                     }
                 });
             }
@@ -800,7 +800,9 @@ impl qobject::Player {
                 crate::ffi::bridge::rvp_main_window_id(),
             ) {
                 Ok(desktop) => core.desktop = Some(desktop),
-                Err(error) => eprintln!("rvp: {error}"),
+                Err(error) => {
+                    rvp_app::log::report(rvp_app::log::Level::Warning, &error);
+                }
             }
         } else if !general.media_controls {
             core.desktop = None;
@@ -1076,13 +1078,23 @@ impl qobject::Player {
             "menus" => core.app.menus_folder(),
             // M9: the user's scripts for mpv's on-screen controllers.
             "mpv" => core.app.mpv_folder(),
+            "log" => core.app.state_dir().to_path_buf(),
             _ => return QString::default(),
         };
         if let Err(error) = std::fs::create_dir_all(&folder) {
-            eprintln!("rvp: cannot make {}: {error}", folder.display());
+            rvp_app::log::report(
+                rvp_app::log::Level::Warning,
+                &format!("cannot make {}: {error}", folder.display()),
+            );
             return QString::default();
         }
         QString::from(&file_url(&folder))
+    }
+
+    // A QML invokable, so a method even though it reads only the log.
+    #[allow(clippy::unused_self)]
+    pub(crate) fn log_recent(&self) -> QString {
+        QString::from(&rvp_app::log::recent())
     }
 
     /// The main window's and the control panel's opacity (Skins >

@@ -314,7 +314,10 @@ impl App {
     /// or with the next file near the end of this one.
     pub(crate) fn speakers_changed(&mut self, engine: &Engine) {
         if let Err(error) = engine.set_text("audio-channels", &self.audio_channels()) {
-            eprintln!("rvp: cannot set the speakers: {error}");
+            crate::log::report(
+                crate::log::Level::Warning,
+                &format!("cannot set the speakers: {error}"),
+            );
         }
         self.update_second_options();
         self.audio_chain_changed(engine);

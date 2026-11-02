@@ -64,6 +64,12 @@ pub const TARGETS: &[&str] = &[
 /// The heights the size limit offers.
 pub const MAX_HEIGHTS: &[u32] = &[480, 576, 720, 1080, 1440, 2160];
 
+/// The Motion Smoothing page's choices for `drop-window`: how many seconds
+/// of the output's dropped frames are counted before smoothing steps down
+/// (0: it never does). Short windows step down for a moment's stutter that
+/// the next seconds would not have shown (the owner's host, 2026-11-02).
+pub const DROP_WINDOWS: &[u32] = &[0, 6, 10, 20, 30, 60];
+
 /// RIFE's model, as the study measured it.
 pub const RIFE_MODEL: &str = "rife-v4.6_ensembleFalse";
 
@@ -152,6 +158,9 @@ pub struct SmoothingSettings {
     pub target: String,
     /// Videos taller than this get Blend instead of motion compensation.
     pub max_height: u32,
+    /// Seconds of dropped frames counted before a lighter step (0:
+    /// never; [`DROP_WINDOWS`]).
+    pub drop_window: u32,
 }
 
 impl Default for SmoothingSettings {
@@ -162,6 +171,7 @@ impl Default for SmoothingSettings {
             preset: Preset::Medium,
             target: "display".to_owned(),
             max_height: 1080,
+            drop_window: 20,
         }
     }
 }
@@ -182,6 +192,13 @@ impl SmoothingSettings {
                 "smoothing.max-height must be 240 to 4320: {repaired} used"
             ));
             self.max_height = repaired;
+        }
+        if self.drop_window != 0 && !(3..=600).contains(&self.drop_window) {
+            let repaired = self.drop_window.clamp(3, 600);
+            notes.push(format!(
+                "smoothing.drop-window must be 0 or 3 to 600 seconds: {repaired} used"
+            ));
+            self.drop_window = repaired;
         }
     }
 }
@@ -652,10 +669,11 @@ enum Verdict {
 
 /// The watch over a motion-compensated filter since it went in: it has to
 /// raise the rate within [`WATCH`] of steady playback, and after that the
-/// output's dropped frames are counted over windows of [`WATCH`]. A seek,
-/// a loop or a pause starts the wait again and leaves a window unjudged;
-/// once the filter has raised the rate, a dip after a seek is no failure
-/// (mpv's estimate starts again after it).
+/// output's dropped frames are counted over windows of the Motion
+/// Smoothing page's length (`drop-window`). A seek, a loop or a pause
+/// starts the wait again and leaves a window unjudged; once the filter has
+/// raised the rate, a dip after a seek is no failure (mpv's estimate starts
+/// again after it).
 #[derive(Debug, Default)]
 struct FilterWatch {
     /// Steady playback since.
@@ -666,10 +684,16 @@ struct FilterWatch {
     last: Option<(Instant, f64)>,
     /// The drop window's start: when, the drops then, the playback time.
     drops_from: Option<(Instant, i64, f64)>,
+    /// The window judged at the last tick: the frames dropped, the frames
+    /// the filter made, and whether they were too many (the log).
+    judged: Option<(i64, f64, bool)>,
 }
 
 impl FilterWatch {
-    fn tick(&mut self, tick: &Tick) -> Verdict {
+    /// One second's readings; `window` is how long dropped frames are
+    /// counted (`None`: they never make it lighter).
+    fn tick(&mut self, tick: &Tick, window: Option<Duration>) -> Verdict {
+        self.judged = None;
         if !tick.playing {
             self.since = None;
             self.drops_from = None;
@@ -696,19 +720,25 @@ impl FilterWatch {
             };
         }
         self.proven = true;
+        let Some(window) = window else {
+            return Verdict::Wait;
+        };
         let Some((from, from_dropped, from_time)) = self.drops_from else {
             self.drops_from = Some((tick.now, tick.dropped, tick.time));
             return Verdict::Wait;
         };
         let seconds = tick.now.duration_since(from).as_secs_f64();
-        if seconds < WATCH.as_secs_f64() {
+        if seconds < window.as_secs_f64() {
             return Verdict::Wait;
         }
         self.drops_from = Some((tick.now, tick.dropped, tick.time));
-        if tick.dropped >= from_dropped
-            && played_on(from_time, tick.time, seconds, tick.speed)
-            && too_many_drops(tick.dropped - from_dropped, tick.filter_fps, seconds)
-        {
+        if tick.dropped < from_dropped || !played_on(from_time, tick.time, seconds, tick.speed) {
+            return Verdict::Wait;
+        }
+        let dropped = tick.dropped - from_dropped;
+        let lighter = too_many_drops(dropped, tick.filter_fps, seconds);
+        self.judged = Some((dropped, tick.filter_fps * seconds, lighter));
+        if lighter {
             Verdict::Lighter
         } else {
             Verdict::Wait
@@ -716,8 +746,9 @@ impl FilterWatch {
     }
 }
 
-/// The share of the filter's frames that the output may drop over a watch
-/// before smoothing takes a lighter step: 5 % (the owner, 2026-10-20).
+/// The share of the filter's frames that the output may drop over a drop
+/// window before smoothing takes a lighter step: 5 % (the owner,
+/// 2026-10-20).
 const DROP_SHARE: f64 = 0.05;
 
 /// Whether `dropped` frames over `seconds` of a filter that makes `rate`
@@ -896,6 +927,17 @@ impl App {
         }
         let filter_before = matches!(self.smoothing.applied, Some(Plan::Filter { .. }));
         let filter_now = matches!(plan, Plan::Filter { .. });
+        crate::log::write(
+            crate::log::Level::Info,
+            &format!(
+                "smoothing: {} -> {}",
+                self.smoothing
+                    .applied
+                    .as_ref()
+                    .map_or_else(|| "nothing yet".to_owned(), Plan::text),
+                plan.text()
+            ),
+        );
         self.smoothing.applied = Some(plan.clone());
         self.smoothing.watch = FilterWatch::default();
         if filter_before || filter_now {
@@ -983,9 +1025,31 @@ impl App {
             dropped: self.model.int(PropertyId::FrameDropCount).unwrap_or(0),
         };
         let before = self.smoothing_plan().text();
-        let verdict = self.smoothing.watch.tick(&tick);
+        let window = match self.settings.smoothing.drop_window {
+            0 => None,
+            seconds => Some(Duration::from_secs(u64::from(seconds))),
+        };
+        let verdict = self.smoothing.watch.tick(&tick, window);
         if self.smoothing.watch.proven {
             self.smoothing.ran.insert(running);
+        }
+        if let Some((dropped, frames, lighter)) = self.smoothing.watch.judged {
+            crate::log::write(
+                if lighter {
+                    crate::log::Level::Warning
+                } else {
+                    crate::log::Level::Debug
+                },
+                &format!(
+                    "smoothing: {before} dropped {dropped} of {frames:.0} frames over {} s ({})",
+                    self.settings.smoothing.drop_window,
+                    if lighter {
+                        "over 5 %: a lighter step"
+                    } else {
+                        "kept"
+                    }
+                ),
+            );
         }
         match verdict {
             Verdict::Wait => return None,
@@ -1006,6 +1070,15 @@ impl App {
             Engine::MvTools => self.smoothing.runtime.mvtools = false,
             Engine::Blend => return None,
         }
+        crate::log::write(
+            crate::log::Level::Warning,
+            &format!(
+                "smoothing: {} did not raise the rate ({:.3} fps in, {:.3} out): left out for the session",
+                running.text(),
+                tick.source_fps,
+                tick.filter_fps
+            ),
+        );
         self.apply_smoothing(engine);
         Some(UiRequest::Osd(format!(
             "Motion smoothing: {} did not run here; {}",
@@ -1283,6 +1356,7 @@ mod tests {
     /// the seconds `seconds`; the verdicts that are not waits.
     fn ticks(
         watch: &mut FilterWatch,
+        window: Option<u64>,
         seconds: std::ops::Range<u64>,
         time: impl Fn(u64) -> f64,
         fps: impl Fn(u64) -> f64,
@@ -1300,7 +1374,7 @@ mod tests {
                     filter_fps: fps(n),
                     dropped: dropped(n),
                 };
-                let verdict = watch.tick(&tick);
+                let verdict = watch.tick(&tick, window.map(Duration::from_secs));
                 (verdict != Verdict::Wait).then_some((n, verdict))
             })
             .collect()
@@ -1313,7 +1387,7 @@ mod tests {
         // A filter that never raises the rate is left out after 6 s.
         let mut watch = FilterWatch::default();
         assert_eq!(
-            ticks(&mut watch, 0..8, steady, |_| 24.0, |_| 0),
+            ticks(&mut watch, Some(6), 0..8, steady, |_| 24.0, |_| 0),
             [(6, Verdict::LeaveOut), (7, Verdict::LeaveOut)]
         );
         // One that raised it is not, when a loop starts mpv's estimate
@@ -1322,13 +1396,16 @@ mod tests {
         #[allow(clippy::cast_precision_loss)]
         let looping = |n: u64| (n % 10) as f64;
         let low_after_loop = |n: u64| if n % 10 < 2 { 24.0 } else { 60.0 };
-        assert_eq!(ticks(&mut watch, 0..30, looping, low_after_loop, |_| 0), []);
+        assert_eq!(
+            ticks(&mut watch, Some(6), 0..30, looping, low_after_loop, |_| 0),
+            []
+        );
         // A seek during the first 6 s starts the wait again.
         let mut watch = FilterWatch::default();
         #[allow(clippy::cast_precision_loss)]
         let seek_at_3 = |n: u64| if n < 3 { n as f64 } else { 100.0 + n as f64 };
         assert_eq!(
-            ticks(&mut watch, 0..10, seek_at_3, |_| 24.0, |_| 0),
+            ticks(&mut watch, Some(6), 0..10, seek_at_3, |_| 24.0, |_| 0),
             [(9, Verdict::LeaveOut)]
         );
         // 10 dropped frames a second at 60: lighter after 6 s and a window.
@@ -1336,6 +1413,7 @@ mod tests {
         assert_eq!(
             ticks(
                 &mut watch,
+                Some(6),
                 0..13,
                 steady,
                 |_| 60.0,
@@ -1348,6 +1426,7 @@ mod tests {
         assert_eq!(
             ticks(
                 &mut watch,
+                Some(6),
                 0..13,
                 |n| 0.6 * steady(n),
                 |_| 60.0,
@@ -1362,12 +1441,66 @@ mod tests {
         assert_eq!(
             ticks(
                 &mut watch,
+                Some(6),
                 0..22,
                 loop_at_9,
                 |_| 60.0,
                 |n| 10 * i64::try_from(n).unwrap_or(0)
             ),
             [(21, Verdict::Lighter)]
+        );
+    }
+
+    #[test]
+    fn a_longer_drop_window_forgives_a_moments_stutter() {
+        #[allow(clippy::cast_precision_loss)] // seconds of a test
+        let steady = |n: u64| n as f64;
+        // 40 frames dropped in second 10 (two thirds of a second at 60):
+        // over 5 % of a 6 s window, under 5 % of a 20 s one (60 frames).
+        let burst = |n: u64| if n < 10 { 0 } else { 40 };
+        let mut watch = FilterWatch::default();
+        assert_eq!(
+            ticks(&mut watch, Some(6), 0..40, steady, |_| 60.0, burst),
+            [(12, Verdict::Lighter)]
+        );
+        assert_eq!(watch.judged, None);
+        let mut watch = FilterWatch::default();
+        assert_eq!(
+            ticks(&mut watch, Some(20), 0..40, steady, |_| 60.0, burst),
+            []
+        );
+        assert_eq!(watch.judged, None);
+        // Steady drops of 10 a second still step down, after 6 s and 20.
+        let mut watch = FilterWatch::default();
+        assert_eq!(
+            ticks(
+                &mut watch,
+                Some(20),
+                0..27,
+                steady,
+                |_| 60.0,
+                |n| 10 * i64::try_from(n).unwrap_or(0)
+            ),
+            [(26, Verdict::Lighter)]
+        );
+        assert_eq!(watch.judged, Some((200, 1200.0, true)));
+        // Never: the filter is still left out when it does not run.
+        let mut watch = FilterWatch::default();
+        assert_eq!(
+            ticks(
+                &mut watch,
+                None,
+                0..40,
+                steady,
+                |_| 60.0,
+                |n| 10 * i64::try_from(n).unwrap_or(0)
+            ),
+            []
+        );
+        let mut watch = FilterWatch::default();
+        assert_eq!(
+            ticks(&mut watch, None, 0..7, steady, |_| 24.0, |_| 0),
+            [(6, Verdict::LeaveOut)]
         );
     }
 

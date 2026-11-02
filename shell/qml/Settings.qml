@@ -72,7 +72,8 @@ ApplicationWindow {
         { key: "tts", title: qsTr("TTS") },
         { key: "touch", title: qsTr("Touch") },
         { key: "xinput", title: qsTr("XInput") },
-        { key: "remote", title: qsTr("Remote Control") }
+        { key: "remote", title: qsTr("Remote Control") },
+        { key: "log", title: qsTr("Log") }
     ]
     // PotPlayer's tree: each group opens into its pages, and the selected
     // group's pages show as tabs over the page. `page` is the group's own
@@ -94,7 +95,8 @@ ApplicationWindow {
         { title: qsTr("Accessibility"), page: "", pages: ["tts", "touch", "xinput"] },
         { title: qsTr("Remote Control"), page: "remote", pages: [] },
         { title: qsTr("Audio"), page: "audio",
-          pages: ["audio-volume", "equalizer", "normalizer", "audio-effects", "audio-sync"] }
+          pages: ["audio-volume", "equalizer", "normalizer", "audio-effects", "audio-sync"] },
+        { title: qsTr("Log"), page: "log", pages: [] }
     ]
     // The shown page (an index of `pages`) and the open groups.
     property int current: 0
@@ -1982,6 +1984,12 @@ ApplicationWindow {
                             values: win.view.choices["smoothing-max-height"] || [1080]
                             format: v => v + "p (Blend above)"
                         }
+                        Amount {
+                            label: qsTr("Step down after dropped frames over")
+                            path: "smoothing.drop-window"
+                            values: win.view.choices["smoothing-drop-window"] || [20]
+                            format: v => v === 0 ? qsTr("never") : qsTr("%1 s").arg(v)
+                        }
                         Note { text: qsTr("Now: %1").arg((win.view.smoothing || "")) }
                         Note {
                             text: qsTr("Here: MVTools %1").arg((win.view.smoothing_engines && win.view.smoothing_engines.mvtools ? "found" : "missing"))
@@ -1990,7 +1998,7 @@ ApplicationWindow {
                                   + " (in RVP's VapourSynth runtime and libmpv)."
                         }
                         Note {
-                            text: qsTr("Smoothing stays off while SVP is attached, while RVP's own VapourSynth script runs and when the video plays at the target rate already; while SVP 4 Manager runs, it waits 8 s for SVP after a file starts. An engine that cannot run here gives way: RIFE and NVIDIA Optical Flow to MVTools, MVTools to Blend; one that drops frames steps down (a lighter preset, then MVTools, then Blend) until the file ends. Above the GPU power budget, smoothing is lightened first.")
+                            text: qsTr("Smoothing stays off while SVP is attached, while RVP's own VapourSynth script runs and when the video plays at the target rate already; while SVP 4 Manager runs, it waits 8 s for SVP after a file starts. An engine that cannot run here gives way: RIFE and NVIDIA Optical Flow to MVTools, MVTools to Blend; one whose output drops more than 5 % of its frames over the time above steps down (a lighter preset, then MVTools, then Blend) until the file ends. Above the GPU power budget, smoothing is lightened first. The Log page's Info level records each step and the seconds that dropped frames.")
                         }
                     }
 
@@ -3238,6 +3246,64 @@ ApplicationWindow {
                                 text: remotePage.added
                                 wrapMode: Text.Wrap
                                 textFormat: Text.PlainText
+                            }
+                        }
+                    }
+
+                    Page {
+                        id: logPage
+                        // The log's last lines, read again each second
+                        // while the page shows.
+                        property string recent: ""
+                        Timer {
+                            interval: 1000
+                            repeat: true
+                            triggeredOnStart: true
+                            running: win.visible && win.currentKey === "log"
+                            onTriggered: logPage.recent = win.player.log_recent()
+                        }
+                        Heading { text: qsTr("Log") }
+                        Choice {
+                            label: qsTr("Level")
+                            path: "log.level"
+                            values: win.view.choices["log.level"] || ["off"]
+                            texts: ({ "off": qsTr("Off"), "critical": qsTr("Critical: errors"),
+                                      "warning": qsTr("Warning: errors and problems worked around"),
+                                      "info": qsTr("Info: also files, settings, smoothing, dropped frames"),
+                                      "debug": qsTr("Debug: also each second of playback, mpv's details") })
+                        }
+                        RowLayout {
+                            Label {
+                                text: qsTr("File")
+                                wrapMode: Text.WordWrap
+                                Layout.preferredWidth: 240
+                            }
+                            Label {
+                                Layout.fillWidth: true
+                                text: win.view.log_file || ""
+                                textFormat: Text.PlainText
+                                elide: Text.ElideMiddle
+                            }
+                            Button {
+                                text: qsTr("Open Folder")
+                                onClicked: Qt.openUrlExternally(win.player.settings_folder_url("log"))
+                            }
+                        }
+                        Note {
+                            text: qsTr("The log keeps what RVP and mpv report, with the time. At 16 MB it moves to rvp.old.log. Debug adds a line for each second of playback: the frame rates, dropped and late frames, the frames drawn and the processors' load.")
+                        }
+                        Heading { text: qsTr("Last lines, newest first") }
+                        ScrollView {
+                            Layout.fillWidth: true
+                            Layout.preferredHeight: 300
+                            TextArea {
+                                objectName: "log-recent"
+                                readOnly: true
+                                wrapMode: TextEdit.Wrap
+                                textFormat: TextEdit.PlainText
+                                font.family: "monospace"
+                                text: logPage.recent.split("\n").slice(-200).reverse().join("\n")
+                                placeholderText: qsTr("Nothing logged yet.")
                             }
                         }
                     }

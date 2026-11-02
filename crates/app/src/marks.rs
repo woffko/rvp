@@ -150,7 +150,10 @@ impl MarkStore {
                 bytes.push(b'\n');
                 self.writer.write(&self.path, bytes);
             }
-            Err(error) => eprintln!("rvp: cannot serialize the marks: {error}"),
+            Err(error) => crate::log::report(
+                crate::log::Level::Critical,
+                &format!("cannot serialize the marks: {error}"),
+            ),
         }
     }
 

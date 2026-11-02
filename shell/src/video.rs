@@ -16,7 +16,8 @@
 use std::cell::RefCell;
 use std::ffi::c_void;
 use std::sync::OnceLock;
-use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering};
+use std::time::Instant;
 
 use libmpv2::render::{OpenGLInitParams, RenderContext, RenderParam, RenderParamApiType};
 use rvp_engine::{Engine, libmpv2};
@@ -41,6 +42,12 @@ static PRESENTED: AtomicBool = AtomicBool::new(false);
 static WAITED: AtomicU32 = AtomicU32::new(0);
 /// Called on the render thread once the render context exists.
 static ON_READY: OnceLock<Box<dyn Fn() + Send + Sync>> = OnceLock::new();
+/// Video frames drawn since [`take_drawn`] last looked, when the last one
+/// was (microseconds since [`EPOCH`]) and the longest time between two.
+static DRAWN: AtomicU32 = AtomicU32::new(0);
+static LAST_DRAWN: AtomicU64 = AtomicU64::new(0);
+static LONGEST_GAP: AtomicU64 = AtomicU64::new(0);
+static EPOCH: OnceLock<Instant> = OnceLock::new();
 
 thread_local! {
     /// Lives on the render thread only.
@@ -71,7 +78,10 @@ fn create(engine: &'static Engine) -> Option<RenderContext<'static>> {
             Some(context)
         }
         Err(error) => {
-            eprintln!("rvp: cannot create the mpv render context: {error}");
+            rvp_app::log::report(
+                rvp_app::log::Level::Critical,
+                &format!("cannot create the mpv render context: {error}"),
+            );
             None
         }
     }
@@ -126,9 +136,38 @@ pub fn render(fbo: i32, width: i32, height: i32) -> bool {
             .is_some_and(|context| context.render::<()>(fbo, width, height, false).is_ok());
         if rendered {
             crate::metrics::video_rendered();
+            count_drawn();
         }
         rendered
     })
+}
+
+/// Counts a drawn frame for [`take_drawn`] (render thread).
+fn count_drawn() {
+    let now = u64::try_from(EPOCH.get_or_init(Instant::now).elapsed().as_micros()).unwrap_or(0);
+    let last = LAST_DRAWN.swap(now, Ordering::Relaxed);
+    if last != 0 {
+        LONGEST_GAP.fetch_max(now.saturating_sub(last), Ordering::Relaxed);
+    }
+    DRAWN.fetch_add(1, Ordering::Relaxed);
+}
+
+/// The video frames the window drew since the last call and the longest
+/// time between two of them in milliseconds (the log's seconds of
+/// playback); `None` when mpv draws into a window of its own. While
+/// nothing plays, the next frame starts the gaps again.
+pub fn take_drawn(playing: bool) -> Option<(u32, u32)> {
+    if in_window() {
+        return None;
+    }
+    if !playing {
+        LAST_DRAWN.store(0, Ordering::Relaxed);
+    }
+    let gap = LONGEST_GAP.swap(0, Ordering::Relaxed) / 1000;
+    Some((
+        DRAWN.swap(0, Ordering::Relaxed),
+        u32::try_from(gap).unwrap_or(u32::MAX),
+    ))
 }
 
 /// The video item's renderer is going away. Qt also builds and drops

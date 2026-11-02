@@ -24,7 +24,10 @@ pub(crate) fn restrict_library_search() {
         #[allow(unsafe_code)]
         let restricted = unsafe { SetDefaultDllDirectories(LOAD_LIBRARY_SEARCH_DEFAULT_DIRS) };
         if restricted.is_err() {
-            eprintln!("rvp: cannot restrict where libraries load from");
+            rvp_app::log::report(
+                rvp_app::log::Level::Warning,
+                "cannot restrict where libraries load from",
+            );
             return;
         }
         let runtime = std::env::current_exe()
@@ -44,9 +47,9 @@ pub(crate) fn restrict_library_search() {
             #[allow(unsafe_code)]
             let cookie = unsafe { AddDllDirectory(windows::core::PCWSTR(wide.as_ptr())) };
             if cookie.is_null() {
-                eprintln!(
-                    "rvp: cannot add {} to the library search",
-                    runtime.display()
+                rvp_app::log::report(
+                    rvp_app::log::Level::Warning,
+                    &format!("cannot add {} to the library search", runtime.display()),
                 );
             }
         }

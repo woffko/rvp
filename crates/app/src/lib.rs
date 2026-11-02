@@ -32,6 +32,7 @@ pub mod gpu_power;
 pub mod hlsl;
 mod input;
 pub mod instance;
+pub mod log;
 pub mod logos;
 pub mod marks;
 pub mod media;

@@ -384,7 +384,10 @@ impl App {
         let settings = settings_from(&target, &presets);
         let applied = self.apply_settings(engine, settings);
         for note in applied.notes {
-            eprintln!("rvp: preset {name}: {note}");
+            crate::log::report(
+                crate::log::Level::Warning,
+                &format!("preset {name}: {note}"),
+            );
         }
         if reopen {
             return self.dispatch(engine, crate::Action::Reopen);

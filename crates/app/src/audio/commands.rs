@@ -211,7 +211,10 @@ impl App {
         let audio = &self.settings.audio;
         let set = |name: &str, value: &str| {
             if let Err(error) = engine.set_text(name, value) {
-                eprintln!("rvp: cannot set {name}: {error}");
+                crate::log::report(
+                    crate::log::Level::Warning,
+                    &format!("cannot set {name}: {error}"),
+                );
             }
         };
         set("audio-spdif", &audio.spdif(count));
@@ -970,7 +973,10 @@ impl App {
                 self.apply_audio_chain(engine);
                 self.follow_second(engine, &[], Instant::now());
             }
-            Err(error) => eprintln!("rvp: cannot start the second audio device: {error}"),
+            Err(error) => crate::log::report(
+                crate::log::Level::Warning,
+                &format!("cannot start the second audio device: {error}"),
+            ),
         }
     }
 

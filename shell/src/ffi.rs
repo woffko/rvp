@@ -128,6 +128,8 @@ pub mod bridge {
         fn rvp_copy_image(rgba: &[u8], width: i32, height: i32) -> bool;
         /// The local date and time as `YYYY-MM-DD HH.MM.SS` (file names).
         fn rvp_local_time() -> String;
+        /// The local time's offset from UTC in seconds (the log's times).
+        fn rvp_utc_offset() -> i32;
         /// Tiles `src` of an atlas over `dst`, clipped to `clip` (each
         /// rectangle as x, y, width, height).
         fn rvp_paint_atlas(

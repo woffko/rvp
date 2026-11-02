@@ -261,7 +261,12 @@ impl Control {
             engine
                 .mpv()
                 .create_weak_client(Some("rvp_normalizer_follower"))
-                .map_err(|error| eprintln!("rvp: normalizer follower: {error}"))
+                .map_err(|error| {
+                    crate::log::report(
+                        crate::log::Level::Warning,
+                        &format!("normalizer follower: {error}"),
+                    );
+                })
                 .ok()
         });
         let previous = std::mem::replace(

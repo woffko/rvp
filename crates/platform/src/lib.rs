@@ -16,10 +16,13 @@
 //! Linux's counterparts of the shell's Windows calls (goal S): the trash
 //! ([`trash`]), power actions through logind ([`power`]), the system's
 //! volume and RVP's own stream through PulseAudio's tools ([`pulse`]), and
-//! the desktop's recent files ([`recent`]).
+//! the desktop's recent files ([`recent`]) and the processors' time for the
+//! log ([`load`]).
 
 #[cfg(target_os = "linux")]
 mod linux;
+#[cfg(target_os = "linux")]
+pub mod load;
 #[cfg(target_os = "linux")]
 pub mod power;
 #[cfg(target_os = "linux")]

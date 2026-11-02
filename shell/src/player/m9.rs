@@ -87,7 +87,10 @@ pub(super) fn start(app: &App, engine: &Engine) -> (Option<Controller>, Option<S
         "define-section",
         &[SECTION, &controller::section(), "force"],
     ) {
-        eprintln!("rvp: the controller's input section: {error}");
+        rvp_app::log::report(
+            rvp_app::log::Level::Warning,
+            &format!("the controller's input section: {error}"),
+        );
     }
     (
         Some(Controller {
@@ -193,7 +196,10 @@ impl qobject::Player {
         if let Some(core) = self.core()
             && let Err(error) = core.engine.command(name, args)
         {
-            eprintln!("rvp: controller {name}: {error}");
+            rvp_app::log::report(
+                rvp_app::log::Level::Warning,
+                &format!("controller {name}: {error}"),
+            );
         }
     }
 
@@ -524,7 +530,10 @@ impl qobject::Player {
             if now != before
                 && let Err(error) = engine.set_flag(name, now)
             {
-                eprintln!("rvp: controller {name}: {error}");
+                rvp_app::log::report(
+                    rvp_app::log::Level::Warning,
+                    &format!("controller {name}: {error}"),
+                );
             }
         }
         state.written = real;

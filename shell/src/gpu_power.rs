@@ -26,7 +26,10 @@ pub(crate) fn start(sender: mpsc::Sender<Vec<Sample>>) {
             crate::ffi::bridge::rvp_gpu_power_close();
         });
     if let Err(error) = spawned {
-        eprintln!("rvp: cannot read the GPU's power: {error}");
+        rvp_app::log::report(
+            rvp_app::log::Level::Warning,
+            &format!("cannot read the GPU's power: {error}"),
+        );
     }
 }
 

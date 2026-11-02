@@ -243,8 +243,9 @@ smoothing for users without SVP, after a study of the engines.
   (`tools/libmpv/build.sh`: shinchiro's recipe with glslang for FFmpeg's
   shaders; RVP probes `lavfi-fruc_vulkan` at start). An engine whose filter
   does not raise the rate within 6 s is left out for the session, and one
-  that leaves the output dropping more than 5 % of its frames over 6 s
-  takes a lighter step for the rest of the file (`App::smoothing_watch`). Checks: `crates/app/tests/smoothing.rs` (with
+  that leaves the output dropping more than 5 % of its frames over the
+  page's `drop-window` (20 s by default; 0 never) takes a lighter step for
+  the rest of the file (`App::smoothing_watch`). Checks: `crates/app/tests/smoothing.rs` (with
   `VSSCRIPT_PATH`), `rvp --selftest=smoothing`,
   `tools/windows-vm/m18-all.ps1`, and on the host, with permission,
   `tools/windows-vm/m18-host.ps1` (each GPU mode in RVP's window at the
@@ -280,6 +281,14 @@ smoothing for users without SVP, after a study of the engines.
   module (`FolderDialog.qml`): import Qt's under a qualifier.
 - Portable mode: `rvp.portable` next to the executable keeps the settings
   there; `RVP_CONFIG_DIR` and `RVP_STATE_DIR` still win (test runs).
+- The log (`crates/app/src/log.rs`, the Log page, `log.level`, off by
+  default): `rvp.log` in the state folder at Critical, Warning, Info or
+  Debug, written by a thread of its own. RVP's messages go through
+  `log::report` (the standard error and the log); mpv's come on a weak
+  client of the player's core read on another thread, never through the
+  window's thread. Debug adds a line per second of playback: mpv's frame
+  counters, the frames the OpenGL renderer drew (`video::take_drawn`) and
+  the processors' load (`shell/src/cpu.rs`, `rvp_platform::load`).
 
 ## Packages and the desktop (M8)
 

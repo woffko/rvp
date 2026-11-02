@@ -40,7 +40,10 @@ impl KeepAwake {
             #[allow(unsafe_code)]
             let previous = unsafe { SetThreadExecutionState(flags) };
             if previous.0 == 0 {
-                eprintln!("rvp: cannot change Windows' execution state");
+                rvp_app::log::report(
+                    rvp_app::log::Level::Warning,
+                    "cannot change Windows' execution state",
+                );
             }
         }
     }

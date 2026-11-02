@@ -187,7 +187,10 @@ fn keep_skin(key: SkinKey, skin: Skin) -> &'static Skin {
             if let Some(data) = data.take()
                 && !crate::ffi::bridge::rvp_add_font(&data)
             {
-                eprintln!("rvp: cannot use the font {name} of {}", theme.display());
+                rvp_app::log::report(
+                    rvp_app::log::Level::Warning,
+                    &format!("cannot use the font {name} of {}", theme.display()),
+                );
             }
         }
     }
@@ -417,6 +420,8 @@ struct Core {
     native_failed: Option<String>,
     /// Where the GPU power budget's readings come from (D17).
     gpu_readings: GpuReadings,
+    /// The processors' load for the log's seconds of playback.
+    load: crate::cpu::Load,
     /// The skin, its logo and its bars over the video (M14).
     look: m14::Look,
     /// The control API for remotes (M15).
@@ -508,6 +513,8 @@ const TICKING: &[PropertyId] = &[
     PropertyId::AudioBitrate,
     PropertyId::FrameDropCount,
     PropertyId::DecoderFrameDropCount,
+    PropertyId::VoDelayedFrameCount,
+    PropertyId::MistimedFrameCount,
 ];
 
 /// The Rust state of [`qobject::Player`]; the fields are the properties.
@@ -732,7 +739,10 @@ fn open_skin_file(source: &SkinSource, file: Option<&str>, touch: bool) -> Resul
     };
     // D10: RVP's logo in place of the skin's title-bar logo.
     if let Err(error) = rvp_look::brand::brand_skin(&mut skin) {
-        eprintln!("rvp: cannot draw the logo: {error}");
+        rvp_app::log::report(
+            rvp_app::log::Level::Warning,
+            &format!("cannot draw the logo: {error}"),
+        );
     }
     Ok(skin)
 }
@@ -988,7 +998,7 @@ impl qobject::Player {
     }
 
     fn show_message(mut self: Pin<&mut Self>, text: &str) {
-        eprintln!("rvp: {text}");
+        rvp_app::log::report(rvp_app::log::Level::Warning, text);
         self.as_mut().set_message(QString::from(text));
     }
 
@@ -1126,6 +1136,7 @@ impl qobject::Player {
             slideshow: false,
             native_failed: None,
             gpu_readings: GpuReadings::Off,
+            load: crate::cpu::Load::default(),
             look: m14::Look::default(),
             remote: m15::Remote::default(),
             disc: None,
@@ -1205,7 +1216,9 @@ impl qobject::Player {
                 crate::ffi::bridge::rvp_main_window_id(),
             ) {
                 Ok(desktop) => core.desktop = Some(desktop),
-                Err(error) => eprintln!("rvp: {error}"),
+                Err(error) => {
+                    rvp_app::log::report(rvp_app::log::Level::Warning, &error);
+                }
             }
         }
         crate::ffi::bridge::rvp_taskbar_start(core.app.settings.general.taskbar);
@@ -1219,6 +1232,8 @@ impl qobject::Player {
             // Reopening the last file keeps the restored window size.
             core.fit = Fit::No;
         }
+        // The log's times are local (it opens in `App::start`).
+        rvp_app::log::set_utc_offset(crate::ffi::bridge::rvp_utc_offset());
         // `/add` and `/insert` at start: the last state first, then theirs.
         let result = if plays || request.files.is_empty() {
             core.app.start(core.engine, &request.files)
@@ -2376,6 +2391,7 @@ impl qobject::Player {
             // General info messages can be turned off (M14); asked-for
             // info shows anyway.
             UiRequest::Osd(text) => {
+                rvp_app::log::write(rvp_app::log::Level::Debug, &format!("osd: {text}"));
                 if core.app.settings.osd.messages {
                     self.as_mut().set_osd(QString::from(&text));
                 }
@@ -3208,7 +3224,24 @@ impl qobject::Player {
         self.as_mut().tick_misc_info();
         self.as_mut().tick_taskbar();
         self.as_mut().tick_gpu_power();
+        self.as_mut().tick_log();
         self.check_native_video();
+    }
+
+    /// The log's second of playback: mpv's frame counters with the frames
+    /// the window drew and the processors' load (the Log page).
+    fn tick_log(self: Pin<&mut Self>) {
+        let Some(core) = self.core_mut() else {
+            return;
+        };
+        let drawn = crate::video::take_drawn(core.app.model.playing());
+        if !rvp_app::log::enabled(rvp_app::log::Level::Info) {
+            return;
+        }
+        rvp_app::log::set_utc_offset(crate::ffi::bridge::rvp_utc_offset());
+        let processors = core.load.sample();
+        core.app
+            .log_second(&rvp_app::log::Second { drawn, processors });
     }
 
     /// The GPU power budget (D17): the cards are read while it is on, a
@@ -3242,7 +3275,7 @@ impl qobject::Player {
     fn gpu_power_requests(mut self: Pin<&mut Self>, requests: Vec<UiRequest>) {
         for request in requests {
             if let UiRequest::Osd(text) = &request {
-                eprintln!("rvp: {text}");
+                rvp_app::log::report(rvp_app::log::Level::Warning, text);
             }
             self.as_mut().handle_request(request);
         }
@@ -3318,7 +3351,10 @@ impl qobject::Player {
             return;
         };
         if let Err(error) = core.app.shutdown(core.engine, Instant::now()) {
-            eprintln!("rvp: cannot save the playback state: {error}");
+            rvp_app::log::report(
+                rvp_app::log::Level::Critical,
+                &format!("cannot save the playback state: {error}"),
+            );
         }
         // Let mpv unload the file and its filter chain (SVP's included)
         // before the process goes on to shut libmpv down.
@@ -3531,6 +3567,8 @@ impl qobject::Player {
             ("panel_shown", self.panel_shown().to_string()),
             ("recording", core.recorder.is_some().to_string()),
             ("message", text(Some(&self.message().to_string()))),
+            ("log_lines", rvp_app::log::counts().0.to_string()),
+            ("log_mpv_lines", rvp_app::log::counts().1.to_string()),
         ])
         .collect()
     }

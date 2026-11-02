@@ -122,7 +122,10 @@ impl qobject::Player {
                     let key = rvp_app::view::thumbnail_key(&path);
                     list_changed |= insert_picture(&key, &picture).is_some();
                 }
-                ThumbEvent::Unavailable(error) => eprintln!("rvp: thumbnails: {error}"),
+                ThumbEvent::Unavailable(error) => rvp_app::log::report(
+                    rvp_app::log::Level::Warning,
+                    &format!("thumbnails: {error}"),
+                ),
                 ThumbEvent::Sheet(sheet) => self.as_mut().save_sheet(sheet),
             }
         }

@@ -103,10 +103,13 @@ pub(super) fn start(app: &mut rvp_app::App, engine: &Engine) {
         .and_then(|()| crate::disc::available().map(drop));
     let bluray = protocol.and_then(|()| crate::disc::bluray::available().map(drop));
     if let Err(why) = &dvd {
-        eprintln!("rvp: DVD menus: {why}");
+        rvp_app::log::report(rvp_app::log::Level::Warning, &format!("DVD menus: {why}"));
     }
     if let Err(why) = &bluray {
-        eprintln!("rvp: Blu-ray menus: {why}");
+        rvp_app::log::report(
+            rvp_app::log::Level::Warning,
+            &format!("Blu-ray menus: {why}"),
+        );
     }
     app.set_disc_menus_available(dvd.is_ok(), bluray.is_ok());
 }
@@ -264,7 +267,10 @@ impl qobject::Player {
         match loaded {
             Ok(()) => self.draw_disc_menu(),
             Err(error) => {
-                eprintln!("rvp: disc segment: {error}");
+                rvp_app::log::report(
+                    rvp_app::log::Level::Warning,
+                    &format!("disc segment: {error}"),
+                );
                 self.disc_end(End::Error);
             }
         }
@@ -290,9 +296,9 @@ impl qobject::Player {
             End::Next => self.load_segment(),
             End::Stop | End::Error => {
                 if end == End::Error {
-                    eprintln!(
-                        "rvp: the disc's navigation failed: {}",
-                        playing.disc.error()
+                    rvp_app::log::report(
+                        rvp_app::log::Level::Critical,
+                        &format!("the disc's navigation failed: {}", playing.disc.error()),
                     );
                 }
                 close(core);
@@ -473,7 +479,10 @@ impl qobject::Player {
         ];
         let args: Vec<&str> = args.iter().map(String::as_str).collect();
         if let Err(error) = core.engine.command("overlay-add", &args) {
-            eprintln!("rvp: disc menu picture: {error}");
+            rvp_app::log::report(
+                rvp_app::log::Level::Warning,
+                &format!("disc menu picture: {error}"),
+            );
             return;
         }
         playing.shown = Some(scaled);
@@ -596,7 +605,10 @@ impl qobject::Player {
 
     pub(super) fn m16_request(mut self: Pin<&mut Self>, request: &UiRequest) {
         let &UiRequest::DiscMenu(menu) = request else {
-            eprintln!("rvp: unhandled request {request:?}");
+            rvp_app::log::report(
+                rvp_app::log::Level::Warning,
+                &format!("unhandled request {request:?}"),
+            );
             return;
         };
         let Some(core) = self.as_mut().core_mut() else {
