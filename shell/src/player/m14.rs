@@ -1078,7 +1078,10 @@ impl qobject::Player {
             "menus" => core.app.menus_folder(),
             // M9: the user's scripts for mpv's on-screen controllers.
             "mpv" => core.app.mpv_folder(),
-            "log" => core.app.state_dir().to_path_buf(),
+            "log" => core.app.log_file().parent().map_or_else(
+                || core.app.state_dir().to_path_buf(),
+                std::path::Path::to_path_buf,
+            ),
             _ => return QString::default(),
         };
         if let Err(error) = std::fs::create_dir_all(&folder) {

@@ -1,7 +1,8 @@
 //! RVP's log (the Log page; `log.level` in settings.json, off by default):
 //! what RVP and mpv report, at the level the user chose, in [`FILE_NAME`]
-//! in the state folder, for finding out afterwards why playback stuttered,
-//! motion smoothing stepped down or a file failed.
+//! in the page's folder (`log.folder`; unset: the state folder), for
+//! finding out afterwards why playback stuttered, motion smoothing stepped
+//! down or a file failed.
 //!
 //! - Critical: errors (a file that cannot play, settings or state that
 //!   cannot be saved, mpv's errors).
@@ -110,12 +111,15 @@ impl Level {
 pub struct LogSettings {
     /// One of [`LEVELS`].
     pub level: String,
+    /// The folder of [`FILE_NAME`]; unset: RVP's state folder.
+    pub folder: Option<PathBuf>,
 }
 
 impl Default for LogSettings {
     fn default() -> Self {
         Self {
             level: "off".to_owned(),
+            folder: None,
         }
     }
 }
@@ -129,6 +133,15 @@ impl LogSettings {
                 LEVELS.join(", ")
             ));
             "off".clone_into(&mut self.level);
+        }
+        if let Some(folder) = &self.folder
+            && !folder.is_absolute()
+        {
+            notes.push(format!(
+                "log.folder {} is not a whole path: the state folder used",
+                folder.display()
+            ));
+            self.folder = None;
         }
     }
 }
@@ -211,6 +224,15 @@ pub fn recent() -> String {
         .map(String::as_str)
         .collect::<Vec<_>>()
         .join("\n")
+}
+
+/// The file the log writes now (`None` while it is off).
+#[must_use]
+pub fn path() -> Option<PathBuf> {
+    SINK.lock()
+        .unwrap_or_else(PoisonError::into_inner)
+        .as_ref()
+        .map(|sink| sink.path.clone())
 }
 
 /// Lines logged since RVP started, and how many of them were mpv's.
@@ -449,22 +471,33 @@ pub(crate) struct LogState {
 }
 
 impl App {
-    /// The Log page's level in force: opens or closes the file, and asks
-    /// mpv for its messages of that level.
-    pub(crate) fn apply_log(&mut self, engine: &Engine) {
+    /// The log's file: in the Log page's folder, else in the state folder.
+    #[must_use]
+    pub fn log_file(&self) -> PathBuf {
+        self.settings
+            .log
+            .folder
+            .as_deref()
+            .unwrap_or_else(|| self.state_dir())
+            .join(FILE_NAME)
+    }
+
+    /// The Log page's level and folder in force: opens, moves or closes
+    /// the file, and asks mpv for its messages of that level. Returns why
+    /// the file cannot be opened (the log is off then).
+    pub(crate) fn apply_log(&mut self, engine: &Engine) -> Option<String> {
         let level = Level::parse(&self.settings.log.level);
-        let path = self.state_dir().join(FILE_NAME);
-        match configure(level, &path) {
+        match configure(level, &self.log_file()) {
             Ok(true) => self.log_opened(),
             Ok(false) => {}
             Err(error) => {
-                self.warnings.push(format!("Log: {error}"));
-                return;
+                self.log.mpv = None;
+                return Some(format!("Log: {error}"));
             }
         }
         let Some(level) = level else {
             self.log.mpv = None;
-            return;
+            return None;
         };
         if self.log.mpv.as_ref().map(|mpv| mpv.level) != Some(level) {
             self.log.mpv = None;
@@ -473,6 +506,7 @@ impl App {
                 Err(error) => report(Level::Warning, &error),
             }
         }
+        None
     }
 
     /// The first lines of a log: RVP, the machine and what plays video.
@@ -716,11 +750,19 @@ mod tests {
         assert_eq!(Level::Info.mpv(), "info");
         let mut settings = LogSettings {
             level: "loud".to_owned(),
+            folder: Some(PathBuf::from("logs")),
         };
         let mut notes = Vec::new();
         settings.validate(&mut notes);
-        assert_eq!(settings.level, "off");
-        assert_eq!(notes.len(), 1);
+        assert_eq!(settings, LogSettings::default());
+        assert_eq!(notes.len(), 2);
+        let mut settings = LogSettings {
+            level: "info".to_owned(),
+            folder: Some(std::env::temp_dir()),
+        };
+        settings.validate(&mut notes);
+        assert_eq!(settings.folder, Some(std::env::temp_dir()));
+        assert_eq!(notes.len(), 2);
     }
 
     #[test]
@@ -791,6 +833,7 @@ mod tests {
         let path = folder.join(FILE_NAME);
         assert_eq!(configure(Some(Level::Warning), &path), Ok(true));
         assert_eq!(configure(Some(Level::Warning), &path), Ok(false));
+        assert_eq!(super::path(), Some(path.clone()));
         write(Level::Warning, "kept");
         write(Level::Info, "not at warning");
         assert!(enabled(Level::Critical) && !enabled(Level::Info));

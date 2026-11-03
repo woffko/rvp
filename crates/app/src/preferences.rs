@@ -582,8 +582,10 @@ impl App {
         {
             self.apply_smoothing(engine);
         }
-        if old.log != self.settings.log {
-            self.apply_log(engine);
+        if old.log != self.settings.log
+            && let Some(error) = self.apply_log(engine)
+        {
+            applied.notes.push(error);
         }
         Self::log_settings_changed(&old, &self.settings);
         self.apply_audio_settings(engine, &old, &mut applied.notes);
@@ -734,7 +736,7 @@ impl App {
                 .and_then(std::path::Path::parent)
                 .map(|dir| dir.join("fonts").display().to_string()),
             "speech": self.speech_view(),
-            "log_file": self.state_dir().join(crate::log::FILE_NAME).display().to_string(),
+            "log_file": self.log_file().display().to_string(),
         });
         // M14's skins, logos and menus.
         if let (Some(view), Value::Object(skins)) = (view.as_object_mut(), self.skins_view()) {

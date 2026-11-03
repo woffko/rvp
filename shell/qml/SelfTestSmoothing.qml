@@ -128,9 +128,24 @@ Item {
                         && recent.indexOf("playback ") >= 0,
                     s.log_lines + " lines, " + s.log_mpv_lines + " of mpv's; "
                         + recent.split("\n").slice(-6).join(" | "))
-            const errors = [setSetting("smoothing.preset", "medium"), setSetting("log.level", "off")]
+            // The Log page's folder: the file moves there at once.
+            const folder = String(s.state_file).replace(/[\\/][^\\/]*$/, "") + "/moved-log"
+            const moved = setSetting("log.folder", folder)
+            t.check("log_folder_set", moved.error === "" && moved.notes.length === 0,
+                    moved.error + " " + moved.notes.join("; "))
+            t.next()
+            break
+        }
+        case 14:
+            t.waitFor("log_moves_to_its_folder", () => /moved-log[\\/]rvp\.log$/.test(String(s.log_open))
+                          && player.log_recent().indexOf("level debug") >= 0, 3000, () => String(s.log_open))
+            break
+        case 15: {
+            const errors = [setSetting("smoothing.preset", "medium"), setSetting("log.folder", null),
+                            setSetting("log.level", "off")]
                 .map(r => r.error).filter(e => e !== "")
-            t.check("smoothing_settings_restored", errors.length === 0, errors.join("; "))
+            t.check("smoothing_settings_restored", errors.length === 0 && t.status().log_open === null,
+                    errors.join("; ") + " " + t.status().log_open)
             t.finish()
             break
         }

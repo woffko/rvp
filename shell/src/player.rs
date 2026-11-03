@@ -3568,6 +3568,14 @@ impl qobject::Player {
             ("recording", core.recorder.is_some().to_string()),
             ("message", text(Some(&self.message().to_string()))),
             ("log_lines", rvp_app::log::counts().0.to_string()),
+            (
+                "log_open",
+                text(
+                    rvp_app::log::path()
+                        .as_deref()
+                        .and_then(std::path::Path::to_str),
+                ),
+            ),
             ("log_mpv_lines", rvp_app::log::counts().1.to_string()),
         ])
         .collect()

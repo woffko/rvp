@@ -3272,17 +3272,26 @@ ApplicationWindow {
                                       "info": qsTr("Info: also files, settings, smoothing, dropped frames"),
                                       "debug": qsTr("Debug: also each second of playback, mpv's details") })
                         }
+                        // Empty: the state folder; the file's path shows
+                        // below.
+                        Field {
+                            // A path: the whole row, its buttons below.
+                            Layout.fillWidth: true
+                            label: qsTr("Folder")
+                            path: "log.folder"
+                            optional: true
+                        }
                         RowLayout {
-                            Label {
-                                text: qsTr("File")
-                                wrapMode: Text.WordWrap
-                                Layout.preferredWidth: 240
-                            }
-                            Label {
-                                Layout.fillWidth: true
-                                text: win.view.log_file || ""
+                            Note {
                                 textFormat: Text.PlainText
-                                elide: Text.ElideMiddle
+                                text: qsTr("File: %1").arg(win.view.log_file || "")
+                            }
+                            Button {
+                                text: qsTr("Browse…")
+                                onClicked: {
+                                    folderChooser.target = "log.folder"
+                                    folderChooser.open()
+                                }
                             }
                             Button {
                                 text: qsTr("Open Folder")
@@ -3290,7 +3299,7 @@ ApplicationWindow {
                             }
                         }
                         Note {
-                            text: qsTr("The log keeps what RVP and mpv report, with the time. At 16 MB it moves to rvp.old.log. Debug adds a line for each second of playback: the frame rates, dropped and late frames, the frames drawn and the processors' load.")
+                            text: qsTr("The log keeps what RVP and mpv report, with the time. An empty folder is RVP's state folder; a new one takes effect at once. At 16 MB the file moves to rvp.old.log beside it. Debug adds a line for each second of playback: the frame rates, dropped and late frames, the frames drawn and the processors' load.")
                         }
                         Heading { text: qsTr("Last lines, newest first") }
                         ScrollView {

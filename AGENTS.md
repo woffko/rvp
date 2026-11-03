@@ -282,8 +282,9 @@ smoothing for users without SVP, after a study of the engines.
 - Portable mode: `rvp.portable` next to the executable keeps the settings
   there; `RVP_CONFIG_DIR` and `RVP_STATE_DIR` still win (test runs).
 - The log (`crates/app/src/log.rs`, the Log page, `log.level`, off by
-  default): `rvp.log` in the state folder at Critical, Warning, Info or
-  Debug, written by a thread of its own. RVP's messages go through
+  default): `rvp.log` in the page's folder (`log.folder`; unset: the state
+  folder) at Critical, Warning, Info or Debug, written by a thread of its
+  own; a new folder reopens the file at once. RVP's messages go through
   `log::report` (the standard error and the log); mpv's come on a weak
   client of the player's core read on another thread, never through the
   window's thread. Debug adds a line per second of playback: mpv's frame

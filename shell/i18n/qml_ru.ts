@@ -4596,12 +4596,12 @@ in %2 seconds</source>
             <translation>Отладка: также каждая секунда воспроизведения, подробности mpv</translation>
         </message>
         <message>
-            <source>File</source>
-            <translation>Файл</translation>
+            <source>File: %1</source>
+            <translation>Файл: %1</translation>
         </message>
         <message>
-            <source>The log keeps what RVP and mpv report, with the time. At 16 MB it moves to rvp.old.log. Debug adds a line for each second of playback: the frame rates, dropped and late frames, the frames drawn and the processors' load.</source>
-            <translation>Журнал хранит сообщения RVP и mpv со временем. При 16 МБ он переносится в rvp.old.log. Отладка добавляет строку на каждую секунду воспроизведения: частоты кадров, потерянные и запоздавшие кадры, отрисованные кадры и загрузку процессоров.</translation>
+            <source>The log keeps what RVP and mpv report, with the time. An empty folder is RVP's state folder; a new one takes effect at once. At 16 MB the file moves to rvp.old.log beside it. Debug adds a line for each second of playback: the frame rates, dropped and late frames, the frames drawn and the processors' load.</source>
+            <translation>Журнал хранит сообщения RVP и mpv со временем. Пустая папка — папка состояния RVP; новая действует сразу. При 16 МБ файл переносится рядом в rvp.old.log. Отладка добавляет строку на каждую секунду воспроизведения: частоты кадров, потерянные и запоздавшие кадры, отрисованные кадры и загрузку процессоров.</translation>
         </message>
         <message>
             <source>Last lines, newest first</source>

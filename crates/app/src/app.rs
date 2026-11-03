@@ -711,7 +711,9 @@ impl App {
         engine.set_mute(state.mute)?;
         self.started = true;
         let last_file = state.last_file.clone();
-        self.apply_log(engine);
+        if let Some(error) = self.apply_log(engine) {
+            self.warnings.push(error);
+        }
         if let Some(volume) = self.settings.audio.startup_volume {
             engine.set_volume(crate::volume::mpv_volume(volume))?;
         }
