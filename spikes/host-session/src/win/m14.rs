@@ -45,7 +45,7 @@ use super::{
 };
 
 /// The window's place for the windowed captures.
-const SIZE: (i32, i32) = (1280, 720);
+pub(super) const SIZE: (i32, i32) = (1280, 720);
 /// RVP's channel for this session (never the owner's own `rvp-<user>`).
 const CHANNEL: &str = "--instance=m14-host";
 
@@ -121,7 +121,7 @@ pub fn m14(options: &Options) -> Result<(), String> {
 }
 
 /// RVP's main window, once it shows.
-fn rvp_window(child: &Child) -> Option<HWND> {
+pub(super) fn rvp_window(child: &Child) -> Option<HWND> {
     let deadline = Instant::now() + Duration::from_secs(20);
     while Instant::now() < deadline {
         if let Some(&hwnd) = top_windows(None, Some(child.id()))
@@ -136,7 +136,7 @@ fn rvp_window(child: &Child) -> Option<HWND> {
     None
 }
 
-fn close_rvp(child: &mut Child, log: &mut Log) {
+pub(super) fn close_rvp(child: &mut Child, log: &mut Log) {
     for hwnd in top_windows(None, Some(child.id())) {
         if class_name(hwnd).contains("QWindow") {
             unsafe {
@@ -158,7 +158,7 @@ fn close_rvp(child: &mut Child, log: &mut Log) {
 }
 
 /// Puts the window at the session's place, on top.
-fn place(hwnd: HWND, monitor: &RECT) {
+pub(super) fn place(hwnd: HWND, monitor: &RECT) {
     let x = monitor.left + 40;
     let y = monitor.top + 40;
     unsafe { SetWindowPos(hwnd, HWND_TOPMOST, x, y, SIZE.0, SIZE.1, SWP_NOACTIVATE) };
@@ -167,7 +167,7 @@ fn place(hwnd: HWND, monitor: &RECT) {
 
 /// Keeps the window over the others (without taking the keyboard), as it
 /// is now.
-fn raise(hwnd: HWND) {
+pub(super) fn raise(hwnd: HWND) {
     unsafe {
         SetWindowPos(hwnd, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
     }
@@ -195,7 +195,7 @@ fn covering(hwnd: HWND, x: i32, y: i32) -> Option<String> {
 
 /// Fails unless the player's window is the one under every point, before
 /// a click or a capture.
-fn require_shown(hwnd: HWND, points: &[(i32, i32)], step: &str) -> Result<(), String> {
+pub(super) fn require_shown(hwnd: HWND, points: &[(i32, i32)], step: &str) -> Result<(), String> {
     for &(x, y) in points {
         if let Some(other) = covering(hwnd, x, y) {
             return Err(format!(
@@ -207,7 +207,7 @@ fn require_shown(hwnd: HWND, points: &[(i32, i32)], step: &str) -> Result<(), St
 }
 
 /// The middle and the corners of a rectangle, 16 pixels inside.
-fn inside(rect: &RECT) -> [(i32, i32); 5] {
+pub(super) fn inside(rect: &RECT) -> [(i32, i32); 5] {
     [
         ((rect.left + rect.right) / 2, (rect.top + rect.bottom) / 2),
         (rect.left + 16, rect.top + 16),
@@ -217,7 +217,7 @@ fn inside(rect: &RECT) -> [(i32, i32); 5] {
     ]
 }
 
-fn double_click(x: i32, y: i32) {
+pub(super) fn double_click(x: i32, y: i32) {
     move_to(x, y);
     let click = [mouse_flags(MOUSEEVENTF_LEFTDOWN), mouse_flags(MOUSEEVENTF_LEFTUP)];
     send(&click);

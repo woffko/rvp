@@ -4,6 +4,7 @@
 
 mod m10;
 mod m14;
+mod skins;
 
 use std::ffi::c_void;
 use std::fmt::Write as _;
@@ -1136,7 +1137,7 @@ impl Options {
 
 pub fn run(args: &[String]) -> Result<(), String> {
     unsafe { SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2) };
-    let (command, rest) = args.split_first().ok_or("usage: host-session r1|s5|audio|m10|m14|record|check ...")?;
+    let (command, rest) = args.split_first().ok_or("usage: host-session r1|s5|audio|m10|m14|skins|record|check ...")?;
     let options = Options::parse(rest);
     match command.as_str() {
         "r1" => r1(&options),
@@ -1144,6 +1145,7 @@ pub fn run(args: &[String]) -> Result<(), String> {
         "audio" => audio(&options),
         "m10" => m10::m10(&options),
         "m14" => m14::m14(&options),
+        "skins" => skins::skins(&options),
         "record" => record(&options),
         "check" => check(),
         "s3-input" => s3_input(&options),

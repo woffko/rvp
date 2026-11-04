@@ -860,3 +860,112 @@ fn visual_bars_light_from_the_bottom_with_the_skins_colours() {
     assert_eq!(image.pixel(10, 5), [0, 0, 0, 0]);
     assert_eq!(image.pixel(3, 7), [0, 0, 0, 0], "between bars");
 }
+
+/// The rules PotPlayer's other bundled skins need (the skin check of
+/// 2026-11-04): `Alignment` and buttons larger than their sprites,
+/// `AutoVisible`, the size rules, the media and fullscreen states, and the
+/// fullscreen bars built for a skin that has none.
+#[test]
+fn other_skins_rules() {
+    let markup = "<Skin><MainSkinArea Image='Atlas.png'><Control>
+\t<Static Align='Top' Height='20'>
+\t\t<Button Align='Left' CmdID='CMD_A' Width='20' ImageLeft='0' ImageTop='10' ImageWidth='8' ImageHeight='8' Alignment='5' />
+\t\t<Button Align='Left' CmdID='CMD_B' Width='20' ImageLeft='0' ImageTop='10' ImageWidth='8' ImageHeight='8' />
+\t\t<Button Align='Left' CmdID='ID_ETC_NEXTONTOP' Width='4' ImageLeft='0' ImageTop='10' ImageWidth='4' ImageHeight='4' AutoVisible='1' />
+\t\t<Button Align='Left' CmdID='ID_ETC_NEXTONTOP' Width='5' ImageLeft='0' ImageTop='10' ImageWidth='4' ImageHeight='4' AutoVisible='2' />
+\t\t<Label Align='Left' CmdID='CMD_FILE_TYPE_MESSAGE' Width='6' AutoVisible='1' />
+\t\t<Button Align='Left' CmdID='CMD_WIDE' Width='3' VisParentMaxWidth='80' />
+\t\t<Static Align='Client' CmdID='CMD_REST' VisMinWidth='40' />
+\t</Static>
+\t<Static Align='Bottom' Height='6' ImageLeft='0' ImageTop='0' ImageWidth='30' ImageHeight='10' />
+\t<Static Align='Client'>
+\t\t<Static State='CMD_ON_MEDIA_PLAY' Contain='CMD_VIDEO_WINDOW' />
+\t\t<Static State='CMD_ON_FULLSCREEN' CmdID='CMD_FULL_MARK' Width='2' Height='2' />
+\t</Static>
+</Control></MainSkinArea></Skin>";
+    let archive = SkinArchive::from_files(
+        "Others",
+        [
+            ("VideoSkin.xml", markup.as_bytes().to_vec()),
+            ("atlas.png", atlas()),
+        ],
+    );
+    let skin = Skin::load(archive, "VideoSkin.xml").expect("load");
+    let commands = |placed: &rvp_skin::Layout<'_>| -> Vec<String> {
+        placed
+            .nodes
+            .iter()
+            .filter_map(|node| node.command().map(str::to_owned))
+            .collect()
+    };
+    let mut state = UiState::default();
+    state.values.insert("ID_ETC_NEXTONTOP".to_owned(), 2);
+    let placed = layout(&skin, "MainSkinArea", 100, 60, &state).expect("layout");
+    let shown = commands(&placed);
+    // The pin of Always On Top's mode 2; no message without a text; the
+    // narrow window's button gone at 100 pixels; the rest 41 wide; no
+    // video slot and no fullscreen mark while nothing plays in a window.
+    assert_eq!(
+        shown,
+        ["CMD_A", "CMD_B", "ID_ETC_NEXTONTOP", "CMD_REST"],
+        "{shown:?}"
+    );
+    assert!(placed.slot("CMD_VIDEO_WINDOW").is_none());
+    let pin = placed
+        .nodes
+        .iter()
+        .find(|node| node.command() == Some("ID_ETC_NEXTONTOP"))
+        .expect("pin");
+    assert_eq!(pin.rect.w, 5, "AutoVisible='2' shows");
+    // A message with a text, a narrower window, a file open, fullscreen.
+    let mut data = DataModel::default();
+    data.set_text("CMD_FILE_TYPE_MESSAGE", "MKV");
+    state.values.extend(data.text_values());
+    state.media_loaded = true;
+    state.fullscreen = true;
+    let placed = layout(&skin, "MainSkinArea", 79, 60, &state).expect("layout");
+    let shown = commands(&placed);
+    assert!(
+        shown.contains(&"CMD_FILE_TYPE_MESSAGE".to_owned()),
+        "{shown:?}"
+    );
+    assert!(shown.contains(&"CMD_WIDE".to_owned()), "{shown:?}");
+    // 79 - 20 - 20 - 5 - 6 - 3: 25, narrower than VisMinWidth.
+    assert!(!shown.contains(&"CMD_REST".to_owned()), "{shown:?}");
+    assert!(shown.contains(&"CMD_FULL_MARK".to_owned()), "{shown:?}");
+    assert_eq!(
+        placed.slot("CMD_VIDEO_WINDOW"),
+        Some(Rect::new(0, 20, 79, 34))
+    );
+
+    // Sprites: centred with Alignment='5' and for a button larger than
+    // its sprite, once (never tiled).
+    let state = UiState::default();
+    let placed = layout(&skin, "MainSkinArea", 100, 60, &state).expect("layout");
+    let image = rasterize(
+        &paint(&skin, &placed, &state, &DataModel::default()),
+        &skin,
+        &mut Fonts::new(Vec::new()),
+    );
+    for left in [0, 20] {
+        assert_eq!(image.pixel(left + 10, 10), BUTTON_STATES[0], "the middle");
+        assert_eq!(image.pixel(left + 2, 2)[3], 0, "no sprite at the corner");
+        assert_eq!(image.pixel(left + 10, 2)[3], 0, "not tiled above");
+    }
+
+    // Fullscreen: the bottom bar over the video, nothing at the top.
+    let placed = layout(&skin, "MainSkinAreaOscInside", 200, 100, &state).expect("built");
+    assert_eq!(
+        placed.slot("CMD_VIDEO_WINDOW"),
+        Some(Rect::new(0, 0, 200, 94))
+    );
+    let bottom = placed
+        .nodes
+        .iter()
+        .find(|node| node.rect == Rect::new(0, 94, 200, 6))
+        .expect("the bottom bar");
+    assert!(bottom.command().is_none());
+    assert!(!commands(&placed).contains(&"CMD_A".to_owned()));
+    // The built area does not count the skin's commands twice.
+    assert_eq!(skin.commands()["ID_ETC_NEXTONTOP"].count, 2);
+}

@@ -414,22 +414,28 @@ fn toggle(flag: &mut bool, what: &str) -> String {
     format!("{what}: {}", if *flag { "on" } else { "off" })
 }
 
-/// The skin files in `folder`: PotPlayer's `.dsf`, classic Winamp skins
-/// (`.wsz`) and VLC's (`.vlt`, M9).
+/// The skin files in `folder` ([`is_skin_file`]).
 fn skins_in(folder: &Path, out: &mut std::collections::BTreeSet<PathBuf>) {
     let Ok(entries) = std::fs::read_dir(folder) else {
         return;
     };
     for entry in entries.flatten() {
         let path = entry.path();
-        if path.extension().is_some_and(|ext| {
-            ext.eq_ignore_ascii_case("dsf")
-                || ext.eq_ignore_ascii_case("wsz")
-                || ext.eq_ignore_ascii_case("vlt")
-        }) {
+        if is_skin_file(&path) {
             out.insert(path);
         }
     }
+}
+
+/// A skin file: PotPlayer's `.dsf`, a classic Winamp skin (`.wsz`) or a
+/// VLC theme (`.vlt`, M9).
+#[must_use]
+pub fn is_skin_file(path: &Path) -> bool {
+    path.extension().is_some_and(|ext| {
+        ext.eq_ignore_ascii_case("dsf")
+            || ext.eq_ignore_ascii_case("wsz")
+            || ext.eq_ignore_ascii_case("vlt")
+    })
 }
 
 impl App {
@@ -759,6 +765,27 @@ impl App {
             }
             SkinCommand::MenuDark => Some(skins.menu_dark),
         }
+    }
+
+    /// Skin files among files opened (the command line's or a second
+    /// instance's) are no media: the last one becomes the skin, as if
+    /// chosen in the Skins menu, and they leave the list. PotPlayer applies
+    /// a `.dsf` that is opened too.
+    pub fn take_skin_files(&mut self, files: &mut Vec<String>) -> Option<UiRequest> {
+        let skin = files
+            .iter()
+            .rev()
+            .find(|file| !crate::playlist::is_url(file) && is_skin_file(Path::new(file)))?
+            .clone();
+        files.retain(|file| crate::playlist::is_url(file) || !is_skin_file(Path::new(file)));
+        // Absolute, as the Skins menu lists them (no `\\?\` prefix of
+        // `canonicalize` on Windows).
+        let path = std::path::absolute(&skin).unwrap_or_else(|_| PathBuf::from(&skin));
+        let name = crate::view::file_name(&path.to_string_lossy()).to_owned();
+        self.settings.skin = Some(path);
+        self.skin_override = SkinOverride::Off;
+        self.save_settings();
+        Some(UiRequest::Osd(format!("Skin: {name}")))
     }
 
     /// A choice of the Skins menu's lists.

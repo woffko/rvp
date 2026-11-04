@@ -11,6 +11,8 @@ pub struct UiState {
     /// Inactive windows use the `AltImage*` sprites.
     pub window_active: bool,
     pub maximized: bool,
+    /// The window is fullscreen (`State='CMD_ON_FULLSCREEN'`).
+    pub fullscreen: bool,
     pub media_loaded: bool,
     /// True while playing; selects the Pause button over the Play button.
     pub playing: bool,
@@ -21,6 +23,10 @@ pub struct UiState {
     /// Active state names (`CMD_BROADCAST_MODE`, ...) and toggled commands of
     /// `DownFlag` buttons (`ID_AUDIO_EQULIZER`, ...).
     pub flags: BTreeSet<String>,
+    /// Command values for `AutoVisible` ([`UiState::auto_value`]): 1 for a
+    /// message that has a text, the Always On Top mode's number (1 to 4)
+    /// for `ID_ETC_NEXTONTOP`, 1 or -1 for a command that is on or off.
+    pub values: BTreeMap<String, i32>,
     /// Element under the mouse pointer.
     pub hover: Option<usize>,
     /// Element held down by the mouse.
@@ -34,11 +40,13 @@ impl Default for UiState {
         Self {
             window_active: true,
             maximized: false,
+            fullscreen: false,
             media_loaded: false,
             playing: false,
             playlist_attached: true,
             current_page: 0,
             flags: BTreeSet::new(),
+            values: BTreeMap::new(),
             hover: None,
             pressed: None,
             code_page: 0,
@@ -47,10 +55,34 @@ impl Default for UiState {
 }
 
 impl UiState {
-    /// True when `name` is an active state or a toggled command.
+    /// True when `name` is an active state or a toggled command. The
+    /// window's and playback's states have names of their own: a file is
+    /// open (`CMD_ON_MEDIA_PLAY`, which twelve of PotPlayer's skins give
+    /// their video slot), fullscreen, the playlist attached; RVP has none
+    /// of Daum's broadcast or VTP modes.
     #[must_use]
     pub fn flag(&self, name: &str) -> bool {
-        self.flags.contains(name)
+        match name {
+            "CMD_ON_MEDIA_PLAY" => self.media_loaded,
+            "CMD_ON_FULLSCREEN" => self.fullscreen,
+            "CMD_PLAYLIST_ATTACH" => self.playlist_attached,
+            "CMD_NOT_VTP_MODE" | "CMD_NOT_BV_MODE" => true,
+            _ => self.flags.contains(name),
+        }
+    }
+
+    /// The value an element's `AutoVisible` is compared with (Default.dsf,
+    /// WindowFrame): the command's entry in [`UiState::values`], else 1
+    /// while it is on and -1 while off. The element shows while they are
+    /// equal: a message's parts while it has a text (`1`), the pin of the
+    /// Always On Top mode (`1` to `4`), the on and off pictures (`1`,
+    /// `-1`); values RVP never gives (HDR's `10`) hide it.
+    #[must_use]
+    pub fn auto_value(&self, command: &str) -> i32 {
+        self.values
+            .get(command)
+            .copied()
+            .unwrap_or(if self.flag(command) { 1 } else { -1 })
     }
 
     /// Whether PotPlayer shows a control bound to `command` in this state.
@@ -179,6 +211,17 @@ pub struct DataModel {
 }
 
 impl DataModel {
+    /// The value 1 for each command whose text is not empty: what
+    /// `AutoVisible='1'` asks of a message ([`UiState::values`]).
+    #[must_use]
+    pub fn text_values(&self) -> BTreeMap<String, i32> {
+        self.texts
+            .iter()
+            .filter(|(_, text)| !text.is_empty())
+            .map(|(command, _)| (command.clone(), 1))
+            .collect()
+    }
+
     /// Text bound to a command, if any.
     #[must_use]
     pub fn text(&self, command: &str) -> Option<&str> {

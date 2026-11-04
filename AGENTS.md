@@ -415,6 +415,17 @@ smoothing for users without SVP, after a study of the engines.
   are opaque windows of their own, and its video keeps its place. The
   video makes room for the bar only with `skins.fullscreen-resize` (off by
   default since goal Q: on, the picture jumped by the bar's height).
+- PotPlayer's 22 bundled skins (the skin check of 2026-11-04): an opened
+  `.dsf`, `.wsz` or `.vlt` (also handed over by a second `rvp`) becomes
+  the skin, as in PotPlayer; another skin file keeps the video's size and
+  builds the window around it. The engine follows `Alignment`,
+  `AutoVisible` (`UiState::values`, `view::apply_auto_values`),
+  `VisParentMaxWidth`/`Height`, `VisMinWidth`/`Height` and the states
+  `CMD_ON_MEDIA_PLAY`, `CMD_ON_FULLSCREEN`; a skin without
+  `MainSkinAreaOscInside` gets one built from its bottom bars
+  (`skin.rs`, `RvpBuilt`). `tools/windows-vm/skins-host.ps1` with
+  host-session's `skins` switches every skin in PotPlayer and RVP on the
+  host, with permission (captures to `~/rvp-reference`).
 - `--selftest=m14 --registry-check` (the test VM only) writes the Run
   key and the file types to the current user's registry and removes
   them; never pass `--registry-check` on the host. The VM's check is

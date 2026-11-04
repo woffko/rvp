@@ -158,6 +158,18 @@ impl qobject::Player {
             core.look.skin_want = Some(want);
             return;
         }
+        // Another skin file: the video keeps its size (below).
+        let video = core
+            .look
+            .skin_want
+            .as_ref()
+            .is_some_and(|old| old.path != want.path)
+            .then(|| {
+                core.chrome
+                    .as_ref()
+                    .map(rvp_app::chrome::Chrome::video_rect)
+            })
+            .flatten();
         show_skin(skin);
         if let Some(chrome) = core.chrome.as_mut() {
             chrome.set_skin(skin);
@@ -179,7 +191,81 @@ impl qobject::Player {
         }
         if mode_changed {
             self.as_mut().size_for_mode(audio);
+        } else if let Some(video) = video {
+            self.as_mut().keep_video_size(video);
         }
+        self.log_skin(audio);
+    }
+
+    /// PotPlayer keeps the video's size when the skin changes and builds
+    /// the window around it with the new skin's frame, bars and attached
+    /// playlist (the skin check's host captures, 2026-11-04: its window
+    /// grew and shrank with each skin). "Keep window size" keeps the
+    /// window's instead; fullscreen and maximized windows stay as they are.
+    fn keep_video_size(self: Pin<&mut Self>, video: rvp_skin::Rect) {
+        let fullscreen = *self.fullscreen();
+        let Some(core) = self.core() else {
+            return;
+        };
+        if fullscreen
+            || core.maximized
+            || core.app.settings.skins.keep_size
+            || video.w <= 0
+            || video.h <= 0
+        {
+            return;
+        }
+        let Some(chrome) = core.chrome.as_ref() else {
+            return;
+        };
+        let (width, height) = chrome.chrome_size();
+        let request = WindowRequest::Size {
+            width: window_length(video.w + width),
+            height: window_length(video.h + height),
+        };
+        self.window_request(&request);
+    }
+
+    /// The skin just shown and the window's sizes (the log's Info).
+    fn log_skin(&self, audio: bool) {
+        if !rvp_app::log::enabled(rvp_app::log::Level::Info) {
+            return;
+        }
+        let Some(core) = self.core() else {
+            return;
+        };
+        let Some(want) = &core.look.skin_want else {
+            return;
+        };
+        let limits = core
+            .chrome
+            .as_ref()
+            .map(|chrome| Mode::Window.limits(chrome.skin()))
+            .unwrap_or_default();
+        rvp_app::log::write(
+            rvp_app::log::Level::Info,
+            &format!(
+                "skin: {} ({}), window {}x{}, smallest {}x{}{}",
+                want.path.as_ref().map_or_else(
+                    || "RVP Default".to_owned(),
+                    |path| path.display().to_string()
+                ),
+                want.file.as_deref().unwrap_or(if audio {
+                    "AudioSkin.xml"
+                } else {
+                    "VideoSkin.xml"
+                }),
+                core.width,
+                core.height,
+                self.min_width(),
+                self.min_height(),
+                if limits.force_width || limits.force_height {
+                    " (forced)"
+                } else {
+                    ""
+                }
+            ),
+        );
     }
 
     /// The window for the skin mode just shown: its own when each mode

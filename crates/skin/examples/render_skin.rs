@@ -103,6 +103,10 @@ fn run(args: &[String]) -> Result<(), String> {
         state.media_loaded = true;
     }
     let area = args.get(5).map_or("MainSkinArea", String::as_str);
+    // As RVP's window: the messages with a text show (`AutoVisible`), the
+    // bars over the video are fullscreen's.
+    state.values.extend(data.text_values());
+    state.fullscreen = area == "MainSkinAreaOscInside";
     let mut fonts = Fonts::from_environment();
     let image = render_area(&skin, area, width, height, &state, &data, &mut fonts)
         .map_err(|e| e.to_string())?;

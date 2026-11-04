@@ -8,7 +8,7 @@ use crate::archive::SkinArchive;
 use crate::error::SkinError;
 use crate::image::Image;
 use crate::lang::StringTable;
-use crate::markup::{Element, parse_document};
+use crate::markup::{Attrs, Element, parse_document};
 use crate::preprocess::{Expanded, expand};
 
 /// Skin files tried, in order, when the caller does not name one.
@@ -126,7 +126,8 @@ impl Skin {
             variables.insert((*name).to_owned(), (*value).to_owned());
         }
         let expanded = expand(&archive, file, &variables);
-        let root = parse_document(&expanded.text);
+        let mut root = parse_document(&expanded.text);
+        add_fullscreen_bars(&mut root);
         let strings = StringTable::collect(&root);
         let mut warnings = expanded.warnings.clone();
         let mut images = BTreeMap::new();
@@ -458,4 +459,70 @@ impl Skin {
         self.image(atlas)
             .map_or([255, 255, 255, 255], |image| image.pixel(x, y))
     }
+}
+
+/// A skin without `MainSkinAreaOscInside` (fourteen of PotPlayer's 22
+/// bundled skins: gom, kmp, pot, zoom...) gets one built from its
+/// `MainSkinArea`: PotPlayer's fullscreen shows that area's bottom-docked
+/// parts across the bottom of the screen over the video, and nothing at
+/// the top (the skin check's host captures, 2026-11-04). The parts keep
+/// their element IDs (only one layout shows at a time); the new elements
+/// get IDs past the document's.
+fn add_fullscreen_bars(root: &mut Element) {
+    if root.find("MainSkinAreaOscInside").is_some() {
+        return;
+    }
+    let Some(main) = root.find("MainSkinArea") else {
+        return;
+    };
+    let parts = main.child("Control").unwrap_or(main);
+    let line = main.line;
+    let mut next_id = 0;
+    root.walk(&mut |element| next_id = next_id.max(element.id + 1));
+    let mut new_element = |name: &str, attrs: &[(&str, &str)]| {
+        let mut list = Attrs::default();
+        for (key, value) in attrs {
+            list.push(key, value);
+        }
+        let mut element = Element::new(name, list, line);
+        element.id = next_id;
+        next_id += 1;
+        element
+    };
+    let mut control = new_element("Control", &[]);
+    control.children = parts
+        .children
+        .iter()
+        .filter(|part| {
+            part.attrs
+                .get("Align")
+                .is_some_and(|align| align.eq_ignore_ascii_case("Bottom"))
+        })
+        .cloned()
+        .collect();
+    control.children.push(new_element(
+        "Static",
+        &[("Align", "Client"), ("Contain", "CMD_VIDEO_WINDOW")],
+    ));
+    let mut area = new_element("MainSkinAreaOscInside", &[]);
+    area.attrs = main.attrs.clone();
+    area.attrs.push("RvpBuilt", "1");
+    area.children.push(control);
+    insert_after(root, "MainSkinArea", area);
+}
+
+/// Puts `element` after the first element named `name`, among its
+/// siblings.
+fn insert_after(parent: &mut Element, name: &str, element: Element) -> Option<Element> {
+    if let Some(index) = parent.children.iter().position(|child| child.is(name)) {
+        parent.children.insert(index + 1, element);
+        return None;
+    }
+    let mut element = Some(element);
+    for child in &mut parent.children {
+        if let Some(left) = element.take() {
+            element = insert_after(child, name, left);
+        }
+    }
+    element
 }

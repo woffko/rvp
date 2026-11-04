@@ -192,6 +192,11 @@ pub fn commands(root: &Element) -> BTreeMap<String, CommandUse> {
 }
 
 fn collect(element: &Element, area: &str, found: &mut BTreeMap<String, CommandUse>) {
+    // RVP's own copies (the fullscreen bars of a skin without them) count
+    // once, where the skin has them.
+    if element.attrs.flag("RvpBuilt") {
+        return;
+    }
     let area = if element.name.ends_with("Area") || element.is("Menu") {
         element.name.as_str()
     } else {

@@ -10,6 +10,14 @@
 //! * The video slot (`Contain='CMD_VIDEO_WINDOW'`) is black in the window,
 //!   where the skin lies under the video. In `MainSkinAreaOscInside`,
 //!   whose bars lie over the video in fullscreen, it draws nothing.
+//! * A `Button` or `Image` with `Alignment` (`Default.dsf`, `WindowFrame`)
+//!   draws its sprite at the sprite's size inside its place, placed by
+//!   `DrawText`'s flags: 1 centre, 2 right, 4 middle, 8 bottom (`5`: the
+//!   middle of the place). Without it an `Image` fills its place, tiled;
+//!   a `Button` larger than its sprite draws it once in the middle
+//!   (Default.dsf's bottom bar: the buttons as tall as the bar, their
+//!   pictures centred in PotPlayer's capture), unless it has margins to
+//!   stretch by.
 //! * Button sprites hold their states side by side, each as wide as the
 //!   button: normal, hover, pressed, disabled. A missing state falls back to
 //!   normal. Toggle buttons (`DownFlag`) show the pressed state while on;
@@ -393,7 +401,57 @@ fn paint_button(list: &mut DisplayList, skin: &Skin, node: &Node<'_>, state: &Ui
     if src.right() > atlas_width {
         src = Rect::new(left, top, width, height);
     }
-    list.image(node.atlas, src, node.rect, node.clip);
+    let dst = if attrs.has("Alignment") || has_margins(attrs) {
+        aligned(node.rect, width, height, attrs)
+    } else {
+        centred(node.rect, width, height)
+    };
+    list.image(node.atlas, src, dst, node.clip);
+}
+
+/// A sliced sprite: fixed borders and a stretched middle.
+fn has_margins(attrs: &Attrs) -> bool {
+    ["LeftMargin", "RightMargin", "TopMargin", "BottomMargin"]
+        .iter()
+        .any(|name| attrs.int(name).is_some_and(|margin| margin > 0))
+}
+
+/// A `width` x `height` sprite in the middle of `place` when the place is
+/// larger; the place itself otherwise.
+fn centred(place: Rect, width: i32, height: i32) -> Rect {
+    if width >= place.w && height >= place.h {
+        return place;
+    }
+    let (width, height) = (width.min(place.w), height.min(place.h));
+    Rect::new(
+        place.x + (place.w - width) / 2,
+        place.y + (place.h - height) / 2,
+        width,
+        height,
+    )
+}
+
+/// The place of a `width` x `height` sprite inside `place` by the
+/// element's `Alignment` (`DrawText`'s flags), or `place` itself without one.
+fn aligned(place: Rect, width: i32, height: i32, attrs: &Attrs) -> Rect {
+    let Some(flags) = attrs.int("Alignment") else {
+        return place;
+    };
+    let x = if flags & 1 != 0 {
+        place.x + (place.w - width) / 2
+    } else if flags & 2 != 0 {
+        place.right() - width
+    } else {
+        place.x
+    };
+    let y = if flags & 4 != 0 {
+        place.y + (place.h - height) / 2
+    } else if flags & 8 != 0 {
+        place.bottom() - height
+    } else {
+        place.y
+    };
+    Rect::new(x, y, width, height)
 }
 
 fn paint_label(
@@ -604,7 +662,7 @@ fn paint_image(list: &mut DisplayList, node: &Node<'_>, data: &DataModel) {
     let dst = if attrs.flag("IsLogo") {
         fit_logo(node.rect, width, height)
     } else {
-        node.rect
+        aligned(node.rect, width, height, attrs)
     };
     list.image(
         node.atlas,

@@ -85,7 +85,7 @@ impl Attrs {
         self.entries.is_empty()
     }
 
-    fn push(&mut self, name: &str, value: &str) {
+    pub(crate) fn push(&mut self, name: &str, value: &str) {
         if !self.has(name) {
             self.entries.push((name.to_owned(), value.to_owned()));
         }
@@ -191,7 +191,7 @@ pub struct Element {
 }
 
 impl Element {
-    fn new(name: &str, attrs: Attrs, line: usize) -> Self {
+    pub(crate) fn new(name: &str, attrs: Attrs, line: usize) -> Self {
         Self {
             id: 0,
             name: name.to_owned(),

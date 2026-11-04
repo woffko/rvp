@@ -19,7 +19,12 @@
 //!   rectangle without changing the free space.
 //! * Hidden elements take no space: paired commands (Play/Pause,
 //!   Maximize/Restore), `State` conditions, `Contain` slots,
-//!   `VisParentMinWidth`, `VisParentMinHeight` and `VisMinLeft`. Controls
+//!   `AutoVisible` (the command's value, `UiState::auto_value`),
+//!   `VisParentMinWidth`, `VisParentMinHeight`, `VisParentMaxWidth` and
+//!   `VisParentMaxHeight` (kmp1's small buttons in a narrow window and its
+//!   labelled ones in a wide one). `VisMinLeft`, `VisMinWidth` and
+//!   `VisMinHeight` hide an element after it is placed (its space is
+//!   taken): left of that place, or narrower or lower than that. Controls
 //!   of Daum's pop-up windows (`CMD_POPUP_WINDOW`, BlackSpace's audio
 //!   skin's "screen partition" button) are hidden as their slots are
 //!   (goal P's host session: PotPlayer shows neither).
@@ -253,6 +258,17 @@ impl<'a> Builder<'a, '_> {
             {
                 continue;
             }
+            if child
+                .attrs
+                .int("VisMinWidth")
+                .is_some_and(|min| placed.w < min)
+                || child
+                    .attrs
+                    .int("VisMinHeight")
+                    .is_some_and(|min| placed.h < min)
+            {
+                continue;
+            }
             let node_clip = placed.intersect(&clip);
             let atlas = child
                 .attrs
@@ -354,19 +370,16 @@ impl<'a> Builder<'a, '_> {
                 return false;
             }
         }
-        if attrs
-            .int("VisParentMinWidth")
-            .is_some_and(|min| parent.w < min)
+        if let Some(auto) = attrs.int("AutoVisible").filter(|auto| *auto != 0)
+            && self.state.auto_value(attrs.get("CmdID").unwrap_or("")) != auto
         {
             return false;
         }
-        if attrs
-            .int("VisParentMinHeight")
-            .is_some_and(|min| parent.h < min)
-        {
-            return false;
-        }
-        true
+        let size = |name: &str| attrs.int(name);
+        !(size("VisParentMinWidth").is_some_and(|min| parent.w < min)
+            || size("VisParentMinHeight").is_some_and(|min| parent.h < min)
+            || size("VisParentMaxWidth").is_some_and(|max| parent.w > max)
+            || size("VisParentMaxHeight").is_some_and(|max| parent.h > max))
     }
 }
 

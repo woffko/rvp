@@ -490,3 +490,26 @@ fn blackspace_menus_build() {
         ]
     );
 }
+
+#[test]
+fn an_opened_skin_file_becomes_the_skin() {
+    let (mut app, dir) = new_app("skin-file", Settings::default());
+    let skin = dir.0.join("Some Skin.DSF");
+    let mut files = vec![
+        "/media/a.mkv".to_owned(),
+        skin.display().to_string(),
+        "https://example.com/b.dsf".to_owned(),
+    ];
+    let notice = app.take_skin_files(&mut files);
+    assert!(
+        matches!(&notice, Some(rvp_app::UiRequest::Osd(text)) if text == "Skin: Some Skin.DSF"),
+        "{notice:?}"
+    );
+    // A URL is never a skin; the media stay.
+    assert_eq!(files, ["/media/a.mkv", "https://example.com/b.dsf"]);
+    assert_eq!(app.settings.skin.as_deref(), Some(skin.as_path()));
+    assert_eq!(app.chosen_skin().as_deref(), Some(skin.as_path()));
+    let mut none = vec!["/media/a.mkv".to_owned()];
+    assert!(app.take_skin_files(&mut none).is_none());
+    assert_eq!(none.len(), 1);
+}

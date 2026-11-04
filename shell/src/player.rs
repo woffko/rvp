@@ -1207,6 +1207,8 @@ impl qobject::Player {
         };
         // PotPlayer's switches (M11): the files' order and options first.
         core.app.prepare_switches(&mut request);
+        // A skin file among them is the skin, not a file to play.
+        let skin = core.app.take_skin_files(&mut request.files);
         // The desktop's media controls follow the application from here,
         // unless the General page turns them off; the taskbar's buttons
         // and progress (M14).
@@ -1248,6 +1250,10 @@ impl qobject::Player {
         }
         // The control API follows the application from here (M15).
         self.as_mut().apply_remote();
+        if let Some(skin) = skin {
+            self.as_mut().sync_skin();
+            self.as_mut().handle_request(skin);
+        }
         if let Some(action) = action {
             self.handle_request(action);
         }
@@ -1411,6 +1417,14 @@ impl qobject::Player {
         }
         let spectrum = core.app.skin_spectrum() && core.app.model.media_loaded();
         view::apply_playback_state(&mut chrome.state, &core.app.model);
+        chrome.state.fullscreen = fullscreen;
+        view::apply_auto_values(
+            &mut chrome.state,
+            &chrome.data,
+            &core.app.model,
+            core.app.settings.on_top,
+            on_top,
+        );
         let toggles = chrome.toggle_commands();
         core.app.toggle_flags(&mut chrome.state, toggles);
         let damage = chrome.refresh();
@@ -2929,6 +2943,19 @@ impl qobject::Player {
             pending.files.extend(request.files);
             return;
         }
+        // A skin file is the skin (PotPlayer applies an opened `.dsf`);
+        // a request with nothing else leaves the playlist as it is.
+        if let Some(skin) = core.app.take_skin_files(&mut request.files) {
+            self.as_mut().sync_skin();
+            self.as_mut().handle_request(skin);
+            if request.files.is_empty() {
+                self.sync_chrome();
+                return;
+            }
+        }
+        let Some(core) = self.as_mut().core_mut() else {
+            return;
+        };
         if request.mode == rvp_app::instance::Mode::Play && !request.files.is_empty() {
             core.request_fit();
             self.as_mut().ui_request(request::RAISE, 0);

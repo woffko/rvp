@@ -349,6 +349,46 @@ pub fn apply_playback_state(state: &mut UiState, model: &PlayerModel) {
     }
 }
 
+/// The values the skin's `AutoVisible` compares (`Default.dsf`, `WindowFrame`,
+/// `UiState::auto_value`): the messages that have a text, the Always On
+/// Top mode's number (1 never to 4 while playing in fullscreen, the order
+/// of its pins) and whether the window is on top now, and the 3D, 360°
+/// and stream menus while a video is open (PotPlayer's capture shows them
+/// then). The broadcast's adult and violence marks, closed captions and
+/// HDR get no value and stay hidden.
+pub fn apply_auto_values(
+    state: &mut UiState,
+    data: &DataModel,
+    model: &PlayerModel,
+    on_top: crate::OnTop,
+    topmost: bool,
+) {
+    let mut values = data.text_values();
+    let mode = match on_top {
+        crate::OnTop::Never => 1,
+        crate::OnTop::Always => 2,
+        crate::OnTop::WhilePlaying => 3,
+        crate::OnTop::FullscreenPlaying => 4,
+    };
+    values.insert("ID_ETC_NEXTONTOP".to_owned(), mode);
+    values.insert(
+        "CMD_TOPMOST_WINDOW".to_owned(),
+        if topmost { 1 } else { -1 },
+    );
+    if model.int(PropertyId::VideoWidth).is_some() {
+        for menu in [
+            "CMD_POPUPMENU_VIDEO_3D",
+            "CMD_POPUPMENU_VIDEO_360VR",
+            "CMD_POPUPMENU_STREAM_SELECT",
+        ] {
+            values.insert(menu.to_owned(), 1);
+        }
+    }
+    if state.values != values {
+        state.values = values;
+    }
+}
+
 /// Playback information over the video (Tab): the file, video, decoder,
 /// audio, time and sync lines, from the observed properties (no mpv reads).
 #[must_use]
