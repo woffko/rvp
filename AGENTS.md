@@ -251,11 +251,11 @@ smoothing for users without SVP, after a study of the engines.
   `tools/windows-vm/m18-host.ps1` (each GPU mode in RVP's window at the
   power limit; `-Vm` tries it on the VM). MVTools' filter asks for 16
   frames at once (`concurrent-frames`, the host's runs of 2026-11-04:
-  mpv's default of one per logical CPU dropped a frame a second), and
-  after a start or a seek the original shows for the page's
-  `original-first` (1 s) before a VapourSynth engine goes in, as SVP does
-  (`App::smoothing_warm`; mpv's refresh seek after RVP's own filter change
-  does not count).
+  mpv's default of one per logical CPU dropped a frame a second), and,
+  as SVP does, the script's first `original-first` seconds (1 s) are the
+  source's frames repeated at the rate (`FrameEval`): mpv loads the script
+  again after each start and seek. Adding the filter later instead
+  dropped 80 frames while mpv's chain changed.
 - The control panel (F7) is a second window (`shell/qml/ControlPanel.qml`)
   with its own `Chrome` in `Mode::ControlBox`, painted whole
   (`SkinView.surface` 1, `panelDamaged`).

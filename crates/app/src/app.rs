@@ -2050,10 +2050,6 @@ impl App {
             self.smoothing.svp_hold = hold;
             self.apply_smoothing(engine);
         }
-        // The original after a start or a seek (`original-first`).
-        let seeking_began = changes.contains(PropertyId::Seeking)
-            && self.model.flag(PropertyId::Seeking) == Some(true);
-        self.smoothing_warm(engine, seeking_began, now);
         if self.started
             && changes.contains(PropertyId::Volume)
             && let Some(volume) = self.model.double(PropertyId::Volume)
@@ -2102,8 +2098,7 @@ impl App {
         // file's dropped frames count no longer.
         self.svp
             .file_started(crate::svp::svp_mode(&self.settings), now);
-        self.smoothing
-            .file_started(now, self.settings.smoothing.original_first > 0);
+        self.smoothing.file_started();
         self.subtitle_file_loaded(engine);
         self.audio_file_loaded(engine);
         self.picture_file_loaded(engine);

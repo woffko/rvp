@@ -67,25 +67,24 @@ Item {
                               && chain().indexOf("@rvpsmooth") < 0, 3000, () => shown(s))
             break
         case 5:
-            // SVP's way: a seek shows the original first, then MVTools
-            // again (`original-first`, 1 s by default).
+            // SVP's way: mpv loads the script again after a seek, whose
+            // first second shows the original (`original-first`); the
+            // filter stays in, and the rate rises again.
             if (mvtools)
                 player.key(Qt.Key_Right, 0)
             t.next()
             break
         case 6:
             if (mvtools)
-                t.waitFor("the_original_shows_after_a_seek",
-                          () => s.smoothing.startsWith("Off (the original first)"), 3000, () => shown(s))
+                t.waitFor("mvtools_smooths_after_a_seek", () => s.smoothing.startsWith("MVTools")
+                              && chain().indexOf("@rvpsmooth:vapoursynth") >= 0
+                              && diagnostics().estimated_vf_fps > 1.5 * diagnostics().container_fps,
+                          10000, () => shown(s))
             else
                 t.next()
             break
         case 7:
-            if (mvtools)
-                t.waitFor("mvtools_returns_after_the_wait", () => s.smoothing.startsWith("MVTools")
-                              && chain().indexOf("@rvpsmooth:vapoursynth") >= 0, 8000, () => shown(s))
-            else
-                t.next()
+            t.next()
             break
         case 8: {
             // The setting and the plan it led to.
