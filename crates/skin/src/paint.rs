@@ -401,7 +401,23 @@ fn paint_button(list: &mut DisplayList, skin: &Skin, node: &Node<'_>, state: &Ui
     if src.right() > atlas_width {
         src = Rect::new(left, top, width, height);
     }
-    let dst = if attrs.has("Alignment") || has_margins(attrs) {
+    if has_margins(attrs) {
+        // A frame for its contents (Default.dsf's codec boxes, sized to
+        // their texts with `AutoSize`): its borders fixed, its middle
+        // stretched to the button's width, at the sprite's height.
+        let place = Rect::new(node.rect.x, node.rect.y, width, height);
+        let row = aligned(node.rect, width, height, attrs);
+        let dst = Rect::new(place.x, row.y, node.rect.w, height.min(node.rect.h));
+        let margins = [
+            attrs.int_or("LeftMargin", 0),
+            attrs.int_or("TopMargin", 0),
+            attrs.int_or("RightMargin", 0),
+            attrs.int_or("BottomMargin", 0),
+        ];
+        list.nine_slice(node.atlas, src, margins, dst, node.clip);
+        return;
+    }
+    let dst = if attrs.has("Alignment") {
         aligned(node.rect, width, height, attrs)
     } else {
         centred(node.rect, width, height)
@@ -454,6 +470,33 @@ fn aligned(place: Rect, width: i32, height: i32, attrs: &Attrs) -> Rect {
     Rect::new(x, y, width, height)
 }
 
+/// A label's text: its command's, else its own `Text`; `None` when empty.
+pub(crate) fn label_text(
+    skin: &Skin,
+    attrs: &Attrs,
+    state: &UiState,
+    data: &DataModel,
+) -> Option<String> {
+    let command = attrs
+        .get("CmdID")
+        .map(str::trim)
+        .filter(|cmd| !cmd.is_empty());
+    let text = match command.and_then(|cmd| data.text(cmd)) {
+        Some(text) => text.to_owned(),
+        None => skin.strings().resolve(attrs.get("Text")?, state.code_page),
+    };
+    (!text.is_empty()).then_some(text)
+}
+
+/// A label's font.
+pub(crate) fn label_font(attrs: &Attrs) -> FontSpec {
+    FontSpec {
+        family: attrs.get("FontName").unwrap_or("Tahoma").to_owned(),
+        size_px: f32::from(u16::try_from(attrs.int_or("FontSize", 12)).unwrap_or(12)),
+        bold: attrs.flag("FontBold"),
+    }
+}
+
 fn paint_label(
     list: &mut DisplayList,
     skin: &Skin,
@@ -462,16 +505,9 @@ fn paint_label(
     data: &DataModel,
 ) {
     let attrs = &node.element.attrs;
-    let text = match node.command().and_then(|cmd| data.text(cmd)) {
-        Some(text) => text.to_owned(),
-        None => match attrs.get("Text") {
-            Some(text) => skin.strings().resolve(text, state.code_page),
-            None => return,
-        },
-    };
-    if text.is_empty() {
+    let Some(text) = label_text(skin, attrs, state, data) else {
         return;
-    }
+    };
     let hovered = state.hover == Some(node.element.id);
     let (color_x, color_y) = if hovered && attrs.has("OverColorX") {
         (attrs.int_or("OverColorX", 0), attrs.int_or("OverColorY", 0))
@@ -482,11 +518,7 @@ fn paint_label(
     color[3] = 255;
     list.ops.push(Op::Text(TextOp {
         text,
-        font: FontSpec {
-            family: attrs.get("FontName").unwrap_or("Tahoma").to_owned(),
-            size_px: f32::from(u16::try_from(attrs.int_or("FontSize", 12)).unwrap_or(12)),
-            bold: attrs.flag("FontBold"),
-        },
+        font: label_font(attrs),
         color,
         rect: node.rect,
         clip: node.clip,

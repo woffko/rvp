@@ -969,3 +969,59 @@ fn other_skins_rules() {
     // The built area does not count the skin's commands twice.
     assert_eq!(skin.commands()["ID_ETC_NEXTONTOP"].count, 2);
 }
+
+/// `AutoSize` (Default.dsf's codec boxes and time labels): a label as wide
+/// as its text, a box as wide as its children side by side, which follow
+/// each other from its left edge; `MaxAutoSize` caps a width.
+#[test]
+fn auto_sized_labels_and_boxes() {
+    let markup = "<Skin><MainSkinArea Image='Atlas.png'><Control>
+\t<Static Align='Top' Height='20'>
+\t\t<Label Align='Left' CmdID='CMD_TIME' Width='50' AutoSize='1' FontSize='10' />
+\t\t<Button Align='Left' CmdID='CMD_BOX' Width='65' AutoSize='1' ImageLeft='0' ImageTop='10' ImageWidth='8' ImageHeight='8' LeftMargin='2' RightMargin='2'>
+\t\t\t<Layout Width='5' />
+\t\t\t<Label CmdID='CMD_CODEC' Width='55' AutoSize='1' FontSize='10' />
+\t\t\t<Layout Width='5' />
+\t\t</Button>
+\t\t<Label Align='Left' CmdID='CMD_LONG' Width='1' AutoSize='1' MaxAutoSize='30' FontSize='10' />
+\t</Static>
+</Control></MainSkinArea></Skin>";
+    let archive = SkinArchive::from_files(
+        "Auto",
+        [
+            ("VideoSkin.xml", markup.as_bytes().to_vec()),
+            ("atlas.png", atlas()),
+        ],
+    );
+    let skin = Skin::load(archive, "VideoSkin.xml").expect("load");
+    let mut data = DataModel::default();
+    data.set_text("CMD_TIME", "00:42");
+    data.set_text("CMD_CODEC", "AVC1");
+    data.set_text("CMD_LONG", "A very long title");
+    let mut state = UiState::default();
+    state.text_widths = rvp_skin::layout::text_widths(&skin, "MainSkinArea", &state, &data);
+    let placed = layout(&skin, "MainSkinArea", 200, 40, &state).expect("layout");
+    let rect = |command: &str| {
+        placed
+            .nodes
+            .iter()
+            .find(|node| node.command() == Some(command))
+            .map(|node| node.rect)
+            .expect(command)
+    };
+    // The estimate without the shell's fonts: 0.6 of the size a letter.
+    assert_eq!(rect("CMD_TIME"), Rect::new(0, 0, 30, 20));
+    assert_eq!(rect("CMD_BOX"), Rect::new(30, 0, 5 + 24 + 5, 20));
+    assert_eq!(rect("CMD_CODEC"), Rect::new(35, 0, 24, 20));
+    assert_eq!(rect("CMD_LONG").w, 30, "MaxAutoSize");
+    // An empty text takes no room.
+    data.set_text("CMD_CODEC", "");
+    state.text_widths = rvp_skin::layout::text_widths(&skin, "MainSkinArea", &state, &data);
+    let placed = layout(&skin, "MainSkinArea", 200, 40, &state).expect("layout");
+    let boxed = placed
+        .nodes
+        .iter()
+        .find(|node| node.command() == Some("CMD_BOX"))
+        .expect("box");
+    assert_eq!(boxed.rect.w, 10);
+}

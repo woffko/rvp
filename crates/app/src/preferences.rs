@@ -707,6 +707,7 @@ impl App {
                 "smoothing-target": crate::smoothing::TARGETS,
                 "smoothing-max-height": crate::smoothing::MAX_HEIGHTS,
                 "smoothing-drop-window": crate::smoothing::DROP_WINDOWS,
+                "smoothing-original-first": crate::smoothing::ORIGINAL_FIRST,
                 "log.level": crate::log::LEVELS,
                 "subtitles.ass-override": crate::subtitles::ASS_OVERRIDE,
                 "subtitles.border-style": crate::subtitles::BORDER_STYLE,

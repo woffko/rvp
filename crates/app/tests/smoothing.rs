@@ -70,6 +70,9 @@ fn playing(dir: &Path, file: &str, engine_choice: SmoothingEngine) -> (Engine, A
     settings.smoothing.preset = Preset::Quality;
     // The headless player knows no display: twice the source's rate.
     "2x".clone_into(&mut settings.smoothing.target);
+    // The filter at once: its frames are under test here; the original
+    // shown first after a start or a seek is the self-test's.
+    settings.smoothing.original_first = 0;
     let mut app = App::new(settings, dir).expect("app");
     app.prepare_svp(vsscript());
     app.start(&engine, &[file.to_owned()]).expect("start");

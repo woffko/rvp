@@ -27,6 +27,9 @@ pub struct UiState {
     /// message that has a text, the Always On Top mode's number (1 to 4)
     /// for `ID_ETC_NEXTONTOP`, 1 or -1 for a command that is on or off.
     pub values: BTreeMap<String, i32>,
+    /// The widths of `AutoSize` labels by element ID, from their texts
+    /// (`layout::text_widths`); a change lays the skin out again.
+    pub text_widths: BTreeMap<usize, i32>,
     /// Element under the mouse pointer.
     pub hover: Option<usize>,
     /// Element held down by the mouse.
@@ -47,6 +50,7 @@ impl Default for UiState {
             current_page: 0,
             flags: BTreeSet::new(),
             values: BTreeMap::new(),
+            text_widths: BTreeMap::new(),
             hover: None,
             pressed: None,
             code_page: 0,

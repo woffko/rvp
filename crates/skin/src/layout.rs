@@ -14,6 +14,12 @@
 //!   distance from the parent's right/bottom edge (`Width='-100'` ends 100
 //!   pixels before it). `HoriCenter`/`VertCenter` centre the element and use
 //!   `Left`/`Top` as an offset from the centre.
+//! * `AutoSize` (Default.dsf, WindowFrame): a `Label` is as wide as its
+//!   text ([`text_widths`], measured by the shell's fonts, else estimated;
+//!   `MaxAutoSize` caps it), and another element as wide as its visible
+//!   children side by side: those without `Align` or `Left` follow each
+//!   other from its left edge (the codec boxes: a space, the text, a
+//!   space).
 //! * `ConstSize` overrides `Width` (or `Height`) of docked elements.
 //!   `OffsetLeft`, `OffsetTop`, `OffsetWidth`, `OffsetHeight` adjust the final
 //!   rectangle without changing the free space.
@@ -36,13 +42,67 @@
 //!   draws from that picture, and so do its children (Default.dsf's logo
 //!   parts); the others draw from their area's.
 
+use std::collections::BTreeMap;
 use std::fmt::Write as _;
+use std::sync::OnceLock;
 
 use crate::error::SkinError;
 use crate::geometry::Rect;
 use crate::markup::{Attrs, Element};
+use crate::paint::FontSpec;
 use crate::skin::Skin;
-use crate::state::UiState;
+use crate::state::{DataModel, UiState};
+
+/// Measures a text's width in pixels in a font: the shell gives Qt's
+/// ([`set_text_measure`]), which draws the texts.
+pub type MeasureText = fn(&FontSpec, &str) -> i32;
+
+static MEASURE: OnceLock<MeasureText> = OnceLock::new();
+
+/// The text measure `AutoSize` uses from now on (once; later calls are
+/// ignored).
+pub fn set_text_measure(measure: MeasureText) {
+    let _ = MEASURE.set(measure);
+}
+
+/// A text's width in `font`: the shell's measure, or without one (tests,
+/// before the window's fonts exist) half the font's size and a tenth per
+/// character.
+#[must_use]
+pub fn text_width(font: &FontSpec, text: &str) -> i32 {
+    if let Some(measure) = MEASURE.get() {
+        return measure(font, text);
+    }
+    // Character counts and font sizes are small.
+    #[allow(clippy::cast_precision_loss, clippy::cast_possible_truncation)]
+    let width = (text.chars().count() as f32 * font.size_px * 0.6).round() as i32;
+    width
+}
+
+/// The widths of `area`'s `AutoSize` labels by element ID, from their
+/// texts now ([`UiState::text_widths`]).
+#[must_use]
+pub fn text_widths(
+    skin: &Skin,
+    area: &str,
+    state: &UiState,
+    data: &DataModel,
+) -> BTreeMap<usize, i32> {
+    let mut widths = BTreeMap::new();
+    let Some(area) = skin.area(area) else {
+        return widths;
+    };
+    area.walk(&mut |element| {
+        if element.is("Label") && element.attrs.flag("AutoSize") {
+            let width = crate::paint::label_text(skin, &element.attrs, state, data)
+                .map_or(0, |text| {
+                    text_width(&crate::paint::label_font(&element.attrs), &text)
+                });
+            widths.insert(element.id, width);
+        }
+    });
+    widths
+}
 
 /// The kinds of controls the layout places.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -241,6 +301,8 @@ impl<'a> Builder<'a, '_> {
         area: &'a Element,
     ) {
         let mut free = rect;
+        // An `AutoSize` box's loose children follow each other.
+        let flow = container.attrs.flag("AutoSize");
         for child in &container.children {
             if child.is("Control") {
                 self.children(child, rect, clip, parent, depth, atlas, area);
@@ -252,7 +314,11 @@ impl<'a> Builder<'a, '_> {
             if !self.visible(child, rect) {
                 continue;
             }
-            let placed = place(&child.attrs, rect, &mut free);
+            let fitted = Fitted {
+                width: self.auto_width(child, rect),
+                left: flow && Align::read(&child.attrs) == Align::None && !child.attrs.has("Left"),
+            };
+            let placed = place(&child.attrs, rect, &mut free, fitted);
             if let Some(min_left) = child.attrs.int("VisMinLeft")
                 && placed.x - rect.x < min_left
             {
@@ -343,6 +409,37 @@ impl<'a> Builder<'a, '_> {
         self.children(holder, rect, clip, Some(index), depth + 1, atlas, area);
     }
 
+    /// An `AutoSize` element's width: a label's text, another element's
+    /// visible children side by side; `MaxAutoSize` caps it.
+    fn auto_width(&self, element: &Element, parent: Rect) -> Option<i32> {
+        if !element.attrs.flag("AutoSize") {
+            return None;
+        }
+        let width = if element.is("Label") {
+            self.state
+                .text_widths
+                .get(&element.id)
+                .copied()
+                .unwrap_or_else(|| element.attrs.int_or("Width", 0))
+        } else {
+            element
+                .children
+                .iter()
+                .filter(|child| Kind::of(child).is_some() && self.visible(child, parent))
+                .map(|child| {
+                    self.auto_width(child, parent)
+                        .unwrap_or_else(|| child.attrs.int_or("Width", 0).max(0))
+                })
+                .sum()
+        };
+        Some(
+            match element.attrs.int("MaxAutoSize").filter(|max| *max > 0) {
+                Some(max) => width.min(max),
+                None => width,
+            },
+        )
+    }
+
     fn visible(&self, element: &Element, parent: Rect) -> bool {
         let attrs = &element.attrs;
         if let Some(command) = attrs.get("CmdID")
@@ -383,15 +480,31 @@ impl<'a> Builder<'a, '_> {
     }
 }
 
+/// What `AutoSize` changes in an element's placement.
+#[derive(Clone, Copy)]
+struct Fitted {
+    /// The width it takes instead of `Width`.
+    width: Option<i32>,
+    /// Docked left as if `Align='Left'` (a loose child of an `AutoSize`
+    /// box).
+    left: bool,
+}
+
 /// Computes the rectangle of one element and updates the free space.
-fn place(attrs: &Attrs, parent: Rect, free: &mut Rect) -> Rect {
-    let docked_width = attrs
-        .int("ConstSize")
-        .unwrap_or_else(|| attrs.int_or("Width", 0));
+fn place(attrs: &Attrs, parent: Rect, free: &mut Rect, fitted: Fitted) -> Rect {
+    let width = fitted.width.unwrap_or_else(|| attrs.int_or("Width", 0));
+    let docked_width = fitted
+        .width
+        .or_else(|| attrs.int("ConstSize"))
+        .unwrap_or(width);
     let docked_height = attrs
         .int("ConstSize")
         .unwrap_or_else(|| attrs.int_or("Height", 0));
-    let mut rect = match Align::read(attrs) {
+    let align = match Align::read(attrs) {
+        Align::None if fitted.left => Align::Left,
+        align => align,
+    };
+    let mut rect = match align {
         Align::Top => {
             let h = docked_height.clamp(0, free.h);
             let rect = Rect::new(free.x, free.y, free.w, h);
@@ -420,7 +533,7 @@ fn place(attrs: &Attrs, parent: Rect, free: &mut Rect) -> Rect {
         Align::None => {
             let (x, w) = axis(
                 attrs.int_or("Left", 0),
-                attrs.int_or("Width", 0),
+                width,
                 parent.w,
                 attrs.flag("HoriCenter"),
             );

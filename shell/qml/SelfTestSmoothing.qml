@@ -66,7 +66,28 @@ Item {
                 t.waitFor("blend_without_mvtools", () => s.smoothing === "Blend"
                               && chain().indexOf("@rvpsmooth") < 0, 3000, () => shown(s))
             break
-        case 5: {
+        case 5:
+            // SVP's way: a seek shows the original first, then MVTools
+            // again (`original-first`, 1 s by default).
+            if (mvtools)
+                player.key(Qt.Key_Right, 0)
+            t.next()
+            break
+        case 6:
+            if (mvtools)
+                t.waitFor("the_original_shows_after_a_seek",
+                          () => s.smoothing.startsWith("Off (the original first)"), 3000, () => shown(s))
+            else
+                t.next()
+            break
+        case 7:
+            if (mvtools)
+                t.waitFor("mvtools_returns_after_the_wait", () => s.smoothing.startsWith("MVTools")
+                              && chain().indexOf("@rvpsmooth:vapoursynth") >= 0, 8000, () => shown(s))
+            else
+                t.next()
+            break
+        case 8: {
             // The setting and the plan it led to.
             const recent = player.log_recent()
             t.check("log_records_the_plan", recent.indexOf("setting log.level") >= 0
@@ -76,35 +97,35 @@ Item {
             t.next()
             break
         }
-        case 6:
+        case 9:
             t.waitFor("blend_from_the_menu", () => s.smoothing === "Blend" && chain().indexOf("@rvpsmooth") < 0,
                       5000, () => shown(s))
             break
-        case 7:
+        case 10:
             player.run_action("smoothing-mvtools")
             player.run_action("smoothing-fast")
             t.next()
             break
-        case 8:
+        case 11:
             if (mvtools)
                 t.waitFor("mvtools_fast_from_the_menu", () => s.smoothing.startsWith("MVTools Fast")
                               && chain().indexOf("@rvpsmooth:vapoursynth") >= 0, 5000, () => shown(s))
             else
                 t.waitFor("mvtools_gives_way_to_blend", () => s.smoothing === "Blend", 3000, () => shown(s))
             break
-        case 9:
+        case 12:
             player.key(Qt.Key_I, Qt.ControlModifier | Qt.ShiftModifier)
             t.next()
             break
-        case 10:
+        case 13:
             t.waitFor("ctrl_shift_i_turns_it_off", () => s.smoothing === "Off"
                           && chain().indexOf("@rvpsmooth") < 0, 5000, () => shown(s))
             break
-        case 11:
+        case 14:
             player.key(Qt.Key_F5, 0)
             t.next()
             break
-        case 12: {
+        case 15: {
             const loader = host.settingsWindow()
             if (!t.waitFor("settings_open_smoothing", () => loader && loader.visible, 3000))
                 break
@@ -121,7 +142,7 @@ Item {
             loader.close()
             break
         }
-        case 13: {
+        case 16: {
             // mpv's messages and each second of playback.
             const recent = player.log_recent()
             t.check("log_records_playback", s.log_lines > 0 && s.log_mpv_lines > 0
@@ -136,11 +157,11 @@ Item {
             t.next()
             break
         }
-        case 14:
+        case 17:
             t.waitFor("log_moves_to_its_folder", () => /moved-log[\\/]rvp\.log$/.test(String(s.log_open))
                           && player.log_recent().indexOf("level debug") >= 0, 3000, () => String(s.log_open))
             break
-        case 15: {
+        case 18: {
             const errors = [setSetting("smoothing.preset", "medium"), setSetting("log.folder", null),
                             setSetting("log.level", "off")]
                 .map(r => r.error).filter(e => e !== "")

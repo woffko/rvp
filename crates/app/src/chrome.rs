@@ -277,6 +277,8 @@ impl Chrome {
     /// # Errors
     /// Fails when the skin lacks the mode's area; the old layout is kept.
     pub fn resize(&mut self, mode: Mode, width: i32, height: i32) -> Result<Damage, SkinError> {
+        self.state.text_widths =
+            rvp_skin::layout::text_widths(self.skin, mode.area(), &self.state, &self.data);
         let placed = layout(self.skin, mode.area(), width, height, &self.state)?;
         self.mode = mode;
         self.width = width;
@@ -294,6 +296,11 @@ impl Chrome {
 
     /// Repaints after `state` or `data` changed and reports what differs.
     pub fn refresh(&mut self) -> Damage {
+        let widths =
+            rvp_skin::layout::text_widths(self.skin, self.mode.area(), &self.state, &self.data);
+        if widths != self.state.text_widths {
+            self.state.text_widths = widths;
+        }
         if self.layout.is_some() && layout_key(&self.state) != self.layout_state {
             // Visibility depends on the state (Play/Pause, Maximize/Restore).
             if let Ok(placed) = layout(

@@ -249,7 +249,13 @@ smoothing for users without SVP, after a study of the engines.
   `VSSCRIPT_PATH`), `rvp --selftest=smoothing`,
   `tools/windows-vm/m18-all.ps1`, and on the host, with permission,
   `tools/windows-vm/m18-host.ps1` (each GPU mode in RVP's window at the
-  power limit; `-Vm` tries it on the VM).
+  power limit; `-Vm` tries it on the VM). MVTools' filter asks for 16
+  frames at once (`concurrent-frames`, the host's runs of 2026-11-04:
+  mpv's default of one per logical CPU dropped a frame a second), and
+  after a start or a seek the original shows for the page's
+  `original-first` (1 s) before a VapourSynth engine goes in, as SVP does
+  (`App::smoothing_warm`; mpv's refresh seek after RVP's own filter change
+  does not count).
 - The control panel (F7) is a second window (`shell/qml/ControlPanel.qml`)
   with its own `Chrome` in `Mode::ControlBox`, painted whole
   (`SkinView.surface` 1, `panelDamaged`).
@@ -422,7 +428,9 @@ smoothing for users without SVP, after a study of the engines.
   `AutoVisible` (`UiState::values`, `view::apply_auto_values`),
   `VisParentMaxWidth`/`Height`, `VisMinWidth`/`Height` and the states
   `CMD_ON_MEDIA_PLAY`, `CMD_ON_FULLSCREEN`; a skin without
-  `MainSkinAreaOscInside` gets one built from its bottom bars
+  `MainSkinAreaOscInside` gets one built from its bottom bars; `AutoSize`
+  labels take their texts' widths (`layout::text_widths`, Qt's
+  `QFontMetrics` through `rvp_text_width`) and boxes their children's
   (`skin.rs`, `RvpBuilt`). `tools/windows-vm/skins-host.ps1` with
   host-session's `skins` switches every skin in PotPlayer and RVP on the
   host, with permission (captures to `~/rvp-reference`).

@@ -1985,6 +1985,12 @@ ApplicationWindow {
                             format: v => v + "p (Blend above)"
                         }
                         Amount {
+                            label: qsTr("Show the original first for")
+                            path: "smoothing.original-first"
+                            values: win.view.choices["smoothing-original-first"] || [1]
+                            format: v => v === 0 ? qsTr("Off") : qsTr("%1 s").arg(v)
+                        }
+                        Amount {
                             label: qsTr("Step down after dropped frames over")
                             path: "smoothing.drop-window"
                             values: win.view.choices["smoothing-drop-window"] || [20]
@@ -1998,7 +2004,7 @@ ApplicationWindow {
                                   + " (in RVP's VapourSynth runtime and libmpv)."
                         }
                         Note {
-                            text: qsTr("Smoothing stays off while SVP is attached, while RVP's own VapourSynth script runs and when the video plays at the target rate already; while SVP 4 Manager runs, it waits 8 s for SVP after a file starts. An engine that cannot run here gives way: RIFE and NVIDIA Optical Flow to MVTools, MVTools to Blend; one whose output drops more than 5 % of its frames over the time above steps down (a lighter preset, then MVTools, then Blend) until the file ends. Above the GPU power budget, smoothing is lightened first. The Log page's Info level records each step and the seconds that dropped frames.")
+                            text: qsTr("Smoothing stays off while SVP is attached, while RVP's own VapourSynth script runs and when the video plays at the target rate already; while SVP 4 Manager runs, it waits 8 s for SVP after a file starts. An engine that cannot run here gives way: RIFE and NVIDIA Optical Flow to MVTools, MVTools to Blend; one whose output drops more than 5 % of its frames over the time above steps down (a lighter preset, then MVTools, then Blend) until the file ends. Above the GPU power budget, smoothing is lightened first. After a start or a seek the original shows for the time above while MVTools or RIFE get ready, as SVP does. The Log page's Info level records each step and the seconds that dropped frames.")
                         }
                     }
 

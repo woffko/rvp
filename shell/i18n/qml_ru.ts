@@ -2772,6 +2772,10 @@ in %2 seconds</source>
             <translation>Компенсация движения до</translation>
         </message>
         <message>
+            <source>Show the original first for</source>
+            <translation>Сначала показывать оригинал</translation>
+        </message>
+        <message>
             <source>Step down after dropped frames over</source>
             <translation>Снижать ступень по потерям кадров за</translation>
         </message>
@@ -2792,8 +2796,8 @@ in %2 seconds</source>
             <translation>Здесь: MVTools %1</translation>
         </message>
         <message>
-            <source>Smoothing stays off while SVP is attached, while RVP's own VapourSynth script runs and when the video plays at the target rate already; while SVP 4 Manager runs, it waits 8 s for SVP after a file starts. An engine that cannot run here gives way: RIFE and NVIDIA Optical Flow to MVTools, MVTools to Blend; one whose output drops more than 5 % of its frames over the time above steps down (a lighter preset, then MVTools, then Blend) until the file ends. Above the GPU power budget, smoothing is lightened first. The Log page's Info level records each step and the seconds that dropped frames.</source>
-            <translation>Сглаживание выключено, пока подключён SVP, пока работает собственный сценарий VapourSynth RVP и когда видео уже идёт с целевой частотой; пока работает SVP 4 Manager, после старта файла оно ждёт SVP 8 с. Движок, который здесь не может работать, уступает место: RIFE и NVIDIA Optical Flow — MVTools, MVTools — Blend; движок, на выходе которого теряется больше 5 % кадров за время выше, переходит на ступень ниже (более лёгкая предустановка, затем MVTools, затем Blend) до конца файла. Сверх бюджета мощности GPU сглаживание облегчается первым. Уровень «Сведения» на странице «Журнал» записывает каждую ступень и секунды с потерянными кадрами.</translation>
+            <source>Smoothing stays off while SVP is attached, while RVP's own VapourSynth script runs and when the video plays at the target rate already; while SVP 4 Manager runs, it waits 8 s for SVP after a file starts. An engine that cannot run here gives way: RIFE and NVIDIA Optical Flow to MVTools, MVTools to Blend; one whose output drops more than 5 % of its frames over the time above steps down (a lighter preset, then MVTools, then Blend) until the file ends. Above the GPU power budget, smoothing is lightened first. After a start or a seek the original shows for the time above while MVTools or RIFE get ready, as SVP does. The Log page's Info level records each step and the seconds that dropped frames.</source>
+            <translation>Сглаживание выключено, пока подключён SVP, пока работает собственный сценарий VapourSynth RVP и когда видео уже идёт с целевой частотой; пока работает SVP 4 Manager, после старта файла оно ждёт SVP 8 с. Движок, который здесь не может работать, уступает место: RIFE и NVIDIA Optical Flow — MVTools, MVTools — Blend; движок, на выходе которого теряется больше 5 % кадров за время выше, переходит на ступень ниже (более лёгкая предустановка, затем MVTools, затем Blend) до конца файла. Сверх бюджета мощности GPU сглаживание облегчается первым. После старта или перемотки на время выше показывается оригинал, пока MVTools или RIFE готовятся, как у SVP. Уровень «Сведения» на странице «Журнал» записывает каждую ступень и секунды с потерянными кадрами.</translation>
         </message>
         <message>
             <source>Show subtitles when a file starts</source>

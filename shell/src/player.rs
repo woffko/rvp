@@ -874,7 +874,17 @@ fn load_app() -> Result<(App, bool, Option<String>), String> {
     };
     // Captured images' names carry the local date (M12).
     app.set_clock(crate::ffi::bridge::rvp_local_time);
+    // The skins' `AutoSize` labels take the widths the window draws them at.
+    rvp_skin::layout::set_text_measure(qt_text_width);
     Ok((app, portable, message))
+}
+
+/// A text's width in the font the window draws it with (`AutoSize`).
+fn qt_text_width(font: &rvp_skin::paint::FontSpec, text: &str) -> i32 {
+    // Font sizes are a few pixels.
+    #[allow(clippy::cast_possible_truncation)]
+    let pixel_size = font.size_px.round() as i32;
+    crate::ffi::bridge::rvp_text_width(text, &font.family, pixel_size, font.bold)
 }
 
 /// A `file:` URL for a local path, for `Qt.openUrlExternally`.

@@ -184,6 +184,7 @@ bool rvp_save_image(rust::Slice<const std::uint8_t> rgba, std::int32_t width, st
 bool rvp_copy_image(rust::Slice<const std::uint8_t> rgba, std::int32_t width, std::int32_t height);
 rust::String rvp_local_time();
 std::int32_t rvp_utc_offset();
+std::int32_t rvp_text_width(rust::Str text, rust::Str family, std::int32_t pixel_size, bool bold);
 void rvp_paint_stretch(QPainter &painter, rust::Str name, std::array<std::int32_t, 4> src,
                        std::array<std::int32_t, 4> dst, std::array<std::int32_t, 4> clip);
 void rvp_paint_atlas(QPainter &painter, rust::Str name, std::array<std::int32_t, 4> src,

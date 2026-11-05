@@ -130,6 +130,9 @@ pub mod bridge {
         fn rvp_local_time() -> String;
         /// The local time's offset from UTC in seconds (the log's times).
         fn rvp_utc_offset() -> i32;
+        /// A text's width in pixels in the font `rvp_paint_text` draws it
+        /// with (the skins' `AutoSize`).
+        fn rvp_text_width(text: &str, family: &str, pixel_size: i32, bold: bool) -> i32;
         /// Tiles `src` of an atlas over `dst`, clipped to `clip` (each
         /// rectangle as x, y, width, height).
         fn rvp_paint_atlas(

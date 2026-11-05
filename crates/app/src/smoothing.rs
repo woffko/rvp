@@ -70,6 +70,12 @@ pub const MAX_HEIGHTS: &[u32] = &[480, 576, 720, 1080, 1440, 2160];
 /// the next seconds would not have shown (the owner's host, 2026-11-02).
 pub const DROP_WINDOWS: &[u32] = &[0, 6, 10, 20, 30, 60];
 
+/// The Motion Smoothing page's choices for `original-first`: seconds of
+/// the original video after a start or a seek before a VapourSynth engine
+/// takes over (0: at once). SVP's way (the owner, 2026-11-04): while
+/// MVTools or RIFE fill their pipeline, the picture stutters.
+pub const ORIGINAL_FIRST: &[u32] = &[0, 1, 2, 3, 5];
+
 /// RIFE's model, as the study measured it.
 pub const RIFE_MODEL: &str = "rife-v4.6_ensembleFalse";
 
@@ -161,6 +167,8 @@ pub struct SmoothingSettings {
     /// Seconds of dropped frames counted before a lighter step (0:
     /// never; [`DROP_WINDOWS`]).
     pub drop_window: u32,
+    /// Seconds of the original after a start or a seek ([`ORIGINAL_FIRST`]).
+    pub original_first: u32,
 }
 
 impl Default for SmoothingSettings {
@@ -172,6 +180,7 @@ impl Default for SmoothingSettings {
             target: "display".to_owned(),
             max_height: 1080,
             drop_window: 20,
+            original_first: 1,
         }
     }
 }
@@ -193,6 +202,13 @@ impl SmoothingSettings {
             ));
             self.max_height = repaired;
         }
+        if self.original_first > 30 {
+            notes.push(format!(
+                "smoothing.original-first must be 0 to 30 seconds: 30 used (was {})",
+                self.original_first
+            ));
+            self.original_first = 30;
+        }
         if self.drop_window != 0 && !(3..=600).contains(&self.drop_window) {
             let repaired = self.drop_window.clamp(3, 600);
             notes.push(format!(
@@ -205,6 +221,8 @@ impl SmoothingSettings {
 
 /// What the plan needs to know about the file and the machine.
 #[derive(Debug, Clone, Copy, PartialEq, Default)]
+// Independent facts about the file, the machine and SVP.
+#[allow(clippy::struct_excessive_bools)]
 pub struct Facts {
     /// The video's height (0: no video).
     pub height: u32,
@@ -218,6 +236,9 @@ pub struct Facts {
     pub svp_waiting: bool,
     /// RVP's VapourSynth script slot runs.
     pub script_slot: bool,
+    /// Playback started or jumped within the page's `original-first`: the
+    /// original shows (VapourSynth's engines only).
+    pub warming: bool,
     pub engines: Engines,
 }
 
@@ -391,6 +412,11 @@ pub fn plan(settings: &SmoothingSettings, facts: &Facts, lightened: Lightened) -
     if engine == Engine::MvTools && !facts.engines.mvtools {
         return Plan::Blend;
     }
+    // VapourSynth's engines fill their pipeline after a start or a seek;
+    // the original shows meanwhile. Blend and fruc_vulkan start at once.
+    if facts.warming && matches!(engine, Engine::MvTools | Engine::Rife) {
+        return Plan::Off("the original first");
+    }
     Plan::Filter {
         engine,
         preset,
@@ -535,10 +561,14 @@ pub fn filter_entry(engine: Engine, preset: Preset, rate: (u64, u64), script: &P
         format!("{entry}:buffered-frames=8:concurrent-frames=8")
     } else {
         // MVTools spreads over the CPU's threads only as far as frames are
-        // asked for at once: mpv's default asks for one per logical CPU,
-        // while 4 at once left 1080p at 2.5x dropping about 48 of its 60
-        // frames a second on the host (64 threads).
-        format!("{entry}:buffered-frames=4")
+        // asked for at once. 4 at once left 1080p at 2.5x dropping about 48
+        // of its 60 frames a second on the host (64 threads); mpv's default,
+        // one per logical CPU, dropped one about every 64 frames (the
+        // owner's log, 2026-11-03), more buffered frames dropped more. The
+        // host's runs of 2026-11-04 (MVTools Quality, 1080p23.976 at 59.94):
+        // 12 to 24 at once dropped none, 8 fell short of the rate, 32
+        // dropped one in 48 s and 64 dropped 162.
+        format!("{entry}:buffered-frames=4:concurrent-frames=16")
     }
 }
 
@@ -612,6 +642,8 @@ impl Runtime {
 
 /// The smoothing's state in the [`App`].
 #[derive(Debug, Default)]
+// Independent states of the smoothing's engines and waits.
+#[allow(clippy::struct_excessive_bools)]
 pub(crate) struct Smoothing {
     pub(crate) runtime: Runtime,
     /// libmpv's FFmpeg has `fruc_vulkan`.
@@ -631,14 +663,25 @@ pub(crate) struct Smoothing {
     /// The engines whose filter raised the rate in this file: a dip after
     /// a seek or a lighter step leaves them in.
     ran: std::collections::BTreeSet<Engine>,
+    /// When playback started or the last seek began ([`App::smoothing_warm`]).
+    restarted: Option<Instant>,
+    /// When RVP changed mpv's video filters last: mpv's refresh seek after
+    /// it is no seek of the user's.
+    filters_changed: Option<Instant>,
+    /// The plan held the filter back for the original (re-planned when
+    /// that ends).
+    pub(crate) warming: bool,
 }
 
 impl Smoothing {
-    /// A file started: the drops of the last one count no longer.
-    pub(crate) fn file_started(&mut self) {
+    /// A file started: the drops of the last one count no longer, and the
+    /// original shows first when `hold` (the page's `original-first`).
+    pub(crate) fn file_started(&mut self, now: Instant, hold: bool) {
         self.dropped = 0;
         self.ran.clear();
         self.watch = FilterWatch::default();
+        self.restarted = hold.then_some(now);
+        self.warming = hold;
     }
 }
 
@@ -803,6 +846,7 @@ impl App {
                 .text(PropertyId::VideoFilters)
                 .is_some_and(|vf| vf.contains("@svp")),
             svp_waiting: self.svp.holds_smoothing(),
+            warming: self.smoothing.warming,
             script_slot: vs.enabled && vs.script.is_some() && !self.gpu_step_taken(Step::Script),
             engines: Engines {
                 mvtools: self.smoothing.runtime.mvtools,
@@ -941,10 +985,42 @@ impl App {
         self.smoothing.applied = Some(plan.clone());
         self.smoothing.watch = FilterWatch::default();
         if filter_before || filter_now {
+            self.smoothing.filters_changed = Some(Instant::now());
             self.apply_decoding(engine);
             drop(self.apply_video_filters(engine));
         }
         Some(plan)
+    }
+
+    /// SVP's way (the owner, 2026-11-04): after a start or a seek the
+    /// original shows until playback ran for the page's `original-first`,
+    /// then a VapourSynth engine's filter goes in. A seek counts when mpv
+    /// starts one that RVP's own filter change did not cause (mpv seeks to
+    /// where it is after the chain changes). Called with each drain;
+    /// re-plans when the wait begins or ends.
+    pub(crate) fn smoothing_warm(&mut self, engine: &Mpv, seeking_began: bool, now: Instant) {
+        let settle = Duration::from_millis(500);
+        if seeking_began
+            && self
+                .smoothing
+                .filters_changed
+                .is_none_or(|at| now.duration_since(at) > settle)
+        {
+            self.smoothing.restarted = Some(now);
+        }
+        let wait = Duration::from_secs(u64::from(self.settings.smoothing.original_first));
+        let warming = self
+            .smoothing
+            .restarted
+            .is_some_and(|at| now.duration_since(at) < wait || !self.model.playing())
+            && !wait.is_zero();
+        if !warming {
+            self.smoothing.restarted = None;
+        }
+        if warming != self.smoothing.warming {
+            self.smoothing.warming = warming;
+            self.apply_smoothing(engine);
+        }
     }
 
     /// Video > Motion Smoothing's commands; the notice says what runs.
@@ -1452,6 +1528,37 @@ mod tests {
     }
 
     #[test]
+    fn the_original_shows_while_vapoursynth_gets_ready() {
+        let warming = Facts {
+            warming: true,
+            ..facts()
+        };
+        for engine in [Engine::MvTools, Engine::Rife] {
+            assert_eq!(
+                plan(&on(engine), &warming, Lightened::default()),
+                Plan::Off("the original first")
+            );
+        }
+        // Blend and NVIDIA Optical Flow start at once.
+        assert_eq!(
+            plan(&on(Engine::Blend), &warming, Lightened::default()),
+            Plan::Blend
+        );
+        assert!(matches!(
+            plan(&on(Engine::FrucVulkan), &warming, Lightened::default()),
+            Plan::Filter {
+                engine: Engine::FrucVulkan,
+                ..
+            }
+        ));
+        let mut settings = on(Engine::MvTools);
+        settings.original_first = 90;
+        let mut notes = Vec::new();
+        settings.validate(&mut notes);
+        assert_eq!((settings.original_first, notes.len()), (30, 1));
+    }
+
+    #[test]
     fn a_longer_drop_window_forgives_a_moments_stutter() {
         #[allow(clippy::cast_precision_loss)] // seconds of a test
         let steady = |n: u64| n as f64;
@@ -1558,7 +1665,7 @@ mod tests {
                 (60, 1),
                 Path::new(r"C:\s\a.vpy")
             ),
-            "@rvpsmooth:vapoursynth=file=%10%C:/s/a.vpy:buffered-frames=4"
+            "@rvpsmooth:vapoursynth=file=%10%C:/s/a.vpy:buffered-frames=4:concurrent-frames=16"
         );
         assert_eq!(
             filter_entry(

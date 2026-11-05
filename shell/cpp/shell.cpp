@@ -805,6 +805,15 @@ std::int32_t rvp_utc_offset()
     return QDateTime::currentDateTime().offsetFromUtc();
 }
 
+std::int32_t rvp_text_width(rust::Str text, rust::Str family, std::int32_t pixel_size, bool bold)
+{
+    // The font rvp_paint_text draws with.
+    QFont font(fromStr(family));
+    font.setPixelSize(pixel_size > 0 ? pixel_size : 12);
+    font.setBold(bold);
+    return QFontMetrics(font).horizontalAdvance(fromStr(text));
+}
+
 void rvp_atlas_insert(rust::Str name, rust::Slice<const std::uint8_t> rgba, std::int32_t width,
                       std::int32_t height)
 {
