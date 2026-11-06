@@ -87,7 +87,8 @@ smoothing for users without SVP, after a study of the engines.
   originality rules apply: draw every asset for RVP, take nothing from
   PotPlayer's skins, and list each new asset in `art/SOURCES.md`.
 - Built files are not committed: `shell/build.rs` draws the icons, logo
-  images, Windows icon resource and `RVP Default.dsf` into its `OUT_DIR`;
+  images, Windows icon resource (with `rvp.exe`'s version resource,
+  `brand::version_info`) and `RVP Default.dsf` into its `OUT_DIR`;
   `cargo xtask look DIR` writes them for packages and reviews.
 - `crates/look/src/svg.rs` renders only the SVG subset its module comment
   lists and rejects the rest; check new art with
@@ -372,7 +373,9 @@ smoothing for users without SVP, after a study of the engines.
   normal priority) on a WAV file a libmpv encode core writes. RVP's
   CPU and Vulkan build is `tools/whisper/build.sh`
   (`tools/libmpv/rootless.sh ROOT WORK tools/whisper/build.sh`, after the
-  libmpv build) and goes into the package as `whisper/`
+  libmpv build; every program and DLL of it gets a version resource from
+  `tools/whisper/version.cmake`: the host's antivirus quarantined a whisper-cli.exe
+  without one, 2026-11-06) and goes into the package as `whisper/`
   (`package.py --whisper`); CUDA and BLAS are whisper.cpp's own builds the
   user puts in `<config>/whisper/<engine>`. Models are never downloaded or
   committed: the user puts `ggml-<model>.bin` into

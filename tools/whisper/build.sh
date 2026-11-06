@@ -12,6 +12,9 @@
 # libc++ includes less on its own than whisper.cpp's examples expect
 # (std::partial_sort without <algorithm>), so every C++ file gets it.
 #
+# Every program and DLL gets a version resource (tools/whisper/version.cmake:
+# the host's antivirus quarantined a whisper-cli.exe without one).
+#
 # Runs where tools/libmpv/build.sh ran (inside the build root of
 # tools/libmpv/rootless.sh: `tools/libmpv/rootless.sh ROOT WORK
 # tools/whisper/build.sh`), after it. The result goes to OUT (default
@@ -24,6 +27,7 @@ set -euo pipefail
 
 TAG=v1.9.5
 COMMIT=d1be6fde11ac6e0407606b4e42fe72d34add8037
+HERE=$(cd "$(dirname "$0")" && pwd)
 WORK=${1:-$HOME/rvp-deps/mpv-build}
 OUT=${2:-$WORK/whisper-out/whisper}
 SYSROOT=$WORK/build64/x86_64-w64-mingw32
@@ -74,7 +78,10 @@ cmake -Wno-dev --fresh -G Ninja -S "$SRC" -B "$BUILD" \
     -DVulkan_GLSLC_EXECUTABLE="$HOST/bin/glslc" \
     -DWHISPER_BUILD_TESTS=OFF -DWHISPER_BUILD_SERVER=OFF -DWHISPER_SDL2=OFF -DWHISPER_CURL=OFF \
     -DCMAKE_EXE_LINKER_FLAGS="-static-libgcc" -DCMAKE_SHARED_LINKER_FLAGS="-static-libgcc" \
-    -DCMAKE_CXX_FLAGS="-include algorithm"
+    -DCMAKE_CXX_FLAGS="-include algorithm" \
+    -DCMAKE_PROJECT_whisper.cpp_INCLUDE="$HERE/version.cmake" \
+    -DRVP_WHISPER_TAG="$TAG" -DRVP_WHISPER_COMMIT="$COMMIT" \
+    -DRVP_WHISPER_COPYRIGHT="$(grep -m1 '^Copyright' "$SRC/LICENSE")"
 ninja -C "$BUILD" whisper-cli
 
 rm -rf "$OUT"
@@ -83,4 +90,12 @@ cp "$BUILD/bin/whisper-cli.exe" "$OUT/"
 find "$BUILD/bin" -maxdepth 1 -name '*.dll' -exec cp {} "$OUT/" \;
 cp "$SRC/LICENSE" "$OUT/LICENSE-whisper.cpp.txt"
 printf 'whisper.cpp %s (%s), built by tools/whisper/build.sh\n' "$TAG" "$COMMIT" > "$OUT/VERSION.txt"
+# Each file carries its version resource (its UTF-16 text without the
+# zero bytes reads as ASCII).
+for file in "$OUT"/*.exe "$OUT"/*.dll; do
+    if ! tr -d '\0' < "$file" | grep -q -a "OriginalFilename$(basename "$file")"; then
+        echo "no version resource in $file" >&2
+        exit 1
+    fi
+done
 ls -la "$OUT"

@@ -140,13 +140,18 @@ fn dib(image: &Image) -> Vec<u8> {
 
 /// A Windows resource file (`.res`, linked into `rvp.exe`) with the icon
 /// of [`ico`] as the group `IDI_ICON1`, the name Qt's Windows platform
-/// looks up for the window class icon.
+/// looks up for the window class icon, and the version resource of
+/// [`version_info`] for `version` (Explorer's Details page and the Task
+/// Manager's name; a program without one looks unknown to antivirus
+/// heuristics).
 ///
 /// # Errors
-/// Fails when `ico` is not an ICO file this module wrote.
-pub fn res(ico: &[u8]) -> Result<Vec<u8>, String> {
+/// Fails when `ico` is not an ICO file this module wrote, or `version` is
+/// not up to four numbers separated by dots.
+pub fn res(ico: &[u8], version: &str) -> Result<Vec<u8>, String> {
     const RT_ICON: u16 = 3;
     const RT_GROUP_ICON: u16 = 14;
+    const RT_VERSION: u16 = 16;
     let count = usize::from(u16::from_le_bytes(
         ico.get(4..6)
             .ok_or("short ICO")?
@@ -183,7 +188,130 @@ pub fn res(ico: &[u8]) -> Result<Vec<u8>, String> {
         0x1030,
         &group,
     );
+    resource(
+        &mut out,
+        Id::Number(RT_VERSION),
+        Id::Number(1),
+        0x0030,
+        &version_info(version)?,
+    );
     Ok(out)
+}
+
+/// The strings of `rvp.exe`'s version resource, US English (`040904B0`).
+fn version_strings(version: &str) -> [(&'static str, String); 9] {
+    [
+        ("CompanyName", "RVP".to_owned()),
+        ("FileDescription", "RVP".to_owned()),
+        ("FileVersion", version.to_owned()),
+        ("InternalName", "rvp".to_owned()),
+        (
+            "LegalCopyright",
+            "Copyright (C) RVP's authors. GNU General Public License 3.0 or later.".to_owned(),
+        ),
+        ("OriginalFilename", "rvp.exe".to_owned()),
+        ("ProductName", "RVP".to_owned()),
+        ("ProductVersion", version.to_owned()),
+        (
+            "Comments",
+            "Rust Video Player, a media player built on libmpv".to_owned(),
+        ),
+    ]
+}
+
+/// A version resource (`VS_VERSIONINFO`): the fixed part with `version`'s
+/// numbers (an application for Windows NT), then [`version_strings`] and
+/// the translation they are in.
+///
+/// # Errors
+/// Fails when `version` is not one to four numbers separated by dots.
+pub fn version_info(version: &str) -> Result<Vec<u8>, String> {
+    let mut numbers = [0_u16; 4];
+    let parts: Vec<&str> = version.split('.').collect();
+    if parts.len() > numbers.len() {
+        return Err(format!("too many parts in version {version}"));
+    }
+    for (number, part) in numbers.iter_mut().zip(&parts) {
+        *number = part
+            .parse()
+            .map_err(|_| format!("bad version number in {version}"))?;
+    }
+    let most = (u32::from(numbers[0]) << 16) | u32::from(numbers[1]);
+    let least = (u32::from(numbers[2]) << 16) | u32::from(numbers[3]);
+    let mut fixed = Vec::with_capacity(52);
+    for value in [
+        0xFEEF_04BD_u32, // signature
+        0x0001_0000,     // structure version
+        most,
+        least,
+        most,
+        least,
+        0x3F,        // flags mask
+        0,           // flags
+        0x0004_0004, // VOS_NT_WINDOWS32
+        1,           // VFT_APP
+        0,           // subtype
+        0,           // date
+        0,
+    ] {
+        fixed.extend_from_slice(&value.to_le_bytes());
+    }
+    let strings: Vec<Vec<u8>> = version_strings(version)
+        .iter()
+        .map(|(key, value)| {
+            let mut text = Vec::new();
+            for unit in value.encode_utf16().chain(std::iter::once(0)) {
+                text.extend_from_slice(&unit.to_le_bytes());
+            }
+            // Text values count UTF-16 units with the terminating zero.
+            let units = u16::try_from(text.len() / 2).unwrap_or(u16::MAX);
+            version_block(key, 1, &text, units, &[])
+        })
+        .collect();
+    let table = version_block("040904B0", 1, &[], 0, &strings);
+    let string_info = version_block("StringFileInfo", 1, &[], 0, &[table]);
+    // US English (0x0409) in Unicode (1200).
+    let translation = version_block("Translation", 0, &[0x09, 0x04, 0xB0, 0x04], 4, &[]);
+    let var_info = version_block("VarFileInfo", 1, &[], 0, &[translation]);
+    Ok(version_block(
+        "VS_VERSION_INFO",
+        0,
+        &fixed,
+        52,
+        &[string_info, var_info],
+    ))
+}
+
+/// One block of a version resource: its length, the value's length, the
+/// type (0 binary, 1 text), the key, the value, then the children, each
+/// starting on four bytes.
+fn version_block(
+    key: &str,
+    kind: u16,
+    value: &[u8],
+    value_length: u16,
+    children: &[Vec<u8>],
+) -> Vec<u8> {
+    let mut out = vec![0; 2];
+    out.extend_from_slice(&value_length.to_le_bytes());
+    out.extend_from_slice(&kind.to_le_bytes());
+    for unit in key.encode_utf16().chain(std::iter::once(0)) {
+        out.extend_from_slice(&unit.to_le_bytes());
+    }
+    while !out.len().is_multiple_of(4) {
+        out.push(0);
+    }
+    out.extend_from_slice(value);
+    for child in children {
+        while !out.len().is_multiple_of(4) {
+            out.push(0);
+        }
+        out.extend_from_slice(child);
+    }
+    // A version resource is far below 64 KiB.
+    let length = u16::try_from(out.len()).unwrap_or(u16::MAX);
+    out[..2].copy_from_slice(&length.to_le_bytes());
+    out
 }
 
 #[derive(Clone, Copy)]
@@ -318,7 +446,7 @@ fn from_f32(value: f32) -> u32 {
 
 #[cfg(test)]
 mod tests {
-    use super::{ICO_SIZES, ico, icon, res, title_logo, wordmark};
+    use super::{ICO_SIZES, ico, icon, res, title_logo, version_info, wordmark};
 
     #[test]
     fn the_icon_has_a_transparent_corner_and_an_orange_symbol() {
@@ -342,17 +470,44 @@ mod tests {
             u32::from_le_bytes(file[14..18].try_into().expect("len")),
             40 + 1024 + 64
         );
-        let resources = res(&file).expect("res");
+        let resources = res(&file, "1.2.3").expect("res");
         assert_eq!(&resources[..8], &[0, 0, 0, 0, 32, 0, 0, 0]);
-        let name: Vec<u8> = "IDI_ICON1"
-            .encode_utf16()
-            .flat_map(u16::to_le_bytes)
-            .collect();
-        assert!(
-            resources
-                .windows(name.len())
-                .any(|window| window == name.as_slice())
-        );
+        let utf16 =
+            |text: &str| -> Vec<u8> { text.encode_utf16().flat_map(u16::to_le_bytes).collect() };
+        for text in [
+            "IDI_ICON1",
+            "VS_VERSION_INFO",
+            "OriginalFilename",
+            "rvp.exe",
+        ] {
+            let name = utf16(text);
+            assert!(
+                resources
+                    .windows(name.len())
+                    .any(|window| window == name.as_slice()),
+                "{text}"
+            );
+        }
+        assert!(res(&file, "1.2.3.4.5").is_err());
+        assert!(res(&file, "1.x").is_err());
+    }
+
+    #[test]
+    fn the_version_resource_holds_the_numbers_and_its_lengths() {
+        let info = version_info("0.10.3").expect("version");
+        let word = |at: usize| u16::from_le_bytes([info[at], info[at + 1]]);
+        let dword = |at: usize| u32::from_le_bytes(info[at..at + 4].try_into().expect("dword"));
+        assert_eq!(usize::from(word(0)), info.len());
+        assert_eq!(word(2), 52);
+        // "VS_VERSION_INFO" and its zero: 32 bytes after the 6-byte header,
+        // padded to 40.
+        let fixed = 40;
+        assert_eq!(dword(fixed), 0xFEEF_04BD);
+        assert_eq!(dword(fixed + 8), 10);
+        assert_eq!(dword(fixed + 12), 3 << 16);
+        // Each child's length stays inside its parent.
+        let string_info = fixed + 52;
+        assert!(string_info + usize::from(word(string_info)) <= info.len());
     }
 
     #[test]

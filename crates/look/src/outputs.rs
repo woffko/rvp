@@ -36,7 +36,10 @@ pub fn outputs() -> Result<Vec<(String, Vec<u8>)>, String> {
         files.push((format!("icons/rvp-{size}.png"), png(&brand::icon(size)?)?));
     }
     let ico = brand::ico()?;
-    files.push(("icons/rvp.res".to_owned(), brand::res(&ico)?));
+    files.push((
+        "icons/rvp.res".to_owned(),
+        brand::res(&ico, env!("CARGO_PKG_VERSION"))?,
+    ));
     files.push(("icons/rvp.ico".to_owned(), ico));
     files.push((
         "icons/rvp.svg".to_owned(),
