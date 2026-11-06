@@ -531,7 +531,7 @@ impl App {
         write(
             Level::Info,
             &format!(
-                "video: renderer {:?} ({}), hwdec {}, video-sync {}, screen {:.3} Hz; smoothing {}: {} {} at {}, motion compensation up to {}p, steps down after {}; here: {}",
+                "video: renderer {:?} ({}), hwdec {}, video-sync {}, {}; smoothing {}: {} {} at {}, motion compensation up to {}p, steps down after {}; here: {}",
                 settings.render.renderer,
                 if self.native_video {
                     "mpv's own window"
@@ -540,7 +540,12 @@ impl App {
                 },
                 settings.hwdec,
                 settings.video_sync,
-                self.picture.screen.refresh,
+                // The window tells the screen after the log opens at start.
+                if self.picture.screen.refresh > 0.0 {
+                    format!("screen {:.3} Hz", self.picture.screen.refresh)
+                } else {
+                    "screen not known yet".to_owned()
+                },
                 if smoothing.enabled { "on" } else { "off" },
                 smoothing.engine.text(),
                 smoothing.preset.text(),

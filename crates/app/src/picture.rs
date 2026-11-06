@@ -1021,6 +1021,18 @@ impl App {
         }
         let resize_changes = self.settings.picture.resize.target == ResizeTarget::Display
             && self.settings.picture.resize.when != ResizeWhen::Never;
+        if (screen.refresh - self.picture.screen.refresh).abs() >= 0.001
+            || (screen.width, screen.height)
+                != (self.picture.screen.width, self.picture.screen.height)
+        {
+            crate::log::write(
+                crate::log::Level::Info,
+                &format!(
+                    "screen: {}x{}, {:.3} Hz",
+                    screen.width, screen.height, screen.refresh
+                ),
+            );
+        }
         self.picture.screen = screen;
         self.update_auto_rotation();
         drop(self.apply_picture(engine));

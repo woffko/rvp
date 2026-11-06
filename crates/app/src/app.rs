@@ -711,6 +711,8 @@ impl App {
         engine.set_mute(state.mute)?;
         self.started = true;
         let last_file = state.last_file.clone();
+        // Before the log opens: its first lines name the engines found.
+        self.probe_fruc(engine);
         if let Some(error) = self.apply_log(engine) {
             self.warnings.push(error);
         }
@@ -729,7 +731,6 @@ impl App {
             self.warnings.push(format!("Picture settings: {error}"));
         }
         self.apply_render(engine);
-        self.probe_fruc(engine);
         self.start_subtitles(engine);
         if let Err(error) = self.apply_video_filters(engine) {
             self.warnings.push(format!("Video filters: {error}"));

@@ -256,7 +256,11 @@ smoothing for users without SVP, after a study of the engines.
   as SVP does, the script's first `original-first` seconds (1 s) are the
   source's frames repeated at the rate (`FrameEval`): mpv loads the script
   again after each start and seek. Adding the filter later instead
-  dropped 80 frames while mpv's chain changed.
+  dropped 80 frames while mpv's chain changed. WSL's builds share the
+  host's processors through the hypervisor, and RVP's process priority
+  does not win them back (2026-11-06, MVTools under a full WSL load: 45,
+  44 and 38 dropped frames a second at normal, above normal and high):
+  read the log's `processors` share before blaming a change.
 - The control panel (F7) is a second window (`shell/qml/ControlPanel.qml`)
   with its own `Chrome` in `Mode::ControlBox`, painted whole
   (`SkinView.surface` 1, `panelDamaged`).
