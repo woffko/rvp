@@ -2800,6 +2800,42 @@ in %2 seconds</source>
             <translation>Сглаживание выключено, пока подключён SVP, пока работает собственный сценарий VapourSynth RVP и когда видео уже идёт с целевой частотой; пока работает SVP 4 Manager, после старта файла оно ждёт SVP 8 с. Движок, который здесь не может работать, уступает место: RIFE и NVIDIA Optical Flow — MVTools, MVTools — Blend; движок, на выходе которого теряется больше 5 % кадров за время выше или больше половины за 5 с, переходит на ступень ниже (более лёгкая предустановка, затем MVTools, затем Blend; RIFE сразу уступает MVTools) до конца файла. Сверх бюджета мощности GPU сглаживание облегчается первым. После старта или перемотки на время выше показывается оригинал, пока MVTools или RIFE готовятся, как у SVP. Уровень «Сведения» на странице «Журнал» записывает каждую ступень и секунды с потерянными кадрами.</translation>
         </message>
         <message>
+            <source>%1 %2 up to %3p</source>
+            <translation>%1 %2 до %3p</translation>
+        </message>
+        <message>
+            <source>%1 %2 below 480p</source>
+            <translation>%1 %2 ниже 480p</translation>
+        </message>
+        <message>
+            <source>%1 does not run here</source>
+            <translation>%1 здесь не работает</translation>
+        </message>
+        <message>
+            <source>Calibration: measuring while nothing plays (%1 done, at most %2 left)</source>
+            <translation>Калибровка: измерение, пока ничего не играет (готово %1, осталось не больше %2)</translation>
+        </message>
+        <message>
+            <source>Calibration of %1 at 60 frames a second: %2</source>
+            <translation>Калибровка от %1 при 60 кадрах в секунду: %2</translation>
+        </message>
+        <message>
+            <source>Calibration: no engine to measure here.</source>
+            <translation>Калибровка: здесь нечего измерять.</translation>
+        </message>
+        <message>
+            <source>Calibration: not measured yet; it runs when smoothing is on and nothing plays for a few seconds.</source>
+            <translation>Калибровка ещё не проведена: она начнётся, когда сглаживание включено и несколько секунд ничего не играет.</translation>
+        </message>
+        <message>
+            <source>Calibrate Now</source>
+            <translation>Калибровать</translation>
+        </message>
+        <message>
+            <source>The calibration measures once how many frames a second MVTools and RIFE make here at each preset from 480p to 2160p, as SVP does, and again when the processors, graphics cards, their drivers or the engines change; each file then starts at the best preset that keeps its rate with a fifth to spare, at most the preset above. NVIDIA Optical Flow is not measured. Steps down taken while other programs loaded the processors come back at the next seek once that load is gone.</source>
+            <translation>Калибровка один раз измеряет, сколько кадров в секунду дают здесь MVTools и RIFE на каждой предустановке от 480p до 2160p, как у SVP, и повторяется при смене процессоров, видеокарт, их драйверов или движков; затем каждый файл начинается с лучшей предустановки, которая держит его частоту с запасом в пятую часть, но не выше выбранной выше. NVIDIA Optical Flow не измеряется. Ступени вниз, сделанные, пока другие программы нагружали процессоры, возвращаются при следующей перемотке, когда эта нагрузка уходит.</translation>
+        </message>
+        <message>
             <source>Show subtitles when a file starts</source>
             <translation>Показывать субтитры при старте файла</translation>
         </message>

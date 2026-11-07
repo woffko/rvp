@@ -175,6 +175,7 @@ std::size_t rvp_gl_get_proc_address(rust::Str name);
 void rvp_video_request_update();
 rust::String rvp_gpu_power_read(bool nvidia);
 void rvp_gpu_power_close();
+rust::String rvp_hardware();
 bool rvp_atlas_contains(rust::Str name);
 void rvp_atlas_remove_prefix(rust::Str prefix);
 void rvp_atlas_insert(rust::Str name, rust::Slice<const std::uint8_t> rgba, std::int32_t width,

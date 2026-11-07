@@ -339,7 +339,7 @@ fn run(receiver: &Receiver<String>, path: &Path, file: File, mut size: u64) {
 }
 
 /// Now in local time as `YYYY-MM-DD HH:MM:SS.mmm`.
-fn local_time() -> String {
+pub(crate) fn local_time() -> String {
     let since = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .unwrap_or_default();

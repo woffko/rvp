@@ -1186,6 +1186,18 @@ impl qobject::Player {
         QString::from(&rvp_app::log::recent())
     }
 
+    pub(crate) fn calibration_status(&self) -> QString {
+        self.core().map_or_else(QString::default, |core| {
+            QString::from(&core.app.calibration_status().to_string())
+        })
+    }
+
+    pub(crate) fn calibrate_now(mut self: Pin<&mut Self>) {
+        if let Some(core) = self.as_mut().core_mut() {
+            core.app.calibrate_now();
+        }
+    }
+
     /// The main window's and the control panel's opacity (Skins >
     /// Opacity).
     pub(super) fn sync_opacity(mut self: Pin<&mut Self>) {

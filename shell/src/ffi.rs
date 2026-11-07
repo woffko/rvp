@@ -105,6 +105,10 @@ pub mod bridge {
         fn rvp_gpu_power_read(nvidia: bool) -> String;
         /// Lets NVML go (a reader ends).
         fn rvp_gpu_power_close();
+        /// On Windows the processor's name and each graphics adapter with
+        /// its vendor and device IDs and its driver's version (the
+        /// smoothing calibration's key); empty elsewhere.
+        fn rvp_hardware() -> String;
 
         /// True when an atlas image of this name is cached on the C++ side.
         fn rvp_atlas_contains(name: &str) -> bool;

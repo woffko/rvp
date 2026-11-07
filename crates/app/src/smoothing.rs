@@ -226,7 +226,8 @@ impl SmoothingSettings {
 /// What the plan needs to know about the file and the machine.
 #[derive(Debug, Clone, Copy, PartialEq, Default)]
 pub struct Facts {
-    /// The video's height (0: no video).
+    /// The video's width and height (height 0: no video).
+    pub width: u32,
     pub height: u32,
     /// The source's frame rate (0: unknown).
     pub source_fps: f64,
@@ -239,6 +240,9 @@ pub struct Facts {
     /// RVP's VapourSynth script slot runs.
     pub script_slot: bool,
     pub engines: Engines,
+    /// What keeps the file's rate by the calibration
+    /// (`crate::calibration`; `None`: not calibrated, all may run).
+    pub fitting: Option<crate::calibration::Fitting>,
 }
 
 /// The motion-compensated engines this machine has.
@@ -391,22 +395,39 @@ pub fn plan(settings: &SmoothingSettings, facts: &Facts, lightened: Lightened) -
         engine => engine,
     };
     let mut preset = settings.preset;
+    // The calibration's start: the first step that keeps the rate with
+    // room (each step that does not is passed over, here and below).
+    let fits = |engine: Engine, preset: Preset| {
+        facts
+            .fitting
+            .is_none_or(|fitting| fitting.fits(engine, preset))
+    };
+    let fit = |mut step: (Engine, Preset)| {
+        while !fits(step.0, step.1) {
+            step = step_down(step.0, step.1, settings.preset)?;
+        }
+        Some(step)
+    };
+    let Some(start) = fit((engine, preset)) else {
+        return Plan::Blend;
+    };
+    (engine, preset) = start;
     if lightened.lighter {
         if engine == Engine::Rife {
             engine = Engine::MvTools;
         } else {
             preset = preset.lighter();
         }
+        let Some(lighter) = fit((engine, preset)) else {
+            return Plan::Blend;
+        };
+        (engine, preset) = lighter;
     }
     for _ in 0..lightened.dropped {
-        if preset != Preset::Fast {
-            preset = preset.lighter();
-        } else if engine != Engine::MvTools {
-            engine = Engine::MvTools;
-            preset = settings.preset.min(Preset::Medium);
-        } else {
+        let Some(lighter) = step_down(engine, preset, settings.preset).and_then(fit) else {
             return Plan::Blend;
-        }
+        };
+        (engine, preset) = lighter;
     }
     if engine == Engine::MvTools && !facts.engines.mvtools {
         return Plan::Blend;
@@ -418,16 +439,43 @@ pub fn plan(settings: &SmoothingSettings, facts: &Facts, lightened: Lightened) -
     }
 }
 
-/// The steps of dropped frames ([`Lightened::dropped`]) that take RIFE
-/// at `preset` past its lighter presets to MVTools, as [`plan`] takes
-/// them: each lightens the preset down to Fast, the next one gives way.
+/// One step down the plan's ladder from `engine` at `preset`: a lighter
+/// preset down to Fast, then MVTools at the `wanted` preset but at most
+/// Medium (RIFE and `fruc_vulkan` give way), then nothing (Blend).
 #[must_use]
-fn steps_to_mvtools(preset: Preset) -> u8 {
-    match preset {
-        Preset::Quality => 3,
-        Preset::Medium => 2,
-        Preset::Fast => 1,
+fn step_down(engine: Engine, preset: Preset, wanted: Preset) -> Option<(Engine, Preset)> {
+    if preset != Preset::Fast {
+        Some((engine, preset.lighter()))
+    } else if engine != Engine::MvTools {
+        Some((Engine::MvTools, wanted.min(Preset::Medium)))
+    } else {
+        None
     }
+}
+
+/// The steps of dropped frames ([`Lightened::dropped`]) beyond
+/// `lightened`'s that take the plan past `engine`, as [`plan`] takes them
+/// (passing over what the calibration says cannot keep the rate); at most
+/// eight.
+#[must_use]
+pub fn steps_past(
+    settings: &SmoothingSettings,
+    facts: &Facts,
+    lightened: Lightened,
+    engine: Engine,
+) -> u8 {
+    (1..=8)
+        .find(|steps| {
+            let further = Lightened {
+                dropped: lightened.dropped.saturating_add(*steps),
+                ..lightened
+            };
+            !matches!(
+                plan(settings, facts, further),
+                Plan::Filter { engine: running, .. } if running == engine
+            )
+        })
+        .unwrap_or(8)
 }
 
 /// A Python string literal for a path.
@@ -666,6 +714,18 @@ impl Runtime {
             rife: vsscript.and_then(rife_files),
         }
     }
+
+    /// MVTools is there.
+    pub(crate) fn has_mvtools(&self) -> bool {
+        self.mvtools
+    }
+
+    /// RIFE's plugin and model, when they are there.
+    pub(crate) fn rife_files(&self) -> Option<(&Path, &Path)> {
+        self.rife
+            .as_ref()
+            .map(|(plugin, model)| (plugin.as_path(), model.as_path()))
+    }
 }
 
 /// The smoothing's state in the [`App`].
@@ -689,6 +749,10 @@ pub(crate) struct Smoothing {
     /// The engines whose filter raised the rate in this file: a dip after
     /// a seek or a lighter step leaves them in.
     ran: std::collections::BTreeSet<Engine>,
+    /// The share of the processors other programs took over the last
+    /// second (0 to 1; `App::set_processors`), and at the last step down.
+    busy: Option<f64>,
+    busy_at_step: Option<f64>,
 }
 
 impl Smoothing {
@@ -873,6 +937,12 @@ const AT_ONCE: Duration = Duration::from_secs(5);
 /// at once: half.
 const AT_ONCE_SHARE: f64 = 0.5;
 
+/// Other programs' share of the processors at a step down that makes it
+/// theirs, and the share under which their load is gone again
+/// (`App::smoothing_seek`): the owner's WSL builds took 85 to 100 %.
+const BUSY_STEP: f64 = 0.6;
+const BUSY_GONE: f64 = 0.3;
+
 /// Whether `dropped` frames over `seconds` of a filter that makes `rate`
 /// frames a second are more than `share` of them.
 #[must_use]
@@ -912,14 +982,20 @@ impl App {
     /// What the plan knows about the file that plays and this machine.
     fn smoothing_facts(&self) -> Facts {
         let vs = &self.settings.vapoursynth;
+        let size = |id| {
+            self.model
+                .int(id)
+                .and_then(|value| u32::try_from(value).ok())
+                .unwrap_or(0)
+        };
+        let (width, height) = (size(PropertyId::VideoWidth), size(PropertyId::VideoHeight));
+        let source_fps = self.model.double(PropertyId::ContainerFps).unwrap_or(0.0);
+        let display_fps = self.picture.screen.refresh;
         Facts {
-            height: self
-                .model
-                .int(PropertyId::VideoHeight)
-                .and_then(|height| u32::try_from(height).ok())
-                .unwrap_or(0),
-            source_fps: self.model.double(PropertyId::ContainerFps).unwrap_or(0.0),
-            display_fps: self.picture.screen.refresh,
+            width,
+            height,
+            source_fps,
+            display_fps,
             svp_attached: self
                 .model
                 .text(PropertyId::VideoFilters)
@@ -934,6 +1010,7 @@ impl App {
                     && self.native_video
                     && self.settings.render.renderer == crate::render::Renderer::Vulkan,
             },
+            fitting: self.calibration_fitting(width, height, source_fps, display_fps),
         }
     }
 
@@ -1133,9 +1210,7 @@ impl App {
     /// rest of the file. Either way the next plan runs, with a notice.
     pub fn smoothing_watch(&mut self, engine: &Mpv, now: Instant) -> Option<UiRequest> {
         let Some(Plan::Filter {
-            engine: running,
-            preset: running_preset,
-            ..
+            engine: running, ..
         }) = self.smoothing.applied.clone()
         else {
             self.smoothing.watch = FilterWatch::default();
@@ -1193,11 +1268,17 @@ impl App {
                 // RIFE at 1080p dropped as many frames at Medium as at
                 // Quality): one far beyond the card gives way to MVTools.
                 let steps = if at_once && running == Engine::Rife {
-                    steps_to_mvtools(running_preset)
+                    steps_past(
+                        &self.settings.smoothing,
+                        &self.smoothing_facts(),
+                        self.smoothing_lightened(),
+                        Engine::Rife,
+                    )
                 } else {
                     1
                 };
                 self.smoothing.dropped = self.smoothing.dropped.saturating_add(steps);
+                self.smoothing.busy_at_step = self.smoothing.busy;
                 self.apply_smoothing(engine);
                 return Some(UiRequest::Osd(format!(
                     "Motion smoothing: {before} dropped frames here; {}",
@@ -1228,6 +1309,36 @@ impl App {
             running.text(),
             self.smoothing_plan().text()
         )))
+    }
+
+    /// The processors' load over the last second, from the shell: all of
+    /// it and RVP's share (0 to 1).
+    pub fn set_processors(&mut self, processors: Option<(f64, f64)>) {
+        self.smoothing.busy = processors.map(|(all, own)| (all - own).max(0.0));
+    }
+
+    /// A seek started: steps down that other programs' load took come back
+    /// once that load is gone, while mpv restarts the filter anyway (the
+    /// owner, 2026-11-07); steps the engine took on its own stay.
+    pub(crate) fn smoothing_seek(&mut self, engine: &Mpv) {
+        let smoothing = &self.smoothing;
+        let (Some(then), Some(now)) = (smoothing.busy_at_step, smoothing.busy) else {
+            return;
+        };
+        if smoothing.dropped == 0 || then < BUSY_STEP || now > BUSY_GONE {
+            return;
+        }
+        crate::log::write(
+            crate::log::Level::Info,
+            &format!(
+                "smoothing: other programs' load is gone ({:.0} % of the processors, {:.0} % at the step): the steps down come back at the seek",
+                now * 100.0,
+                then * 100.0
+            ),
+        );
+        self.smoothing.dropped = 0;
+        self.smoothing.busy_at_step = None;
+        self.apply_smoothing(engine);
     }
 
     /// Which engines this machine has, for the settings window.
@@ -1465,12 +1576,14 @@ mod tests {
                 plan(&quality(Engine::Rife), &machine, dropped(taken)),
                 filter(Engine::Rife, running)
             );
+            let past = steps_past(
+                &quality(Engine::Rife),
+                &machine,
+                dropped(taken),
+                Engine::Rife,
+            );
             assert_eq!(
-                plan(
-                    &quality(Engine::Rife),
-                    &machine,
-                    dropped(taken + steps_to_mvtools(running))
-                ),
+                plan(&quality(Engine::Rife), &machine, dropped(taken + past)),
                 filter(Engine::MvTools, Preset::Medium)
             );
         }

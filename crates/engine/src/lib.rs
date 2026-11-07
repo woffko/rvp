@@ -6,6 +6,7 @@
 //! headless (`vo=null`, `ao=null`) on generated `av://lavfi:` sources.
 //! [`thumbnail`] is the second core that renders small pictures (M11).
 
+pub mod calibrate;
 pub mod encode;
 mod engine;
 mod model;

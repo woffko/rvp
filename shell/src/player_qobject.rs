@@ -333,6 +333,16 @@ pub mod qobject {
         #[qinvokable]
         fn log_recent(self: &Self) -> QString;
 
+        /// Motion smoothing's calibration as JSON (the Motion Smoothing
+        /// page): `state`, `date`, `rows`, `failed`, `done`, `left`.
+        #[qinvokable]
+        fn calibration_status(self: &Self) -> QString;
+
+        /// Measures the smoothing engines again as soon as nothing plays
+        /// (the Motion Smoothing page's Calibrate Now).
+        #[qinvokable]
+        fn calibrate_now(self: Pin<&mut Self>);
+
         /// How the menus look (M14, Skins > Context Menu Style): JSON with
         /// `native`, `dark`, `opacity`, `scale` and the skin's `colors`.
         #[qinvokable]

@@ -38,6 +38,7 @@
 #include <dxgi.h>
 #pragma comment(lib, "dxgi.lib")
 #pragma comment(lib, "gdi32.lib")
+#pragma comment(lib, "advapi32.lib")
 #else
 #include <dlfcn.h>
 #endif
@@ -286,4 +287,55 @@ void rvp_gpu_power_close()
 #ifdef _WIN32
     closeAdapters();
 #endif
+}
+
+rust::String rvp_hardware()
+{
+    std::string text;
+#ifdef _WIN32
+    wchar_t cpu[256] = {};
+    DWORD size = sizeof cpu;
+    if (RegGetValueW(HKEY_LOCAL_MACHINE, L"HARDWARE\\DESCRIPTION\\System\\CentralProcessor\\0",
+                     L"ProcessorNameString", RRF_RT_REG_SZ, nullptr, cpu, &size)
+        == ERROR_SUCCESS) {
+        char name[512] = {};
+        WideCharToMultiByte(CP_UTF8, 0, cpu, -1, name, sizeof name - 1, nullptr, nullptr);
+        text += name;
+    }
+    IDXGIFactory1 *factory = nullptr;
+    if (SUCCEEDED(CreateDXGIFactory1(__uuidof(IDXGIFactory1), reinterpret_cast<void **>(&factory)))) {
+        for (UINT index = 0;; ++index) {
+            IDXGIAdapter1 *adapter = nullptr;
+            if (FAILED(factory->EnumAdapters1(index, &adapter)) || adapter == nullptr)
+                break;
+            DXGI_ADAPTER_DESC1 desc{};
+            LARGE_INTEGER version{};
+            const bool listed = SUCCEEDED(adapter->GetDesc1(&desc))
+                && (desc.Flags & DXGI_ADAPTER_FLAG_SOFTWARE) == 0;
+            // The user-mode driver's version (the only interface DXGI
+            // answers this for).
+            const bool known = listed
+                && SUCCEEDED(adapter->CheckInterfaceSupport(__uuidof(IDXGIDevice), &version));
+            adapter->Release();
+            if (!listed)
+                continue;
+            char card[256] = {};
+            WideCharToMultiByte(CP_UTF8, 0, desc.Description, -1, card, sizeof card - 1, nullptr,
+                                nullptr);
+            const auto part = [&](LONG high, unsigned shift) {
+                return known ? static_cast<unsigned>((static_cast<unsigned long>(high) >> shift) & 0xFFFFu)
+                             : 0u;
+            };
+            char line[400] = {};
+            std::snprintf(line, sizeof line, "; %s %04x:%04x driver %u.%u.%u.%u", card,
+                          static_cast<unsigned>(desc.VendorId), static_cast<unsigned>(desc.DeviceId),
+                          part(version.HighPart, 16), part(version.HighPart, 0),
+                          part(static_cast<LONG>(version.LowPart), 16),
+                          part(static_cast<LONG>(version.LowPart), 0));
+            text += line;
+        }
+        factory->Release();
+    }
+#endif
+    return rust::String(text);
 }

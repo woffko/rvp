@@ -855,6 +855,24 @@ fn load_skin(source: &SkinSource) -> Result<&'static Skin, String> {
     Ok(skin)
 }
 
+/// What the command line changes in the application before it starts.
+fn prepare_app(cli: &Cli, app: &mut App) {
+    if cli.flag("selftest") {
+        // A fresh test state must not import the owner's playlists.
+        app.skip_first_import();
+    }
+    // Self-tests measure the smoothing engines only when asked;
+    // `--calibrate` measures as soon as nothing plays.
+    app.set_calibration_manual(cli.flag("selftest"));
+    if cli.flag("calibrate") {
+        app.calibrate_now();
+    }
+    // M9: `--controller=KIND` for this run (the self-test).
+    if let Some(kind) = cli.value("controller") {
+        app.settings.controller.choose(kind);
+    }
+}
+
 /// The application core from the user's directories (and whether they are
 /// portable); on failure a temporary state directory and a message saying
 /// so.
@@ -1079,15 +1097,8 @@ impl qobject::Player {
             }
         };
         messages.extend(app.warnings.iter().cloned());
-        if cli.flag("selftest") {
-            // A fresh test state must not import the owner's playlists.
-            app.skip_first_import();
-        }
         crate::metrics::mark("settings_loaded_ms");
-        // M9: `--controller=KIND` for this run (the self-test).
-        if let Some(kind) = cli.value("controller") {
-            app.settings.controller.choose(kind);
-        }
+        prepare_app(&cli, &mut app);
         let chrome = load_chrome(&cli, &app.settings, &mut messages);
         command_line_skin(&cli, &mut app);
         crate::metrics::mark("skin_loaded_ms");
@@ -1254,6 +1265,8 @@ impl qobject::Player {
                 .start(core.engine, &[])
                 .and_then(|()| core.app.remote(core.engine, &request))
         };
+        // The calibration's key (after the start: libmpv's version).
+        core.app.set_hardware(crate::hardware::describe());
         let action = core.app.switch_action(core.engine, &request);
         if let Err(error) = result {
             self.as_mut().show_message(&format!("cannot open: {error}"));
@@ -3247,13 +3260,18 @@ impl qobject::Player {
         };
         core.app.tick_second(core.engine, Instant::now());
         let watched = core.app.smoothing_watch(core.engine, Instant::now());
+        let calibrated = core.app.calibration_tick(core.engine, Instant::now());
         let reloaded = core.app.watch_subtitle_files(core.engine);
         let speech = core.app.speech_tick(core.engine, Instant::now());
         if let Err(error) = core.app.tick(Instant::now()) {
             let text = format!("cannot save the playback state: {error}");
             self.as_mut().show_message(&text);
         }
-        for request in [watched, reloaded].into_iter().flatten().chain(speech) {
+        for request in [watched, calibrated, reloaded]
+            .into_iter()
+            .flatten()
+            .chain(speech)
+        {
             self.as_mut().handle_request(request);
         }
         self.as_mut().tick_m11();
@@ -3272,11 +3290,13 @@ impl qobject::Player {
             return;
         };
         let drawn = crate::video::take_drawn(core.app.model.playing());
+        // Every second: smoothing's steps down judge other programs' load.
+        let processors = core.load.sample();
+        core.app.set_processors(processors);
         if !rvp_app::log::enabled(rvp_app::log::Level::Info) {
             return;
         }
         rvp_app::log::set_utc_offset(crate::ffi::bridge::rvp_utc_offset());
-        let processors = core.load.sample();
         core.app
             .log_second(&rvp_app::log::Second { drawn, processors });
     }

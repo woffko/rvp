@@ -236,3 +236,94 @@ fn toggles_leave_svp_alone_and_the_script_slot_takes_over() {
     assert!(app.model.playing(), "still playing");
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+/// The calibration (`rvp_app::calibration`) where a VapourSynth runtime
+/// with MVTools is: asked for while nothing plays, it measures MVTools'
+/// presets on a generated picture, writes `calibration.json`, and the next
+/// file starts at the first preset it says keeps the rate.
+#[test]
+fn the_calibration_measures_mvtools_and_the_plan_follows_it() {
+    if vsscript().is_none() {
+        eprintln!("skipped: no VapourSynth runtime (set VSSCRIPT_PATH to run this test)");
+        return;
+    }
+    let dir = scratch("calibration");
+    let engine = Engine::new(&EngineOptions::headless()).expect("engine");
+    let mut settings = Settings {
+        reopen_last_file: false,
+        remember_positions: false,
+        ipc_server: String::new(),
+        hwdec: "auto-safe".to_owned(),
+        ..Settings::default()
+    };
+    settings.smoothing.enabled = true;
+    settings.smoothing.engine = SmoothingEngine::MvTools;
+    settings.smoothing.preset = Preset::Quality;
+    "2x".clone_into(&mut settings.smoothing.target);
+    settings.smoothing.original_first = 0;
+    let mut app = App::new(settings, &dir).expect("app");
+    app.prepare_svp(vsscript());
+    app.start(&engine, &[]).expect("start");
+    app.set_hardware("the test's machine".to_owned());
+    assert_eq!(app.calibration_status()["state"], "waiting");
+    app.calibrate_now();
+    let deadline = Instant::now() + Duration::from_secs(300);
+    while app.calibration_status()["state"] != "measured" {
+        assert!(
+            Instant::now() < deadline,
+            "the calibration did not finish: {}",
+            app.calibration_status()
+        );
+        app.drain(&engine, Instant::now());
+        drop(app.calibration_tick(&engine, Instant::now()));
+        std::thread::sleep(Duration::from_millis(100));
+    }
+    let calibration = rvp_app::calibration::load(&dir).expect("calibration.json");
+    assert!(
+        calibration.key.contains("the test's machine"),
+        "{calibration:?}"
+    );
+    // RIFE may not run (the test VM has no GPU); MVTools has to.
+    assert!(
+        !calibration.failed.contains(&SmoothingEngine::MvTools),
+        "{calibration:?}"
+    );
+    let measured: Vec<_> = calibration
+        .points
+        .iter()
+        .filter(|point| point.engine == SmoothingEngine::MvTools && point.height == 720)
+        .collect();
+    assert_eq!(measured.len(), 3, "{calibration:?}");
+    assert!(
+        measured.iter().all(|point| point.fps > 1.0),
+        "{calibration:?}"
+    );
+    let rows = app.calibration_status()["rows"]
+        .as_array()
+        .cloned()
+        .unwrap_or_default();
+    assert!(!rows.is_empty(), "{}", app.calibration_status());
+    // The next file starts at the first MVTools preset that keeps twice
+    // its rate with room, by the calibration, or with Blend.
+    app.open(&engine, &[fixture("fixture-square.mkv")], false)
+        .expect("open");
+    let deadline = Instant::now() + Duration::from_secs(20);
+    while app.model.double(PropertyId::TimePos).unwrap_or(0.0) < 0.3 {
+        assert!(Instant::now() < deadline, "the fixture did not play");
+        pump(&mut app, &engine, 50);
+    }
+    let width = u32::try_from(app.model.int(PropertyId::VideoWidth).unwrap_or(0)).unwrap_or(0);
+    let height = u32::try_from(app.model.int(PropertyId::VideoHeight).unwrap_or(0)).unwrap_or(0);
+    let fps = 2.0 * app.model.double(PropertyId::ContainerFps).unwrap_or(0.0);
+    let fitting = calibration.fitting(width, height, fps);
+    let expected = [Preset::Quality, Preset::Medium, Preset::Fast]
+        .into_iter()
+        .find(|preset| fitting.fits(SmoothingEngine::MvTools, *preset));
+    match (app.smoothing_plan(), expected) {
+        (Plan::Filter { engine, preset, .. }, Some(wanted)) => {
+            assert_eq!((engine, preset), (SmoothingEngine::MvTools, wanted));
+        }
+        (Plan::Blend, None) => {}
+        (plan, wanted) => panic!("plan {plan:?}, calibration {wanted:?}: {calibration:?}"),
+    }
+}

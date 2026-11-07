@@ -14,6 +14,7 @@ mod app;
 pub mod associations;
 pub mod audio;
 pub mod binding_editor;
+pub mod calibration;
 pub mod capture;
 pub mod chrome;
 pub mod classic;

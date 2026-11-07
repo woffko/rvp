@@ -2003,8 +2003,56 @@ ApplicationWindow {
                                   + ", NVIDIA Optical Flow " + (win.view.smoothing_engines && win.view.smoothing_engines.fruc ? "found" : "missing")
                                   + " (in RVP's VapourSynth runtime and libmpv)."
                         }
+                        Item {
+                            id: calibration
+                            // The calibration's state, read again each second
+                            // while the page shows.
+                            property var status: ({})
+                            Timer {
+                                interval: 1000
+                                repeat: true
+                                triggeredOnStart: true
+                                running: win.visible && win.currentKey === "smoothing"
+                                onTriggered: calibration.status = JSON.parse(win.player.calibration_status() || "{}")
+                            }
+                            function presetText(preset) {
+                                return preset === "Fast" ? qsTr("Fast") : preset === "Medium" ? qsTr("Medium") : qsTr("Quality")
+                            }
+                            function summary() {
+                                const status = calibration.status
+                                let parts = (status.rows || []).map(row => row.height > 0
+                                    ? qsTr("%1 %2 up to %3p").arg(row.engine).arg(presetText(row.preset)).arg(row.height)
+                                    : qsTr("%1 %2 below 480p").arg(row.engine).arg(presetText(row.preset)))
+                                parts = parts.concat((status.failed || []).map(engine => qsTr("%1 does not run here").arg(engine)))
+                                return parts.join(", ")
+                            }
+                            function text() {
+                                const status = calibration.status
+                                if (status.state === "running")
+                                    return qsTr("Calibration: measuring while nothing plays (%1 done, at most %2 left)").arg(status.done || 0).arg(status.left || 0)
+                                if (status.state === "measured")
+                                    return qsTr("Calibration of %1 at 60 frames a second: %2").arg(status.date || "").arg(summary())
+                                if (status.state === "unavailable")
+                                    return qsTr("Calibration: no engine to measure here.")
+                                return qsTr("Calibration: not measured yet; it runs when smoothing is on and nothing plays for a few seconds.")
+                            }
+                        }
+                        RowLayout {
+                            Note {
+                                Layout.fillWidth: true
+                                text: calibration.text()
+                            }
+                            Button {
+                                text: qsTr("Calibrate Now")
+                                enabled: calibration.status.state !== "running" && calibration.status.state !== "unavailable"
+                                onClicked: win.player.calibrate_now()
+                            }
+                        }
                         Note {
                             text: qsTr("Smoothing stays off while SVP is attached, while RVP's own VapourSynth script runs and when the video plays at the target rate already; while SVP 4 Manager runs, it waits 8 s for SVP after a file starts. An engine that cannot run here gives way: RIFE and NVIDIA Optical Flow to MVTools, MVTools to Blend; one whose output drops more than 5 % of its frames over the time above, or more than half of them over 5 s, steps down (a lighter preset, then MVTools, then Blend; RIFE gives way to MVTools at once) until the file ends. Above the GPU power budget, smoothing is lightened first. After a start or a seek the original shows for the time above while MVTools or RIFE get ready, as SVP does. The Log page's Info level records each step and the seconds that dropped frames.")
+                        }
+                        Note {
+                            text: qsTr("The calibration measures once how many frames a second MVTools and RIFE make here at each preset from 480p to 2160p, as SVP does, and again when the processors, graphics cards, their drivers or the engines change; each file then starts at the best preset that keeps its rate with a fifth to spare, at most the preset above. NVIDIA Optical Flow is not measured. Steps down taken while other programs loaded the processors come back at the next seek once that load is gone.")
                         }
                     }
 

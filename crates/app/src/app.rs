@@ -411,6 +411,8 @@ pub struct App {
     pub(crate) gpu: crate::gpu_power::Budget,
     /// M18's motion smoothing.
     pub(crate) smoothing: crate::smoothing::Smoothing,
+    /// Its calibration (`crate::calibration`).
+    pub(crate) calibration: crate::calibration::State,
     /// The log's mpv client and counters (the Log page).
     pub(crate) log: crate::log::LogState,
     /// libmpv's defaults of the subtitle options RVP leaves unset, and the
@@ -546,6 +548,7 @@ impl App {
             processor_entry: std::cell::RefCell::new(None),
             gpu: crate::gpu_power::Budget::default(),
             smoothing: crate::smoothing::Smoothing::default(),
+            calibration: crate::calibration::State::default(),
             log: crate::log::LogState::default(),
             subtitle_defaults: crate::subtitles::MpvDefaults::default(),
             applied_subtitle_options: std::collections::BTreeMap::new(),
@@ -713,6 +716,7 @@ impl App {
         let last_file = state.last_file.clone();
         // Before the log opens: its first lines name the engines found.
         self.probe_fruc(engine);
+        self.calibration_started(engine);
         if let Some(error) = self.apply_log(engine) {
             self.warnings.push(error);
         }
@@ -1970,6 +1974,7 @@ impl App {
                 EngineEvent::Error(message) => {
                     requests.push(UiRequest::Message(format!("Cannot play: {message}")));
                 }
+                EngineEvent::Seek => self.smoothing_seek(engine),
                 // The shell's (M9).
                 EngineEvent::PlaybackRestart
                 | EngineEvent::Shutdown

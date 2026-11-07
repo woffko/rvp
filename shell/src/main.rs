@@ -28,6 +28,7 @@ mod disc;
 mod disc_ffi;
 mod ffi;
 mod gpu_power;
+mod hardware;
 #[cfg(windows)]
 mod media_controls;
 mod metrics;

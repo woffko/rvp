@@ -263,6 +263,20 @@ smoothing for users without SVP, after a study of the engines.
   does not win them back (2026-11-06, MVTools under a full WSL load: 45,
   44 and 38 dropped frames a second at normal, above normal and high):
   read the log's `processors` share before blaming a change.
+- Smoothing's calibration (`crates/app/src/calibration.rs`, the owner,
+  2026-11-07, SVP's way): while nothing plays, a core without a window
+  (`rvp_engine::calibrate`: `vo=null` at speed 8, not `untimed`, which
+  leaves `estimated-vf-fps` at the source's rate) plays `testsrc2`
+  through each engine's script at 480p to 2160p; a size is skipped once
+  the last one, scaled by the pixels, cannot keep 60 with room (RIFE at
+  2160p took the host's GPU down). Results and the machine's key
+  (`shell/src/hardware.rs`, `rvp_hardware` in `gpu_power.cpp`, libmpv,
+  the engines' files, `calibration::VERSION`: bump it when the scripts
+  change) are in `<state>/calibration.json`; each file starts at the
+  first step of the ladder that keeps its rate with a fifth to spare.
+  NVIDIA Optical Flow is not measured. Steps down taken while other
+  programs held the processors come back at the next seek
+  (`App::smoothing_seek`). Self-tests measure only with `--calibrate`.
 - The control panel (F7) is a second window (`shell/qml/ControlPanel.qml`)
   with its own `Chrome` in `Mode::ControlBox`, painted whole
   (`SkinView.surface` 1, `panelDamaged`).

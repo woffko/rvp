@@ -135,6 +135,9 @@ pub enum EngineEvent {
         reason: EndReason,
         path: Option<String>,
     },
+    /// A seek started (mpv's `seek`; [`EngineEvent::PlaybackRestart`]
+    /// follows when it is done).
+    Seek,
     /// A seek finished and playback continues from the new position.
     PlaybackRestart,
     /// An error reported by libmpv, for example a file that cannot be opened.
@@ -408,6 +411,7 @@ impl Engine {
                     path,
                 });
             }
+            Ok(Event::Seek) => events.push(EngineEvent::Seek),
             Ok(Event::PlaybackRestart) => events.push(EngineEvent::PlaybackRestart),
             Ok(Event::Shutdown) => events.push(EngineEvent::Shutdown),
             Ok(Event::ClientMessage(args)) => events.push(EngineEvent::ClientMessage(
