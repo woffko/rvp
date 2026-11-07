@@ -13,7 +13,12 @@
 # - MVTools in `vs-plugins` (the kit's build, the version of the Windows
 #   bundle), with FFTW;
 # - RIFE's ncnn-Vulkan plugin (its Linux release) with model v4.6 in
-#   `rife/`, with GCC's OpenMP runtime.
+#   `rife/`, with GCC's OpenMP runtime;
+# - vs-mlrt v15.16's TensorRT plugin and trtexec, built here
+#   (tools/vapoursynth/build-vstrt-linux.sh: vs-mlrt has no Linux build),
+#   with vsmlrt.py and RIFE v4.6's ONNX model, in `vs-mlrt/` (not loaded
+#   on its own): RIFE (TensorRT) copies them next to NVIDIA's TensorRT,
+#   which RVP downloads only on the user's request.
 #
 # The libraries find each other by their run paths ($ORIGIN, set with
 # patchelf). Every download is checked by its SHA-256. The result goes to
@@ -35,6 +40,11 @@ JOBS=$(nproc)
 VS_TAG=R73
 ZIMG_TAG=release-3.0.6
 CYTHON=3.1.4
+# Unpacks vs-mlrt's 7z model archive at build time only.
+PY7ZR=1.1.4
+VSMLRT_TAG=v15.16
+RIFE_ONNX_URL=https://github.com/AmusementClub/vs-mlrt/releases/download/model-20220923/rife_v8.7z
+RIFE_ONNX_SHA256=1a18614e72164c61d60861199fc8be6b0003110f747646b3dafb9acd632f6ef7
 PYTHON=cpython-3.12.15+20261021-x86_64-unknown-linux-gnu-install_only.tar.gz
 PYTHON_URL=https://github.com/astral-sh/python-build-standalone/releases/download/20261021/$PYTHON
 PYTHON_SHA256=5ff9f0602ce964a529ed1e8555d3abab6341926d724402ba9a15e9e877191124
@@ -78,6 +88,9 @@ if [ ! -x "$WORK/build-venv/bin/cython" ]; then
     "$WORK/build-venv/bin/pip" install -q "cython==$CYTHON" meson ninja
 fi
 export PATH=$WORK/build-venv/bin:$PATH
+if [ ! -x "$WORK/build-venv/bin/py7zr" ]; then
+    "$WORK/build-venv/bin/pip" install -q "py7zr==$PY7ZR"
+fi
 
 # zimg, static, for VapourSynth's core.
 ZIMG=$WORK/zimg-prefix
@@ -128,6 +141,15 @@ gomp=$(ldconfig -p | sed -n 's/.*libgomp\.so\.1 (libc6,x86-64) => \(.*\)/\1/p' |
 cp -L "$gomp" "$OUT/rife/libgomp.so.1"
 patchelf --set-rpath "\$ORIGIN" "$OUT/rife/librife_linux_x86-64.so"
 
+# vs-mlrt: the plugin and trtexec built here, vsmlrt.py, its licence, and
+# RIFE v4.6's model.
+"$(dirname "$0")/build-vstrt-linux.sh" "$WORK/vstrt" "$WORK/vstrt-out"
+mkdir -p "$OUT/vs-mlrt/models/rife"
+cp "$WORK/vstrt-out/libvstrt.so" "$WORK/vstrt-out/trtexec" "$OUT/vs-mlrt/"
+cp "$WORK/vstrt/vs-mlrt/scripts/vsmlrt.py" "$WORK/vstrt/vs-mlrt/LICENSE" "$OUT/vs-mlrt/"
+"$WORK/build-venv/bin/py7zr" x "$(fetch "$RIFE_ONNX_URL" "vs-mlrt-rife_v8.7z" "$RIFE_ONNX_SHA256")" "$WORK/rife-onnx"
+cp "$WORK/rife-onnx/rife/rife_v4.6.onnx" "$OUT/vs-mlrt/models/rife/rife_v4.6.onnx"
+
 # What a player does not need: the Python's own tests, IDLE and Tk, pip
 # and its installer, its headers, static library and caches; the libraries
 # without their debugging symbols (the Python's carried 100 MB).
@@ -152,6 +174,11 @@ RIFE ncnn-Vulkan $RIFE_TAG (rife/)           MIT                 https://github.
   with ncnn                                   BSD-3-Clause        https://github.com/Tencent/ncnn
   model $MODEL                   MIT                 RIFE, https://github.com/hzwer/Practical-RIFE
   with GCC's OpenMP runtime (libgomp)         GPL-3.0 with the GCC Runtime Library Exception
+vs-mlrt $VSMLRT_TAG (vs-mlrt/, built here)      GPL-3.0             https://github.com/AmusementClub/vs-mlrt (vs-mlrt/LICENSE)
+  trtexec                                     Apache-2.0          TensorRT's sample, https://github.com/NVIDIA/TensorRT
+  models/rife/rife_v4.6.onnx                  MIT                 RIFE, https://github.com/hzwer/Practical-RIFE
+NVIDIA's TensorRT is not part of this runtime: RVP downloads it from NVIDIA
+on the user's request, under NVIDIA's licence.
 NOTICE
 
 # The runtime works on its own and where it is moved to (as the packages

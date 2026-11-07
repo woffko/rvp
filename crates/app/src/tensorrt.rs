@@ -9,7 +9,8 @@
 //! model that RVP's package carries (`vapoursynth/vs-mlrt`), laid out as
 //! vs-mlrt expects them, in `<state>/tensorrt`:
 //!
-//! * `vstrt.dll`, which loads `vsmlrt-cuda/nvinfer_10.dll` by its path;
+//! * vs-mlrt's plugin ([`VSTRT`]), which loads TensorRT ([`NVINFER`]) from
+//!   `vsmlrt-cuda/` (Windows: by its path; Linux: by its run path);
 //! * `vsmlrt-cuda/`: NVIDIA's libraries and `trtexec`, which builds the
 //!   engine for the card (a process of its own, so RVP's narrow library
 //!   search does not apply to it);
@@ -69,19 +70,85 @@ pub const BUILDERS: [&str; 7] = ["sm75", "sm80", "sm86", "sm89", "sm90", "sm100"
 /// What the install folder holds when it is complete.
 pub const INSTALLED: &str = "installed.json";
 
-/// NVIDIA's archives for this system (Windows: TensorRT 10.16 for CUDA
-/// 13.2 and CUDA 13.2.51's runtime and NVRTC; vs-mlrt v15.16's plugin is
-/// built for them). CUDA's SHA-256 are NVIDIA's (`redistrib_13.2.0.json`);
-/// TensorRT's, which NVIDIA does not publish, were taken on 2026-11-07.
+/// NVIDIA's archives for this system: TensorRT 10.16 for CUDA 13.2 and
+/// CUDA 13.2.51's runtime and NVRTC, which vs-mlrt v15.16's plugin
+/// (Windows) and `tools/vapoursynth/build-vstrt-linux.sh`'s (Linux) are
+/// built for. Windows: NVIDIA's zip and CUDA's redistributable archives
+/// (their SHA-256 in NVIDIA's `redistrib_13.2.0.json`; TensorRT's, which
+/// NVIDIA does not publish, taken on 2026-11-07). Linux: NVIDIA's wheels
+/// (zips too; their SHA-256 in NVIDIA's package index and the Python
+/// Package Index's).
 #[must_use]
 pub fn archives() -> Vec<Archive> {
-    let member = |path: &str, name: &str| Member {
+    if cfg!(windows) {
+        windows_archives()
+    } else if cfg!(all(target_os = "linux", target_arch = "x86_64")) {
+        linux_archives()
+    } else {
+        Vec::new()
+    }
+}
+
+fn member(path: &str, name: &str) -> Member {
+    Member {
         path: path.to_owned(),
         name: name.to_owned(),
-    };
-    if !cfg!(windows) {
-        return Vec::new();
     }
+}
+
+/// Linux's archives ([`archives`]): NVIDIA's wheels, of 3.8 GB in all.
+fn linux_archives() -> Vec<Archive> {
+    let libs = "tensorrt_libs";
+    let cuda = "nvidia/cu13/lib";
+    vec![
+        Archive {
+            url: "https://pypi.nvidia.com/tensorrt-cu13-libs/tensorrt_cu13_libs-10.16.0.72-py3-none-manylinux_2_28_x86_64.whl".to_owned(),
+            size: 3_728_699_633,
+            sha256: "11262f57f6dac4ee0c02a3c90b1f10cc609701136815ce3c606f24436277bfee".to_owned(),
+            members: vec![
+                member(&format!("{libs}/libnvinfer.so.10"), "vsmlrt-cuda/libnvinfer.so.10"),
+                member(&format!("{libs}/libnvinfer_plugin.so.10"), "vsmlrt-cuda/libnvinfer_plugin.so.10"),
+                member(&format!("{libs}/libnvonnxparser.so.10"), "vsmlrt-cuda/libnvonnxparser.so.10"),
+                member(
+                    &format!("{libs}/libnvinfer_builder_resource_{{sm}}.so.10.16.0"),
+                    "vsmlrt-cuda/libnvinfer_builder_resource_{sm}.so.10.16.0",
+                ),
+                member(
+                    "tensorrt_cu13_libs-10.16.0.72.dist-info/LICENSE.txt",
+                    "licences/TensorRT-LICENSE.txt",
+                ),
+            ],
+        },
+        Archive {
+            url: "https://files.pythonhosted.org/packages/a6/5a/b116ad2b7e574d691458ca0139ab4e9f26beed62184c85570636ce127b7f/nvidia_cuda_runtime-13.2.51-py3-none-manylinux2014_x86_64.manylinux_2_17_x86_64.whl".to_owned(),
+            size: 2_321_923,
+            sha256: "9c43b06a52c5b9316e19abc047236932c4d5c729969918a83223c4d2a4132f9a".to_owned(),
+            members: vec![
+                member(&format!("{cuda}/libcudart.so.13"), "vsmlrt-cuda/libcudart.so.13"),
+                member(
+                    "nvidia_cuda_runtime-13.2.51.dist-info/licenses/License.txt",
+                    "licences/CUDA-runtime-LICENSE.txt",
+                ),
+            ],
+        },
+        Archive {
+            url: "https://files.pythonhosted.org/packages/5e/21/2fd0aa5a03a8c71962d281084ac44ae7b3b6690d6163ffd7d6486fdb7aa8/nvidia_cuda_nvrtc-13.2.51-py3-none-manylinux2010_x86_64.manylinux_2_12_x86_64.whl".to_owned(),
+            size: 47_019_178,
+            sha256: "c88076f32cbbd26e7ebd2107d4b093dd8667e2a90b23b3273d028f3daf574d2e".to_owned(),
+            members: vec![
+                member(&format!("{cuda}/libnvrtc.so.13"), "vsmlrt-cuda/libnvrtc.so.13"),
+                member(&format!("{cuda}/libnvrtc-builtins.so.13.2"), "vsmlrt-cuda/libnvrtc-builtins.so.13.2"),
+                member(
+                    "nvidia_cuda_nvrtc-13.2.51.dist-info/licenses/License.txt",
+                    "licences/CUDA-NVRTC-LICENSE.txt",
+                ),
+            ],
+        },
+    ]
+}
+
+/// Windows' archives ([`archives`]): NVIDIA's zips, of 2.2 GB in all.
+fn windows_archives() -> Vec<Archive> {
     let trt = "TensorRT-10.16.0.72";
     let cudart = "cuda_cudart-windows-x86_64-13.2.51-archive";
     let nvrtc = "cuda_nvrtc-windows-x86_64-13.2.51-archive";
@@ -161,13 +228,29 @@ pub fn archives() -> Vec<Archive> {
 /// RIFE v4.6's model (MIT, Practical-RIFE's, converted by vs-mlrt).
 pub const PACKAGE_FILES: [(&str, &str); 3] = [
     (VSTRT, VSTRT),
-    (TRTEXEC, "vsmlrt-cuda/trtexec.exe"),
+    (TRTEXEC, TRTEXEC_INSTALLED),
     ("models/rife/rife_v4.6.onnx", "models/rife/rife_v4.6.onnx"),
 ];
 
-/// vs-mlrt's plugin and `trtexec` by their file names.
+/// vs-mlrt's plugin and `trtexec` by their file names, where `trtexec`
+/// goes (vs-mlrt looks for it in `vsmlrt-cuda`), and TensorRT's library,
+/// which the plugin loads from there.
+#[cfg(windows)]
 pub const VSTRT: &str = "vstrt.dll";
+#[cfg(not(windows))]
+pub const VSTRT: &str = "libvstrt.so";
+#[cfg(windows)]
 pub const TRTEXEC: &str = "trtexec.exe";
+#[cfg(not(windows))]
+pub const TRTEXEC: &str = "trtexec";
+#[cfg(windows)]
+const TRTEXEC_INSTALLED: &str = "vsmlrt-cuda/trtexec.exe";
+#[cfg(not(windows))]
+const TRTEXEC_INSTALLED: &str = "vsmlrt-cuda/trtexec";
+#[cfg(windows)]
+pub const NVINFER: &str = "nvinfer_10.dll";
+#[cfg(not(windows))]
+pub const NVINFER: &str = "libnvinfer.so.10";
 
 /// What [`INSTALLED`] says.
 #[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
@@ -839,12 +922,36 @@ mod tests {
     }
 
     #[test]
-    fn windows_archives_keep_what_rife_needs() {
-        let archives = archives();
-        if !cfg!(windows) {
-            assert!(archives.is_empty());
-            return;
+    fn linux_archives_keep_what_rife_needs() {
+        let names: Vec<String> = linux_archives()
+            .iter()
+            .flat_map(|archive| {
+                archive
+                    .members
+                    .iter()
+                    .map(|member| member.name.replace("{sm}", "sm86"))
+            })
+            .collect();
+        for wanted in [
+            "vsmlrt-cuda/libnvinfer.so.10",
+            "vsmlrt-cuda/libnvinfer_plugin.so.10",
+            "vsmlrt-cuda/libnvonnxparser.so.10",
+            "vsmlrt-cuda/libnvinfer_builder_resource_sm86.so.10.16.0",
+            "vsmlrt-cuda/libcudart.so.13",
+            "vsmlrt-cuda/libnvrtc.so.13",
+        ] {
+            assert!(names.iter().any(|name| name == wanted), "{wanted}");
         }
+        assert!(
+            linux_archives()
+                .iter()
+                .all(|archive| archive.sha256.len() == 64)
+        );
+    }
+
+    #[test]
+    fn windows_archives_keep_what_rife_needs() {
+        let archives = windows_archives();
         let names: Vec<String> = archives
             .iter()
             .flat_map(|archive| {
@@ -935,9 +1042,7 @@ mod tests {
         );
         assert!(folder.join("vsmlrt-cuda/builder_sm86.dll").is_file());
         assert!(!folder.join("vsmlrt-cuda/builder_sm89.dll").exists());
-        assert!(
-            folder.join("vstrt.dll").is_file() && folder.join("vsmlrt-cuda/trtexec.exe").is_file()
-        );
+        assert!(folder.join(VSTRT).is_file() && folder.join(TRTEXEC_INSTALLED).is_file());
         assert!(!folder.join("downloads").exists(), "the downloads go");
         assert_eq!(installed(&folder), Some(done.clone()));
         assert!(events.try_iter().any(|event| matches!(

@@ -298,7 +298,17 @@ smoothing for users without SVP, after a study of the engines.
   stands in. `--install-tensorrt` installs at once (tests);
   `RVP_TENSORRT_MIRROR` (a folder URL, `file://` too) replaces NVIDIA's
   servers; the host's copy of the archives is in
-  `~/rvp-reference/trt/nvidia`. Never commit NVIDIA's files.
+  `~/rvp-reference/trt/nvidia` (Linux's wheels in `nvidia-linux`).
+  Never commit NVIDIA's files. Linux: NVIDIA's wheels (TensorRT's 3.7 GB,
+  CUDA's runtime and NVRTC from PyPI, zips too, about 960 MB kept);
+  vs-mlrt has no Linux build, so `tools/vapoursynth/build-vstrt-linux.sh`
+  (called by `build-linux.sh`) builds `libvstrt.so` and `trtexec` against
+  the headers of NVIDIA's Ubuntu 22.04 packages, the plugin linked to a
+  TensorRT library of no content that only names `libnvinfer.so.10`
+  (NVIDIA's comes in at run time by `$ORIGIN/vsmlrt-cuda`), and
+  `check-deb.sh` leaves `vs-mlrt/` out of its library check.
+  `cargo run -p rvp-app --example rife_trt -- FOLDER MIRROR` installs and
+  measures without RVP's window (`VSSCRIPT_PATH` at RVP's runtime).
 - The control panel (F7) is a second window (`shell/qml/ControlPanel.qml`)
   with its own `Chrome` in `Mode::ControlBox`, painted whole
   (`SkinView.surface` 1, `panelDamaged`).

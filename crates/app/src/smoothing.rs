@@ -2030,7 +2030,7 @@ mod tests {
         );
         let vstrt = format!(
             "core.std.LoadPlugin({})",
-            python_path(&folder.join("vstrt.dll"))
+            python_path(&folder.join(crate::tensorrt::VSTRT))
         );
         assert!(text.contains(&vstrt), "{text}");
         let path = format!("sys.path.insert(0, {})", python_path(scripts));

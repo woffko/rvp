@@ -43,13 +43,15 @@ fi
 
 # At run time rvp's run path ($ORIGIN/../lib) serves the libraries loaded
 # after it that name no path of their own; ldd on one library alone needs
-# it spelled out.
+# it spelled out. vs-mlrt's TensorRT plugin is left out: it needs NVIDIA's
+# libnvinfer.so.10, which RVP downloads only on the user's request.
 missing=$( {
     LD_LIBRARY_PATH=/opt/rvp/lib ldd /opt/rvp/bin/rvp
-    find /opt/rvp -name '*.so*' -type f -exec env LD_LIBRARY_PATH=/opt/rvp/lib ldd {} \;
+    find /opt/rvp -name '*.so*' -type f -not -path '*/vs-mlrt/*' \
+        -exec env LD_LIBRARY_PATH=/opt/rvp/lib ldd {} \;
 } 2> /dev/null | grep 'not found' | sort -u | tr -s ' \t' ' ' | tr '\n' ';')
 if [ -z "$missing" ]; then
-    check libraries_resolve PASS "rvp and $(find /opt/rvp -name '*.so*' -type f | wc -l) libraries"
+    check libraries_resolve PASS "rvp and $(find /opt/rvp -name '*.so*' -type f -not -path '*/vs-mlrt/*' | wc -l) libraries"
 else
     check libraries_resolve FAIL "$missing"
 fi

@@ -651,7 +651,7 @@ impl App {
         if self.tensorrt_installed() {
             let folder = self.tensorrt_folder();
             files.push(folder.join(crate::tensorrt::VSTRT));
-            files.push(folder.join("vsmlrt-cuda").join("nvinfer_10.dll"));
+            files.push(folder.join("vsmlrt-cuda").join(crate::tensorrt::NVINFER));
         }
         Some(key(hardware, &self.calibration.mpv_version, &files))
     }

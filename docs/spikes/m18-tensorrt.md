@@ -126,6 +126,18 @@ in a test copy of RVP with the owner's settings at 315 W:
   filter) it dropped 19 frames over 37 s, where RIFE on ncnn drops 40 to
   50 a second.
 
+Linux (2026-11-07):
+
+- vs-mlrt has no Linux build. `tools/vapoursynth/build-vstrt-linux.sh`
+  builds `libvstrt.so` and `trtexec` against the headers of NVIDIA's
+  Ubuntu 22.04 packages (no NVIDIA library at build time).
+- RVP downloads NVIDIA's wheels: TensorRT 3.7 GB, CUDA's runtime and NVRTC
+  50 MB. The installation keeps 986 MB for `sm86`.
+- In WSL on the host's card at 315 W, through RVP's Linux VapourSynth
+  runtime (WSL's libmpv has no VapourSynth, so without mpv), RVP's RIFE
+  (TensorRT) settings with 3 streams built the engine in 106 s and made
+  335, 166 and 105 frames a second at 720p, 1080p and 1440p.
+
 ## Sources
 
 - docs.nvidia.com/deeplearning/tensorrt/latest/reference/sla.html
