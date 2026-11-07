@@ -93,12 +93,21 @@ pub enum Engine {
     MvTools,
     #[serde(rename = "rife")]
     Rife,
+    /// RIFE through NVIDIA's TensorRT (`crate::tensorrt`).
+    #[serde(rename = "rife-trt")]
+    RifeTrt,
     #[serde(rename = "fruc-vulkan")]
     FrucVulkan,
 }
 
 impl Engine {
-    pub const ALL: [Self; 4] = [Self::Blend, Self::MvTools, Self::Rife, Self::FrucVulkan];
+    pub const ALL: [Self; 5] = [
+        Self::Blend,
+        Self::MvTools,
+        Self::Rife,
+        Self::RifeTrt,
+        Self::FrucVulkan,
+    ];
 
     #[must_use]
     pub fn text(self) -> &'static str {
@@ -106,6 +115,7 @@ impl Engine {
             Self::Blend => "Blend",
             Self::MvTools => "MVTools",
             Self::Rife => "RIFE",
+            Self::RifeTrt => "RIFE (TensorRT)",
             Self::FrucVulkan => "NVIDIA Optical Flow (fruc_vulkan)",
         }
     }
@@ -117,8 +127,16 @@ impl Engine {
             Self::Blend => "blend",
             Self::MvTools => "mvtools",
             Self::Rife => "rife",
+            Self::RifeTrt => "rife-trt",
             Self::FrucVulkan => "fruc-vulkan",
         }
+    }
+
+    /// RIFE on ncnn or on TensorRT: presets that change only how much of
+    /// the GPU runs at once, and a lighter step gives way to MVTools.
+    #[must_use]
+    pub fn is_rife(self) -> bool {
+        matches!(self, Self::Rife | Self::RifeTrt)
     }
 }
 
@@ -246,6 +264,8 @@ pub struct Facts {
 }
 
 /// The motion-compensated engines this machine has.
+// One flag an engine: a set would hide which engine each test sets.
+#[allow(clippy::struct_excessive_bools)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct Engines {
     /// A VapourSynth runtime with MVTools.
@@ -254,6 +274,9 @@ pub struct Engines {
     pub rife: bool,
     /// libmpv's FFmpeg has `fruc_vulkan`.
     pub fruc: bool,
+    /// RIFE (TensorRT) is installed, and the calibration built and
+    /// measured its engine for this card.
+    pub rife_trt: bool,
 }
 
 /// The GPU power budget's smoothing steps that are taken.
@@ -391,6 +414,9 @@ pub fn plan(settings: &SmoothingSettings, facts: &Facts, lightened: Lightened) -
     }
     let mut engine = match settings.engine {
         Engine::FrucVulkan if !facts.engines.fruc => Engine::MvTools,
+        // RIFE on ncnn stands in while TensorRT's engine is not ready.
+        Engine::RifeTrt if !facts.engines.rife_trt && facts.engines.rife => Engine::Rife,
+        Engine::RifeTrt if !facts.engines.rife_trt => Engine::MvTools,
         Engine::Rife if !facts.engines.rife => Engine::MvTools,
         engine => engine,
     };
@@ -413,7 +439,7 @@ pub fn plan(settings: &SmoothingSettings, facts: &Facts, lightened: Lightened) -
     };
     (engine, preset) = start;
     if lightened.lighter {
-        if engine == Engine::Rife {
+        if engine.is_rife() {
             engine = Engine::MvTools;
         } else {
             preset = preset.lighter();
@@ -478,6 +504,73 @@ pub fn steps_past(
         .unwrap_or(8)
 }
 
+/// The engines' files a script loads.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct Files<'a> {
+    /// RIFE's ncnn plugin and model.
+    pub rife: Option<(&'a Path, &'a Path)>,
+    /// MVTools' plugin where the runtime does not load it itself.
+    pub mvtools: Option<&'a Path>,
+    /// RIFE (TensorRT): the install folder (`crate::tensorrt`: `vstrt.dll`
+    /// and NVIDIA's libraries next to it) and vs-mlrt's `vsmlrt.py` in the
+    /// package.
+    pub tensorrt: Option<(&'a Path, &'a Path)>,
+}
+
+/// The shapes of RIFE (TensorRT)'s engine, as SVP builds its own: one
+/// engine for every picture from 128x128 to [`TRT_LARGEST`], fastest at
+/// 1920x1088.
+pub const TRT_LARGEST: (u32, u32) = (2560, 1440);
+
+/// RIFE v4.6 through vs-mlrt's TensorRT backend (fp16, frames padded to
+/// multiples of 32 and cropped back, 1080 to 1088): `vsmlrt.RIFE` with the
+/// rate's ratio, its engine in the install folder's `engines` (built by
+/// `trtexec` the first time, two minutes on the host's RTX 30-series card); the
+/// presets are its CUDA streams (1, 2 and 3).
+fn rife_trt_script(
+    text: &mut String,
+    preset: Preset,
+    source: (u64, u64),
+    rate: (u64, u64),
+    folder: &Path,
+    scripts: &Path,
+) {
+    let streams = match preset {
+        Preset::Fast => 1,
+        Preset::Medium => 2,
+        Preset::Quality => 3,
+    };
+    let _ = write!(
+        text,
+        "import sys\n\
+         from fractions import Fraction\n\
+         core.std.LoadPlugin({vstrt})\n\
+         if {scripts} not in sys.path:\n    sys.path.insert(0, {scripts})\n\
+         import vsmlrt\n\
+         matrix = '709' if clip.height > 576 else '170m'\n\
+         width, height = clip.width, clip.height\n\
+         padded = ((width + 31) // 32 * 32, (height + 31) // 32 * 32)\n\
+         rgb = core.resize.Bicubic(clip, format=vs.RGBH, matrix_in_s=matrix)\n\
+         if padded != (width, height):\n    \
+         rgb = core.std.AddBorders(rgb, right=padded[0] - width, bottom=padded[1] - height)\n\
+         backend = vsmlrt.Backend.TRT(fp16=True, device_id=0, num_streams={streams}, \
+         static_shape=False, min_shapes=(128, 128), opt_shapes=(1920, 1088), \
+         max_shapes=({largest_w}, {largest_h}), output_format=1, engine_folder={engines})\n\
+         rgb = vsmlrt.RIFE(rgb, multi=Fraction({num}, {den}), model=vsmlrt.RIFEModel.v4_6, \
+         backend=backend, video_player=True)\n\
+         if padded != (width, height):\n    \
+         rgb = core.std.Crop(rgb, right=padded[0] - width, bottom=padded[1] - height)\n\
+         clip = core.resize.Bicubic(rgb, format=clip.format.id, matrix_s=matrix)\n",
+        vstrt = python_path(&folder.join(crate::tensorrt::VSTRT)),
+        scripts = python_path(scripts),
+        engines = python_path(&folder.join("engines")),
+        largest_w = TRT_LARGEST.0,
+        largest_h = TRT_LARGEST.1,
+        num = rate.0 * source.1,
+        den = rate.1 * source.0,
+    );
+}
+
 /// A Python string literal for a path.
 fn python_path(path: &Path) -> String {
     let text = path.to_string_lossy();
@@ -505,10 +598,10 @@ pub fn script(
     preset: Preset,
     source: (u64, u64),
     rate: (u64, u64),
-    rife: Option<(&Path, &Path)>,
-    mvtools: Option<&Path>,
+    files: &Files<'_>,
     original: u32,
 ) -> String {
+    let (rife, mvtools) = (files.rife, files.mvtools);
     let mut text = format!(
         "# Generated by RVP (M18): motion smoothing.\n\
          import vapoursynth as vs\n\
@@ -517,7 +610,9 @@ pub fn script(
          src = clip\n",
         source.0, source.1
     );
-    if let (Engine::Rife, Some((plugin, model))) = (engine, rife) {
+    if let (Engine::RifeTrt, Some((folder, scripts))) = (engine, files.tensorrt) {
+        rife_trt_script(&mut text, preset, source, rate, folder, scripts);
+    } else if let (Engine::Rife, Some((plugin, model))) = (engine, rife) {
         let threads = match preset {
             Preset::Fast => 1,
             Preset::Medium => 2,
@@ -632,7 +727,7 @@ pub fn filter_entry(engine: Engine, preset: Preset, rate: (u64, u64), script: &P
     }
     let path = script.to_string_lossy().replace('\\', "/");
     let entry = format!("@{LABEL}:vapoursynth=file=%{}%{path}", path.len());
-    if engine == Engine::Rife {
+    if engine.is_rife() {
         // RIFE keeps its GPU threads busy with the frames in flight.
         format!("{entry}:buffered-frames=8:concurrent-frames=8")
     } else {
@@ -677,6 +772,19 @@ pub fn mvtools_file(vsscript: &Path) -> Option<PathBuf> {
     plugin.is_file().then_some(plugin)
 }
 
+/// vs-mlrt's folder in the runtime of `vsscript` (`vs-mlrt` next to it),
+/// when it has all `crate::tensorrt` needs from the package and
+/// `vsmlrt.py`.
+#[must_use]
+pub fn tensorrt_package(vsscript: &Path) -> Option<PathBuf> {
+    let folder = vsscript.parent()?.join("vs-mlrt");
+    (folder.join("vsmlrt.py").is_file()
+        && crate::tensorrt::PACKAGE_FILES
+            .iter()
+            .all(|(file, _)| folder.join(file).is_file()))
+    .then_some(folder)
+}
+
 /// True when the runtime of `vsscript` has MVTools: RVP's own runtime
 /// keeps it in `vs-plugins`; another runtime is trusted to have it.
 #[must_use]
@@ -703,6 +811,9 @@ pub(crate) struct Runtime {
     pub(crate) mvtools_plugin: Option<PathBuf>,
     /// RIFE's plugin and model.
     rife: Option<(PathBuf, PathBuf)>,
+    /// vs-mlrt's files in the package (`vs-mlrt` next to VSScript): its
+    /// TensorRT plugin, `trtexec`, `vsmlrt.py` and RIFE's ONNX model.
+    tensorrt: Option<PathBuf>,
 }
 
 impl Runtime {
@@ -712,7 +823,14 @@ impl Runtime {
             mvtools: vsscript.is_some_and(has_mvtools),
             mvtools_plugin: vsscript.and_then(mvtools_file),
             rife: vsscript.and_then(rife_files),
+            tensorrt: vsscript.and_then(tensorrt_package),
         }
+    }
+
+    /// The package's vs-mlrt folder (its `vsmlrt.py` and the files
+    /// `crate::tensorrt` copies), when it is there.
+    pub(crate) fn tensorrt_scripts(&self) -> Option<&Path> {
+        self.tensorrt.as_deref()
     }
 
     /// MVTools is there.
@@ -749,6 +867,8 @@ pub(crate) struct Smoothing {
     /// The engines whose filter raised the rate in this file: a dip after
     /// a seek or a lighter step leaves them in.
     ran: std::collections::BTreeSet<Engine>,
+    /// Engines left out for the session that have no flag of their own.
+    pub(crate) left_out: std::collections::BTreeSet<Engine>,
     /// The share of the processors other programs took over the last
     /// second (0 to 1; `App::set_processors`), and at the last step down.
     busy: Option<f64>,
@@ -1009,6 +1129,7 @@ impl App {
                 fruc: self.smoothing.fruc
                     && self.native_video
                     && self.settings.render.renderer == crate::render::Renderer::Vulkan,
+                rife_trt: self.rife_trt_ready(),
             },
             fitting: self.calibration_fitting(width, height, source_fps, display_fps),
         }
@@ -1074,18 +1195,21 @@ impl App {
                 .filter(|fps| *fps > 0.0)
                 .unwrap_or(24000.0 / 1001.0),
         );
-        let rife = self
-            .smoothing
-            .runtime
-            .rife
-            .as_ref()
-            .map(|(plugin, model)| (plugin.as_path(), model.as_path()));
-        let mvtools = self.smoothing.runtime.mvtools_plugin.as_deref();
+        let folder = self.tensorrt_folder();
+        let files = Files {
+            rife: self.smoothing.runtime.rife_files(),
+            mvtools: self.smoothing.runtime.mvtools_plugin.as_deref(),
+            tensorrt: self
+                .smoothing
+                .runtime
+                .tensorrt_scripts()
+                .map(|scripts| (folder.as_path(), scripts)),
+        };
         let path = self.smoothing_script_path();
         let original = self.settings.smoothing.original_first;
         crate::storage::write_atomic(
             &path,
-            script(engine, preset, source, rate, rife, mvtools, original).as_bytes(),
+            script(engine, preset, source, rate, &files, original).as_bytes(),
         )
         .map_err(|error| format!("{}: {error}", path.display()))
     }
@@ -1267,12 +1391,12 @@ impl App {
                 // RIFE's presets change only its GPU threads (the host's
                 // RIFE at 1080p dropped as many frames at Medium as at
                 // Quality): one far beyond the card gives way to MVTools.
-                let steps = if at_once && running == Engine::Rife {
+                let steps = if at_once && running.is_rife() {
                     steps_past(
                         &self.settings.smoothing,
                         &self.smoothing_facts(),
                         self.smoothing_lightened(),
-                        Engine::Rife,
+                        running,
                     )
                 } else {
                     1
@@ -1291,6 +1415,9 @@ impl App {
         match running {
             Engine::FrucVulkan => self.smoothing.fruc = false,
             Engine::Rife => self.smoothing.runtime.rife = None,
+            Engine::RifeTrt => {
+                self.smoothing.left_out.insert(Engine::RifeTrt);
+            }
             Engine::MvTools => self.smoothing.runtime.mvtools = false,
             Engine::Blend => return None,
         }
@@ -1348,6 +1475,7 @@ impl App {
             "mvtools": self.smoothing.runtime.mvtools,
             "rife": self.smoothing.runtime.rife.is_some(),
             "fruc": self.smoothing.fruc,
+            "rife-trt": self.rife_trt_ready(),
         })
     }
 
@@ -1378,6 +1506,7 @@ mod tests {
                 mvtools: true,
                 rife: true,
                 fruc: true,
+                rife_trt: false,
             },
             ..Facts::default()
         }
@@ -1483,6 +1612,7 @@ mod tests {
                 mvtools: true,
                 rife: false,
                 fruc: false,
+                rife_trt: false,
             },
             ..facts()
         };
@@ -1561,6 +1691,7 @@ mod tests {
                 mvtools: true,
                 rife: true,
                 fruc: true,
+                rife_trt: false,
             },
             ..facts()
         };
@@ -1795,8 +1926,7 @@ mod tests {
             Preset::Medium,
             (24000, 1001),
             (60, 1),
-            None,
-            None,
+            &Files::default(),
             1,
         );
         assert!(first.contains("src = clip\n"));
@@ -1810,8 +1940,7 @@ mod tests {
             Preset::Medium,
             (24000, 1001),
             (60, 1),
-            None,
-            None,
+            &Files::default(),
             0,
         );
         assert!(!at_once.contains("FrameEval"));
@@ -1885,14 +2014,93 @@ mod tests {
     }
 
     #[test]
+    fn rife_through_tensorrt_runs_vs_mlrt_and_stands_in_while_not_ready() {
+        let folder = Path::new(r"C:\Users\me\AppData\Local\RVP\tensorrt");
+        let scripts = Path::new(r"C:\RVP\vapoursynth\vs-mlrt");
+        let text = script(
+            Engine::RifeTrt,
+            Preset::Medium,
+            (24000, 1001),
+            (60000, 1001),
+            &Files {
+                tensorrt: Some((folder, scripts)),
+                ..Files::default()
+            },
+            0,
+        );
+        let vstrt = format!(
+            "core.std.LoadPlugin({})",
+            python_path(&folder.join("vstrt.dll"))
+        );
+        assert!(text.contains(&vstrt), "{text}");
+        let path = format!("sys.path.insert(0, {})", python_path(scripts));
+        assert!(text.contains(&path), "{text}");
+        // 59.94 out of 23.976: vsmlrt.RIFE takes the ratio, 5/2.
+        assert!(
+            text.contains("multi=Fraction(60060000, 24024000)"),
+            "{text}"
+        );
+        assert!(text.contains("num_streams=2"), "{text}");
+        assert!(text.contains("max_shapes=(2560, 1440)"), "{text}");
+        let engines = format!("engine_folder={}", python_path(&folder.join("engines")));
+        assert!(text.contains(&engines), "{text}");
+        assert!(text.ends_with("core.clear_cache()\nclip.set_output()\n"));
+        assert!(
+            filter_entry(
+                Engine::RifeTrt,
+                Preset::Medium,
+                (60, 1),
+                Path::new("/s.vpy")
+            )
+            .ends_with(":buffered-frames=8:concurrent-frames=8")
+        );
+        // Not ready (not installed, or its engine not built yet): RIFE on
+        // ncnn stands in, else MVTools; ready, it runs; the budget's lighter
+        // step gives way to MVTools, as RIFE's does.
+        let settings = on(Engine::RifeTrt);
+        let with = |rife, rife_trt| Facts {
+            engines: Engines {
+                mvtools: true,
+                rife,
+                fruc: false,
+                rife_trt,
+            },
+            ..facts()
+        };
+        let engine_of = |plan: Plan| match plan {
+            Plan::Filter { engine, .. } => Some(engine),
+            _ => None,
+        };
+        assert_eq!(
+            engine_of(plan(&settings, &with(true, false), Lightened::default())),
+            Some(Engine::Rife)
+        );
+        assert_eq!(
+            engine_of(plan(&settings, &with(false, false), Lightened::default())),
+            Some(Engine::MvTools)
+        );
+        assert_eq!(
+            engine_of(plan(&settings, &with(false, true), Lightened::default())),
+            Some(Engine::RifeTrt)
+        );
+        let lighter = Lightened {
+            lighter: true,
+            ..Lightened::default()
+        };
+        assert_eq!(
+            engine_of(plan(&settings, &with(false, true), lighter)),
+            Some(Engine::MvTools)
+        );
+    }
+
+    #[test]
     fn scripts_clear_the_cache_and_make_the_rate() {
         let mvtools = script(
             Engine::MvTools,
             Preset::Quality,
             (24000, 1001),
             (60, 1),
-            None,
-            None,
+            &Files::default(),
             0,
         );
         assert!(mvtools.contains("AssumeFPS(video_in, fpsnum=24000, fpsden=1001)"));
@@ -1906,10 +2114,12 @@ mod tests {
             Preset::Fast,
             (25, 1),
             (50, 1),
-            None,
-            Some(Path::new(
-                "/opt/rvp/bin/vapoursynth/vs-plugins/libmvtools.so",
-            )),
+            &Files {
+                mvtools: Some(Path::new(
+                    "/opt/rvp/bin/vapoursynth/vs-plugins/libmvtools.so",
+                )),
+                ..Files::default()
+            },
             0,
         );
         assert!(fast.contains("BlockFPS(clip, sup, bv, fv, num=50, den=1, mode=3"));
@@ -1923,8 +2133,10 @@ mod tests {
             Preset::Quality,
             (24000, 1001),
             (60000, 1001),
-            Some((plugin, model)),
-            None,
+            &Files {
+                rife: Some((plugin, model)),
+                ..Files::default()
+            },
             0,
         );
         assert!(rife.contains(

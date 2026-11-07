@@ -504,6 +504,7 @@ impl App {
         }
         self.svp.endpoint = endpoint;
         self.smoothing.runtime = crate::smoothing::Runtime::probe(vapoursynth.as_deref());
+        self.load_tensorrt();
         self.svp.vapoursynth = vapoursynth;
     }
 }

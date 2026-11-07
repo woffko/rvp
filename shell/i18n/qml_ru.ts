@@ -112,6 +112,10 @@
             <source>Close</source>
             <translation>Закрыть</translation>
         </message>
+        <message>
+            <source>Measuring %1… The first measurement builds TensorRT's engine for this card: a few minutes.</source>
+            <translation>Измерение: %1… Первое измерение собирает движок TensorRT для этой карты: несколько минут.</translation>
+        </message>
     </context>
     <context>
         <name>ColorTheme</name>
@@ -4738,6 +4742,70 @@ in %2 seconds</source>
         <message>
             <source>Nothing logged yet.</source>
             <translation>Пока ничего не записано.</translation>
+        </message>
+        <message>
+            <source>RIFE (TensorRT): optical flow on NVIDIA's cards, with NVIDIA's TensorRT</source>
+            <translation>RIFE (TensorRT): оптический поток на картах NVIDIA через NVIDIA TensorRT</translation>
+        </message>
+        <message>
+            <source>checking</source>
+            <translation>проверка</translation>
+        </message>
+        <message>
+            <source>unpacking</source>
+            <translation>распаковка</translation>
+        </message>
+        <message>
+            <source>downloading</source>
+            <translation>загрузка</translation>
+        </message>
+        <message>
+            <source>RIFE (TensorRT): %1, %2 of %3 GB</source>
+            <translation>RIFE (TensorRT): %1, %2 из %3 ГБ</translation>
+        </message>
+        <message>
+            <source>RIFE (TensorRT): NVIDIA's TensorRT %1 is installed for %2 and its engine is built.</source>
+            <translation>RIFE (TensorRT): NVIDIA TensorRT %1 установлен для %2, движок собран.</translation>
+        </message>
+        <message>
+            <source>RIFE (TensorRT): NVIDIA's TensorRT %1 is installed for %2; the calibration builds its engine (a few minutes) when nothing plays.</source>
+            <translation>RIFE (TensorRT): NVIDIA TensorRT %1 установлен для %2; калибровка соберёт движок (несколько минут), когда ничего не играет.</translation>
+        </message>
+        <message>
+            <source>RIFE (TensorRT): %1</source>
+            <translation>RIFE (TensorRT): %1</translation>
+        </message>
+        <message>
+            <source>RIFE (TensorRT) needs NVIDIA's TensorRT: a %1 GB download from NVIDIA, of which about %2 GB stay.</source>
+            <translation>Для RIFE (TensorRT) нужен NVIDIA TensorRT: загрузка %1 ГБ с серверов NVIDIA, из них остаётся около %2 ГБ.</translation>
+        </message>
+        <message>
+            <source>Download…</source>
+            <translation>Загрузить…</translation>
+        </message>
+        <message>
+            <source>Cancel</source>
+            <translation>Отмена</translation>
+        </message>
+        <message>
+            <source>Download NVIDIA's TensorRT</source>
+            <translation>Загрузка NVIDIA TensorRT</translation>
+        </message>
+        <message>
+            <source>RVP downloads NVIDIA TensorRT %1 and CUDA's runtime from NVIDIA's servers (%2 GB) and keeps the files this card needs in RVP's state folder. They are NVIDIA's software under NVIDIA's terms, not RVP's: by downloading them you accept the NVIDIA TensorRT Software License Agreement and the CUDA End User License Agreement.</source>
+            <translation>RVP загружает NVIDIA TensorRT %1 и среду выполнения CUDA с серверов NVIDIA (%2 ГБ) и оставляет файлы, нужные этой карте, в папке состояния RVP. Это программы NVIDIA на условиях NVIDIA, а не RVP: загружая их, вы принимаете лицензионное соглашение NVIDIA TensorRT и лицензионное соглашение CUDA.</translation>
+        </message>
+        <message>
+            <source>TensorRT's licence</source>
+            <translation>Лицензия TensorRT</translation>
+        </message>
+        <message>
+            <source>CUDA's EULA</source>
+            <translation>Лицензия CUDA (EULA)</translation>
+        </message>
+        <message>
+            <source>Accept and Download</source>
+            <translation>Принять и загрузить</translation>
         </message>
     </context>
     <context>

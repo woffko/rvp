@@ -47,7 +47,26 @@ pub const SIZES: [(u32, u32); 5] = [
 ];
 
 /// The engines measured, in order.
-pub const ENGINES: [Engine; 2] = [Engine::MvTools, Engine::Rife];
+pub const ENGINES: [Engine; 3] = [Engine::MvTools, Engine::Rife, Engine::RifeTrt];
+
+/// The largest picture `engine` takes: RIFE (TensorRT)'s engine is built
+/// for pictures up to `smoothing::TRT_LARGEST`.
+#[must_use]
+pub fn largest(engine: Engine) -> Option<(u32, u32)> {
+    (engine == Engine::RifeTrt).then_some(crate::smoothing::TRT_LARGEST)
+}
+
+/// How long a measurement of `engine` may take, its start included: RIFE
+/// (TensorRT)'s first one builds its engine (two minutes on the host's
+/// RTX 30-series card, more on smaller cards).
+#[must_use]
+pub fn timeout(engine: Engine) -> Duration {
+    if engine == Engine::RifeTrt {
+        Duration::from_mins(20)
+    } else {
+        Duration::from_secs(60)
+    }
+}
 
 /// The generated picture's rate and the rate the filters make of it: the
 /// commonest case, film on a 60 Hz display.
@@ -102,7 +121,7 @@ pub struct Calibration {
 /// Which engines and presets keep a file's rate, for the plan: one bit
 /// per engine and preset measured.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub struct Fitting(u8);
+pub struct Fitting(u16);
 
 impl Fitting {
     fn bit(engine: Engine, preset: Preset) -> Option<u8> {
@@ -144,6 +163,9 @@ impl Calibration {
     /// scaled down by the pixel counts. `None` when nothing was measured.
     #[must_use]
     pub fn capacity(&self, engine: Engine, preset: Preset, width: u32, height: u32) -> Option<f64> {
+        if largest(engine).is_some_and(|(w, h)| pixels(width, height) > pixels(w, h)) {
+            return None;
+        }
         let wanted = pixels(width, height);
         let mut measured: Vec<&Point> = self
             .points
@@ -248,6 +270,9 @@ pub fn next(
         for preset in Preset::ALL {
             let mut last: Option<&Point> = None;
             for size in SIZES {
+                if largest(engine).is_some_and(|(w, h)| pixels(size.0, size.1) > pixels(w, h)) {
+                    break;
+                }
                 let measured = done.iter().find(|point| {
                     point.engine == engine
                         && point.preset == preset
@@ -340,10 +365,11 @@ pub struct Job {
     pub date: String,
     /// The engines this machine has (of [`ENGINES`]).
     pub available: Vec<Engine>,
-    /// RIFE's plugin and model, and MVTools' plugin (as the scripts take
-    /// them).
+    /// RIFE's plugin and model, MVTools' plugin, and RIFE (TensorRT)'s
+    /// install folder and vs-mlrt's scripts (as the scripts take them).
     pub rife: Option<(PathBuf, PathBuf)>,
     pub mvtools: Option<PathBuf>,
+    pub tensorrt: Option<(PathBuf, PathBuf)>,
     /// The state folder: the script goes to its `vapoursynth`, the
     /// results to [`FILE_NAME`].
     pub folder: PathBuf,
@@ -441,95 +467,116 @@ fn run(job: &Job, cancel: &AtomicBool, sender: &Sender<Event>) {
         points: Vec::new(),
         failed: Vec::new(),
     };
-    let rife = job
-        .rife
-        .as_ref()
-        .map(|(plugin, model)| (plugin.as_path(), model.as_path()));
-    while let Some((engine, preset, (width, height))) =
-        next(&calibration.points, &job.available, &calibration.failed)
-    {
-        if cancel.load(Ordering::Relaxed) {
+    let files = crate::smoothing::Files {
+        rife: job
+            .rife
+            .as_ref()
+            .map(|(plugin, model)| (plugin.as_path(), model.as_path())),
+        mvtools: job.mvtools.as_deref(),
+        tensorrt: job
+            .tensorrt
+            .as_ref()
+            .map(|(folder, scripts)| (folder.as_path(), scripts.as_path())),
+    };
+    while let Some(step) = next(&calibration.points, &job.available, &calibration.failed) {
+        if cancel.load(Ordering::Relaxed)
+            || !measure_step(job, &files, &script, step, &mut calibration, cancel, sender)
+        {
             drop(sender.send(Event::Cancelled));
             return;
-        }
-        let text = crate::smoothing::script(
-            engine,
-            preset,
-            SOURCE_RATE,
-            RATE,
-            rife,
-            job.mvtools.as_deref(),
-            0,
-        );
-        if let Err(error) = script
-            .parent()
-            .map_or(Ok(()), std::fs::create_dir_all)
-            .and_then(|()| std::fs::write(&script, text))
-        {
-            drop(sender.send(Event::Failed {
-                engine,
-                why: format!("the script cannot be written: {error}"),
-            }));
-            calibration.failed.push(engine);
-            continue;
-        }
-        drop(sender.send(Event::Started {
-            engine,
-            preset,
-            width,
-            height,
-        }));
-        let probe = rvp_engine::calibrate::Probe {
-            width,
-            height,
-            rate: SOURCE_RATE,
-            vf: crate::smoothing::filter_entry(engine, preset, RATE, &script),
-            warm_up: job.warm_up,
-            measure: job.measure,
-            extra: Vec::new(),
-        };
-        match rvp_engine::calibrate::measure(&probe, cancel, Duration::from_secs(60)) {
-            Ok(measurement) if measurement.filter_fps >= RAISED * rate_fps(SOURCE_RATE) => {
-                let point = Point {
-                    engine,
-                    preset,
-                    width,
-                    height,
-                    fps: measurement.speed * measurement.filter_fps,
-                };
-                calibration.points.push(point.clone());
-                drop(sender.send(Event::Measured {
-                    point,
-                    done: calibration.points.len(),
-                    left: most_left(&calibration.points, &job.available, &calibration.failed),
-                }));
-            }
-            Ok(measurement) => {
-                calibration.failed.push(engine);
-                drop(sender.send(Event::Failed {
-                    engine,
-                    why: format!(
-                        "its filter did not raise the rate ({:.3} fps): {}",
-                        measurement.filter_fps,
-                        measurement.errors.join("; ")
-                    ),
-                }));
-            }
-            Err(_) if cancel.load(Ordering::Relaxed) => {
-                drop(sender.send(Event::Cancelled));
-                return;
-            }
-            Err(error) => {
-                calibration.failed.push(engine);
-                drop(sender.send(Event::Failed {
-                    engine,
-                    why: error.to_string(),
-                }));
-            }
         }
     }
     let written = save(&job.folder, &calibration).map_err(|error| error.to_string());
     drop(sender.send(Event::Finished(calibration, written)));
+}
+
+/// One measurement of [`run`]: writes the script, measures `step` and
+/// records it in `calibration`; `false` when it was cancelled.
+fn measure_step(
+    job: &Job,
+    files: &crate::smoothing::Files<'_>,
+    script: &Path,
+    (engine, preset, (width, height)): (Engine, Preset, (u32, u32)),
+    calibration: &mut Calibration,
+    cancel: &AtomicBool,
+    sender: &Sender<Event>,
+) -> bool {
+    // A preset that fails where another of its engine ran only does not
+    // keep the rate (RIFE's streams can run out of the card's memory); a
+    // first failure leaves the engine out.
+    let ran_before = calibration
+        .points
+        .iter()
+        .any(|point| point.engine == engine);
+    let fell_short = |calibration: &mut Calibration, why: String| {
+        if ran_before {
+            calibration.points.push(Point {
+                engine,
+                preset,
+                width,
+                height,
+                fps: 0.0,
+            });
+        } else {
+            calibration.failed.push(engine);
+        }
+        drop(sender.send(Event::Failed { engine, why }));
+    };
+    let text = crate::smoothing::script(engine, preset, SOURCE_RATE, RATE, files, 0);
+    if let Err(error) = script
+        .parent()
+        .map_or(Ok(()), std::fs::create_dir_all)
+        .and_then(|()| std::fs::write(script, text))
+    {
+        fell_short(
+            calibration,
+            format!("the script cannot be written: {error}"),
+        );
+        return true;
+    }
+    drop(sender.send(Event::Started {
+        engine,
+        preset,
+        width,
+        height,
+    }));
+    let probe = rvp_engine::calibrate::Probe {
+        width,
+        height,
+        rate: SOURCE_RATE,
+        vf: crate::smoothing::filter_entry(engine, preset, RATE, script),
+        warm_up: job.warm_up,
+        measure: job.measure,
+        extra: Vec::new(),
+    };
+    match rvp_engine::calibrate::measure(&probe, cancel, timeout(engine)) {
+        Ok(measurement) if measurement.filter_fps >= RAISED * rate_fps(SOURCE_RATE) => {
+            let point = Point {
+                engine,
+                preset,
+                width,
+                height,
+                fps: measurement.speed * measurement.filter_fps,
+            };
+            calibration.points.push(point.clone());
+            drop(sender.send(Event::Measured {
+                point,
+                done: calibration.points.len(),
+                left: most_left(&calibration.points, &job.available, &calibration.failed),
+            }));
+        }
+        Ok(measurement) => fell_short(
+            calibration,
+            format!(
+                "its filter did not raise the rate ({:.3} fps): {}",
+                measurement.filter_fps,
+                measurement.errors.join("; ")
+            ),
+        ),
+        Err(_) if cancel.load(Ordering::Relaxed) => return false,
+        Err(error) => fell_short(calibration, error.to_string()),
+    }
+    true
 }
 
 /// How long nothing has to play before a calibration starts on its own.
@@ -601,6 +648,11 @@ impl App {
             files.push(plugin.to_path_buf());
             files.push(model.to_path_buf());
         }
+        if self.tensorrt_installed() {
+            let folder = self.tensorrt_folder();
+            files.push(folder.join(crate::tensorrt::VSTRT));
+            files.push(folder.join("vsmlrt-cuda").join("nvinfer_10.dll"));
+        }
         Some(key(hardware, &self.calibration.mpv_version, &files))
     }
 
@@ -612,6 +664,7 @@ impl App {
             .filter(|engine| match engine {
                 Engine::MvTools => runtime.has_mvtools(),
                 Engine::Rife => runtime.rife_files().is_some(),
+                Engine::RifeTrt => self.tensorrt_installed(),
                 _ => false,
             })
             .collect()
@@ -640,10 +693,26 @@ impl App {
     /// measured, and this machine has none (or the settings window asked).
     fn calibration_due(&self) -> bool {
         let state = &self.calibration;
+        // An installation of TensorRT under way adds an engine to measure:
+        // it asks for its run when it ends.
         state.hardware.is_some()
+            && !self.tensorrt_installing()
             && self.settings.smoothing.enabled
             && !self.calibration_engines().is_empty()
             && (state.asked || (!state.manual && !state.declined && state.results.is_none()))
+    }
+
+    /// Whether the calibration in force measured `engine` (RIFE
+    /// (TensorRT)'s engine is built then).
+    #[must_use]
+    pub(crate) fn calibration_measured(&self, engine: Engine) -> bool {
+        self.calibration.results.as_ref().is_some_and(|results| {
+            !results.failed.contains(&engine)
+                && results
+                    .points
+                    .iter()
+                    .any(|point| point.engine == engine && point.fps > 0.0)
+        })
     }
 
     /// The calibration window's Start: pauses playback and measures at the
@@ -725,6 +794,10 @@ impl App {
                 .rife_files()
                 .map(|(plugin, model)| (plugin.to_path_buf(), model.to_path_buf())),
             mvtools: runtime.mvtools_plugin.clone(),
+            tensorrt: runtime
+                .tensorrt_scripts()
+                .filter(|_| self.tensorrt_installed())
+                .map(|scripts| (self.tensorrt_folder(), scripts.to_path_buf())),
             folder: self.state_dir().to_path_buf(),
             warm_up: Duration::from_millis(1500),
             measure: Duration::from_millis(2500),
@@ -940,6 +1013,41 @@ mod tests {
         // Nothing is asked of a missing engine, nor of a failed one.
         assert_eq!(next(&[], &[], &[]), None);
         assert_eq!(next(&[], &[Engine::Rife], &[Engine::Rife]), None);
+    }
+
+    #[test]
+    fn rife_through_tensorrt_is_measured_and_fits_up_to_its_engines_largest() {
+        // The host's TensorRT: 316 frames a second at 720p; 1440p's 99
+        // scaled to 2160p would be measured, but the engine stops at 1440p.
+        let trt =
+            |_: Engine, _: Preset, size: (u32, u32)| 316.0 * 921_600.0 / pixels(size.0, size.1);
+        let asked = order(&[Engine::RifeTrt], trt);
+        assert!(
+            asked
+                .iter()
+                .all(|(engine, _, height)| *engine == Engine::RifeTrt && *height <= 1440),
+            "{asked:?}"
+        );
+        assert!(asked.contains(&(Engine::RifeTrt, Preset::Quality, 1440)));
+        let calibration = Calibration {
+            version: VERSION,
+            points: vec![point(Engine::RifeTrt, Preset::Medium, (2560, 1440), 300.0)],
+            ..Calibration::default()
+        };
+        assert_eq!(
+            calibration.capacity(Engine::RifeTrt, Preset::Medium, 3840, 2160),
+            None
+        );
+        assert!(
+            calibration
+                .fitting(2560, 1440, 60.0)
+                .fits(Engine::RifeTrt, Preset::Medium)
+        );
+        assert!(
+            !calibration
+                .fitting(3840, 2160, 60.0)
+                .fits(Engine::RifeTrt, Preset::Medium)
+        );
     }
 
     #[test]

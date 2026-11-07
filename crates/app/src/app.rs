@@ -413,6 +413,8 @@ pub struct App {
     pub(crate) smoothing: crate::smoothing::Smoothing,
     /// Its calibration (`crate::calibration`).
     pub(crate) calibration: crate::calibration::State,
+    /// RIFE (TensorRT)'s installation (`crate::tensorrt`).
+    pub(crate) tensorrt: crate::tensorrt::State,
     /// The log's mpv client and counters (the Log page).
     pub(crate) log: crate::log::LogState,
     /// libmpv's defaults of the subtitle options RVP leaves unset, and the
@@ -549,6 +551,7 @@ impl App {
             gpu: crate::gpu_power::Budget::default(),
             smoothing: crate::smoothing::Smoothing::default(),
             calibration: crate::calibration::State::default(),
+            tensorrt: crate::tensorrt::State::default(),
             log: crate::log::LogState::default(),
             subtitle_defaults: crate::subtitles::MpvDefaults::default(),
             applied_subtitle_options: std::collections::BTreeMap::new(),

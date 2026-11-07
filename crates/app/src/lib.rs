@@ -69,6 +69,7 @@ mod storage;
 pub mod subtitle_editor;
 pub mod subtitles;
 pub mod svp;
+pub mod tensorrt;
 pub mod thumbs;
 pub mod tomsteady;
 pub mod video;

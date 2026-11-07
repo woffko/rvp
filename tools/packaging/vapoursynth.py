@@ -8,7 +8,12 @@ libmpv at (never SVP's runtime):
   smoothing and PotPlayer's motion interpolation script);
 - RIFE's ncnn-Vulkan plugin (r9_mod_v33) with model v4.6 in `rife/`,
   loaded by RVP's RIFE script only, with Microsoft's OpenMP runtime
-  (vcomp140.dll) next to it.
+  (vcomp140.dll) next to it;
+- vs-mlrt v15.16's TensorRT plugin (vstrt.dll), its trtexec and vsmlrt.py,
+  with RIFE v4.6's ONNX model, in `vs-mlrt/` (not loaded on its own): RIFE
+  (TensorRT) copies them next to NVIDIA's TensorRT, which RVP downloads
+  from NVIDIA only when the user asks (crates/app/src/tensorrt.rs; NVIDIA's
+  licence lets RVP's packages carry none of it).
 
 Every download is checked by its SHA-256 and kept in --cache. The output
 folder is made anew; NOTICE.txt there names each part and its licence.
@@ -26,6 +31,8 @@ import zipfile
 from pathlib import Path
 
 RIFE_TAG = "r9_mod_v33"
+VSMLRT_TAG = "v15.16"
+VSMLRT = f"https://github.com/AmusementClub/vs-mlrt/releases/download/{VSMLRT_TAG}"
 RIFE_RAW = f"https://raw.githubusercontent.com/styler00dollar/VapourSynth-RIFE-ncnn-Vulkan/{RIFE_TAG}"
 MODEL = "rife-v4.6_ensembleFalse"
 
@@ -61,6 +68,28 @@ DOWNLOADS = {
         f"{RIFE_RAW}/models/{MODEL}/flownet.param",
         "ae9b08af43fba97e27aa2c40c04c35b1a75f637b2d2b01a941fa94361ab25cbd",
     ),
+    "vstrt": (
+        f"VSTRT-Windows-x64.{VSMLRT_TAG}.7z",
+        f"{VSMLRT}/VSTRT-Windows-x64.{VSMLRT_TAG}.7z",
+        "c4e64e69e87553bf15a7acd29d76debd006954e39ee07ef0e6d526947c5d34b1",
+    ),
+    "vsmlrt-scripts": (
+        f"vsmlrt-scripts.{VSMLRT_TAG}.7z",
+        f"{VSMLRT}/scripts.{VSMLRT_TAG}.7z",
+        "d07dae0a00cb8dbf4f00358f640f630ff5d933de44d27050e7acce4f31cc3560",
+    ),
+    "vsmlrt-licence": (
+        f"vs-mlrt-{VSMLRT_TAG}-LICENSE",
+        f"https://raw.githubusercontent.com/AmusementClub/vs-mlrt/{VSMLRT_TAG}/LICENSE",
+        "3972dc9744f6499f0f9b2dbf76696f2ae7ad8af9b23dde66d6af86c9dfb36986",
+    ),
+    # RIFE v4.0 to v4.10 for vs-mlrt (model-20220923; no SHA-256 published:
+    # taken on 2026-11-07, the archive's own CRCs checked).
+    "rife-onnx": (
+        "vs-mlrt-rife_v8.7z",
+        "https://github.com/AmusementClub/vs-mlrt/releases/download/model-20220923/rife_v8.7z",
+        "1a18614e72164c61d60861199fc8be6b0003110f747646b3dafb9acd632f6ef7",
+    ),
 }
 
 # Parts of the portable archive a player does not need: its own archiver,
@@ -81,7 +110,12 @@ RIFE ncnn-Vulkan {rife} (rife/)  MIT                 https://github.com/styler00
   with ncnn                       BSD-3-Clause        https://github.com/Tencent/ncnn
   model {model}     MIT                 RIFE, https://github.com/hzwer/Practical-RIFE
 vcomp140.dll (rife/)              Microsoft Visual C++ redistributable
-""".format(rife=RIFE_TAG, model=MODEL)
+vs-mlrt {vsmlrt} (vs-mlrt/)        GPL-3.0             https://github.com/AmusementClub/vs-mlrt (vs-mlrt/LICENSE)
+  trtexec.exe                     Apache-2.0          TensorRT's sample, built by vs-mlrt
+  models/rife/rife_v4.6.onnx      MIT                 RIFE, https://github.com/hzwer/Practical-RIFE
+NVIDIA's TensorRT is not part of this package: RVP downloads it from NVIDIA
+on the user's request, under NVIDIA's licence.
+""".format(rife=RIFE_TAG, model=MODEL, vsmlrt=VSMLRT_TAG)
 
 
 def fetch(cache: Path, key: str) -> Path:
@@ -154,6 +188,23 @@ def main() -> None:
         urllib.request.Request(f"{RIFE_RAW}/LICENSE", headers={"User-Agent": "rvp-packaging"}), timeout=60
     ).read()
     (rife / "LICENSE").write_bytes(licence)
+
+    # vs-mlrt: the plugin and trtexec, vsmlrt.py, and RIFE v4.6's model only.
+    vsmlrt = out / "vs-mlrt"
+    (vsmlrt / "models" / "rife").mkdir(parents=True)
+    unpacked = cache / f"vs-mlrt-{VSMLRT_TAG}"
+    if not (unpacked / "vstrt.dll").exists():
+        subprocess.run([args.sevenzip, "x", "-y", f"-o{unpacked}", str(fetch(cache, "vstrt"))],
+                       check=True, stdout=subprocess.DEVNULL)
+        subprocess.run([args.sevenzip, "x", "-y", f"-o{unpacked}", str(fetch(cache, "vsmlrt-scripts"))],
+                       check=True, stdout=subprocess.DEVNULL)
+        subprocess.run([args.sevenzip, "x", "-y", f"-o{unpacked}", str(fetch(cache, "rife-onnx")),
+                        "rife/rife_v4.6.onnx"], check=True, stdout=subprocess.DEVNULL)
+    shutil.copy2(unpacked / "vstrt.dll", vsmlrt / "vstrt.dll")
+    shutil.copy2(unpacked / "vsmlrt-cuda" / "trtexec.exe", vsmlrt / "trtexec.exe")
+    shutil.copy2(unpacked / "vsmlrt.py", vsmlrt / "vsmlrt.py")
+    shutil.copy2(unpacked / "rife" / "rife_v4.6.onnx", vsmlrt / "models" / "rife" / "rife_v4.6.onnx")
+    shutil.copy2(fetch(cache, "vsmlrt-licence"), vsmlrt / "LICENSE")
     (out / "NOTICE.txt").write_text(NOTICE, encoding="utf-8", newline="\r\n")
 
     files = sorted(p for p in out.rglob("*") if p.is_file())

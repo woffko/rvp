@@ -42,6 +42,8 @@ Window {
     }
 
     function stateText() {
+        if (status.state === "running" && status.current && status.current.indexOf("TensorRT") >= 0)
+            return qsTr("Measuring %1… The first measurement builds TensorRT's engine for this card: a few minutes.").arg(status.current)
         if (status.state === "running")
             return status.current ? qsTr("Measuring %1…").arg(status.current) : qsTr("Starting…")
         if (status.state === "measured")

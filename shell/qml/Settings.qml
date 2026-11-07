@@ -1970,11 +1970,103 @@ ApplicationWindow {
                         Choice {
                             label: qsTr("Engine")
                             path: "smoothing.engine"
-                            values: ["blend", "mvtools", "rife", "fruc-vulkan"]
+                            values: ["blend", "mvtools", "rife", "rife-trt", "fruc-vulkan"]
                             texts: ({ "blend": qsTr("Blend: neighbouring frames blended at the display's rate"),
                                       "mvtools": qsTr("MVTools: motion compensation on the CPU"),
                                       "rife": qsTr("RIFE: optical flow on the GPU (Vulkan)"),
+                                      "rife-trt": qsTr("RIFE (TensorRT): optical flow on NVIDIA's cards, with NVIDIA's TensorRT"),
                                       "fruc-vulkan": qsTr("NVIDIA Optical Flow: RTX 30 and later") })
+                        }
+                        Item {
+                            id: tensorrt
+                            // RIFE (TensorRT)'s installation, read again each
+                            // second while the page shows.
+                            property var status: ({})
+                            Timer {
+                                interval: 1000
+                                repeat: true
+                                triggeredOnStart: true
+                                running: win.visible && win.currentKey === "smoothing"
+                                onTriggered: tensorrt.status = JSON.parse(win.player.tensorrt_status() || "{}")
+                            }
+                            function gb(bytes) {
+                                return (bytes / 1e9).toFixed(1)
+                            }
+                            function text() {
+                                const status = tensorrt.status
+                                if (status.state === "installing") {
+                                    const stage = status.stage === "checking" ? qsTr("checking")
+                                                : status.stage === "unpacking" ? qsTr("unpacking") : qsTr("downloading")
+                                    return qsTr("RIFE (TensorRT): %1, %2 of %3 GB").arg(stage).arg(gb(status.done || 0)).arg(gb(status.total || status.download || 0))
+                                }
+                                if (status.state === "installed")
+                                    return status.ready
+                                        ? qsTr("RIFE (TensorRT): NVIDIA's TensorRT %1 is installed for %2 and its engine is built.").arg(status.version).arg(status.builder)
+                                        : qsTr("RIFE (TensorRT): NVIDIA's TensorRT %1 is installed for %2; the calibration builds its engine (a few minutes) when nothing plays.").arg(status.version).arg(status.builder)
+                                if (status.error)
+                                    return qsTr("RIFE (TensorRT): %1").arg(status.error)
+                                return qsTr("RIFE (TensorRT) needs NVIDIA's TensorRT: a %1 GB download from NVIDIA, of which about %2 GB stay.").arg(gb(status.download || 0)).arg(gb(status.kept || 0))
+                            }
+                        }
+                        RowLayout {
+                            visible: tensorrt.status.state !== undefined && tensorrt.status.state !== "unavailable"
+                            Note {
+                                Layout.fillWidth: true
+                                text: tensorrt.text()
+                            }
+                            Button {
+                                text: qsTr("Download…")
+                                visible: tensorrt.status.state === "missing"
+                                onClicked: tensorrtConsent.open()
+                            }
+                            Button {
+                                text: qsTr("Cancel")
+                                visible: tensorrt.status.state === "installing"
+                                onClicked: win.player.tensorrt_cancel()
+                            }
+                            Button {
+                                text: qsTr("Remove")
+                                visible: tensorrt.status.state === "installed"
+                                onClicked: {
+                                    const error = win.player.tensorrt_remove()
+                                    if (error !== "")
+                                        tensorrt.status = Object.assign({}, tensorrt.status, { error: error })
+                                }
+                            }
+                        }
+                        ProgressBar {
+                            Layout.fillWidth: true
+                            visible: tensorrt.status.state === "installing"
+                            from: 0
+                            to: 1
+                            value: (tensorrt.status.done || 0) / Math.max(1, tensorrt.status.total || 0)
+                        }
+                        Dialog {
+                            id: tensorrtConsent
+                            parent: Overlay.overlay
+                            anchors.centerIn: parent
+                            width: Math.min(560, win.width - 40)
+                            modal: true
+                            title: qsTr("Download NVIDIA's TensorRT")
+                            contentItem: Label {
+                                wrapMode: Text.Wrap
+                                textFormat: Text.StyledText
+                                text: qsTr("RVP downloads NVIDIA TensorRT %1 and CUDA's runtime from NVIDIA's servers (%2 GB) and keeps the files this card needs in RVP's state folder. They are NVIDIA's software under NVIDIA's terms, not RVP's: by downloading them you accept the NVIDIA TensorRT Software License Agreement and the CUDA End User License Agreement.").arg(tensorrt.status.version || "").arg(tensorrt.gb(tensorrt.status.download || 0))
+                                      + "<br><br><a href=\"https://docs.nvidia.com/deeplearning/tensorrt/latest/reference/sla.html\">" + qsTr("TensorRT's licence") + "</a> · "
+                                      + "<a href=\"https://docs.nvidia.com/cuda/eula/index.html\">" + qsTr("CUDA's EULA") + "</a>"
+                                onLinkActivated: link => Qt.openUrlExternally(link)
+                            }
+                            footer: DialogButtonBox {
+                                Button {
+                                    text: qsTr("Accept and Download")
+                                    DialogButtonBox.buttonRole: DialogButtonBox.AcceptRole
+                                }
+                                Button {
+                                    text: qsTr("Cancel")
+                                    DialogButtonBox.buttonRole: DialogButtonBox.RejectRole
+                                }
+                            }
+                            onAccepted: win.player.tensorrt_install()
                         }
                         Choice {
                             label: qsTr("Preset")

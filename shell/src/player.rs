@@ -1267,6 +1267,12 @@ impl qobject::Player {
         };
         // The calibration's key (after the start: libmpv's version).
         core.app.set_hardware(crate::hardware::describe());
+        // `--install-tensorrt`: RIFE (TensorRT)'s download at once, NVIDIA's
+        // terms accepted by asking for it (tests and scripts); a failure is
+        // in the log.
+        if Cli::parse(std::env::args().skip(1)).flag("install-tensorrt") {
+            drop(core.app.tensorrt_install());
+        }
         let action = core.app.switch_action(core.engine, &request);
         if let Err(error) = result {
             self.as_mut().show_message(&format!("cannot open: {error}"));
@@ -3261,13 +3267,14 @@ impl qobject::Player {
         core.app.tick_second(core.engine, Instant::now());
         let watched = core.app.smoothing_watch(core.engine, Instant::now());
         let calibrated = core.app.calibration_tick(core.engine, Instant::now());
+        let installed = core.app.tensorrt_tick(core.engine);
         let reloaded = core.app.watch_subtitle_files(core.engine);
         let speech = core.app.speech_tick(core.engine, Instant::now());
         if let Err(error) = core.app.tick(Instant::now()) {
             let text = format!("cannot save the playback state: {error}");
             self.as_mut().show_message(&text);
         }
-        for request in [watched, calibrated, reloaded]
+        for request in [watched, calibrated, installed, reloaded]
             .into_iter()
             .flatten()
             .chain(speech)

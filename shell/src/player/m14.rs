@@ -1204,6 +1204,36 @@ impl qobject::Player {
         }
     }
 
+    pub(crate) fn tensorrt_status(&self) -> QString {
+        self.core().map_or_else(QString::default, |core| {
+            QString::from(&core.app.tensorrt_status().to_string())
+        })
+    }
+
+    pub(crate) fn tensorrt_install(mut self: Pin<&mut Self>) {
+        let request = self
+            .as_mut()
+            .core_mut()
+            .and_then(|core| core.app.tensorrt_install());
+        if let Some(request) = request {
+            self.handle_request(request);
+        }
+    }
+
+    pub(crate) fn tensorrt_cancel(mut self: Pin<&mut Self>) {
+        if let Some(core) = self.as_mut().core_mut() {
+            core.app.tensorrt_cancel();
+        }
+    }
+
+    pub(crate) fn tensorrt_remove(mut self: Pin<&mut Self>) -> QString {
+        let result = self
+            .as_mut()
+            .core_mut()
+            .map_or(Ok(()), |core| core.app.tensorrt_remove(core.engine));
+        QString::from(&result.err().unwrap_or_default())
+    }
+
     /// The main window's and the control panel's opacity (Skins >
     /// Opacity).
     pub(super) fn sync_opacity(mut self: Pin<&mut Self>) {

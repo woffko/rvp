@@ -15,6 +15,8 @@ rvp-skin = { path = "../skin" }
 rvp-subtitle = { path = "../subtitle" }
 serde.workspace = true
 serde_json.workspace = true
+sha2.workspace = true
+zip.workspace = true
 
 [dev-dependencies]
 # Builds RVP Default for its coverage report.

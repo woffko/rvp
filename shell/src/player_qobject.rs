@@ -348,6 +348,24 @@ pub mod qobject {
         #[qinvokable]
         fn cancel_calibration(self: Pin<&mut Self>);
 
+        /// RIFE (TensorRT)'s installation as JSON (the Motion Smoothing
+        /// page): `state`, `stage`, `done`, `total`, `download`, `kept`,
+        /// `builder`, `error`, `ready`.
+        #[qinvokable]
+        fn tensorrt_status(self: &Self) -> QString;
+
+        /// Downloads NVIDIA's TensorRT (after the page's consent).
+        #[qinvokable]
+        fn tensorrt_install(self: Pin<&mut Self>);
+
+        /// Stops the download.
+        #[qinvokable]
+        fn tensorrt_cancel(self: Pin<&mut Self>);
+
+        /// Deletes the installation; an error text, or empty.
+        #[qinvokable]
+        fn tensorrt_remove(self: Pin<&mut Self>) -> QString;
+
         /// How the menus look (M14, Skins > Context Menu Style): JSON with
         /// `native`, `dark`, `opacity`, `scale` and the skin's `colors`.
         #[qinvokable]

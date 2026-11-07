@@ -6156,6 +6156,14 @@ pub const ACTIONS: &[ActionInfo] = &[
         &[],
     ),
     info(
+        Action::Smoothing(SmoothingCommand::Engine(SmoothingEngine::RifeTrt)),
+        "smoothing-rife-trt",
+        "RIFE (TensorRT, NVIDIA)",
+        None,
+        &[],
+        &[],
+    ),
+    info(
         Action::Smoothing(SmoothingCommand::Engine(SmoothingEngine::FrucVulkan)),
         "smoothing-fruc-vulkan",
         "NVIDIA Optical Flow (RTX 30 and later)",

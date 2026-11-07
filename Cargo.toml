@@ -55,6 +55,11 @@ futures-core = { version = "=0.3.34", default-features = false }
 # messages and serves D-Bus at once (crates/platform); already in the tree
 # through zbus; MIT.
 zruntime = { version = "=0.2.2", default-features = false, features = ["mpmc"] }
+# Checks NVIDIA's TensorRT and CUDA archives that RIFE (TensorRT) downloads
+# on the user's request against their pinned SHA-256 (M18,
+# docs/spikes/m18-tensorrt.md): 2.2 GB of native libraries that RVP loads;
+# RustCrypto's pure Rust implementation; MIT or Apache-2.0.
+sha2 = "=0.11.1"
 # Fatal signal handlers for the crash log on Linux (M8, shell/src/crash.rs);
 # already in the tree.
 libc = "=0.2.190"

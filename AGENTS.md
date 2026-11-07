@@ -281,6 +281,24 @@ smoothing for users without SVP, after a study of the engines.
   Smoothing page's Calibrate…/Recalibrate…, `Settings.openCalibration`)
   has Start (it pauses playback), Cancel (no run on its own until Start)
   and the progress.
+- RIFE (TensorRT) (`smoothing::Engine::RifeTrt`, `crates/app/src/tensorrt.rs`,
+  `docs/spikes/m18-tensorrt.md`): vs-mlrt v15.16's `vstrt` with RIFE v4.6.
+  NVIDIA's licence keeps TensorRT out of RVP's packages: the Motion
+  Smoothing page's Download… asks for consent to NVIDIA's terms, then
+  fetches TensorRT 10.16 and CUDA 13.2's runtime and NVRTC from NVIDIA
+  through the system's `curl` (2.2 GB, sizes and SHA-256 pinned in
+  `tensorrt::archives`), and keeps what the card needs (its builder
+  resource by `nvidia-smi`'s compute capability, about 700 MB) with the
+  package's `vapoursynth/vs-mlrt` (plugin, `trtexec`, `vsmlrt.py`, model;
+  `tools/packaging/vapoursynth.py`) in `<state>/tensorrt`, laid out as
+  vs-mlrt expects. `vstrt` loads `vsmlrt-cuda/nvinfer_10.dll` by its path
+  (RVP's library search allows it); `trtexec` builds the engine as a
+  process of its own. The engine runs only once the calibration has built
+  (two minutes on the host) and measured it; until then RIFE on ncnn
+  stands in. `--install-tensorrt` installs at once (tests);
+  `RVP_TENSORRT_MIRROR` (a folder URL, `file://` too) replaces NVIDIA's
+  servers; the host's copy of the archives is in
+  `~/rvp-reference/trt/nvidia`. Never commit NVIDIA's files.
 - The control panel (F7) is a second window (`shell/qml/ControlPanel.qml`)
   with its own `Chrome` in `Mode::ControlBox`, painted whole
   (`SkinView.surface` 1, `panelDamaged`).

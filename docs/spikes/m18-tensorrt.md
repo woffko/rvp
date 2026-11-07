@@ -103,6 +103,29 @@ advice).
    publishes no Linux release, so RVP would build it. TensorRT comes from
    NVIDIA's apt repository or its pip wheels.
 
+## In RVP (2026-11-07)
+
+The route is implemented for Windows: the engine "RIFE (TensorRT)"
+(`crates/app/src/tensorrt.rs`), NVIDIA's files in `<state>/tensorrt`
+rather than the configuration folder (local, not roaming). On the host,
+in a test copy of RVP with the owner's settings at 315 W:
+
+- The installation took 10 s from a local copy of the archives, with the
+  SHA-256 checked and 13 files kept for `sm86`.
+- The calibration built the engine (about two minutes) and measured the
+  following, in frames a second at 59.94:
+
+  | RIFE (TensorRT) | 480p | 720p | 1080p | 1440p |
+  |---|---|---|---|---|
+  | Fast (1 stream) | 250 | 138 | 70 | |
+  | Medium (2 streams) | 412 | 247 | 123 | 77 |
+  | Quality (3 streams) | 455 | 268 | 134 | 86 |
+
+- The 1080p23.976 clip then started at once with RIFE (TensorRT) Quality.
+  After the first 3 s (88 frames, as the original gave way to the
+  filter) it dropped 19 frames over 37 s, where RIFE on ncnn drops 40 to
+  50 a second.
+
 ## Sources
 
 - docs.nvidia.com/deeplearning/tensorrt/latest/reference/sla.html

@@ -1972,6 +1972,10 @@
         <translation>RIFE (оптический поток, GPU)</translation>
     </message>
     <message>
+        <source>RIFE (TensorRT, NVIDIA)</source>
+        <translation>RIFE (TensorRT, NVIDIA)</translation>
+    </message>
+    <message>
         <source>Random Color Theme</source>
         <translation>Случайная цветовая тема</translation>
     </message>
