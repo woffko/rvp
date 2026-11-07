@@ -245,8 +245,10 @@ smoothing for users without SVP, after a study of the engines.
   shaders; RVP probes `lavfi-fruc_vulkan` at start). An engine whose filter
   does not raise the rate within 6 s is left out for the session, and one
   that leaves the output dropping more than 5 % of its frames over the
-  page's `drop-window` (20 s by default; 0 never) takes a lighter step for
-  the rest of the file (`App::smoothing_watch`). Checks: `crates/app/tests/smoothing.rs` (with
+  page's `drop-window` (20 s by default; 0 never), or more than half of
+  them over 5 s (at once; RIFE then gives way to MVTools, as its presets
+  change only its GPU threads), takes a lighter step for the rest of the
+  file (`App::smoothing_watch`). Checks: `crates/app/tests/smoothing.rs` (with
   `VSSCRIPT_PATH`), `rvp --selftest=smoothing`,
   `tools/windows-vm/m18-all.ps1`, and on the host, with permission,
   `tools/windows-vm/m18-host.ps1` (each GPU mode in RVP's window at the

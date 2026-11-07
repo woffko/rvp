@@ -2004,7 +2004,7 @@ ApplicationWindow {
                                   + " (in RVP's VapourSynth runtime and libmpv)."
                         }
                         Note {
-                            text: qsTr("Smoothing stays off while SVP is attached, while RVP's own VapourSynth script runs and when the video plays at the target rate already; while SVP 4 Manager runs, it waits 8 s for SVP after a file starts. An engine that cannot run here gives way: RIFE and NVIDIA Optical Flow to MVTools, MVTools to Blend; one whose output drops more than 5 % of its frames over the time above steps down (a lighter preset, then MVTools, then Blend) until the file ends. Above the GPU power budget, smoothing is lightened first. After a start or a seek the original shows for the time above while MVTools or RIFE get ready, as SVP does. The Log page's Info level records each step and the seconds that dropped frames.")
+                            text: qsTr("Smoothing stays off while SVP is attached, while RVP's own VapourSynth script runs and when the video plays at the target rate already; while SVP 4 Manager runs, it waits 8 s for SVP after a file starts. An engine that cannot run here gives way: RIFE and NVIDIA Optical Flow to MVTools, MVTools to Blend; one whose output drops more than 5 % of its frames over the time above, or more than half of them over 5 s, steps down (a lighter preset, then MVTools, then Blend; RIFE gives way to MVTools at once) until the file ends. Above the GPU power budget, smoothing is lightened first. After a start or a seek the original shows for the time above while MVTools or RIFE get ready, as SVP does. The Log page's Info level records each step and the seconds that dropped frames.")
                         }
                     }
 

@@ -24,11 +24,15 @@
 //!   already plays. An engine
 //!   that cannot run here gives way: RIFE and `fruc_vulkan` to MVTools,
 //!   MVTools to Blend. One that runs but leaves the output dropping more
-//!   than 5 % of its frames takes a lighter step for the rest of the file
-//!   (the owner, 2026-10-20): a lighter preset, then RIFE or `fruc_vulkan`
-//!   give way to MVTools, then Blend. On the host (RTX 30-series card at its
-//!   315 W test limit) RIFE and `fruc_vulkan` medium reach 720p at 60 fps
-//!   but not 1080p.
+//!   than 5 % of its frames over the page's drop window, or more than half
+//!   of them over 5 s, takes a lighter step for the rest of the file (the
+//!   owner, 2026-10-20 and 2026-11-06): a lighter preset, then RIFE or
+//!   `fruc_vulkan` give way to MVTools, then Blend; RIFE over half gives
+//!   way at once (its presets change only its GPU threads). On the host (RTX 3080
+//!   Ti at its 315 W test limit) RIFE and `fruc_vulkan` medium reach 720p
+//!   at 60 fps but not 1080p (RIFE quality at 1080p: 40 to 50 of 60 frames
+//!   a second dropped, the card at 99 %), and a minute's drop window held
+//!   such a step for a minute before the step at once came in.
 //! * MVTools and RIFE run in the VapourSynth runtime RVP ships (never
 //!   SVP's). The scripts end with `core.clear_cache()`: mpv answers the
 //!   frames a script asks for while it loads with black ones (MVTools asks
@@ -414,6 +418,18 @@ pub fn plan(settings: &SmoothingSettings, facts: &Facts, lightened: Lightened) -
     }
 }
 
+/// The steps of dropped frames ([`Lightened::dropped`]) that take RIFE
+/// at `preset` past its lighter presets to MVTools, as [`plan`] takes
+/// them: each lightens the preset down to Fast, the next one gives way.
+#[must_use]
+fn steps_to_mvtools(preset: Preset) -> u8 {
+    match preset {
+        Preset::Quality => 3,
+        Preset::Medium => 2,
+        Preset::Fast => 1,
+    }
+}
+
 /// A Python string literal for a path.
 fn python_path(path: &Path) -> String {
     let text = path.to_string_lossy();
@@ -712,10 +728,12 @@ enum Verdict {
 /// The watch over a motion-compensated filter since it went in: it has to
 /// raise the rate within [`WATCH`] of steady playback, and after that the
 /// output's dropped frames are counted over windows of the Motion
-/// Smoothing page's length (`drop-window`). A seek, a loop or a pause
-/// starts the wait again and leaves a window unjudged; once the filter has
-/// raised the rate, a dip after a seek is no failure (mpv's estimate starts
-/// again after it).
+/// Smoothing page's length (`drop-window`), more than [`DROP_SHARE`] of
+/// the frames making it lighter, and over windows of [`AT_ONCE`], where
+/// more than [`AT_ONCE_SHARE`] makes it lighter at once (unless the page
+/// never steps down). A seek, a loop or a pause starts the wait again and
+/// leaves the windows unjudged; once the filter has raised the rate, a dip
+/// after a seek is no failure (mpv's estimate starts again after it).
 #[derive(Debug, Default)]
 struct FilterWatch {
     /// Steady playback since.
@@ -726,9 +744,25 @@ struct FilterWatch {
     last: Option<(Instant, f64)>,
     /// The drop window's start: when, the drops then, the playback time.
     drops_from: Option<(Instant, i64, f64)>,
-    /// The window judged at the last tick: the frames dropped, the frames
-    /// the filter made, and whether they were too many (the log).
-    judged: Option<(i64, f64, bool)>,
+    /// The short window's start ([`AT_ONCE`]), as `drops_from`.
+    at_once_from: Option<(Instant, i64, f64)>,
+    /// The window judged at the last tick (the log): the drop window's,
+    /// or a short one that made the filter lighter at once.
+    judged: Option<Judged>,
+}
+
+/// A window of dropped frames the watch judged.
+#[derive(Debug, Clone, Copy, PartialEq)]
+struct Judged {
+    /// The frames the output dropped and the frames the filter made.
+    dropped: i64,
+    frames: f64,
+    /// The window's length.
+    seconds: f64,
+    /// More than the window's share: a lighter step.
+    too_many: bool,
+    /// A short window ([`AT_ONCE`]).
+    at_once: bool,
 }
 
 impl FilterWatch {
@@ -739,6 +773,7 @@ impl FilterWatch {
         if !tick.playing {
             self.since = None;
             self.drops_from = None;
+            self.at_once_from = None;
             self.last = None;
             return Verdict::Wait;
         }
@@ -747,6 +782,7 @@ impl FilterWatch {
             if !played_on(time, tick.time, seconds, tick.speed) {
                 self.since = None;
                 self.drops_from = None;
+                self.at_once_from = None;
             }
         }
         self.last = Some((tick.now, tick.time));
@@ -765,22 +801,23 @@ impl FilterWatch {
         let Some(window) = window else {
             return Verdict::Wait;
         };
-        let Some((from, from_dropped, from_time)) = self.drops_from else {
-            self.drops_from = Some((tick.now, tick.dropped, tick.time));
+        // An engine far beyond this machine does not wait for the drop
+        // window (the owner, 2026-11-06).
+        if let Some(judged) = judge(&mut self.at_once_from, tick, AT_ONCE, AT_ONCE_SHARE)
+            && judged.too_many
+        {
+            self.judged = Some(Judged {
+                at_once: true,
+                ..judged
+            });
+            self.drops_from = None;
+            return Verdict::Lighter;
+        }
+        let Some(judged) = judge(&mut self.drops_from, tick, window, DROP_SHARE) else {
             return Verdict::Wait;
         };
-        let seconds = tick.now.duration_since(from).as_secs_f64();
-        if seconds < window.as_secs_f64() {
-            return Verdict::Wait;
-        }
-        self.drops_from = Some((tick.now, tick.dropped, tick.time));
-        if tick.dropped < from_dropped || !played_on(from_time, tick.time, seconds, tick.speed) {
-            return Verdict::Wait;
-        }
-        let dropped = tick.dropped - from_dropped;
-        let lighter = too_many_drops(dropped, tick.filter_fps, seconds);
-        self.judged = Some((dropped, tick.filter_fps * seconds, lighter));
-        if lighter {
+        self.judged = Some(judged);
+        if judged.too_many {
             Verdict::Lighter
         } else {
             Verdict::Wait
@@ -788,19 +825,62 @@ impl FilterWatch {
     }
 }
 
+/// Once `length` has passed since `from` (a window's start: when, the
+/// drops then, the playback time), counts the drops over it against
+/// `share` of the filter's frames and starts the next window; `None`
+/// while the window runs, and when a seek or a loop left it unjudged.
+fn judge(
+    from: &mut Option<(Instant, i64, f64)>,
+    tick: &Tick,
+    length: Duration,
+    share: f64,
+) -> Option<Judged> {
+    let Some((at, at_dropped, at_time)) = *from else {
+        *from = Some((tick.now, tick.dropped, tick.time));
+        return None;
+    };
+    let seconds = tick.now.duration_since(at).as_secs_f64();
+    if seconds < length.as_secs_f64() {
+        return None;
+    }
+    *from = Some((tick.now, tick.dropped, tick.time));
+    if tick.dropped < at_dropped || !played_on(at_time, tick.time, seconds, tick.speed) {
+        return None;
+    }
+    let dropped = tick.dropped - at_dropped;
+    Some(Judged {
+        dropped,
+        frames: tick.filter_fps * seconds,
+        seconds,
+        too_many: too_many_drops(dropped, tick.filter_fps, seconds, share),
+        at_once: false,
+    })
+}
+
 /// The share of the filter's frames that the output may drop over a drop
 /// window before smoothing takes a lighter step: 5 % (the owner,
 /// 2026-10-20).
 const DROP_SHARE: f64 = 0.05;
 
+/// The short window: more than [`AT_ONCE_SHARE`] of the frames dropped
+/// over it make smoothing lighter at once, whatever the drop window (the
+/// owner, 2026-11-06: RIFE at 1080p, which the host's card cannot keep up
+/// with, otherwise dropped 40 to 50 frames a second for a minute's window
+/// at each step).
+const AT_ONCE: Duration = Duration::from_secs(5);
+
+/// The share of the frames over [`AT_ONCE`] that makes smoothing lighter
+/// at once: half.
+const AT_ONCE_SHARE: f64 = 0.5;
+
 /// Whether `dropped` frames over `seconds` of a filter that makes `rate`
-/// frames a second are too many ([`DROP_SHARE`]).
+/// frames a second are more than `share` of them.
 #[must_use]
-fn too_many_drops(dropped: i64, rate: f64, seconds: f64) -> bool {
+fn too_many_drops(dropped: i64, rate: f64, seconds: f64, share: f64) -> bool {
     // Frame counts of a few seconds.
     #[allow(clippy::cast_precision_loss)]
     let dropped = dropped as f64;
-    dropped > DROP_SHARE * rate * seconds
+    dropped > share * rate * seconds
 }
 
 /// Whether playback went on from `from` to `to` (playback times) over
@@ -1048,11 +1128,14 @@ impl App {
     /// not start here (RIFE or `fruc_vulkan` without their GPU, MVTools
     /// without its plugin; mpv drops a filter that fails) and is left out
     /// for the session; one that leaves the output dropping more than
-    /// [`DROP_SHARE`] of its frames takes one step lighter for the rest of
-    /// the file. Either way the next plan runs, with a notice.
+    /// [`DROP_SHARE`] of its frames over the drop window, or more than
+    /// [`AT_ONCE_SHARE`] over [`AT_ONCE`], takes one step lighter for the
+    /// rest of the file. Either way the next plan runs, with a notice.
     pub fn smoothing_watch(&mut self, engine: &Mpv, now: Instant) -> Option<UiRequest> {
         let Some(Plan::Filter {
-            engine: running, ..
+            engine: running,
+            preset: running_preset,
+            ..
         }) = self.smoothing.applied.clone()
         else {
             self.smoothing.watch = FilterWatch::default();
@@ -1076,17 +1159,21 @@ impl App {
         if self.smoothing.watch.proven {
             self.smoothing.ran.insert(running);
         }
-        if let Some((dropped, frames, lighter)) = self.smoothing.watch.judged {
+        if let Some(judged) = self.smoothing.watch.judged {
             crate::log::write(
-                if lighter {
+                if judged.too_many {
                     crate::log::Level::Warning
                 } else {
                     crate::log::Level::Debug
                 },
                 &format!(
-                    "smoothing: {before} dropped {dropped} of {frames:.0} frames over {} s ({})",
-                    self.settings.smoothing.drop_window,
-                    if lighter {
+                    "smoothing: {before} dropped {} of {:.0} frames over {:.0} s ({})",
+                    judged.dropped,
+                    judged.frames,
+                    judged.seconds,
+                    if judged.at_once {
+                        "over half: a lighter step at once"
+                    } else if judged.too_many {
                         "over 5 %: a lighter step"
                     } else {
                         "kept"
@@ -1097,7 +1184,20 @@ impl App {
         match verdict {
             Verdict::Wait => return None,
             Verdict::Lighter => {
-                self.smoothing.dropped = self.smoothing.dropped.saturating_add(1);
+                let at_once = self
+                    .smoothing
+                    .watch
+                    .judged
+                    .is_some_and(|judged| judged.at_once);
+                // RIFE's presets change only its GPU threads (the host's
+                // RIFE at 1080p dropped as many frames at Medium as at
+                // Quality): one far beyond the card gives way to MVTools.
+                let steps = if at_once && running == Engine::Rife {
+                    steps_to_mvtools(running_preset)
+                } else {
+                    1
+                };
+                self.smoothing.dropped = self.smoothing.dropped.saturating_add(steps);
                 self.apply_smoothing(engine);
                 return Some(UiRequest::Osd(format!(
                     "Motion smoothing: {before} dropped frames here; {}",
@@ -1358,6 +1458,22 @@ mod tests {
             preset,
             rate: (60, 1),
         };
+        // A RIFE far beyond the card gives way to MVTools at once from
+        // the preset it runs at.
+        for (taken, running) in [(0, Preset::Quality), (1, Preset::Medium), (2, Preset::Fast)] {
+            assert_eq!(
+                plan(&quality(Engine::Rife), &machine, dropped(taken)),
+                filter(Engine::Rife, running)
+            );
+            assert_eq!(
+                plan(
+                    &quality(Engine::Rife),
+                    &machine,
+                    dropped(taken + steps_to_mvtools(running))
+                ),
+                filter(Engine::MvTools, Preset::Medium)
+            );
+        }
         for gpu in [Engine::Rife, Engine::FrucVulkan] {
             let steps: Vec<Plan> = (0..6)
                 .map(|n| plan(&quality(gpu), &machine, dropped(n)))
@@ -1383,8 +1499,10 @@ mod tests {
             Plan::Blend
         );
         // 5 % of 60 frames a second over 6 s: 18 frames.
-        assert!(!too_many_drops(18, 60.0, 6.0));
-        assert!(too_many_drops(19, 60.0, 6.0));
+        assert!(!too_many_drops(18, 60.0, 6.0, DROP_SHARE));
+        assert!(too_many_drops(19, 60.0, 6.0, DROP_SHARE));
+        assert!(!too_many_drops(150, 60.0, 5.0, AT_ONCE_SHARE));
+        assert!(too_many_drops(151, 60.0, 5.0, AT_ONCE_SHARE));
         // A seek between leaves the drops unjudged; a machine that plays
         // slower than real time is judged.
         assert!(played_on(10.0, 16.1, 6.0, 1.0));
@@ -1495,6 +1613,67 @@ mod tests {
     }
 
     #[test]
+    fn a_hopeless_engine_steps_down_at_once() {
+        #[allow(clippy::cast_precision_loss)] // seconds of a test
+        let steady = |n: u64| n as f64;
+        let per_second = |frames: i64| move |n: u64| frames * i64::try_from(n).unwrap_or(0);
+        // RIFE at 1080p on the host: 45 of 60 frames a second dropped.
+        // With a minute's drop window it steps down 5 s after it proved
+        // itself, not a minute later.
+        let mut watch = FilterWatch::default();
+        assert_eq!(
+            ticks(
+                &mut watch,
+                Some(60),
+                0..12,
+                steady,
+                |_| 60.0,
+                per_second(45)
+            ),
+            [(11, Verdict::Lighter)]
+        );
+        let judged = watch.judged.expect("judged");
+        assert!(judged.at_once && judged.too_many);
+        assert_eq!((judged.dropped, judged.seconds), (225, 5.0));
+        // A third of the frames waits for the drop window.
+        let mut watch = FilterWatch::default();
+        assert_eq!(
+            ticks(
+                &mut watch,
+                Some(60),
+                0..67,
+                steady,
+                |_| 60.0,
+                per_second(20)
+            ),
+            [(66, Verdict::Lighter)]
+        );
+        assert!(!watch.judged.expect("judged").at_once);
+        // "Never" never steps down, however many frames drop.
+        let mut watch = FilterWatch::default();
+        assert_eq!(
+            ticks(&mut watch, None, 0..70, steady, |_| 60.0, per_second(45)),
+            []
+        );
+        // A seek inside the short window leaves it unjudged: the wait
+        // starts again at the seek, and the next short window counts.
+        let mut watch = FilterWatch::default();
+        #[allow(clippy::cast_precision_loss)]
+        let seek_at_9 = |n: u64| if n < 9 { n as f64 } else { 100.0 + n as f64 };
+        assert_eq!(
+            ticks(
+                &mut watch,
+                Some(60),
+                0..21,
+                seek_at_9,
+                |_| 60.0,
+                per_second(45)
+            ),
+            [(20, Verdict::Lighter)]
+        );
+    }
+
+    #[test]
     fn the_original_frames_come_first_after_each_start() {
         // A second at 60 frames a second of the 24000/1001 source: output
         // frame n shows source frame n * 1 * 24000 / (60 * 1001).
@@ -1562,7 +1741,16 @@ mod tests {
             ),
             [(26, Verdict::Lighter)]
         );
-        assert_eq!(watch.judged, Some((200, 1200.0, true)));
+        assert_eq!(
+            watch.judged,
+            Some(Judged {
+                dropped: 200,
+                frames: 1200.0,
+                seconds: 20.0,
+                too_many: true,
+                at_once: false,
+            })
+        );
         // Never: the filter is still left out when it does not run.
         let mut watch = FilterWatch::default();
         assert_eq!(
