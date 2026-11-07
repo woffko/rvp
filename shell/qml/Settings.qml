@@ -22,6 +22,16 @@ ApplicationWindow {
     minimumWidth: 640
     minimumHeight: 440
 
+    // The calibration window (Calibration.qml), made on first use: the
+    // Motion Smoothing page's button and the self-test open it.
+    function openCalibration() {
+        if (!calibrationLoader.item)
+            calibrationLoader.setSource("Calibration.qml", { player: win.player, owner: win })
+        calibrationLoader.item.begin()
+        return calibrationLoader.item
+    }
+    Loader { id: calibrationLoader }
+
     // Keys of rvp_app::SettingsPage, in the order of the pages in `stack`.
     readonly property var pages: [
         { key: "playback", title: qsTr("Playback") },
@@ -2034,6 +2044,8 @@ ApplicationWindow {
                                     return qsTr("Calibration of %1 at 60 frames a second: %2").arg(status.date || "").arg(summary())
                                 if (status.state === "unavailable")
                                     return qsTr("Calibration: no engine to measure here.")
+                                if (status.state === "cancelled")
+                                    return qsTr("Calibration: cancelled; it starts again with Start in its window.")
                                 return qsTr("Calibration: not measured yet; it runs when smoothing is on and nothing plays for a few seconds.")
                             }
                         }
@@ -2043,9 +2055,8 @@ ApplicationWindow {
                                 text: calibration.text()
                             }
                             Button {
-                                text: qsTr("Calibrate Now")
-                                enabled: calibration.status.state !== "running" && calibration.status.state !== "unavailable"
-                                onClicked: win.player.calibrate_now()
+                                text: calibration.status.state === "measured" ? qsTr("Recalibrate…") : qsTr("Calibrate…")
+                                onClicked: win.openCalibration()
                             }
                         }
                         Note {

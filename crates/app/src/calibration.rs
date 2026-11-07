@@ -355,6 +355,13 @@ pub struct Job {
 /// What the runner tells the window's thread.
 #[derive(Debug, Clone, PartialEq)]
 pub enum Event {
+    /// A measurement starts.
+    Started {
+        engine: Engine,
+        preset: Preset,
+        width: u32,
+        height: u32,
+    },
     /// A measurement: done and the most left.
     Measured {
         point: Point,
@@ -466,6 +473,12 @@ fn run(job: &Job, cancel: &AtomicBool, sender: &Sender<Event>) {
             calibration.failed.push(engine);
             continue;
         }
+        drop(sender.send(Event::Started {
+            engine,
+            preset,
+            width,
+            height,
+        }));
         let probe = rvp_engine::calibrate::Probe {
             width,
             height,
@@ -530,13 +543,18 @@ pub(crate) struct State {
     mpv_version: String,
     /// The results in force: measured on this machine.
     results: Option<Calibration>,
-    /// The thread while it measures, and its progress (done, most left).
+    /// The thread while it measures, its progress (done, most left) and
+    /// the measurement it is at.
     runner: Option<Runner>,
     progress: (usize, usize),
+    current: Option<String>,
     /// Since when nothing plays.
     idle_since: Option<Instant>,
-    /// The settings window asked for a run.
+    /// The calibration window asked for a run.
     asked: bool,
+    /// The calibration window cancelled one: no run on its own until
+    /// asked again.
+    declined: bool,
     /// Runs only when asked (self-tests).
     manual: bool,
 }
@@ -624,13 +642,32 @@ impl App {
         state.hardware.is_some()
             && self.settings.smoothing.enabled
             && !self.calibration_engines().is_empty()
-            && (state.asked || (!state.manual && state.results.is_none()))
+            && (state.asked || (!state.manual && !state.declined && state.results.is_none()))
     }
 
-    /// The settings window's "Calibrate now": runs as soon as nothing
-    /// plays.
-    pub fn calibrate_now(&mut self) {
+    /// The calibration window's Start: pauses playback and measures at the
+    /// next tick.
+    pub fn calibrate_now(&mut self, engine: &Mpv) {
         self.calibration.asked = true;
+        self.calibration.declined = false;
+        if self.model.playing() {
+            drop(engine.set_pause(true));
+        }
+    }
+
+    /// The command line's `--calibrate`: measures as soon as nothing plays.
+    pub fn calibrate_at_start(&mut self) {
+        self.calibration.asked = true;
+    }
+
+    /// The calibration window's Cancel: stops the run; none starts on its
+    /// own until Start.
+    pub fn cancel_calibration(&mut self) {
+        self.calibration.asked = false;
+        self.calibration.declined = true;
+        if let Some(runner) = &self.calibration.runner {
+            runner.cancel();
+        }
     }
 
     /// Once a second: the runner's news, a stop when a file plays, a
@@ -700,7 +737,9 @@ impl App {
                 );
                 self.calibration.runner = Some(runner);
                 self.calibration.progress = (0, 0);
-                None
+                Some(UiRequest::Osd(
+                    "Motion smoothing: calibrating while nothing plays".to_owned(),
+                ))
             }
             Err(error) => {
                 let text = format!("Motion smoothing: the calibration cannot start: {error}");
@@ -713,6 +752,19 @@ impl App {
     /// One event of the runner; `true` when the calibration finished.
     fn calibration_event(&mut self, event: Event) -> bool {
         match event {
+            Event::Started {
+                engine,
+                preset,
+                width,
+                height,
+            } => {
+                self.calibration.current = Some(format!(
+                    "{} {} {width}x{height}",
+                    engine.text(),
+                    preset.text()
+                ));
+                false
+            }
             Event::Measured { point, done, left } => {
                 crate::log::write(
                     crate::log::Level::Info,
@@ -748,14 +800,13 @@ impl App {
                 );
                 self.calibration.results = Some(calibration);
                 self.calibration.runner = None;
+                self.calibration.current = None;
                 true
             }
             Event::Cancelled => {
-                crate::log::write(
-                    crate::log::Level::Info,
-                    "calibration: stopped while a file plays; it goes on when nothing does",
-                );
+                crate::log::write(crate::log::Level::Info, "calibration: stopped");
                 self.calibration.runner = None;
+                self.calibration.current = None;
                 false
             }
         }
@@ -806,6 +857,8 @@ impl App {
             "measured"
         } else if self.calibration_engines().is_empty() {
             "unavailable"
+        } else if state.declined {
+            "cancelled"
         } else {
             "waiting"
         };
@@ -816,6 +869,8 @@ impl App {
             "failed": failed,
             "done": state.progress.0,
             "left": state.progress.1,
+            "current": state.current,
+            "playing": self.model.playing(),
         })
     }
 }

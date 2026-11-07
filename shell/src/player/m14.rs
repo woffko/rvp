@@ -1194,7 +1194,13 @@ impl qobject::Player {
 
     pub(crate) fn calibrate_now(mut self: Pin<&mut Self>) {
         if let Some(core) = self.as_mut().core_mut() {
-            core.app.calibrate_now();
+            core.app.calibrate_now(core.engine);
+        }
+    }
+
+    pub(crate) fn cancel_calibration(mut self: Pin<&mut Self>) {
+        if let Some(core) = self.as_mut().core_mut() {
+            core.app.cancel_calibration();
         }
     }
 

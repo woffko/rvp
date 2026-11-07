@@ -35,6 +35,85 @@
         </message>
     </context>
     <context>
+        <name>Calibration</name>
+        <message>
+            <source>Motion Smoothing Calibration</source>
+            <translation>Калибровка сглаживания движения</translation>
+        </message>
+        <message>
+            <source>Fast</source>
+            <translation>Быстро</translation>
+        </message>
+        <message>
+            <source>Medium</source>
+            <translation>Средне</translation>
+        </message>
+        <message>
+            <source>Quality</source>
+            <translation>Качественно</translation>
+        </message>
+        <message>
+            <source>Measuring %1…</source>
+            <translation>Измерение: %1…</translation>
+        </message>
+        <message>
+            <source>Starting…</source>
+            <translation>Запуск…</translation>
+        </message>
+        <message>
+            <source>Measured on %1.</source>
+            <translation>Измерено %1.</translation>
+        </message>
+        <message>
+            <source>No engine to measure here: RVP's VapourSynth runtime with MVTools or RIFE is missing.</source>
+            <translation>Здесь нечего измерять: нет среды VapourSynth RVP с MVTools или RIFE.</translation>
+        </message>
+        <message>
+            <source>Cancelled. It starts again with Start.</source>
+            <translation>Отменено. Начнётся снова по кнопке «Начать».</translation>
+        </message>
+        <message>
+            <source>Not measured yet.</source>
+            <translation>Ещё не измерено.</translation>
+        </message>
+        <message>
+            <source>RVP measures how many frames a second MVTools and RIFE make on this machine at each preset from 480p to 2160p, on a generated picture with no window or sound, as SVP does. It takes one to three minutes, and playback pauses for it. Each file then starts at the best preset that keeps its rate. It measures again on its own when the processors, graphics cards, their drivers or the engines change.</source>
+            <translation>RVP измеряет, сколько кадров в секунду дают на этой машине MVTools и RIFE на каждой предустановке от 480p до 2160p, на сгенерированной картинке без окна и звука, как SVP. Это занимает от одной до трёх минут, воспроизведение на это время ставится на паузу. Затем каждый файл начинается с лучшей предустановки, которая держит его частоту. Измерение повторяется само при смене процессоров, видеокарт, их драйверов или движков.</translation>
+        </message>
+        <message>
+            <source>%1 done, at most %2 left</source>
+            <translation>готово %1, осталось не больше %2</translation>
+        </message>
+        <message>
+            <source>What keeps 60 frames a second with a fifth to spare:</source>
+            <translation>Что держит 60 кадров в секунду с запасом в пятую часть:</translation>
+        </message>
+        <message>
+            <source>%1 %2: up to %3p</source>
+            <translation>%1 %2: до %3p</translation>
+        </message>
+        <message>
+            <source>%1 %2: below 480p</source>
+            <translation>%1 %2: ниже 480p</translation>
+        </message>
+        <message>
+            <source>%1: does not run here</source>
+            <translation>%1: здесь не работает</translation>
+        </message>
+        <message>
+            <source>Start</source>
+            <translation>Начать</translation>
+        </message>
+        <message>
+            <source>Cancel</source>
+            <translation>Отмена</translation>
+        </message>
+        <message>
+            <source>Close</source>
+            <translation>Закрыть</translation>
+        </message>
+    </context>
+    <context>
         <name>ColorTheme</name>
         <message>
             <source>Customize Color Theme</source>
@@ -2812,6 +2891,18 @@ in %2 seconds</source>
             <translation>%1 здесь не работает</translation>
         </message>
         <message>
+            <source>Recalibrate…</source>
+            <translation>Перекалибровать…</translation>
+        </message>
+        <message>
+            <source>Calibrate…</source>
+            <translation>Калибровать…</translation>
+        </message>
+        <message>
+            <source>Calibration: cancelled; it starts again with Start in its window.</source>
+            <translation>Калибровка отменена; она начнётся снова по кнопке «Начать» в её окне.</translation>
+        </message>
+        <message>
             <source>Calibration: measuring while nothing plays (%1 done, at most %2 left)</source>
             <translation>Калибровка: измерение, пока ничего не играет (готово %1, осталось не больше %2)</translation>
         </message>
@@ -2827,10 +2918,7 @@ in %2 seconds</source>
             <source>Calibration: not measured yet; it runs when smoothing is on and nothing plays for a few seconds.</source>
             <translation>Калибровка ещё не проведена: она начнётся, когда сглаживание включено и несколько секунд ничего не играет.</translation>
         </message>
-        <message>
-            <source>Calibrate Now</source>
-            <translation>Калибровать</translation>
-        </message>
+
         <message>
             <source>The calibration measures once how many frames a second MVTools and RIFE make here at each preset from 480p to 2160p, as SVP does, and again when the processors, graphics cards, their drivers or the engines change; each file then starts at the best preset that keeps its rate with a fifth to spare, at most the preset above. NVIDIA Optical Flow is not measured. Steps down taken while other programs loaded the processors come back at the next seek once that load is gone.</source>
             <translation>Калибровка один раз измеряет, сколько кадров в секунду дают здесь MVTools и RIFE на каждой предустановке от 480p до 2160p, как у SVP, и повторяется при смене процессоров, видеокарт, их драйверов или движков; затем каждый файл начинается с лучшей предустановки, которая держит его частоту с запасом в пятую часть, но не выше выбранной выше. NVIDIA Optical Flow не измеряется. Ступени вниз, сделанные, пока другие программы нагружали процессоры, возвращаются при следующей перемотке, когда эта нагрузка уходит.</translation>

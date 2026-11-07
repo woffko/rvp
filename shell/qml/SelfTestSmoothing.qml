@@ -133,6 +133,13 @@ Item {
             t.check("settings_smoothing_page", loader.currentGroup.page === "video"
                         && loader.tabKeys.indexOf("smoothing") >= 0 && loader.view.smoothing === "Off",
                     loader.currentGroup.title + ": " + loader.tabKeys.join(",") + " now " + loader.view.smoothing)
+            // The calibration window: a self-test measures only when asked.
+            const calibration = loader.openCalibration()
+            t.check("calibration_window_opens", calibration && calibration.visible
+                        && ["waiting", "unavailable"].indexOf(calibration.status.state) >= 0,
+                    calibration ? JSON.stringify(calibration.status) : "no window")
+            if (calibration)
+                calibration.close()
             // The Log page is a group of its own.
             loader.showKey("log")
             t.check("settings_log_page", loader.currentGroup.page === "log" && loader.currentKey === "log"

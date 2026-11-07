@@ -112,6 +112,7 @@ fn main() {
         .qml_file("qml/SubtitleBrowser.qml")
         .qml_file("qml/ColorTheme.qml")
         .qml_file("qml/SystemInfo.qml")
+        .qml_file("qml/Calibration.qml")
         .qml_file("qml/DropMenu.qml")
         .qml_file("qml/Tray.qml")
         .qml_file("qml/ControlPanel.qml")

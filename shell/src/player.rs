@@ -865,7 +865,7 @@ fn prepare_app(cli: &Cli, app: &mut App) {
     // `--calibrate` measures as soon as nothing plays.
     app.set_calibration_manual(cli.flag("selftest"));
     if cli.flag("calibrate") {
-        app.calibrate_now();
+        app.calibrate_at_start();
     }
     // M9: `--controller=KIND` for this run (the self-test).
     if let Some(kind) = cli.value("controller") {

@@ -277,6 +277,10 @@ smoothing for users without SVP, after a study of the engines.
   NVIDIA Optical Flow is not measured. Steps down taken while other
   programs held the processors come back at the next seek
   (`App::smoothing_seek`). Self-tests measure only with `--calibrate`.
+  The calibration window (`shell/qml/Calibration.qml`, from the Motion
+  Smoothing page's Calibrate…/Recalibrate…, `Settings.openCalibration`)
+  has Start (it pauses playback), Cancel (no run on its own until Start)
+  and the progress.
 - The control panel (F7) is a second window (`shell/qml/ControlPanel.qml`)
   with its own `Chrome` in `Mode::ControlBox`, painted whole
   (`SkinView.surface` 1, `panelDamaged`).

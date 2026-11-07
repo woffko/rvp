@@ -239,7 +239,7 @@ fn toggles_leave_svp_alone_and_the_script_slot_takes_over() {
 
 /// The calibration (`rvp_app::calibration`) where a VapourSynth runtime
 /// with MVTools is: asked for while nothing plays, it measures MVTools'
-/// presets on a generated picture, writes `calibration.json`, and the next
+/// presets on a generated picture (each at least at the smallest size), writes `calibration.json`, and the next
 /// file starts at the first preset it says keeps the rate.
 #[test]
 fn the_calibration_measures_mvtools_and_the_plan_follows_it() {
@@ -266,7 +266,7 @@ fn the_calibration_measures_mvtools_and_the_plan_follows_it() {
     app.start(&engine, &[]).expect("start");
     app.set_hardware("the test's machine".to_owned());
     assert_eq!(app.calibration_status()["state"], "waiting");
-    app.calibrate_now();
+    app.calibrate_now(&engine);
     let deadline = Instant::now() + Duration::from_secs(300);
     while app.calibration_status()["state"] != "measured" {
         assert!(
@@ -291,7 +291,10 @@ fn the_calibration_measures_mvtools_and_the_plan_follows_it() {
     let measured: Vec<_> = calibration
         .points
         .iter()
-        .filter(|point| point.engine == SmoothingEngine::MvTools && point.height == 720)
+        .filter(|point| {
+            point.engine == SmoothingEngine::MvTools
+                && (point.width, point.height) == rvp_app::calibration::SIZES[0]
+        })
         .collect();
     assert_eq!(measured.len(), 3, "{calibration:?}");
     assert!(
