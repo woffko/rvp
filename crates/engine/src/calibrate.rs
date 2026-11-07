@@ -44,7 +44,7 @@ pub struct Probe {
 }
 
 /// What a probe measured.
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Measurement {
     /// Playback seconds per wall second while measured (about [`SPEED`]
     /// when the filters keep up with it).
@@ -52,6 +52,8 @@ pub struct Measurement {
     /// mpv's estimate of the rate the filters put out (frames a second of
     /// playback time; the source's rate when they did not run).
     pub filter_fps: f64,
+    /// mpv's first error messages meanwhile: why a filter did not run.
+    pub errors: Vec<String>,
 }
 
 /// The generated picture for `probe`: `testsrc2` (moving colour bars, a
@@ -172,6 +174,7 @@ fn run(
                 return Ok(Measurement {
                     speed: (time - from) / seconds,
                     filter_fps,
+                    errors,
                 });
             }
             _ => {}

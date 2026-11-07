@@ -509,8 +509,9 @@ fn run(job: &Job, cancel: &AtomicBool, sender: &Sender<Event>) {
                 drop(sender.send(Event::Failed {
                     engine,
                     why: format!(
-                        "its filter did not raise the rate ({:.3} fps)",
-                        measurement.filter_fps
+                        "its filter did not raise the rate ({:.3} fps): {}",
+                        measurement.filter_fps,
+                        measurement.errors.join("; ")
                     ),
                 }));
             }

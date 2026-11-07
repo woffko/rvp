@@ -44,12 +44,17 @@ fn main() {
     };
     let cancel = AtomicBool::new(false);
     match measure(&probe, &cancel, Duration::from_secs_f64(number(4, 120.0))) {
-        Ok(measurement) => println!(
-            "size={width}x{height} speed={:.3} filter_fps={:.3} output_fps={:.1}",
-            measurement.speed,
-            measurement.filter_fps,
-            measurement.speed * measurement.filter_fps
-        ),
+        Ok(measurement) => {
+            for error in &measurement.errors {
+                eprintln!("mpv: {error}");
+            }
+            println!(
+                "size={width}x{height} speed={:.3} filter_fps={:.3} output_fps={:.1}",
+                measurement.speed,
+                measurement.filter_fps,
+                measurement.speed * measurement.filter_fps
+            );
+        }
         Err(error) => {
             println!("size={width}x{height} error={error}");
             std::process::exit(1);
