@@ -487,6 +487,13 @@ smoothing for users without SVP, after a study of the engines.
   a language without a `.qm` file, and loads the system's at start:
   English is `Qt.uiLanguage = ""` (`Main.qml` `applyLanguage`).
 - Notices RVP formats in Rust (OSD texts, errors) stay English.
+- The OSD Messages page's colours, outline, shadow and bold
+  (`osd.color`... in `crates/app/src/osd.rs`) apply to the notices and the
+  info texts: over the video `Main.qml`'s `OsdText` draws the outline as
+  copies of the text around itself and the shadow as the outlined text
+  offset, each part in a layer at its colour's opacity; in the picture
+  mpv's OSD gets `osd-color` and the rest by the first name the running
+  libmpv knows (0.37: `osd-border-*`).
 - Presets (`crates/app/src/presets.rs`): the default preset is
   settings.json's own values; another preset keeps a whole copy, and
   while it is active every change goes into it.

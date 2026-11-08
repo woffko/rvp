@@ -740,6 +740,7 @@ impl App {
         }
         self.apply_render(engine);
         self.start_subtitles(engine);
+        self.apply_osd_style(engine);
         if let Err(error) = self.apply_video_filters(engine) {
             self.warnings.push(format!("Video filters: {error}"));
         }

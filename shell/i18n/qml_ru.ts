@@ -4815,6 +4815,22 @@ in %2 seconds</source>
             <source>Accept and Download</source>
             <translation>Принять и загрузить</translation>
         </message>
+        <message>
+            <source>Shadow</source>
+            <translation>Тень</translation>
+        </message>
+        <message>
+            <source>Info box</source>
+            <translation>Подложка инфо</translation>
+        </message>
+        <message>
+            <source>OSD Font</source>
+            <translation>Шрифт экранных сообщений</translation>
+        </message>
+        <message>
+            <source>The notices and the info texts (Tab, Scroll Lock) take these colours; in the picture mpv draws the notices with them.</source>
+            <translation>Эти цвета берут сообщения и инфо-тексты (Tab, Scroll Lock); в картинке сообщения с ними рисует mpv.</translation>
+        </message>
     </context>
     <context>
         <name>SubtitleBrowser</name>

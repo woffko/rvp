@@ -803,6 +803,19 @@ ApplicationWindow {
             win.set(target, "#" + hex(c.a) + hex(c.r) + hex(c.g) + hex(c.b))
         }
     }
+    // The OSD Messages page's fonts: `target` is the setting.
+    Dialogs.FontDialog {
+        id: osdFontChooser
+        property string target
+        title: qsTr("OSD Font")
+        onAccepted: win.set(target, selectedFont.family)
+    }
+    function chooseOsdFont(path) {
+        const family = win.value(path)
+        osdFontChooser.target = path
+        osdFontChooser.currentFont = Qt.font({ family: family ? family : Qt.application.font.family, pixelSize: 20 })
+        osdFontChooser.open()
+    }
     Dialogs.FontDialog {
         id: subtitleFontChooser
         title: qsTr("Subtitle Font")
@@ -2587,10 +2600,36 @@ ApplicationWindow {
                         Amount { label: qsTr("Top margin"); path: "osd.top-margin"; from: 0; to: 200; unit: "px" }
                         Amount { label: qsTr("Right margin"); path: "osd.right-margin"; from: 0; to: 200; unit: "px" }
                         Check { path: "osd.auto-size"; text: qsTr("Auto font size (follows the video's height)") }
-                        Field { label: qsTr("Font"); path: "osd.font"; placeholder: qsTr("Qt's font") }
+                        Field {
+                            label: qsTr("Font")
+                            path: "osd.font"
+                            placeholder: qsTr("Qt's font")
+                            Button {
+                                text: qsTr("Choose…")
+                                onClicked: win.chooseOsdFont("osd.font")
+                            }
+                        }
                         Amount { label: qsTr("Font size"); path: "osd.font-size"; from: 8; to: 96; unit: "px" }
-                        Field { label: qsTr("Info font"); path: "osd.info-font"; placeholder: qsTr("Qt's font") }
+                        Field {
+                            label: qsTr("Info font")
+                            path: "osd.info-font"
+                            placeholder: qsTr("Qt's font")
+                            Button {
+                                text: qsTr("Choose…")
+                                onClicked: win.chooseOsdFont("osd.info-font")
+                            }
+                        }
                         Amount { label: qsTr("Info font size"); path: "osd.info-font-size"; from: 8; to: 96; unit: "px" }
+                        Check { path: "osd.bold"; text: qsTr("Bold") }
+                        // The unset colours and sizes are osd.rs's TEXT_COLOR and the others.
+                        Heading { text: qsTr("Colours, outline and shadow") }
+                        ColorChoice { label: qsTr("Text"); path: "osd.color"; fallback: "#FFF0F0F0" }
+                        ColorChoice { label: qsTr("Outline"); path: "osd.outline-color"; fallback: "#FF000000" }
+                        ColorChoice { label: qsTr("Shadow"); path: "osd.shadow-color"; fallback: "#80000000" }
+                        ColorChoice { label: qsTr("Info box"); path: "osd.box-color"; fallback: "#99000000" }
+                        Amount { label: qsTr("Outline width"); path: "osd.outline-size"; from: 0; to: 10; step: 1; unit: "px"; fallback: 1 }
+                        Amount { label: qsTr("Shadow offset"); path: "osd.shadow-offset"; from: 0; to: 10; step: 1; unit: "px"; fallback: 0 }
+                        Note { text: qsTr("The notices and the info texts (Tab, Scroll Lock) take these colours; in the picture mpv draws the notices with them.") }
                         Heading { text: qsTr("Content of Misc Info (Scroll Lock)") }
                         Check { path: "osd.misc.show"; text: qsTr("Display misc info") }
                         Check { path: "osd.misc.key-fullscreen-only"; text: qsTr("Operate only in fullscreen") }

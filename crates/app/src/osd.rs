@@ -13,6 +13,13 @@
 //!   subtitle, the time, the A-B section and the codecs.
 //!
 //! The info texts use the second font (`info_font`, also the Tab info's).
+//!
+//! All of them take the page's colours, outline and shadow (PotPlayer's
+//! font dialogs; the owner, 2026-11-08, as the subtitles have them): over
+//! the video in RVP's window the outline is the text drawn around itself
+//! and the shadow the outlined text in the shadow's colour, offset; in the
+//! picture mpv draws them (`osd-color` and the rest, by the first name the
+//! running libmpv knows, as the subtitles' options).
 
 use serde::{Deserialize, Serialize};
 
@@ -29,6 +36,15 @@ pub const VERTICAL: &[&str] = &["top", "center", "bottom"];
 pub const MISC_TIMES: &[&str] = &["none", "elapsed", "remaining", "both"];
 /// The misc info's clock: none, hours and minutes, or with seconds.
 pub const MISC_CLOCKS: &[&str] = &["none", "minutes", "seconds"];
+/// The texts' colours and sizes while the page leaves them unset.
+pub const TEXT_COLOR: &str = "#FFF0F0F0";
+pub const OUTLINE_COLOR: &str = "#FF000000";
+pub const SHADOW_COLOR: &str = "#80000000";
+pub const BOX_COLOR: &str = "#99000000";
+pub const OUTLINE_SIZE: u8 = 1;
+pub const SHADOW_OFFSET: u8 = 0;
+/// The largest outline and shadow, in pixels.
+pub const MOST_PIXELS: u8 = 10;
 
 /// The OSD Messages page (`osd` in settings.json).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -55,6 +71,18 @@ pub struct OsdSettings {
     /// The info texts' font and size.
     pub info_font: String,
     pub info_font_size: u16,
+    /// The texts' colours, notices and info texts alike, as `#AARRGGBB`
+    /// (mpv's notation; the alpha is the opacity), and the info texts'
+    /// box; unset: [`TEXT_COLOR`] and the others.
+    pub color: Option<String>,
+    pub outline_color: Option<String>,
+    pub shadow_color: Option<String>,
+    pub box_color: Option<String>,
+    /// The outline's width and the shadow's offset in pixels (unset:
+    /// [`OUTLINE_SIZE`], [`SHADOW_OFFSET`]).
+    pub outline_size: Option<u8>,
+    pub shadow_offset: Option<u8>,
+    pub bold: bool,
     pub misc: MiscInfo,
     pub short: ShortInfo,
 }
@@ -73,6 +101,13 @@ impl Default for OsdSettings {
             font_size: 20,
             info_font: String::new(),
             info_font_size: 14,
+            color: None,
+            outline_color: None,
+            shadow_color: None,
+            box_color: None,
+            outline_size: None,
+            shadow_offset: None,
+            bold: false,
             misc: MiscInfo::default(),
             short: ShortInfo::default(),
         }
@@ -183,7 +218,94 @@ impl OsdSettings {
                 *value = 500;
             }
         }
+        for (name, value) in [
+            ("color", &mut self.color),
+            ("outline-color", &mut self.outline_color),
+            ("shadow-color", &mut self.shadow_color),
+            ("box-color", &mut self.box_color),
+        ] {
+            if value
+                .as_deref()
+                .is_some_and(|color| !crate::subtitles::is_color(color))
+            {
+                notes.push(format!(
+                    "osd.{name} {value:?} is not #RRGGBB or #AARRGGBB: the default"
+                ));
+                *value = None;
+            }
+        }
+        for (name, value) in [
+            ("outline-size", &mut self.outline_size),
+            ("shadow-offset", &mut self.shadow_offset),
+        ] {
+            if let Some(pixels) = value.filter(|pixels| *pixels > MOST_PIXELS) {
+                notes.push(format!(
+                    "osd.{name} {pixels} is out of 0 to {MOST_PIXELS}: {MOST_PIXELS}"
+                ));
+                *value = Some(MOST_PIXELS);
+            }
+        }
     }
+
+    /// The colours and sizes in force: the page's, or the defaults.
+    #[must_use]
+    pub fn look(&self) -> OsdLook {
+        let color = |value: &Option<String>, default: &str| {
+            value.clone().unwrap_or_else(|| default.to_owned())
+        };
+        OsdLook {
+            color: color(&self.color, TEXT_COLOR),
+            outline_color: color(&self.outline_color, OUTLINE_COLOR),
+            shadow_color: color(&self.shadow_color, SHADOW_COLOR),
+            box_color: color(&self.box_color, BOX_COLOR),
+            outline_size: self.outline_size.unwrap_or(OUTLINE_SIZE),
+            shadow_offset: self.shadow_offset.unwrap_or(SHADOW_OFFSET),
+        }
+    }
+
+    /// The notices' look for mpv's OSD (shown in the picture, and over the
+    /// Direct3D 11 renderer's window): each option under its names, the
+    /// current first (libmpv 0.37 knows the outline as the border).
+    #[must_use]
+    pub fn mpv_options(&self) -> Vec<(&'static [&'static str], String)> {
+        let look = self.look();
+        let yes_no = |on: bool| if on { "yes" } else { "no" }.to_owned();
+        let font = if self.font.is_empty() {
+            "sans-serif".to_owned()
+        } else {
+            self.font.clone()
+        };
+        vec![
+            (&["osd-font"], font),
+            // mpv scales its OSD with the window, the size at 720 lines
+            // (`osd-scale-by-window` stays mpv's: on-screen controllers
+            // size themselves by it).
+            (&["osd-font-size"], self.font_size.to_string()),
+            (&["osd-bold"], yes_no(self.bold)),
+            (&["osd-color"], look.color),
+            (
+                &["osd-outline-color", "osd-border-color"],
+                look.outline_color,
+            ),
+            (&["osd-shadow-color", "osd-back-color"], look.shadow_color),
+            (
+                &["osd-outline-size", "osd-border-size"],
+                look.outline_size.to_string(),
+            ),
+            (&["osd-shadow-offset"], look.shadow_offset.to_string()),
+        ]
+    }
+}
+
+/// [`OsdSettings::look`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct OsdLook {
+    pub color: String,
+    pub outline_color: String,
+    pub shadow_color: String,
+    pub box_color: String,
+    pub outline_size: u8,
+    pub shadow_offset: u8,
 }
 
 /// The parts of the misc info line, as the window knows them now.
@@ -274,6 +396,22 @@ pub enum OsdCommand {
 }
 
 impl App {
+    /// Gives mpv's OSD the page's font and look ([`OsdSettings::mpv_options`]),
+    /// each option by the first name this libmpv takes.
+    pub(crate) fn apply_osd_style(&self, engine: &rvp_engine::Engine) {
+        for (names, value) in self.settings.osd.mpv_options() {
+            if !names
+                .iter()
+                .any(|name| engine.set_text(name, &value).is_ok())
+            {
+                crate::log::write(
+                    crate::log::Level::Debug,
+                    &format!("osd: libmpv takes none of {names:?}"),
+                );
+            }
+        }
+    }
+
     /// The info items' commands.
     pub(crate) fn osd_command(
         &mut self,
@@ -393,7 +531,15 @@ impl App {
     #[must_use]
     pub fn osd_look(&self) -> serde_json::Value {
         let osd = &self.settings.osd;
+        let look = osd.look();
         serde_json::json!({
+            "color": look.color,
+            "outline": look.outline_color,
+            "shadow": look.shadow_color,
+            "box": look.box_color,
+            "outlineSize": look.outline_size,
+            "shadowOffset": look.shadow_offset,
+            "bold": osd.bold,
             "messages": osd.messages,
             "video": osd.output == "video",
             "h": osd.h_align,
@@ -504,6 +650,47 @@ mod tests {
         assert_eq!(settings.output, "window");
         assert_eq!(settings.font_size, 20);
         assert_eq!(settings.misc.clock, "none");
+    }
+
+    #[test]
+    fn colours_and_sizes_are_checked_and_reach_mpv() {
+        let mut settings = OsdSettings {
+            color: Some("#FF00FF00".to_owned()),
+            outline_color: Some("red".to_owned()),
+            shadow_offset: Some(40),
+            bold: true,
+            ..OsdSettings::default()
+        };
+        let mut notes = Vec::new();
+        settings.validate(&mut notes);
+        assert_eq!(notes.len(), 2, "{notes:?}");
+        let look = settings.look();
+        assert_eq!(look.color, "#FF00FF00");
+        assert_eq!(look.outline_color, OUTLINE_COLOR);
+        assert_eq!(
+            (look.outline_size, look.shadow_offset),
+            (OUTLINE_SIZE, MOST_PIXELS)
+        );
+        let options = settings.mpv_options();
+        let value = |name: &str| {
+            options
+                .iter()
+                .find(|(names, _)| names[0] == name)
+                .map(|(_, value)| value.as_str())
+        };
+        assert_eq!(value("osd-color"), Some("#FF00FF00"));
+        assert_eq!(value("osd-outline-color"), Some(OUTLINE_COLOR));
+        assert_eq!(value("osd-shadow-offset"), Some("10"));
+        assert_eq!(value("osd-bold"), Some("yes"));
+        // Qt's font stands for mpv's own.
+        assert_eq!(value("osd-font"), Some("sans-serif"));
+        assert_eq!(value("osd-font-size"), Some("20"));
+        // libmpv 0.37 knows the outline as the border.
+        assert!(
+            options
+                .iter()
+                .any(|(names, _)| names == &["osd-outline-size", "osd-border-size"])
+        );
     }
 
     #[test]

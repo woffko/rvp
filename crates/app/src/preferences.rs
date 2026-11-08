@@ -544,6 +544,9 @@ impl App {
             set("scale", &scaler);
         }
         self.subtitle_settings_changed(engine, &old, &mut applied.notes);
+        if old.osd != new.osd {
+            self.apply_osd_style(engine);
+        }
         if old.skin != new.skin {
             // The user's skin now, not the command line's (M14).
             self.skin_override = crate::skins::SkinOverride::Off;

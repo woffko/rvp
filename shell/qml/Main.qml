@@ -1355,17 +1355,94 @@ Window {
         }
     }
 
-    // The OSD Messages page's look (M14): alignment, margins and fonts.
+    // The OSD Messages page's look (M14): alignment, margins, fonts,
+    // colours, outline and shadow.
     readonly property var osdLook: player.osd_look ? JSON.parse(player.osd_look) : ({})
     // A font size of the page, following the video's height when so set.
     function osdSize(size) {
         const base = size > 0 ? size : 20
         return Math.max(8, Math.round(osdLook.auto === true ? base * player.video_rect.height / 720 : base))
     }
+    // The opaque colour and the opacity of mpv's `#AARRGGBB` (or #RRGGBB).
+    function osdOpaque(color) {
+        return color && color.length === 9 ? "#" + color.substring(3) : (color || "#000000")
+    }
+    function osdAlpha(color) {
+        return color && color.length === 9 ? parseInt(color.substring(1, 3), 16) / 255 : 1
+    }
+
+    // One copy of an OsdText's text, `dx` and `dy` around its place.
+    component OsdCopy: Text {
+        property Item label
+        property real dx
+        property real dy
+        x: label.outline + dx
+        y: label.outline + dy
+        text: label.text
+        font.family: label.family
+        font.pixelSize: label.pixelSize
+        font.bold: root.osdLook.bold === true
+    }
+    // A text in the page's look: the outline is the text drawn around
+    // itself, the shadow the outlined text in the shadow's colour, offset
+    // (Qt's own outline is one pixel wide, without a shadow). Each part is
+    // drawn opaque into a layer whose opacity is its colour's, so the
+    // copies do not darken where they overlap.
+    component OsdText: Item {
+        id: osdLabel
+        property string text
+        property string family
+        property int pixelSize
+        readonly property int outline: root.osdLook.outlineSize !== undefined ? root.osdLook.outlineSize : 1
+        readonly property int shadow: root.osdLook.shadowOffset !== undefined ? root.osdLook.shadowOffset : 0
+        // Copies around the text, more for a wider outline.
+        readonly property int around: outline === 0 ? 0 : outline <= 2 ? 8 : 16
+        implicitWidth: face.implicitWidth + 2 * outline + shadow
+        implicitHeight: face.implicitHeight + 2 * outline + shadow
+        Item {
+            anchors.fill: parent
+            visible: osdLabel.shadow > 0
+            opacity: root.osdAlpha(root.osdLook.shadow)
+            layer.enabled: visible && opacity < 1
+            Repeater {
+                model: osdLabel.around + 1
+                OsdCopy {
+                    required property int index
+                    readonly property real angle: 2 * Math.PI * index / Math.max(1, osdLabel.around)
+                    label: osdLabel
+                    dx: osdLabel.shadow + (index < osdLabel.around ? Math.round(osdLabel.outline * Math.cos(angle)) : 0)
+                    dy: osdLabel.shadow + (index < osdLabel.around ? Math.round(osdLabel.outline * Math.sin(angle)) : 0)
+                    color: root.osdOpaque(root.osdLook.shadow)
+                }
+            }
+        }
+        Item {
+            anchors.fill: parent
+            visible: osdLabel.around > 0
+            opacity: root.osdAlpha(root.osdLook.outline)
+            layer.enabled: visible && opacity < 1
+            Repeater {
+                model: osdLabel.around
+                OsdCopy {
+                    required property int index
+                    readonly property real angle: 2 * Math.PI * index / osdLabel.around
+                    label: osdLabel
+                    dx: Math.round(osdLabel.outline * Math.cos(angle))
+                    dy: Math.round(osdLabel.outline * Math.sin(angle))
+                    color: root.osdOpaque(root.osdLook.outline)
+                }
+            }
+        }
+        OsdCopy {
+            id: face
+            label: osdLabel
+            color: root.osdLook.color || "#f0f0f0"
+        }
+    }
 
     // The OSD: short notices over the video (volume, normalizer), as
     // PotPlayer shows them at the top left (OSD Messages places them).
-    Text {
+    OsdText {
         id: osdText
         readonly property string h: root.osdLook.h || "left"
         readonly property string v: root.osdLook.v || "top"
@@ -1380,11 +1457,8 @@ Window {
         y: player.video_rect.y + (v === "top" ? marginY : v === "bottom" ? player.video_rect.height - height - marginY
                                                      : (player.video_rect.height - height) / 2)
         text: player.osd
-        color: "#f0f0f0"
-        style: Text.Outline
-        styleColor: "#000000"
-        font.family: root.osdLook.font || Qt.application.font.family
-        font.pixelSize: root.osdSize(root.osdLook.size)
+        family: root.osdLook.font || Qt.application.font.family
+        pixelSize: root.osdSize(root.osdLook.size)
         onTextChanged: {
             if (text === "")
                 return
@@ -1495,13 +1569,14 @@ Window {
         width: miscInfoText.implicitWidth + 16
         height: miscInfoText.implicitHeight + 8
         radius: 4
-        color: "#99000000"
-        Text {
+        color: root.osdLook.box || "#99000000"
+        OsdText {
             id: miscInfoText
             anchors.centerIn: parent
-            color: "#f0f0f0"
-            font.family: root.osdLook.infoFont || Qt.application.font.family
-            font.pixelSize: root.osdSize(root.osdLook.infoSize > 0 ? root.osdLook.infoSize : 14)
+            width: implicitWidth
+            height: implicitHeight
+            family: root.osdLook.infoFont || Qt.application.font.family
+            pixelSize: root.osdSize(root.osdLook.infoSize > 0 ? root.osdLook.infoSize : 14)
             text: player.misc_info
         }
     }
@@ -1516,14 +1591,15 @@ Window {
         width: infoText.implicitWidth + 16
         height: infoText.implicitHeight + 12
         radius: 4
-        color: "#99000000"
-        Text {
+        color: root.osdLook.box || "#99000000"
+        OsdText {
             id: infoText
             x: 8
             y: 6
-            color: "#f0f0f0"
-            font.family: root.osdLook.infoFont || Qt.application.font.family
-            font.pixelSize: root.osdSize(root.osdLook.infoSize > 0 ? root.osdLook.infoSize : 14)
+            width: implicitWidth
+            height: implicitHeight
+            family: root.osdLook.infoFont || Qt.application.font.family
+            pixelSize: root.osdSize(root.osdLook.infoSize > 0 ? root.osdLook.infoSize : 14)
             text: ""
         }
         Timer {
