@@ -376,6 +376,10 @@ pub struct Job {
     /// How long each measurement warms up and measures.
     pub warm_up: Duration,
     pub measure: Duration,
+    /// Measurements of engines not measured again, and the engines that
+    /// did not run then (an engine added since: RIFE (TensorRT) installed).
+    pub kept: Vec<Point>,
+    pub kept_failed: Vec<Engine>,
 }
 
 /// What the runner tells the window's thread.
@@ -464,8 +468,8 @@ fn run(job: &Job, cancel: &AtomicBool, sender: &Sender<Event>) {
         version: VERSION,
         key: job.key.clone(),
         date: job.date.clone(),
-        points: Vec::new(),
-        failed: Vec::new(),
+        points: job.kept.clone(),
+        failed: job.kept_failed.clone(),
     };
     let files = crate::smoothing::Files {
         rife: job
@@ -600,6 +604,9 @@ pub(crate) struct State {
     idle_since: Option<Instant>,
     /// The calibration window asked for a run.
     asked: bool,
+    /// The next run measures this engine only and keeps the others'
+    /// measurements (RIFE (TensorRT) installed on a calibrated machine).
+    only: Option<Engine>,
     /// The calibration window cancelled one: no run on its own until
     /// asked again.
     declined: bool,
@@ -648,7 +655,9 @@ impl App {
             files.push(plugin.to_path_buf());
             files.push(model.to_path_buf());
         }
-        if self.tensorrt_installed() {
+        // Whether the card's answer came or not (it comes after the key is
+        // first read), and for whichever card.
+        if self.tensorrt_present() {
             let folder = self.tensorrt_folder();
             files.push(folder.join(crate::tensorrt::VSTRT));
             files.push(folder.join("vsmlrt-cuda").join(crate::tensorrt::NVINFER));
@@ -694,9 +703,11 @@ impl App {
     fn calibration_due(&self) -> bool {
         let state = &self.calibration;
         // An installation of TensorRT under way adds an engine to measure:
-        // it asks for its run when it ends.
+        // it asks for its run when it ends. Whether the installation is
+        // this card's is known a moment after the start.
         state.hardware.is_some()
             && !self.tensorrt_installing()
+            && !self.tensorrt_checking()
             && self.settings.smoothing.enabled
             && !self.calibration_engines().is_empty()
             && (state.asked || (!state.manual && !state.declined && state.results.is_none()))
@@ -728,6 +739,13 @@ impl App {
     /// The command line's `--calibrate`: measures as soon as nothing plays.
     pub fn calibrate_at_start(&mut self) {
         self.calibration.asked = true;
+    }
+
+    /// Measures `engine` as soon as nothing plays, keeping the other
+    /// engines' measurements (an engine just installed).
+    pub(crate) fn calibrate_engine(&mut self, engine: Engine) {
+        self.calibration.asked = true;
+        self.calibration.only = Some(engine);
     }
 
     /// The calibration window's Cancel: stops the run; none starts on its
@@ -786,10 +804,32 @@ impl App {
     fn start_calibration(&mut self) -> Option<UiRequest> {
         let key = self.calibration_key()?;
         let runtime = &self.smoothing.runtime;
+        let mut available = self.calibration_engines();
+        let (mut kept, mut kept_failed) = (Vec::new(), Vec::new());
+        if let (Some(only), Some(results)) =
+            (self.calibration.only.take(), &self.calibration.results)
+            && available.contains(&only)
+        {
+            kept = results
+                .points
+                .iter()
+                .filter(|point| point.engine != only)
+                .cloned()
+                .collect();
+            kept_failed = results
+                .failed
+                .iter()
+                .copied()
+                .filter(|engine| *engine != only)
+                .collect();
+            available = vec![only];
+        }
         let job = Job {
             key,
             date: crate::log::local_time().chars().take(10).collect(),
-            available: self.calibration_engines(),
+            kept,
+            kept_failed,
+            available,
             rife: runtime
                 .rife_files()
                 .map(|(plugin, model)| (plugin.to_path_buf(), model.to_path_buf())),
@@ -1048,6 +1088,17 @@ mod tests {
                 .fitting(3840, 2160, 60.0)
                 .fits(Engine::RifeTrt, Preset::Medium)
         );
+    }
+
+    #[test]
+    fn an_engine_added_later_is_measured_alone() {
+        // MVTools and RIFE were measured; only RIFE (TensorRT) is asked for.
+        let kept = vec![
+            point(Engine::MvTools, Preset::Fast, (854, 480), 480.0),
+            point(Engine::Rife, Preset::Fast, (854, 480), 90.0),
+        ];
+        let (engine, _, size) = next(&kept, &[Engine::RifeTrt], &[]).expect("a step");
+        assert_eq!((engine, size), (Engine::RifeTrt, (854, 480)));
     }
 
     #[test]

@@ -2879,8 +2879,8 @@ in %2 seconds</source>
             <translation>Здесь: MVTools %1</translation>
         </message>
         <message>
-            <source>Smoothing stays off while SVP is attached, while RVP's own VapourSynth script runs and when the video plays at the target rate already; while SVP 4 Manager runs, it waits 8 s for SVP after a file starts. An engine that cannot run here gives way: RIFE and NVIDIA Optical Flow to MVTools, MVTools to Blend; one whose output drops more than 5 % of its frames over the time above, or more than half of them over 5 s, steps down (a lighter preset, then MVTools, then Blend; RIFE gives way to MVTools at once) until the file ends. Above the GPU power budget, smoothing is lightened first. After a start or a seek the original shows for the time above while MVTools or RIFE get ready, as SVP does. The Log page's Info level records each step and the seconds that dropped frames.</source>
-            <translation>Сглаживание выключено, пока подключён SVP, пока работает собственный сценарий VapourSynth RVP и когда видео уже идёт с целевой частотой; пока работает SVP 4 Manager, после старта файла оно ждёт SVP 8 с. Движок, который здесь не может работать, уступает место: RIFE и NVIDIA Optical Flow — MVTools, MVTools — Blend; движок, на выходе которого теряется больше 5 % кадров за время выше или больше половины за 5 с, переходит на ступень ниже (более лёгкая предустановка, затем MVTools, затем Blend; RIFE сразу уступает MVTools) до конца файла. Сверх бюджета мощности GPU сглаживание облегчается первым. После старта или перемотки на время выше показывается оригинал, пока MVTools или RIFE готовятся, как у SVP. Уровень «Сведения» на странице «Журнал» записывает каждую ступень и секунды с потерянными кадрами.</translation>
+            <source>Smoothing stays off while SVP is attached, while RVP's own VapourSynth script runs and when the video plays at the target rate already; while SVP 4 Manager runs, it waits 8 s for SVP after a file starts. An engine that cannot run here gives way: RIFE and NVIDIA Optical Flow to MVTools, MVTools to Blend; one whose output drops more than 5 % of its frames over the time above, or more than half of them over 5 s, steps down (a lighter preset, then MVTools, then Blend; RIFE gives way to MVTools at once) until the file ends. Above the GPU power budget, smoothing is lightened first. After a start or a seek the original shows for the time above while MVTools or RIFE get ready, as SVP does; RIFE (TensorRT) starts with its own frames. The Log page's Info level records each step and the seconds that dropped frames.</source>
+            <translation>Сглаживание выключено, пока подключён SVP, пока работает собственный сценарий VapourSynth RVP и когда видео уже идёт с целевой частотой; пока работает SVP 4 Manager, после старта файла оно ждёт SVP 8 с. Движок, который здесь не может работать, уступает место: RIFE и NVIDIA Optical Flow — MVTools, MVTools — Blend; движок, на выходе которого теряется больше 5 % кадров за время выше или больше половины за 5 с, переходит на ступень ниже (более лёгкая предустановка, затем MVTools, затем Blend; RIFE сразу уступает MVTools) до конца файла. Сверх бюджета мощности GPU сглаживание облегчается первым. После старта или перемотки на время выше показывается оригинал, пока MVTools или RIFE готовятся, как у SVP; RIFE (TensorRT) сразу начинает со своих кадров. Уровень «Сведения» на странице «Журнал» записывает каждую ступень и секунды с потерянными кадрами.</translation>
         </message>
         <message>
             <source>%1 %2 up to %3p</source>
@@ -4770,6 +4770,14 @@ in %2 seconds</source>
         <message>
             <source>RIFE (TensorRT): NVIDIA's TensorRT %1 is installed for %2; the calibration builds its engine (a few minutes) when nothing plays.</source>
             <translation>RIFE (TensorRT): NVIDIA TensorRT %1 установлен для %2; калибровка соберёт движок (несколько минут), когда ничего не играет.</translation>
+        </message>
+        <message>
+            <source>RIFE (TensorRT): NVIDIA's TensorRT %1 is installed for %2, and this card needs %3: download it again.</source>
+            <translation>RIFE (TensorRT): NVIDIA TensorRT %1 установлен для %2, а этой карте нужен %3: скачайте его заново.</translation>
+        </message>
+        <message>
+            <source>RIFE (TensorRT): NVIDIA's TensorRT %1 is installed for %2, and this computer has no NVIDIA card it runs on.</source>
+            <translation>RIFE (TensorRT): NVIDIA TensorRT %1 установлен для %2, но в этом компьютере нет карты NVIDIA, на которой он работает.</translation>
         </message>
         <message>
             <source>RIFE (TensorRT): %1</source>

@@ -146,7 +146,27 @@ pub enum EngineEvent {
     /// `key-binding` from `script-binding main/...`; M9).
     ClientMessage(Vec<String>),
     Shutdown,
+    /// A file is open and its streams known, before any is decoded (mpv's
+    /// `on_preloaded` hook, after [`Engine::hold_preloaded`]): mpv waits
+    /// until [`Engine::continue_preloaded`] with `hook`. `video` is the
+    /// video track mpv will choose, as the demuxer describes it.
+    Preloaded {
+        hook: u64,
+        video: Option<DemuxVideo>,
+    },
 }
+
+/// A video track as the demuxer describes it, before its first frame.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct DemuxVideo {
+    pub width: u32,
+    pub height: u32,
+    /// Frames a second (0 when the container does not say).
+    pub fps: f64,
+}
+
+/// The `reply_userdata` of RVP's `on_preloaded` hook.
+const PRELOADED_HOOK: u64 = u64::MAX;
 
 /// An engine failure.
 /// A frame from [`Engine::screenshot_raw`]: `stride` bytes a row in mpv's
@@ -417,6 +437,18 @@ impl Engine {
             Ok(Event::ClientMessage(args)) => events.push(EngineEvent::ClientMessage(
                 args.into_iter().map(str::to_owned).collect(),
             )),
+            Ok(Event::Hook {
+                id, reply_userdata, ..
+            }) => {
+                if reply_userdata == PRELOADED_HOOK {
+                    events.push(EngineEvent::Preloaded {
+                        hook: id,
+                        video: self.demux_video(),
+                    });
+                } else {
+                    drop(self.mpv.hook_continue(id));
+                }
+            }
             Ok(_) => {}
             // libmpv2 reports an end-file with an error code (an unplayable
             // file) and failed asynchronous replies this way.
@@ -627,6 +659,65 @@ impl Engine {
                 })
             })
             .collect()
+    }
+
+    /// Holds each file after it is opened, before its streams are
+    /// decoded, until [`Engine::continue_preloaded`]: reported as
+    /// [`EngineEvent::Preloaded`]. Once added, the hold stays for the
+    /// core's life.
+    ///
+    /// # Errors
+    /// Fails when libmpv refuses the hook.
+    pub fn hold_preloaded(&self) -> Result<(), EngineError> {
+        self.mpv
+            .hook_add("on_preloaded", 0, PRELOADED_HOOK)
+            .map_err(|e| error("on_preloaded", &e))
+    }
+
+    /// Lets mpv go on with the file held by [`EngineEvent::Preloaded`].
+    ///
+    /// # Errors
+    /// Fails when libmpv does not know the hook.
+    pub fn continue_preloaded(&self, hook: u64) -> Result<(), EngineError> {
+        self.mpv
+            .hook_continue(hook)
+            .map_err(|e| error("on_preloaded", &e))
+    }
+
+    /// The video track mpv will choose, by `track-list` before the tracks
+    /// are selected (`on_preloaded`): the one asked for (`vid`), else the
+    /// first marked default, else the first; never cover art.
+    fn demux_video(&self) -> Option<DemuxVideo> {
+        let list = self.get_json("track-list")?;
+        let wanted = self.get_int("vid");
+        let videos: Vec<&serde_json::Value> = list
+            .as_array()?
+            .iter()
+            .filter(|track| {
+                track["type"].as_str() == Some("video")
+                    && !track["albumart"].as_bool().unwrap_or(false)
+            })
+            .collect();
+        let track = videos
+            .iter()
+            .find(|track| wanted.is_some() && track["id"].as_i64() == wanted)
+            .or_else(|| {
+                videos
+                    .iter()
+                    .find(|track| track["default"].as_bool() == Some(true))
+            })
+            .or_else(|| videos.first())?;
+        let size = |key: &str| {
+            track[key]
+                .as_i64()
+                .and_then(|value| u32::try_from(value).ok())
+                .filter(|value| *value > 0)
+        };
+        Some(DemuxVideo {
+            width: size("demux-w")?,
+            height: size("demux-h")?,
+            fps: track["demux-fps"].as_f64().unwrap_or(0.0),
+        })
     }
 
     /// The file's chapters (read now, for menus), in one read.

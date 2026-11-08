@@ -580,6 +580,7 @@ impl App {
         }
         if old.smoothing != self.settings.smoothing || old.vapoursynth != self.settings.vapoursynth
         {
+            self.hold_preloaded(engine);
             self.apply_smoothing(engine);
         }
         if old.log != self.settings.log

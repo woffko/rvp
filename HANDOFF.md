@@ -3,9 +3,8 @@
 State on 2026-11-01: every goal of `docs/PLAN.md` is done, goal S (M17,
 Linux completion) last (`docs/goals/goal-s-status.md`, commits up to
 2b397da). What remains is one session on the owner's Ubuntu 26.10 boot of
-the same PC (GNOME Wayland, RTX 30-series card): the acceptance of M6, M8 and
-M17 and the parts of M9 to M18 that only real hardware and a person at
-the desktop can check.
+the same PC (GNOME Wayland; an RTX 50-series card since 2026-11-07, an RTX 30-series card before): the acceptance of M6, M8 and M17 and the parts of M9 to M18
+that only real hardware and a person at the desktop can check.
 
 ## Starting on the Ubuntu boot
 

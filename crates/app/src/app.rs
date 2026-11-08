@@ -720,6 +720,7 @@ impl App {
         // Before the log opens: its first lines name the engines found.
         self.probe_fruc(engine);
         self.calibration_started(engine);
+        self.hold_preloaded(engine);
         if let Some(error) = self.apply_log(engine) {
             self.warnings.push(error);
         }
@@ -1938,6 +1939,7 @@ impl App {
         for event in events {
             match event {
                 EngineEvent::StartFile => {
+                    self.smoothing.start_file();
                     self.tracking = Tracking::Loading;
                     self.next_random_logo();
                     self.seek_bar = None;
@@ -1978,6 +1980,9 @@ impl App {
                     requests.push(UiRequest::Message(format!("Cannot play: {message}")));
                 }
                 EngineEvent::Seek => self.smoothing_seek(engine),
+                EngineEvent::Preloaded { hook, video } => {
+                    self.smoothing_preloaded(engine, *hook, *video, now);
+                }
                 // The shell's (M9).
                 EngineEvent::PlaybackRestart
                 | EngineEvent::Shutdown

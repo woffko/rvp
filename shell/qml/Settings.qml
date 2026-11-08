@@ -2003,6 +2003,10 @@ ApplicationWindow {
                                     return status.ready
                                         ? qsTr("RIFE (TensorRT): NVIDIA's TensorRT %1 is installed for %2 and its engine is built.").arg(status.version).arg(status.builder)
                                         : qsTr("RIFE (TensorRT): NVIDIA's TensorRT %1 is installed for %2; the calibration builds its engine (a few minutes) when nothing plays.").arg(status.version).arg(status.builder)
+                                if (status.state === "other-card")
+                                    return status.card
+                                        ? qsTr("RIFE (TensorRT): NVIDIA's TensorRT %1 is installed for %2, and this card needs %3: download it again.").arg(status.version).arg(status.builder).arg(status.card)
+                                        : qsTr("RIFE (TensorRT): NVIDIA's TensorRT %1 is installed for %2, and this computer has no NVIDIA card it runs on.").arg(status.version).arg(status.builder)
                                 if (status.error)
                                     return qsTr("RIFE (TensorRT): %1").arg(status.error)
                                 return qsTr("RIFE (TensorRT) needs NVIDIA's TensorRT: a %1 GB download from NVIDIA, of which about %2 GB stay.").arg(gb(status.download || 0)).arg(gb(status.kept || 0))
@@ -2017,6 +2021,7 @@ ApplicationWindow {
                             Button {
                                 text: qsTr("Download…")
                                 visible: tensorrt.status.state === "missing"
+                                         || (tensorrt.status.state === "other-card" && !!tensorrt.status.card)
                                 onClicked: tensorrtConsent.open()
                             }
                             Button {
@@ -2026,7 +2031,7 @@ ApplicationWindow {
                             }
                             Button {
                                 text: qsTr("Remove")
-                                visible: tensorrt.status.state === "installed"
+                                visible: tensorrt.status.state === "installed" || tensorrt.status.state === "other-card"
                                 onClicked: {
                                     const error = win.player.tensorrt_remove()
                                     if (error !== "")
@@ -2152,7 +2157,7 @@ ApplicationWindow {
                             }
                         }
                         Note {
-                            text: qsTr("Smoothing stays off while SVP is attached, while RVP's own VapourSynth script runs and when the video plays at the target rate already; while SVP 4 Manager runs, it waits 8 s for SVP after a file starts. An engine that cannot run here gives way: RIFE and NVIDIA Optical Flow to MVTools, MVTools to Blend; one whose output drops more than 5 % of its frames over the time above, or more than half of them over 5 s, steps down (a lighter preset, then MVTools, then Blend; RIFE gives way to MVTools at once) until the file ends. Above the GPU power budget, smoothing is lightened first. After a start or a seek the original shows for the time above while MVTools or RIFE get ready, as SVP does. The Log page's Info level records each step and the seconds that dropped frames.")
+                            text: qsTr("Smoothing stays off while SVP is attached, while RVP's own VapourSynth script runs and when the video plays at the target rate already; while SVP 4 Manager runs, it waits 8 s for SVP after a file starts. An engine that cannot run here gives way: RIFE and NVIDIA Optical Flow to MVTools, MVTools to Blend; one whose output drops more than 5 % of its frames over the time above, or more than half of them over 5 s, steps down (a lighter preset, then MVTools, then Blend; RIFE gives way to MVTools at once) until the file ends. Above the GPU power budget, smoothing is lightened first. After a start or a seek the original shows for the time above while MVTools or RIFE get ready, as SVP does; RIFE (TensorRT) starts with its own frames. The Log page's Info level records each step and the seconds that dropped frames.")
                         }
                         Note {
                             text: qsTr("The calibration measures once how many frames a second MVTools and RIFE make here at each preset from 480p to 2160p, as SVP does, and again when the processors, graphics cards, their drivers or the engines change; each file then starts at the best preset that keeps its rate with a fifth to spare, at most the preset above. NVIDIA Optical Flow is not measured. Steps down taken while other programs loaded the processors come back at the next seek once that load is gone.")

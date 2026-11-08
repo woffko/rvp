@@ -19,6 +19,14 @@
 //!
 //! The downloads go through the system's `curl` (Windows 10 and later have
 //! it), resume after a cancel, and are deleted once unpacked.
+//!
+//! When RVP starts with TensorRT installed, a thread of its own asks
+//! `nvidia-smi` which builder resource the card needs: after a change of
+//! card (the host's RTX 30-series card, `sm86`, gave way to an RTX 50-series card,
+//! `sm120`, on 2026-11-07) the installation is another card's, RIFE
+//! (TensorRT) does not run, and the Motion Smoothing page offers the
+//! download again. A new installation removes the files of the one before
+//! that it does not keep, and its engines when the card is another.
 //! `RVP_TENSORRT_MIRROR` (a folder URL, `file://` too) replaces NVIDIA's
 //! servers in tests.
 
@@ -264,11 +272,16 @@ pub struct Installed {
     pub files: Vec<String>,
 }
 
+/// What [`INSTALLED`] in `folder` says, complete or not.
+fn recorded(folder: &Path) -> Option<Installed> {
+    let text = std::fs::read_to_string(folder.join(INSTALLED)).ok()?;
+    serde_json::from_str(&text).ok()
+}
+
 /// The installation in `folder`, when it is complete.
 #[must_use]
 pub fn installed(folder: &Path) -> Option<Installed> {
-    let text = std::fs::read_to_string(folder.join(INSTALLED)).ok()?;
-    let installed: Installed = serde_json::from_str(&text).ok()?;
+    let installed = recorded(folder)?;
     (installed.version == VERSION
         && installed
             .files
@@ -513,6 +526,16 @@ fn install(job: &Job, cancel: &AtomicBool, sender: &Sender<Event>) -> Result<Ins
             .map_err(|error| format!("{}: {error}", source.display()))?;
         files.push(to.to_owned());
     }
+    // Another card's installation, or another version's: what it kept and
+    // this one does not, and the engines built for another card.
+    if let Some(before) = recorded(&job.folder) {
+        for file in before.files.iter().filter(|file| !files.contains(file)) {
+            drop(std::fs::remove_file(job.folder.join(file)));
+        }
+        if before.builder != builder {
+            drop(std::fs::remove_dir_all(job.folder.join("engines")));
+        }
+    }
     std::fs::create_dir_all(job.folder.join("engines")).map_err(|error| error.to_string())?;
     let installed = Installed {
         version: VERSION.to_owned(),
@@ -676,11 +699,23 @@ fn unpack(
 /// settings window.
 pub const KEPT_BYTES: u64 = 700_000_000;
 
+/// The builder resource the card needs (`None`: no NVIDIA card TensorRT
+/// runs on), asked of `nvidia-smi` on a thread when RVP starts with
+/// TensorRT installed.
+#[derive(Debug, Default)]
+enum Card {
+    #[default]
+    Unasked,
+    Asking(Receiver<Option<String>>),
+    Known(Option<String>),
+}
+
 /// The TensorRT installation's state in the [`App`].
 #[derive(Debug, Default)]
 pub(crate) struct State {
     /// What `<state>/tensorrt` holds, when complete.
     installed: Option<Installed>,
+    card: Card,
     /// The installer while it runs, where it is, and the last failure.
     installer: Option<Installer>,
     progress: Option<(Stage, u64, u64)>,
@@ -694,9 +729,59 @@ impl App {
         self.state_dir().join("tensorrt")
     }
 
-    /// Reads the installation (when RVP starts, after the runtime).
+    /// Reads the installation (when RVP starts, after the runtime) and,
+    /// when there is one, asks which builder resource the card needs
+    /// (`nvidia-smi` takes a moment: not on the window's thread).
     pub(crate) fn load_tensorrt(&mut self) {
-        self.tensorrt.installed = installed(&self.tensorrt_folder());
+        let folder = self.tensorrt_folder();
+        let trt = &mut self.tensorrt;
+        trt.installed = installed(&folder);
+        let Some(installed) = &trt.installed else {
+            return;
+        };
+        let (sender, receiver) = channel();
+        let asked = std::thread::Builder::new()
+            .name("rvp-tensorrt-card".to_owned())
+            .spawn(move || {
+                drop(sender.send(compute_capability().and_then(|cap| builder_for(&cap))));
+            });
+        trt.card = match asked {
+            Ok(_) => Card::Asking(receiver),
+            // Without the answer, the installation is taken as this card's.
+            Err(_) => Card::Known(Some(installed.builder.clone())),
+        };
+    }
+
+    /// Whether RVP is still asking which builder resource the card needs
+    /// (the calibration waits for the answer).
+    #[must_use]
+    pub(crate) fn tensorrt_checking(&self) -> bool {
+        matches!(self.tensorrt.card, Card::Asking(_))
+    }
+
+    /// The installation, when it is this card's.
+    fn tensorrt_for_this_card(&self) -> Option<&Installed> {
+        let installed = self.tensorrt.installed.as_ref()?;
+        matches!(&self.tensorrt.card, Card::Known(Some(builder)) if *builder == installed.builder)
+            .then_some(installed)
+    }
+
+    /// Whether the card's answer came and the installation is another
+    /// card's.
+    fn tensorrt_for_another_card(&self) -> bool {
+        self.tensorrt.installed.as_ref().is_some_and(|installed| {
+            matches!(&self.tensorrt.card,
+                Card::Known(card) if card.as_deref() != Some(installed.builder.as_str()))
+        })
+    }
+
+    /// The builder resource the card needs, once its answer came (`None`
+    /// too without an NVIDIA card TensorRT runs on).
+    fn tensorrt_card(&self) -> Option<&str> {
+        match &self.tensorrt.card {
+            Card::Known(card) => card.as_deref(),
+            _ => None,
+        }
     }
 
     /// Whether RIFE (TensorRT) can be installed or run here: the package
@@ -711,10 +796,18 @@ impl App {
         self.tensorrt.installer.is_some()
     }
 
-    /// Whether RIFE (TensorRT) is installed (its files, not its engine).
+    /// Whether an installation is there, this card's or not (the
+    /// calibration's key names its files).
+    #[must_use]
+    pub(crate) fn tensorrt_present(&self) -> bool {
+        self.tensorrt_possible() && self.tensorrt.installed.is_some()
+    }
+
+    /// Whether RIFE (TensorRT) is installed for this card (its files, not
+    /// its engine).
     #[must_use]
     pub(crate) fn tensorrt_installed(&self) -> bool {
-        self.tensorrt_possible() && self.tensorrt.installed.is_some()
+        self.tensorrt_possible() && self.tensorrt_for_this_card().is_some()
     }
 
     /// Whether RIFE (TensorRT) can run: installed, and its engine built
@@ -785,14 +878,44 @@ impl App {
                 .map_err(|error| format!("{}: {error}", folder.display()))?;
         }
         self.tensorrt.installed = None;
+        self.tensorrt.card = Card::Unasked;
         crate::log::write(crate::log::Level::Info, "tensorrt: removed");
         self.apply_smoothing(engine);
         Ok(())
     }
 
-    /// Once a second: the installer's news. A finished installation asks
-    /// the calibration to build and measure RIFE (TensorRT)'s engine.
+    /// Once a second: the card's answer and the installer's news. A
+    /// finished installation asks the calibration to build and measure
+    /// RIFE (TensorRT)'s engine.
     pub fn tensorrt_tick(&mut self, engine: &Mpv) -> Option<UiRequest> {
+        if let Card::Asking(receiver) = &self.tensorrt.card {
+            let answer = match receiver.try_recv() {
+                Ok(card) => Some(card),
+                Err(std::sync::mpsc::TryRecvError::Empty) => None,
+                Err(std::sync::mpsc::TryRecvError::Disconnected) => Some(None),
+            };
+            if let Some(card) = answer {
+                self.tensorrt.card = Card::Known(card);
+                if let Some(installed) = self
+                    .tensorrt
+                    .installed
+                    .as_ref()
+                    .filter(|_| self.tensorrt_for_another_card())
+                {
+                    crate::log::report(
+                        crate::log::Level::Warning,
+                        &format!(
+                            "tensorrt: installed for {}, and this card needs {}: RIFE (TensorRT) \
+                             waits for its download again (the Motion Smoothing page)",
+                            installed.builder,
+                            self.tensorrt_card()
+                                .unwrap_or("an NVIDIA card of Turing or later")
+                        ),
+                    );
+                }
+                self.apply_smoothing(engine);
+            }
+        }
         let events = self
             .tensorrt
             .installer
@@ -815,11 +938,14 @@ impl App {
                             done.files.len()
                         ),
                     );
+                    // The installer asked the card itself.
+                    self.tensorrt.card = Card::Known(Some(done.builder.clone()));
                     self.tensorrt.installed = Some(done);
                     self.tensorrt.installer = None;
                     self.tensorrt.progress = None;
-                    // Its engine is built and measured before it runs.
-                    self.calibrate_at_start();
+                    // Its engine is built and measured before it runs; the
+                    // other engines' measurements stay.
+                    self.calibrate_engine(Engine::RifeTrt);
                     self.apply_smoothing(engine);
                     request = Some(UiRequest::Osd(
                         "TensorRT installed: the calibration builds RIFE's engine when nothing plays"
@@ -855,6 +981,8 @@ impl App {
             "unavailable"
         } else if trt.installer.is_some() {
             "installing"
+        } else if self.tensorrt_for_another_card() {
+            "other-card"
         } else if trt.installed.is_some() {
             "installed"
         } else {
@@ -872,6 +1000,7 @@ impl App {
             "download": archives().iter().map(|archive| archive.size).sum::<u64>(),
             "kept": KEPT_BYTES,
             "builder": trt.installed.as_ref().map(|installed| installed.builder.clone()),
+            "card": self.tensorrt_card(),
             "error": trt.error,
             "ready": self.rife_trt_ready(),
         })
@@ -973,17 +1102,19 @@ mod tests {
         assert!(archives.iter().all(|archive| archive.sha256.len() == 64));
     }
 
-    #[test]
-    fn an_installation_downloads_checks_unpacks_and_takes_the_package() {
+    /// A mirror with one archive (TensorRT's library and two builder
+    /// resources), the package's files and a job for `sm86` under a
+    /// scratch folder; `None` without curl.
+    fn test_installation(name: &str) -> Option<(PathBuf, Job, Vec<u8>)> {
         if std::process::Command::new("curl")
             .arg("--version")
             .output()
             .is_err()
         {
             eprintln!("skipped: no curl");
-            return;
+            return None;
         }
-        let root = scratch("install");
+        let root = scratch(name);
         let mirror = root.join("mirror");
         std::fs::create_dir_all(&mirror).expect("mirror");
         let library = b"a library for the test".to_vec();
@@ -1017,22 +1148,28 @@ mod tests {
                 },
             ],
         };
-        let folder = root.join("tensorrt");
-        let url = |path: &Path| {
-            let text = path.to_string_lossy().replace('\\', "/");
-            if text.starts_with('/') {
-                format!("file://{text}")
-            } else {
-                format!("file:///{text}")
-            }
+        let text = mirror.to_string_lossy().replace('\\', "/");
+        let url = if text.starts_with('/') {
+            format!("file://{text}")
+        } else {
+            format!("file:///{text}")
         };
         let job = Job {
-            folder: folder.clone(),
+            folder: root.join("tensorrt"),
             package,
-            archives: vec![archive.clone()],
-            mirror: Some(url(&mirror)),
+            archives: vec![archive],
+            mirror: Some(url),
             builder: Some("sm86".to_owned()),
         };
+        Some((root, job, library))
+    }
+
+    #[test]
+    fn an_installation_downloads_checks_unpacks_and_takes_the_package() {
+        let Some((root, job, library)) = test_installation("install") else {
+            return;
+        };
+        let folder = job.folder.clone();
         let (sender, events) = channel();
         let done = install(&job, &AtomicBool::new(false), &sender).expect("install");
         assert_eq!(done.builder, "sm86");
@@ -1044,7 +1181,7 @@ mod tests {
         assert!(!folder.join("vsmlrt-cuda/builder_sm89.dll").exists());
         assert!(folder.join(VSTRT).is_file() && folder.join(TRTEXEC_INSTALLED).is_file());
         assert!(!folder.join("downloads").exists(), "the downloads go");
-        assert_eq!(installed(&folder), Some(done.clone()));
+        assert_eq!(installed(&folder), Some(done));
         assert!(events.try_iter().any(|event| matches!(
             event,
             Event::Progress {
@@ -1055,7 +1192,7 @@ mod tests {
         // An archive that is not the pinned one is refused and deleted.
         let wrong = Archive {
             sha256: "0".repeat(64),
-            ..archive
+            ..job.archives[0].clone()
         };
         let job = Job {
             folder: root.join("wrong"),
@@ -1066,6 +1203,33 @@ mod tests {
         assert!(error.contains("is not NVIDIA's file"), "{error}");
         assert!(!root.join("wrong/downloads/runtime.zip").exists());
         assert_eq!(installed(&root.join("wrong")), None);
+        drop(std::fs::remove_dir_all(&root));
+    }
+
+    #[test]
+    fn another_cards_installation_gives_way_to_this_ones() {
+        let Some((root, job, _)) = test_installation("again") else {
+            return;
+        };
+        let folder = job.folder.clone();
+        let (sender, _events) = channel();
+        install(&job, &AtomicBool::new(false), &sender).expect("install");
+        // The host's RTX 30-series card gave way to an RTX 50-series card: the new installation
+        // keeps that card's builder resource, and the one before and the
+        // engines built for it go.
+        std::fs::write(folder.join("engines/rife.sm86.engine"), b"engine").expect("engine");
+        let again = Job {
+            builder: Some("sm89".to_owned()),
+            ..job
+        };
+        let done = install(&again, &AtomicBool::new(false), &sender).expect("again");
+        assert_eq!(done.builder, "sm89");
+        assert!(folder.join("vsmlrt-cuda/builder_sm89.dll").is_file());
+        assert!(!folder.join("vsmlrt-cuda/builder_sm86.dll").exists());
+        assert!(folder.join("vsmlrt-cuda/nvinfer_10.dll").is_file());
+        assert!(folder.join("engines").is_dir());
+        assert!(!folder.join("engines/rife.sm86.engine").exists());
+        assert_eq!(installed(&folder), Some(done));
         drop(std::fs::remove_dir_all(&root));
     }
 }

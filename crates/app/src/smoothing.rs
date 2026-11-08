@@ -46,7 +46,7 @@ use std::fmt::Write as _;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
-use rvp_engine::{Engine as Mpv, PropertyId};
+use rvp_engine::{DemuxVideo, Engine as Mpv, PropertyId};
 use serde::{Deserialize, Serialize};
 
 use crate::app::{App, UiRequest};
@@ -679,6 +679,17 @@ pub fn script(
     // is the source's frames, repeated at the rate, while the engine fills
     // its pipeline from the frames asked for ahead. Adding the filter later
     // instead dropped 80 frames as mpv's chain changed (the host, 1080p).
+    // Not for RIFE (TensorRT): its first frames after a load take about a
+    // second, which mpv waits for before its clock runs when they come
+    // first, while the original's frames start the clock and leave that
+    // second to the switch (the host's runs of 2026-11-08, 1080p: about 60
+    // frames dropped at each switch, at most 2 without the original, as
+    // also when the streams had run once while the script loaded).
+    let original = if engine == Engine::RifeTrt {
+        0
+    } else {
+        original
+    };
     let first = rate.0 * u64::from(original) / rate.1.max(1);
     if first > 0 {
         let _ = write!(
@@ -873,9 +884,27 @@ pub(crate) struct Smoothing {
     /// second (0 to 1; `App::set_processors`), and at the last step down.
     busy: Option<f64>,
     busy_at_step: Option<f64>,
+    /// Once mpv holds each file before its first frame for the plan
+    /// (`Engine::hold_preloaded`): the video track as the demuxer
+    /// describes it while no frame came.
+    held: Option<Preloaded>,
+}
+
+/// What mpv's hold before a file's first frame told
+/// (`App::smoothing_preloaded`).
+#[derive(Debug, Clone, Copy, Default)]
+struct Preloaded {
+    video: Option<DemuxVideo>,
 }
 
 impl Smoothing {
+    /// mpv starts a file: what the demuxer said of the last one goes.
+    pub(crate) fn start_file(&mut self) {
+        if let Some(held) = &mut self.held {
+            held.video = None;
+        }
+    }
+
     /// A file started: the drops of the last one count no longer.
     pub(crate) fn file_started(&mut self) {
         self.dropped = 0;
@@ -1108,8 +1137,20 @@ impl App {
                 .and_then(|value| u32::try_from(value).ok())
                 .unwrap_or(0)
         };
-        let (width, height) = (size(PropertyId::VideoWidth), size(PropertyId::VideoHeight));
-        let source_fps = self.model.double(PropertyId::ContainerFps).unwrap_or(0.0);
+        // The decoded size and rate once a frame came, the demuxer's before
+        // (`App::smoothing_preloaded`).
+        let preloaded = self.smoothing.held.and_then(|held| held.video);
+        let decoded = (size(PropertyId::VideoWidth), size(PropertyId::VideoHeight));
+        let (width, height) = match preloaded {
+            Some(video) if decoded.0 == 0 || decoded.1 == 0 => (video.width, video.height),
+            _ => decoded,
+        };
+        let source_fps = self
+            .model
+            .double(PropertyId::ContainerFps)
+            .filter(|fps| *fps > 0.0)
+            .or(preloaded.map(|video| video.fps))
+            .unwrap_or(0.0);
         let display_fps = self.picture.screen.refresh;
         Facts {
             width,
@@ -1214,6 +1255,49 @@ impl App {
         .map_err(|error| format!("{}: {error}", path.display()))
     }
 
+    /// Asks mpv to hold each file before its first frame while smoothing
+    /// may run a filter (on, and not Blend), so the filter is in place as
+    /// playback starts: added after it, it stopped mpv's core while the
+    /// script loaded as the sound played on, and the video then dropped
+    /// what it was behind (the host's runs of 2026-11-08: 44 to 62 frames
+    /// at each start). Without smoothing the start does not wait for the
+    /// window's thread, which is busy while RVP starts.
+    pub(crate) fn hold_preloaded(&mut self, engine: &Mpv) {
+        let smoothing = &self.settings.smoothing;
+        if self.smoothing.held.is_some() || !smoothing.enabled || smoothing.engine == Engine::Blend
+        {
+            return;
+        }
+        match engine.hold_preloaded() {
+            Ok(()) => self.smoothing.held = Some(Preloaded::default()),
+            Err(error) => crate::log::report(
+                crate::log::Level::Warning,
+                &format!("smoothing: no filter before playback starts: {error}"),
+            ),
+        }
+    }
+
+    /// A file is open and mpv waits before its first frame: the plan from
+    /// the demuxer's video track, then mpv goes on. The file starts here
+    /// for SVP's wait and the drop watch, as it does again when it is
+    /// loaded.
+    pub(crate) fn smoothing_preloaded(
+        &mut self,
+        engine: &Mpv,
+        hook: u64,
+        video: Option<DemuxVideo>,
+        now: Instant,
+    ) {
+        self.svp
+            .file_started(crate::svp::svp_mode(&self.settings), now);
+        self.smoothing.file_started();
+        self.smoothing.held = Some(Preloaded { video });
+        self.apply_smoothing(engine);
+        if let Err(error) = engine.continue_preloaded(hook) {
+            crate::log::report(crate::log::Level::Warning, &format!("smoothing: {error}"));
+        }
+    }
+
     /// mpv's `video-sync`: display-resample while Blend runs, else the
     /// setting.
     #[must_use]
@@ -1291,6 +1375,7 @@ impl App {
             }
         }
         self.save_settings();
+        self.hold_preloaded(engine);
         self.apply_smoothing(engine);
         UiRequest::Osd(format!(
             "Motion smoothing: {}",
@@ -1944,6 +2029,21 @@ mod tests {
             0,
         );
         assert!(!at_once.contains("FrameEval"));
+        // RIFE (TensorRT) starts with its own frames.
+        let tensorrt = script(
+            Engine::RifeTrt,
+            Preset::Medium,
+            (24000, 1001),
+            (60, 1),
+            &Files {
+                tensorrt: Some((Path::new("/trt"), Path::new("/vs-mlrt"))),
+                ..Files::default()
+            },
+            1,
+        );
+        assert!(
+            tensorrt.contains("vsmlrt.RIFE(") && !tensorrt.contains("FrameEval(clip, original)")
+        );
         let mut settings = on(Engine::MvTools);
         settings.original_first = 90;
         let mut notes = Vec::new();

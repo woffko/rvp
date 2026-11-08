@@ -13,8 +13,8 @@ mod model;
 pub mod thumbnail;
 
 pub use engine::{
-    AudioOutput, Chapter, EndReason, Engine, EngineError, EngineEvent, EngineOptions, Image, Seek,
-    Track, TrackKind, VideoOutput, default_ipc_server,
+    AudioOutput, Chapter, DemuxVideo, EndReason, Engine, EngineError, EngineEvent, EngineOptions,
+    Image, Seek, Track, TrackKind, VideoOutput, default_ipc_server,
 };
 pub use libmpv2;
 pub use model::{Changes, Kind, PlayerModel, PropertyId, Value};

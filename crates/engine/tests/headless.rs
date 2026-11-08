@@ -104,6 +104,40 @@ fn loading_fills_the_model() {
 }
 
 #[test]
+fn a_held_file_waits_before_its_first_frame() {
+    let mut player = Player::new();
+    player.engine.hold_preloaded().expect("hook");
+    player.events.clear();
+    player.engine.load(LONG, false).expect("loadfile");
+    player.wait("the hold", |_, events| {
+        events
+            .iter()
+            .any(|event| matches!(event, EngineEvent::Preloaded { .. }))
+    });
+    let Some(EngineEvent::Preloaded { hook, video }) = player
+        .events
+        .iter()
+        .find(|event| matches!(event, EngineEvent::Preloaded { .. }))
+        .cloned()
+    else {
+        unreachable!("waited for it");
+    };
+    // The demuxer's description, before any frame: no picture yet.
+    let video = video.expect("the video track");
+    assert_eq!((video.width, video.height), (96, 72));
+    assert!((video.fps - 10.0).abs() < 0.01, "fps {}", video.fps);
+    std::thread::sleep(Duration::from_millis(300));
+    player
+        .engine
+        .wait_and_drain(0.05, &mut player.model, &mut player.events);
+    assert_eq!(player.model.int(PropertyId::VideoWidth), None);
+    player.engine.continue_preloaded(hook).expect("continue");
+    player.wait("the first frame", |model, _| {
+        model.int(PropertyId::VideoWidth) == Some(96)
+    });
+}
+
+#[test]
 fn pause_seek_and_time() {
     let mut player = Player::new();
     player.load(LONG);

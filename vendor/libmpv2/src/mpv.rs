@@ -409,6 +409,22 @@ impl Mpv {
         })
     }
 
+    /// RVP patch: run the hook `name` (`on_preloaded`, ...): mpv sends
+    /// `Event::Hook` with `reply_userdata` to this handle and waits until
+    /// [`hook_continue`](Mpv::hook_continue) (`mpv_hook_add`).
+    pub fn hook_add(&self, name: &str, priority: i32, reply_userdata: u64) -> Result<()> {
+        let name = CString::new(name)?;
+        mpv_err((), unsafe {
+            libmpv2_sys::mpv_hook_add(self.ctx.as_ptr(), reply_userdata, name.as_ptr(), priority)
+        })
+    }
+
+    /// RVP patch: let mpv go on after `Event::Hook` with `id`
+    /// (`mpv_hook_continue`).
+    pub fn hook_continue(&self, id: u64) -> Result<()> {
+        mpv_err((), unsafe { libmpv2_sys::mpv_hook_continue(self.ctx.as_ptr(), id) })
+    }
+
     /// RVP patch: receive log messages of `min_level` and more severe as
     /// `Event::LogMessage` on this handle (`mpv_request_log_messages`).
     /// `"no"` turns them off again.

@@ -256,8 +256,15 @@ smoothing for users without SVP, after a study of the engines.
   frames at once (`concurrent-frames`, the host's runs of 2026-11-04:
   mpv's default of one per logical CPU dropped a frame a second), and,
   as SVP does, the script's first `original-first` seconds (1 s) are the
-  source's frames repeated at the rate (`FrameEval`): mpv loads the script
-  again after each start and seek. Adding the filter later instead
+  source's frames repeated at the rate (`FrameEval`; not RIFE (TensorRT)'s):
+  mpv loads the script again after each start and seek. While smoothing
+  may run a filter, mpv holds each file at its `on_preloaded` hook
+  (`Engine::hold_preloaded`, `App::smoothing_preloaded`) until the plan is
+  made from the demuxer's video track (`track-list`), so the filter is in
+  place before playback starts: one added after it stopped mpv's core
+  while the script loaded, the sound played on and the video dropped what
+  it was behind. Every `EngineEvent::Preloaded` must be continued, or the
+  file never plays. Adding the filter later instead
   dropped 80 frames while mpv's chain changed. WSL's builds share the
   host's processors through the hypervisor, and RVP's process priority
   does not win them back (2026-11-06, MVTools under a full WSL load: 45,
@@ -295,7 +302,15 @@ smoothing for users without SVP, after a study of the engines.
   (RVP's library search allows it); `trtexec` builds the engine as a
   process of its own. The engine runs only once the calibration has built
   (two minutes on the host) and measured it; until then RIFE on ncnn
-  stands in. `--install-tensorrt` installs at once (tests);
+  stands in. At start a thread asks `nvidia-smi` which builder the card
+  needs (the calibration waits for it): another card's installation
+  (`other-card`) does not run and the page offers Download… again; a new
+  installation removes the files and engines of the one before. mpv loads
+  the script again at every start and seek, and RIFE (TensorRT)'s first
+  frames after a load take about a second: it has no original frames
+  first, so mpv waits for them before its clock runs (with the original
+  first, the switch dropped about 60 frames; frames made while the script
+  loads did not help, the host's runs of 2026-11-08). `--install-tensorrt` installs at once (tests);
   `RVP_TENSORRT_MIRROR` (a folder URL, `file://` too) replaces NVIDIA's
   servers; the host's copy of the archives is in
   `~/rvp-reference/trt/nvidia` (Linux's wheels in `nvidia-linux`).
@@ -308,7 +323,9 @@ smoothing for users without SVP, after a study of the engines.
   (NVIDIA's comes in at run time by `$ORIGIN/vsmlrt-cuda`), and
   `check-deb.sh` leaves `vs-mlrt/` out of its library check.
   `cargo run -p rvp-app --example rife_trt -- FOLDER MIRROR` installs and
-  measures without RVP's window (`VSSCRIPT_PATH` at RVP's runtime).
+  measures without RVP's window (`VSSCRIPT_PATH` at RVP's runtime);
+  `cargo run -p rvp-engine --example render_vf -- FILE START FRAMES OUT
+  [VF]` writes the frames a filter makes as PNG files, to compare engines.
 - The control panel (F7) is a second window (`shell/qml/ControlPanel.qml`)
   with its own `Chrome` in `Mode::ControlBox`, painted whole
   (`SkinView.surface` 1, `panelDamaged`).
@@ -762,7 +779,8 @@ smoothing for users without SVP, after a study of the engines.
 - Ubuntu 22.04 VM shared with another project (`<ubuntu-vm>`, see
   the other project's notes): Linux builds and GNOME Wayland
   behaviour. It has no real GPU.
-- The owner's Ubuntu 26.10 boot of the same PC (GNOME Wayland, RTX 30-series card):
+- The owner's Ubuntu 26.10 boot of the same PC (GNOME Wayland; an RTX 50-series card, `sm120`, since 2026-11-07, an RTX 30-series card before; measurements
+  before that date are the RTX 30-series card's):
   GPU, SVP and performance checks, run in separate sessions through this
   repository.
 - Windows test VM `<windows-vm>`: Windows builds and functional tests.

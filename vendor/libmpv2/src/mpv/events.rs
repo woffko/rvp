@@ -110,6 +110,13 @@ pub enum Event<'a> {
     },
     /// Received when the Event Queue is full
     QueueOverflow,
+    /// RVP patch: a hook added with `Mpv::hook_add` runs; mpv waits until
+    /// `Mpv::hook_continue` is called with `id`.
+    Hook {
+        name: &'a str,
+        id: u64,
+        reply_userdata: u64,
+    },
     /// A deprecated event
     Deprecated(libmpv2_sys::mpv_event),
 }
@@ -296,6 +303,14 @@ impl Mpv {
                 }
             }
             mpv_event_id::QueueOverflow => Some(Ok(Event::QueueOverflow)),
+            mpv_event_id::Hook => {
+                let hook = unsafe { *(event.data as *mut libmpv2_sys::mpv_event_hook) };
+                Some(unsafe { mpv_cstr_to_str!(hook.name) }.map(|name| Event::Hook {
+                    name,
+                    id: hook.id,
+                    reply_userdata: event.reply_userdata,
+                }))
+            }
             _ => Some(Ok(Event::Deprecated(event))),
         }
     }

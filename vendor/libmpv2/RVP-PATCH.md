@@ -28,3 +28,8 @@ RVP through `[patch.crates-io]` in the workspace manifest. Changes:
   into a `RawImage` (size, stride, format, a copy of the pixels, the
   stride checked against the data's length) and freed with
   `mpv_free_node_contents`.
+- Hooks, for M18's smoothing filter before playback starts
+  (`crates/engine/src/engine.rs`, 2026-11-08): `Mpv::hook_add`
+  (`mpv_hook_add`), `Mpv::hook_continue` (`mpv_hook_continue`) and
+  `Event::Hook { name, id, reply_userdata }` (`MPV_EVENT_HOOK`, which
+  upstream reports as `Event::Deprecated`).
