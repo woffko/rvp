@@ -14,7 +14,7 @@
 #   bundle), with FFTW;
 # - RIFE's ncnn-Vulkan plugin (its Linux release) with model v4.6 in
 #   `rife/`, with GCC's OpenMP runtime;
-# - vs-mlrt v15.16's TensorRT plugin and trtexec, built here
+# - vs-mlrt v15.15's TensorRT plugin and trtexec, built here
 #   (tools/vapoursynth/build-vstrt-linux.sh: vs-mlrt has no Linux build),
 #   with vsmlrt.py and RIFE v4.6's ONNX model, in `vs-mlrt/` (not loaded
 #   on its own): RIFE (TensorRT) copies them next to NVIDIA's TensorRT,
@@ -42,7 +42,7 @@ ZIMG_TAG=release-3.0.6
 CYTHON=3.1.4
 # Unpacks vs-mlrt's 7z model archive at build time only.
 PY7ZR=1.1.4
-VSMLRT_TAG=v15.16
+VSMLRT_TAG=v15.15
 RIFE_ONNX_URL=https://github.com/AmusementClub/vs-mlrt/releases/download/model-20220923/rife_v8.7z
 RIFE_ONNX_SHA256=1a18614e72164c61d60861199fc8be6b0003110f747646b3dafb9acd632f6ef7
 PYTHON=cpython-3.12.15+20261021-x86_64-unknown-linux-gnu-install_only.tar.gz
@@ -146,7 +146,7 @@ patchelf --set-rpath "\$ORIGIN" "$OUT/rife/librife_linux_x86-64.so"
 "$(dirname "$0")/build-vstrt-linux.sh" "$WORK/vstrt" "$WORK/vstrt-out"
 mkdir -p "$OUT/vs-mlrt/models/rife"
 cp "$WORK/vstrt-out/libvstrt.so" "$WORK/vstrt-out/trtexec" "$OUT/vs-mlrt/"
-cp "$WORK/vstrt/vs-mlrt/scripts/vsmlrt.py" "$WORK/vstrt/vs-mlrt/LICENSE" "$OUT/vs-mlrt/"
+cp "$WORK/vstrt/vs-mlrt-$VSMLRT_TAG/scripts/vsmlrt.py" "$WORK/vstrt/vs-mlrt-$VSMLRT_TAG/LICENSE" "$OUT/vs-mlrt/"
 "$WORK/build-venv/bin/py7zr" x "$(fetch "$RIFE_ONNX_URL" "vs-mlrt-rife_v8.7z" "$RIFE_ONNX_SHA256")" "$WORK/rife-onnx"
 cp "$WORK/rife-onnx/rife/rife_v4.6.onnx" "$OUT/vs-mlrt/models/rife/rife_v4.6.onnx"
 

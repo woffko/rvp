@@ -9,7 +9,7 @@ libmpv at (never SVP's runtime):
 - RIFE's ncnn-Vulkan plugin (r9_mod_v33) with model v4.6 in `rife/`,
   loaded by RVP's RIFE script only, with Microsoft's OpenMP runtime
   (vcomp140.dll) next to it;
-- vs-mlrt v15.16's TensorRT plugin (vstrt.dll), its trtexec and vsmlrt.py,
+- vs-mlrt v15.15's TensorRT plugin (vstrt.dll), its trtexec and vsmlrt.py,
   with RIFE v4.6's ONNX model, in `vs-mlrt/` (not loaded on its own): RIFE
   (TensorRT) copies them next to NVIDIA's TensorRT, which RVP downloads
   from NVIDIA only when the user asks (crates/app/src/tensorrt.rs; NVIDIA's
@@ -31,7 +31,7 @@ import zipfile
 from pathlib import Path
 
 RIFE_TAG = "r9_mod_v33"
-VSMLRT_TAG = "v15.16"
+VSMLRT_TAG = "v15.15"
 VSMLRT = f"https://github.com/AmusementClub/vs-mlrt/releases/download/{VSMLRT_TAG}"
 RIFE_RAW = f"https://raw.githubusercontent.com/styler00dollar/VapourSynth-RIFE-ncnn-Vulkan/{RIFE_TAG}"
 MODEL = "rife-v4.6_ensembleFalse"
@@ -71,12 +71,12 @@ DOWNLOADS = {
     "vstrt": (
         f"VSTRT-Windows-x64.{VSMLRT_TAG}.7z",
         f"{VSMLRT}/VSTRT-Windows-x64.{VSMLRT_TAG}.7z",
-        "c4e64e69e87553bf15a7acd29d76debd006954e39ee07ef0e6d526947c5d34b1",
+        "d44cef26df68745b9b6474cfe078b9baeffaac80b8201bc9f34d01ba9557d60d",
     ),
     "vsmlrt-scripts": (
         f"vsmlrt-scripts.{VSMLRT_TAG}.7z",
         f"{VSMLRT}/scripts.{VSMLRT_TAG}.7z",
-        "d07dae0a00cb8dbf4f00358f640f630ff5d933de44d27050e7acce4f31cc3560",
+        "567abe5b9890229bc0ee026dc14fda3fc99a1a8260e6fc0db7878831961b1b21",
     ),
     "vsmlrt-licence": (
         f"vs-mlrt-{VSMLRT_TAG}-LICENSE",

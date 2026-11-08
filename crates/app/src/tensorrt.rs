@@ -69,7 +69,7 @@ impl Archive {
 }
 
 /// TensorRT's version: the plugin RVP's package carries is built for it.
-pub const VERSION: &str = "10.16.0.72";
+pub const VERSION: &str = "10.15.1.29";
 
 /// The builder resources TensorRT's archive has, by architecture; any
 /// other card builds from PTX.
@@ -78,14 +78,18 @@ pub const BUILDERS: [&str; 7] = ["sm75", "sm80", "sm86", "sm89", "sm90", "sm100"
 /// What the install folder holds when it is complete.
 pub const INSTALLED: &str = "installed.json";
 
-/// NVIDIA's archives for this system: TensorRT 10.16 for CUDA 13.2 and
-/// CUDA 13.2.51's runtime and NVRTC, which vs-mlrt v15.16's plugin
-/// (Windows) and `tools/vapoursynth/build-vstrt-linux.sh`'s (Linux) are
-/// built for. Windows: NVIDIA's zip and CUDA's redistributable archives
-/// (their SHA-256 in NVIDIA's `redistrib_13.2.0.json`; TensorRT's, which
-/// NVIDIA does not publish, taken on 2026-11-07). Linux: NVIDIA's wheels
-/// (zips too; their SHA-256 in NVIDIA's package index and the Python
-/// Package Index's).
+/// NVIDIA's archives for this system: TensorRT 10.15.1 for CUDA 13.1 and
+/// CUDA 13.2.51's runtime and NVRTC (CUDA 13's minor versions are
+/// compatible), which vs-mlrt v15.15's plugin (Windows) and
+/// `tools/vapoursynth/build-vstrt-linux.sh`'s (Linux) are built for.
+/// Not TensorRT 10.16: its engines computed RIFE v4.6 wrongly on the
+/// host's RTX 50-series card (`sm120`, 2026-11-08: a fine grid over the whole
+/// picture, fp16 and fp32 alike), where 10.15.1 and 10.8 match onnxruntime
+/// on the processor (`docs/spikes/m18-tensorrt.md`). Windows: NVIDIA's zip
+/// and CUDA's redistributable archives (their SHA-256 in NVIDIA's
+/// `redistrib_13.2.0.json`; TensorRT's, which NVIDIA does not publish,
+/// taken on 2026-11-08). Linux: NVIDIA's wheels (zips too; their SHA-256 in
+/// NVIDIA's package index and the Python Package Index's).
 #[must_use]
 pub fn archives() -> Vec<Archive> {
     if cfg!(windows) {
@@ -110,19 +114,19 @@ fn linux_archives() -> Vec<Archive> {
     let cuda = "nvidia/cu13/lib";
     vec![
         Archive {
-            url: "https://pypi.nvidia.com/tensorrt-cu13-libs/tensorrt_cu13_libs-10.16.0.72-py3-none-manylinux_2_28_x86_64.whl".to_owned(),
-            size: 3_728_699_633,
-            sha256: "11262f57f6dac4ee0c02a3c90b1f10cc609701136815ce3c606f24436277bfee".to_owned(),
+            url: "https://pypi.nvidia.com/tensorrt-cu13-libs/tensorrt_cu13_libs-10.15.1.29-py2.py3-none-manylinux_2_28_x86_64.whl".to_owned(),
+            size: 3_713_901_680,
+            sha256: "0619b60ba97425909c18442eb36cbe7f99b1a7eeb4ebf9c6b278e6e2c5ac6c3b".to_owned(),
             members: vec![
                 member(&format!("{libs}/libnvinfer.so.10"), "vsmlrt-cuda/libnvinfer.so.10"),
                 member(&format!("{libs}/libnvinfer_plugin.so.10"), "vsmlrt-cuda/libnvinfer_plugin.so.10"),
                 member(&format!("{libs}/libnvonnxparser.so.10"), "vsmlrt-cuda/libnvonnxparser.so.10"),
                 member(
-                    &format!("{libs}/libnvinfer_builder_resource_{{sm}}.so.10.16.0"),
-                    "vsmlrt-cuda/libnvinfer_builder_resource_{sm}.so.10.16.0",
+                    &format!("{libs}/libnvinfer_builder_resource_{{sm}}.so.10.15.1"),
+                    "vsmlrt-cuda/libnvinfer_builder_resource_{sm}.so.10.15.1",
                 ),
                 member(
-                    "tensorrt_cu13_libs-10.16.0.72.dist-info/LICENSE.txt",
+                    "tensorrt_cu13_libs-10.15.1.29.dist-info/LICENSE.txt",
                     "licences/TensorRT-LICENSE.txt",
                 ),
             ],
@@ -157,16 +161,16 @@ fn linux_archives() -> Vec<Archive> {
 
 /// Windows' archives ([`archives`]): NVIDIA's zips, of 2.2 GB in all.
 fn windows_archives() -> Vec<Archive> {
-    let trt = "TensorRT-10.16.0.72";
+    let trt = "TensorRT-10.15.1.29";
     let cudart = "cuda_cudart-windows-x86_64-13.2.51-archive";
     let nvrtc = "cuda_nvrtc-windows-x86_64-13.2.51-archive";
     vec![
         Archive {
             url: format!(
-                "https://developer.download.nvidia.com/compute/machine-learning/tensorrt/10.16.0/zip/{trt}.Windows.amd64.cuda-13.2.zip"
+                "https://developer.download.nvidia.com/compute/machine-learning/tensorrt/10.15.1/zip/{trt}.Windows.amd64.cuda-13.1.zip"
             ),
-            size: 1_940_597_054,
-            sha256: "10929ba0f0bb019fde205e089f4db3fce4aecca5bb6b40fee57bbd72ff5abf2a".to_owned(),
+            size: 1_934_486_030,
+            sha256: "83304c1f9ab86534f083bc4864691b38dee34135fd1aa0391644531c7c4e1e1e".to_owned(),
             members: vec![
                 member(
                     &format!("{trt}/bin/nvinfer_10.dll"),
@@ -527,12 +531,13 @@ fn install(job: &Job, cancel: &AtomicBool, sender: &Sender<Event>) -> Result<Ins
         files.push(to.to_owned());
     }
     // Another card's installation, or another version's: what it kept and
-    // this one does not, and the engines built for another card.
+    // this one does not, and the engines built for another card or by
+    // another TensorRT.
     if let Some(before) = recorded(&job.folder) {
         for file in before.files.iter().filter(|file| !files.contains(file)) {
             drop(std::fs::remove_file(job.folder.join(file)));
         }
-        if before.builder != builder {
+        if before.builder != builder || before.version != VERSION {
             drop(std::fs::remove_dir_all(job.folder.join("engines")));
         }
     }
@@ -1065,7 +1070,7 @@ mod tests {
             "vsmlrt-cuda/libnvinfer.so.10",
             "vsmlrt-cuda/libnvinfer_plugin.so.10",
             "vsmlrt-cuda/libnvonnxparser.so.10",
-            "vsmlrt-cuda/libnvinfer_builder_resource_sm86.so.10.16.0",
+            "vsmlrt-cuda/libnvinfer_builder_resource_sm86.so.10.15.1",
             "vsmlrt-cuda/libcudart.so.13",
             "vsmlrt-cuda/libnvrtc.so.13",
         ] {

@@ -289,10 +289,10 @@ smoothing for users without SVP, after a study of the engines.
   has Start (it pauses playback), Cancel (no run on its own until Start)
   and the progress.
 - RIFE (TensorRT) (`smoothing::Engine::RifeTrt`, `crates/app/src/tensorrt.rs`,
-  `docs/spikes/m18-tensorrt.md`): vs-mlrt v15.16's `vstrt` with RIFE v4.6.
+  `docs/spikes/m18-tensorrt.md`): vs-mlrt v15.15's `vstrt` with RIFE v4.6.
   NVIDIA's licence keeps TensorRT out of RVP's packages: the Motion
   Smoothing page's Download… asks for consent to NVIDIA's terms, then
-  fetches TensorRT 10.16 and CUDA 13.2's runtime and NVRTC from NVIDIA
+  fetches TensorRT 10.15.1 and CUDA 13.2's runtime and NVRTC from NVIDIA
   through the system's `curl` (2.2 GB, sizes and SHA-256 pinned in
   `tensorrt::archives`), and keeps what the card needs (its builder
   resource by `nvidia-smi`'s compute capability, about 700 MB) with the
@@ -305,7 +305,12 @@ smoothing for users without SVP, after a study of the engines.
   stands in. At start a thread asks `nvidia-smi` which builder the card
   needs (the calibration waits for it): another card's installation
   (`other-card`) does not run and the page offers Download… again; a new
-  installation removes the files and engines of the one before. mpv loads
+  installation removes the files and engines of the one before. Not
+  TensorRT 10.16: it computed RIFE wrongly on the host's RTX 50-series card, a fine
+  grid over every in-between frame, which 10.15.1 and 10.8 do not
+  (trtexec on one input against onnxruntime on the processor). Check a
+  new TensorRT the same way, and with `render_vf` against RIFE on Vulkan,
+  before moving to it. mpv loads
   the script again at every start and seek, and RIFE (TensorRT)'s first
   frames after a load take about a second: it has no original frames
   first, so mpv waits for them before its clock runs (with the original

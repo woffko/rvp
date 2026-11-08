@@ -138,6 +138,79 @@ Linux (2026-11-07):
   (TensorRT) settings with 3 streams built the engine in 106 s and made
   335, 166 and 105 frames a second at 720p, 1080p and 1440p.
 
+## The RTX 50-series card (2026-11-08)
+
+The host's card changed from the RTX 30-series card (`sm86`) to an RTX 50-series card
+(`sm120`, 300 W, the runs at 270 W). RVP noticed that the installation was
+another card's, installed it again for `sm120` from the local copy in
+12 s, and its calibration measured, in frames a second at 59.94:
+
+| 1080p | Fast | Medium | Quality |
+|---|---|---|---|
+| MVTools | 176 | 98 | 72 |
+| RIFE on Vulkan | | | 68 (720p: 152) |
+| RIFE (TensorRT) | 84 | 150 | 154 (1440p: 108) |
+
+### The start and seeks
+
+mpv loads the script again at every start and seek, and RIFE (TensorRT)'s
+first frames after a load take about a second.
+
+- With the original frames first, mpv's clock started on the cheap frames,
+  and that second came at the switch: about 60 frames dropped there.
+  - Frames made while the script loaded did not help.
+  - The card's clocks fell during the original second (memory P1 to P3,
+    graphics 2850 to 1300-2000 MHz) and came back within about half a
+    second.
+- Without the original frames mpv waits for RIFE's first frame before its
+  clock runs.
+- A filter added after playback began dropped 44 to 62 frames: mpv's core
+  stopped while the script loaded, as the sound played on.
+- mpv now holds each file at `on_preloaded` until the filter is set. With
+  that and no original frames for RIFE (TensorRT), four runs dropped no
+  frame at the start or after 16 seeks (TensorRT Quality and Medium,
+  MVTools Medium).
+- The first picture of a file now comes about 4.5 s after RVP starts with
+  TensorRT, 2.5 s with MVTools.
+
+### Wrong frames
+
+RIFE (TensorRT)'s in-between frames on this card are wrong: a fine grid,
+dashes and ghost lines. RIFE on Vulkan and MVTools are clean on the same
+frames (`render_vf`).
+
+- None of these changed it:
+  - fp32;
+  - a fixed shape;
+  - fp32 input;
+  - no JIT or edge-mask convolutions;
+  - a whole multiple of the rate, as SVP calls it;
+  - vs-mlrt's second RIFE implementation (`rife_v2`);
+  - SVP's backend options;
+  - driver 617.42 to 621.14.
+- The same 11-channel input, with onnxruntime on the processor, made a
+  clean frame.
+- trtexec ran it through RVP's engines and put the grid over the whole
+  picture, with fp16 and fp32 alike. TensorRT 10.16 computes the model
+  wrongly on `sm120`.
+- The same input through other versions' trtexec, as pixels far from the
+  processor's frame:
+
+  | TensorRT | fp16 | fp32 |
+  |---|---|---|
+  | 10.8 (SVP's, read from its folder) | 0.04 % | 0.00 % |
+  | 10.15.1 | 0.03 % | |
+  | 10.16 | 56 % | 56 % |
+
+- RVP now downloads TensorRT 10.15.1 (for CUDA 13.1, with CUDA 13.2's
+  runtime and NVRTC) and carries vs-mlrt v15.15's plugin. An installation
+  of 10.16 counts as missing, and RVP downloads 10.15.1 again; its files
+  and engines go.
+- SVP's RIFE profile shows TensorRT, but in PotPlayer SVP runs through
+  AviSynth, and its log says that RIFE for TensorRT works only through
+  VapourSynth. Its clean picture is not RIFE at all, and it built no
+  engine for the card.
+
 ## Sources
 
 - docs.nvidia.com/deeplearning/tensorrt/latest/reference/sla.html
