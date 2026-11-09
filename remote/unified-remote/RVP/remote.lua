@@ -138,16 +138,12 @@ update = function ()
 		icon = "pause"
 	end
 	local volume = math.floor((now.volume or 0) + 0.5)
-	local muted = ""
-	if now.mute then
-		muted = " (muted)"
-	end
 	server.update(
 		{ id = "title", text = title },
 		{ id = "position", progress = math.floor(now.position or 0), progressmax = length,
 		  text = span(now.position) .. " / " .. span(now.duration) },
 		{ id = "volume", progress = volume, progressmax = math.floor(now.volume_max or 100),
-		  text = "Volume " .. volume .. " %" .. muted },
+		  text = "Volume " .. volume .. " %" },
 		{ id = "play", icon = icon },
 		{ id = "speed", text = string.format("%.2fx", now.speed or 1) },
 		{ id = "normalizer", checked = now.normalizer == true },

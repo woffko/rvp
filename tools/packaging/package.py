@@ -216,7 +216,8 @@ def remote_folder(look: Path, bundle: Path) -> None:
     target.mkdir(parents=True)
     for source in sorted((ROOT / REMOTE).iterdir()):
         shutil.copy2(source, target / source.name)
-    for name in ("icon.png", "icon_hires.png"):
+    # Its icons and button pictures (crates/look/src/outputs.rs).
+    for name in ("icon.png", "icon_hires.png", "mute.png"):
         shutil.copy2(look / REMOTE / name, target / name)
 
 

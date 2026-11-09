@@ -26,6 +26,15 @@ pub const REMOTE_ICONS: [(&str, u32); 2] = [("icon.png", 64), ("icon_hires.png",
 /// rest).
 pub const REMOTE_DIR: &str = "remote/unified-remote/RVP";
 
+/// The remote's button pictures by RVP Default's icons (`art/skin/icons.svg`),
+/// where Unified Remote's own icons say too little: its `vmute` is a
+/// speaker without a cross (the owner, 2026-11-08).
+pub const REMOTE_BUTTONS: [(&str, &str); 1] = [("mute.png", "icon-mute")];
+
+/// The size of a remote's button pictures, as Unified Remote's own
+/// remotes draw them.
+pub const REMOTE_BUTTON_SIZE: u32 = 48;
+
 /// The built files as `(relative path, bytes)`, in a fixed order.
 ///
 /// # Errors
@@ -63,7 +72,37 @@ pub fn outputs() -> Result<Vec<(String, Vec<u8>)>, String> {
     for (name, size) in REMOTE_ICONS {
         files.push((format!("{REMOTE_DIR}/{name}"), png(&brand::icon(size)?)?));
     }
+    for (name, symbol) in REMOTE_BUTTONS {
+        files.push((
+            format!("{REMOTE_DIR}/{name}"),
+            png(&remote_button(symbol, REMOTE_BUTTON_SIZE)?)?,
+        ));
+    }
     Ok(files)
+}
+
+/// RVP Default's icon `symbol`, white on nothing, `size` pixels square, as
+/// a button picture of the remote (Unified Remote's buttons are blue).
+///
+/// # Errors
+/// Fails when the icon sheet has no such symbol or it cannot be drawn.
+pub fn remote_button(symbol: &str, size: u32) -> Result<Image, String> {
+    let sheet = crate::sprites::ICONS_SVG;
+    let start = sheet
+        .find(&format!("<symbol id=\"{symbol}\""))
+        .ok_or_else(|| format!("icons.svg has no {symbol}"))?;
+    let end = sheet[start..]
+        .find("</symbol>")
+        .map(|at| start + at + "</symbol>".len())
+        .ok_or_else(|| format!("icons.svg's {symbol} has no end"))?;
+    let svg = format!(
+        "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 24 24\" \
+         width=\"{size}\" height=\"{size}\"><defs>{}</defs>\
+         <g color=\"#FFFFFF\" stroke-width=\"2\"><use href=\"#{symbol}\" x=\"0\" y=\"0\" \
+         width=\"24\" height=\"24\"/></g></svg>",
+        &sheet[start..end]
+    );
+    brand::render(&svg, size, size)
 }
 
 fn png(image: &Image) -> Result<Vec<u8>, String> {

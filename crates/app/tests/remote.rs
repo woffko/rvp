@@ -215,6 +215,24 @@ fn layout_xml_is_well_formed_and_its_events_are_actions() {
             "remote.lua updates {id}, which layout.xml lacks"
         );
     }
+    // Pictures are RVP's own, drawn by `cargo xtask look`.
+    let drawn: BTreeSet<&str> = rvp_look::outputs::REMOTE_BUTTONS
+        .iter()
+        .map(|(name, _)| *name)
+        .collect();
+    let pictures: Vec<&str> = elements
+        .iter()
+        .flat_map(|e| e.attributes.iter())
+        .filter(|(key, _)| key == "image")
+        .map(|(_, value)| value.as_str())
+        .collect();
+    assert!(pictures.contains(&"mute.png"), "{pictures:?}");
+    for picture in pictures {
+        assert!(
+            drawn.contains(picture),
+            "layout.xml shows {picture}, which nothing draws"
+        );
+    }
 }
 
 #[test]

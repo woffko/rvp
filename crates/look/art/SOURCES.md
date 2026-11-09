@@ -19,7 +19,8 @@ font is used.
 `crates/look` renders them into the PNG icons, `rvp.ico`, the Windows
 resource, the idle screen's symbol and the About box's wordmark, and
 `icon.svg` also into the Unified Remote remote's `icon.png` (64 pixels) and
-`icon_hires.png` (512 pixels) (M15).
+`icon_hires.png` (512 pixels) (M15). RVP Default's `icon-mute` (below) is
+also the remote's `mute.png` button picture (48 pixels, white).
 
 ## RVP Default (`skin/`)
 

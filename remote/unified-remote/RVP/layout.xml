@@ -15,7 +15,7 @@
 				<slider id="volume" text="Volume" onchange="volume" />
 			</row>
 			<row weight="wrap">
-				<button icon="vmute" ontap="mute" />
+				<button image="mute.png" scale="native" ontap="mute" />
 				<button icon="rwd" ontap="back" />
 				<button id="play" icon="playpause" ontap="play_pause" />
 				<button icon="ff" ontap="forward" />
@@ -47,7 +47,7 @@
 			</row>
 			<row weight="wrap">
 				<button icon="vdown" ontap="volume_down" />
-				<button icon="vmute" ontap="mute" />
+				<button image="mute.png" scale="native" ontap="mute" />
 				<button icon="vup" ontap="volume_up" />
 			</row>
 		</tab>
