@@ -2110,6 +2110,14 @@ ApplicationWindow {
                             values: win.view.choices["smoothing-original-first"] || [1]
                             format: v => v === 0 ? qsTr("Off") : qsTr("%1 s").arg(v)
                         }
+                        Choice {
+                            label: qsTr("At a scene change")
+                            path: "smoothing.scene-change"
+                            values: win.view.choices["smoothing-scene-change"] || []
+                            texts: ({ "off": qsTr("Interpolate across it (one scene morphs into the next)"),
+                                      "normal": qsTr("Repeat the scene's last frame"),
+                                      "high": qsTr("Repeat the scene's last frame (more sensitive: alike scenes too, now and then a fast pan)") })
+                        }
                         Amount {
                             label: qsTr("Step down after dropped frames over")
                             path: "smoothing.drop-window"

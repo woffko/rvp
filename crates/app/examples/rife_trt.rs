@@ -77,7 +77,15 @@ fn main() {
     };
     std::fs::write(
         &path,
-        script(Engine::RifeTrt, preset, (24000, 1001), (60, 1), &files, 0),
+        script(
+            Engine::RifeTrt,
+            preset,
+            (24000, 1001),
+            (60, 1),
+            &files,
+            0,
+            None,
+        ),
     )
     .expect("script");
     let cancel = AtomicBool::new(false);

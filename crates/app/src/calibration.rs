@@ -77,8 +77,9 @@ pub const RATE: (u64, u64) = (60, 1);
 pub const HEADROOM: f64 = 1.2;
 
 /// What is measured: a new number measures again (the scripts, their
-/// filter entries, the sizes or the rates changed).
-pub const VERSION: u32 = 1;
+/// filter entries, the sizes or the rates changed). 2: the scripts look
+/// for cuts (2026-11-08).
+pub const VERSION: u32 = 2;
 
 /// The file in the state folder.
 pub const FILE_NAME: &str = "calibration.json";
@@ -526,7 +527,16 @@ fn measure_step(
         }
         drop(sender.send(Event::Failed { engine, why }));
     };
-    let text = crate::smoothing::script(engine, preset, SOURCE_RATE, RATE, files, 0);
+    // With cuts looked for, as a file plays by default (testsrc2 has none).
+    let text = crate::smoothing::script(
+        engine,
+        preset,
+        SOURCE_RATE,
+        RATE,
+        files,
+        0,
+        crate::smoothing::scene_threshold("normal"),
+    );
     if let Err(error) = script
         .parent()
         .map_or(Ok(()), std::fs::create_dir_all)

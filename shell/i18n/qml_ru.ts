@@ -4831,6 +4831,22 @@ in %2 seconds</source>
             <source>The notices and the info texts (Tab, Scroll Lock) take these colours; in the picture mpv draws the notices with them.</source>
             <translation>Эти цвета берут сообщения и инфо-тексты (Tab, Scroll Lock); в картинке сообщения с ними рисует mpv.</translation>
         </message>
+        <message>
+            <source>At a scene change</source>
+            <translation>На смене сцены</translation>
+        </message>
+        <message>
+            <source>Interpolate across it (one scene morphs into the next)</source>
+            <translation>Интерполировать (одна сцена перетекает в другую)</translation>
+        </message>
+        <message>
+            <source>Repeat the scene's last frame</source>
+            <translation>Повторять последний кадр сцены</translation>
+        </message>
+        <message>
+            <source>Repeat the scene's last frame (more sensitive: alike scenes too, now and then a fast pan)</source>
+            <translation>Повторять последний кадр сцены (чувствительнее: и похожие сцены, иногда быстрая панорама)</translation>
+        </message>
     </context>
     <context>
         <name>SubtitleBrowser</name>

@@ -712,6 +712,7 @@ impl App {
                 "smoothing-max-height": crate::smoothing::MAX_HEIGHTS,
                 "smoothing-drop-window": crate::smoothing::DROP_WINDOWS,
                 "smoothing-original-first": crate::smoothing::ORIGINAL_FIRST,
+                "smoothing-scene-change": crate::smoothing::SCENE_CHANGES,
                 "log.level": crate::log::LEVELS,
                 "subtitles.ass-override": crate::subtitles::ASS_OVERRIDE,
                 "subtitles.border-style": crate::subtitles::BORDER_STYLE,

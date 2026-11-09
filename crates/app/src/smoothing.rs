@@ -80,6 +80,30 @@ pub const DROP_WINDOWS: &[u32] = &[0, 6, 10, 20, 30, 60];
 /// MVTools or RIFE fill their pipeline, the picture stutters.
 pub const ORIGINAL_FIRST: &[u32] = &[0, 1, 2, 3, 5];
 
+/// The Motion Smoothing page's choices for `scene-change`: how a cut
+/// shows (the owner, 2026-11-08: RIFE morphed one scene into the next).
+/// `off` interpolates across it, as the engines do on their own. `normal`
+/// and `high` take a source frame whose next one differs from it by more
+/// than [`scene_threshold`] in mean luma for the last of a scene, and
+/// repeat it in place of the frames between the two (SVP's "repeat the
+/// last frame"). The higher sensitivity catches cuts between alike scenes,
+/// and also takes a fast pan or a flash for one more often (one repeated
+/// frame there).
+pub const SCENE_CHANGES: &[&str] = &["off", "normal", "high"];
+
+/// The mean luma difference between two source frames (0 to 1,
+/// VapourSynth's `PlaneStatsDiff`) above which `scene_change` takes them
+/// for a cut; `None`: no cut is looked for. 0.1 is `misc.SCDetect`'s,
+/// which RVP's VapourSynth (R73, no `misc`) lacks.
+#[must_use]
+pub fn scene_threshold(scene_change: &str) -> Option<f64> {
+    match scene_change {
+        "normal" => Some(0.1),
+        "high" => Some(0.05),
+        _ => None,
+    }
+}
+
 /// RIFE's model, as the study measured it.
 pub const RIFE_MODEL: &str = "rife-v4.6_ensembleFalse";
 
@@ -191,6 +215,8 @@ pub struct SmoothingSettings {
     pub drop_window: u32,
     /// Seconds of the original after a start or a seek ([`ORIGINAL_FIRST`]).
     pub original_first: u32,
+    /// How a cut shows: one of [`SCENE_CHANGES`].
+    pub scene_change: String,
 }
 
 impl Default for SmoothingSettings {
@@ -203,6 +229,7 @@ impl Default for SmoothingSettings {
             max_height: 1080,
             drop_window: 20,
             original_first: 1,
+            scene_change: "normal".to_owned(),
         }
     }
 }
@@ -223,6 +250,14 @@ impl SmoothingSettings {
                 "smoothing.max-height must be 240 to 4320: {repaired} used"
             ));
             self.max_height = repaired;
+        }
+        if !SCENE_CHANGES.contains(&self.scene_change.as_str()) {
+            notes.push(format!(
+                "smoothing.scene-change {:?} is not one of {}: normal used",
+                self.scene_change,
+                SCENE_CHANGES.join(", ")
+            ));
+            "normal".clone_into(&mut self.scene_change);
         }
         if self.original_first > 30 {
             notes.push(format!(
@@ -571,6 +606,46 @@ fn rife_trt_script(
     );
 }
 
+/// [`script`]'s part for cuts ([`SCENE_CHANGES`]): the engine's frames
+/// past a cut's last source frame, up to the next scene's first, are that
+/// frame repeated; `AssumeFPS` gives them the rate's durations, which mpv's
+/// timestamps follow.
+fn cut_script(text: &mut String, source: (u64, u64), rate: (u64, u64), threshold: f64) {
+    let _ = write!(
+        text,
+        "scene = core.std.PlaneStats(src, src[1:] + src[-1], plane=0, prop='RvpScene')\n\
+         def held(n):\n    \
+         return scene[min(n * {} // {}, scene.num_frames - 1)] * (n + 1)\n\
+         cuts = core.std.FrameEval(clip, held)\n\
+         smooth = clip\n\
+         def at_cut(n, f):\n    \
+         return cuts if f.props['RvpSceneDiff'] > {threshold} else smooth\n\
+         clip = core.std.AssumeFPS(core.std.FrameEval(smooth, at_cut, prop_src=cuts), \
+         fpsnum={}, fpsden={})\n",
+        rate.1 * source.0,
+        rate.0 * source.1,
+        rate.0,
+        rate.1,
+    );
+}
+
+/// [`script`]'s part for the original first: its `first` frames are the
+/// source's, repeated at the rate.
+fn original_script(text: &mut String, source: (u64, u64), rate: (u64, u64), first: u64) {
+    let _ = write!(
+        text,
+        "def original(n):\n    \
+         return src[min(n * {} // {}, src.num_frames - 1)] * (n + 1)\n\
+         shown = core.std.AssumeFPS(core.std.FrameEval(clip, original), \
+         fpsnum={}, fpsden={})\n\
+         clip = shown[:{first}] + clip[{first}:]\n",
+        rate.1 * source.0,
+        rate.0 * source.1,
+        rate.0,
+        rate.1,
+    );
+}
+
 /// A Python string literal for a path.
 fn python_path(path: &Path) -> String {
     let text = path.to_string_lossy();
@@ -592,6 +667,8 @@ fn python_path(path: &Path) -> String {
 /// (a fraction), making `rate`. `rife` names RIFE's plugin and model,
 /// `mvtools` MVTools' plugin where the runtime does not load it itself
 /// (RVP's Linux runtime: its compiled-in plugin folder is the build's).
+/// `original` is [`SmoothingSettings::original_first`], `scene` the cut
+/// threshold ([`scene_threshold`]).
 #[must_use]
 pub fn script(
     engine: Engine,
@@ -600,6 +677,7 @@ pub fn script(
     rate: (u64, u64),
     files: &Files<'_>,
     original: u32,
+    scene: Option<f64>,
 ) -> String {
     let (rife, mvtools) = (files.rife, files.mvtools);
     let mut text = format!(
@@ -685,6 +763,9 @@ pub fn script(
     // second to the switch (the host's runs of 2026-11-08, 1080p: about 60
     // frames dropped at each switch, at most 2 without the original, as
     // also when the streams had run once while the script loaded).
+    if let Some(threshold) = scene {
+        cut_script(&mut text, source, rate, threshold);
+    }
     let original = if engine == Engine::RifeTrt {
         0
     } else {
@@ -692,18 +773,7 @@ pub fn script(
     };
     let first = rate.0 * u64::from(original) / rate.1.max(1);
     if first > 0 {
-        let _ = write!(
-            text,
-            "def original(n):\n    \
-             return src[min(n * {} // {}, src.num_frames - 1)] * (n + 1)\n\
-             shown = core.std.AssumeFPS(core.std.FrameEval(clip, original), \
-             fpsnum={}, fpsden={})\n\
-             clip = shown[:{first}] + clip[{first}:]\n",
-            rate.1 * source.0,
-            rate.0 * source.1,
-            rate.0,
-            rate.1,
-        );
+        original_script(&mut text, source, rate, first);
     }
     text.push_str(
         "# mpv answers frames asked for while the script loads with black ones;\n\
@@ -1247,10 +1317,20 @@ impl App {
                 .map(|scripts| (folder.as_path(), scripts)),
         };
         let path = self.smoothing_script_path();
-        let original = self.settings.smoothing.original_first;
+        let smoothing = &self.settings.smoothing;
+        let scene = scene_threshold(&smoothing.scene_change);
         crate::storage::write_atomic(
             &path,
-            script(engine, preset, source, rate, &files, original).as_bytes(),
+            script(
+                engine,
+                preset,
+                source,
+                rate,
+                &files,
+                smoothing.original_first,
+                scene,
+            )
+            .as_bytes(),
         )
         .map_err(|error| format!("{}: {error}", path.display()))
     }
@@ -2013,6 +2093,7 @@ mod tests {
             (60, 1),
             &Files::default(),
             1,
+            None,
         );
         assert!(first.contains("src = clip\n"));
         assert!(
@@ -2027,6 +2108,7 @@ mod tests {
             (60, 1),
             &Files::default(),
             0,
+            None,
         );
         assert!(!at_once.contains("FrameEval"));
         // RIFE (TensorRT) starts with its own frames.
@@ -2040,6 +2122,7 @@ mod tests {
                 ..Files::default()
             },
             1,
+            None,
         );
         assert!(
             tensorrt.contains("vsmlrt.RIFE(") && !tensorrt.contains("FrameEval(clip, original)")
@@ -2127,6 +2210,7 @@ mod tests {
                 ..Files::default()
             },
             0,
+            None,
         );
         let vstrt = format!(
             "core.std.LoadPlugin({})",
@@ -2194,6 +2278,50 @@ mod tests {
     }
 
     #[test]
+    fn cuts_repeat_the_last_frame_of_a_scene() {
+        assert_eq!(scene_threshold("off"), None);
+        assert_eq!(scene_threshold("normal"), Some(0.1));
+        assert_eq!(scene_threshold("high"), Some(0.05));
+        let text = script(
+            Engine::MvTools,
+            Preset::Medium,
+            (24000, 1001),
+            (60000, 1001),
+            &Files::default(),
+            1,
+            Some(0.1),
+        );
+        // Each source frame against the next, in mean luma.
+        assert!(text.contains("PlaneStats(src, src[1:] + src[-1], plane=0, prop='RvpScene')"));
+        // Output frame n shows source frame n * 24000 / 60000 at a cut.
+        assert!(text.contains(
+            "return scene[min(n * 24024000 // 60060000, scene.num_frames - 1)] * (n + 1)"
+        ));
+        assert!(text.contains("return cuts if f.props['RvpSceneDiff'] > 0.1 else smooth"));
+        // Repeated frames take the rate's durations (mpv times frames by them).
+        assert!(text.contains("prop_src=cuts), fpsnum=60000, fpsden=1001)\n"));
+        // Before the original's first second, which shows the source anyway.
+        let cuts = text.find("at_cut").unwrap_or(usize::MAX);
+        assert!(cuts < text.find("def original").unwrap_or(0));
+        let off = script(
+            Engine::MvTools,
+            Preset::Medium,
+            (24000, 1001),
+            (60000, 1001),
+            &Files::default(),
+            1,
+            None,
+        );
+        assert!(!off.contains("RvpScene"));
+        let mut settings = on(Engine::MvTools);
+        assert_eq!(settings.scene_change, "normal");
+        settings.scene_change = "always".to_owned();
+        let mut notes = Vec::new();
+        settings.validate(&mut notes);
+        assert_eq!((settings.scene_change.as_str(), notes.len()), ("normal", 1));
+    }
+
+    #[test]
     fn scripts_clear_the_cache_and_make_the_rate() {
         let mvtools = script(
             Engine::MvTools,
@@ -2202,6 +2330,7 @@ mod tests {
             (60, 1),
             &Files::default(),
             0,
+            None,
         );
         assert!(mvtools.contains("AssumeFPS(video_in, fpsnum=24000, fpsden=1001)"));
         assert!(!mvtools.contains("LoadPlugin"));
@@ -2221,6 +2350,7 @@ mod tests {
                 ..Files::default()
             },
             0,
+            None,
         );
         assert!(fast.contains("BlockFPS(clip, sup, bv, fv, num=50, den=1, mode=3"));
         assert!(fast.contains(
@@ -2238,6 +2368,7 @@ mod tests {
                 ..Files::default()
             },
             0,
+            None,
         );
         assert!(rife.contains(
             r"core.std.LoadPlugin('C:\\RVP\\vapoursynth\\rife\\librife_windows_x86-64.dll')"

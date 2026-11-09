@@ -264,8 +264,14 @@ smoothing for users without SVP, after a study of the engines.
   place before playback starts: one added after it stopped mpv's core
   while the script loaded, the sound played on and the video dropped what
   it was behind. Every `EngineEvent::Preloaded` must be continued, or the
-  file never plays. Adding the filter later instead
-  dropped 80 frames while mpv's chain changed. WSL's builds share the
+  file never plays. Adding the filter later instead dropped 80 frames
+  while mpv's chain changed. Cuts (`smoothing.scene-change`,
+  `smoothing::scene_threshold`, the owner, 2026-11-08): a source frame
+  whose next one differs from it by more than the threshold in mean luma
+  (`std.PlaneStats`; R73 has no `misc`) is a scene's last, and the
+  engine's frames up to the next scene's first repeat it instead of
+  morphing one scene into the other; that part ends in `AssumeFPS`, since
+  mpv times each frame by its `_DurationNum`/`_DurationDen`. WSL's builds share the
   host's processors through the hypervisor, and RVP's process priority
   does not win them back (2026-11-06, MVTools under a full WSL load: 45,
   44 and 38 dropped frames a second at normal, above normal and high):
