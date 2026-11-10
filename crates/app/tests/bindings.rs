@@ -1230,7 +1230,7 @@ fn every_default_binding_triggers_its_action() {
     // Close Playback last: it unloads the file.
     h.dispatch(Action::CloseMedia);
     h.wait("idle", |m| !m.media_loaded());
-    // With nothing loaded, Play plays the album's selected entry ...
+    // With nothing loaded, Play plays the entry that played last ...
     assert_eq!(h.dispatch(Action::PlayPause), None);
     h.wait("playing again", PlayerModel::media_loaded);
     h.dispatch(Action::CloseMedia);
@@ -1242,6 +1242,39 @@ fn every_default_binding_triggers_its_action() {
         h.dispatch(Action::PlayPause),
         Some(UiRequest::OpenFileDialog)
     );
+}
+
+/// Stop (Close Playback) and Play bring back the file that played, from
+/// where it stopped, wherever the panel's cursor is (the owner, 2026-11-09:
+/// the remote's Stop and Play started the file before).
+#[test]
+fn play_after_stop_resumes_the_file_that_played() {
+    let mut h = Harness::new();
+    h.app.settings.remember_positions = true;
+    h.app
+        .open(&h.engine, &[LONG.to_owned(), SHORT.to_owned()], false)
+        .expect("open");
+    h.wait("loaded", |m| {
+        m.media_loaded() && m.double(PropertyId::Duration).is_some()
+    });
+    h.back_to_30();
+    // The panel's cursor on the other file, as after Next and Previous
+    // from the remote.
+    h.app
+        .list_action(&h.engine, rvp_app::ListAction::CursorDown, false, 10);
+    assert_eq!(
+        h.app.library().cursor(h.app.library().lists().shown),
+        Some(1)
+    );
+    h.dispatch(Action::CloseMedia);
+    h.wait("idle", |m| !m.media_loaded());
+    assert_eq!(h.dispatch(Action::PlayPause), None);
+    h.wait("the long file again, from 30 s", |m| {
+        m.loaded_path()
+            .is_some_and(|path| path.ends_with("fixture-60s.mkv"))
+            && m.double(PropertyId::TimePos)
+                .is_some_and(|time| time > 29.0)
+    });
 }
 
 #[test]

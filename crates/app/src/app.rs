@@ -1247,9 +1247,19 @@ impl App {
         None
     }
 
-    /// Play with nothing loaded: the shown album's selected or current
-    /// entry, else the file dialog.
+    /// Play with nothing loaded: the entry that played last, from where
+    /// it stopped (the resume store), as PotPlayer's Play after Stop; else
+    /// the shown album's selected or current entry; else the file dialog.
+    /// The panel's selection need not follow the files played since (Next
+    /// and Previous move only the playing entry; the owner, 2026-11-09:
+    /// the remote's Stop and Play started the file before).
     fn play_shown(&mut self, engine: &Engine) -> Option<UiRequest> {
+        if let (Some(album), Some((index, _))) =
+            (self.library.lists().playing, self.library.playing())
+        {
+            drop(self.play_entry(engine, album, index, false));
+            return None;
+        }
         let shown = self.library.lists().shown;
         let target = self
             .library
