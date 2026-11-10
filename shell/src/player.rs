@@ -3308,15 +3308,17 @@ impl qobject::Player {
             .log_second(&rvp_app::log::Second { drawn, processors });
     }
 
-    /// The GPU power budget (D17): the cards are read while it is on, a
-    /// file plays (a reading a second would keep a laptop's sleeping card
-    /// awake) and no self-test gives the readings; its steps and returns
-    /// are carried out and logged.
+    /// The GPU power budget (D17): the cards are read while it is on (or
+    /// the log takes Debug, which gets them every 3 s), a file plays (a
+    /// reading a second would keep a laptop's sleeping card awake) and no
+    /// self-test gives the readings; its steps and returns are carried out
+    /// and logged.
     fn tick_gpu_power(mut self: Pin<&mut Self>) {
         let Some(core) = self.as_mut().core_mut() else {
             return;
         };
-        let wanted = core.app.gpu_power_wanted() && core.app.model.playing();
+        // For the budget, or for the log at Debug.
+        let wanted = core.app.gpu_readings_wanted() && core.app.model.playing();
         match core.gpu_readings {
             GpuReadings::Off if wanted => {
                 let (sender, receiver) = std::sync::mpsc::channel();
@@ -3368,6 +3370,7 @@ impl qobject::Player {
             draw,
             rated,
             unit: rvp_app::gpu_power::Unit::Watts,
+            state: rvp_app::gpu_power::CardState::default(),
         };
         let requests = core
             .app

@@ -79,6 +79,52 @@ pub struct Sample {
     /// Its rated power: the default power limit, else the one in force.
     pub rated: f64,
     pub unit: Unit,
+    /// What else its reader tells (NVML's), for the log.
+    pub state: CardState,
+}
+
+/// A card's load, clocks, temperature and performance state where its
+/// reader has them (NVML: NVIDIA's cards), for the log at Debug
+/// ([`GPU_LOG_EVERY`]; the owner, 2026-11-10: was the card busy or slowed
+/// when playback stuttered?).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct CardState {
+    /// The share of the last sample period the card was busy, in percent.
+    pub load: Option<u32>,
+    pub graphics_mhz: Option<u32>,
+    pub memory_mhz: Option<u32>,
+    /// Degrees Celsius.
+    pub temperature: Option<u32>,
+    /// NVML's performance state (P0, the fastest, to P15).
+    pub pstate: Option<u32>,
+}
+
+/// How often the cards' readings go to the log at Debug.
+pub const GPU_LOG_EVERY: Duration = Duration::from_secs(3);
+
+impl Sample {
+    /// The log's text of it: `NAME: 182 W of 300 W, load 54 %, 2790 MHz,
+    /// memory 13801 MHz, 61 °C, P1` (the parts the reader has).
+    #[must_use]
+    pub fn log_text(&self) -> String {
+        let mut text = match self.unit {
+            Unit::Watts => format!("{}: {:.0} W of {:.0} W", self.name, self.draw, self.rated),
+            Unit::Percent => format!("{}: {:.0} % busy", self.name, self.draw),
+        };
+        let state = &self.state;
+        let parts = [
+            state.load.map(|load| format!("load {load} %")),
+            state.graphics_mhz.map(|mhz| format!("{mhz} MHz")),
+            state.memory_mhz.map(|mhz| format!("memory {mhz} MHz")),
+            state.temperature.map(|celsius| format!("{celsius} °C")),
+            state.pstate.map(|pstate| format!("P{pstate}")),
+        ];
+        for part in parts.into_iter().flatten() {
+            text.push_str(", ");
+            text.push_str(&part);
+        }
+        text
+    }
 }
 
 impl Sample {
@@ -365,6 +411,8 @@ pub(crate) struct Budget {
     /// The last reading and when it came.
     last: Vec<Sample>,
     last_at: Option<Instant>,
+    /// When the readings last went to the log.
+    logged_at: Option<Instant>,
 }
 
 impl App {
@@ -372,6 +420,34 @@ impl App {
     #[must_use]
     pub fn gpu_power_wanted(&self) -> bool {
         self.settings.render.power_budget < BUDGET_OFF
+    }
+
+    /// True while the shell should read the cards: for the budget, or for
+    /// the log at Debug ([`GPU_LOG_EVERY`]).
+    #[must_use]
+    pub fn gpu_readings_wanted(&self) -> bool {
+        self.gpu_power_wanted() || crate::log::enabled(crate::log::Level::Debug)
+    }
+
+    /// Writes the cards' readings to the log at Debug, once every
+    /// [`GPU_LOG_EVERY`].
+    fn log_gpu_readings(&mut self, samples: &[Sample], now: Instant) {
+        if samples.is_empty()
+            || !crate::log::enabled(crate::log::Level::Debug)
+            || self
+                .gpu
+                .logged_at
+                .is_some_and(|at| now.duration_since(at) < GPU_LOG_EVERY)
+        {
+            return;
+        }
+        self.gpu.logged_at = Some(now);
+        for sample in samples {
+            crate::log::write(
+                crate::log::Level::Debug,
+                &format!("gpu: {}", sample.log_text()),
+            );
+        }
     }
 
     /// The channel the shell's readings arrive on; `None` when it stops
@@ -394,6 +470,14 @@ impl App {
     /// Takes the shell's latest reading (call it about once a second); at
     /// 100 % every step comes back.
     pub fn gpu_tick(&mut self, engine: &Engine, now: Instant) -> Vec<UiRequest> {
+        let latest = self
+            .gpu
+            .receiver
+            .as_ref()
+            .and_then(|receiver| receiver.try_iter().last());
+        if let Some(samples) = &latest {
+            self.log_gpu_readings(samples, now);
+        }
         if !self.gpu_power_wanted() {
             let steps = self.gpu.governor.give_all();
             for step in &steps {
@@ -407,11 +491,6 @@ impl App {
                 )]
             };
         }
-        let latest = self
-            .gpu
-            .receiver
-            .as_ref()
-            .and_then(|receiver| receiver.try_iter().last());
         match latest {
             Some(samples) => self.gpu_power_sample(engine, samples, now),
             None => Vec::new(),
@@ -615,6 +694,7 @@ pub fn amdgpu_samples(drm: &Path) -> Vec<Sample> {
                     draw: watts(draw),
                     rated: watts(rated),
                     unit: Unit::Watts,
+                    state: CardState::default(),
                 });
                 break;
             }
@@ -785,12 +865,42 @@ mod tests {
     }
 
     #[test]
+    fn readings_read_well_in_the_log() {
+        let card = Sample {
+            name: "RTX 50-series card".to_owned(),
+            draw: 182.4,
+            rated: 300.0,
+            unit: Unit::Watts,
+            state: CardState {
+                load: Some(54),
+                graphics_mhz: Some(2790),
+                memory_mhz: Some(13801),
+                temperature: Some(61),
+                pstate: Some(1),
+            },
+        };
+        assert_eq!(
+            card.log_text(),
+            "RTX 50-series card: 182 W of 300 W, load 54 %, 2790 MHz, memory 13801 MHz, 61 °C, P1"
+        );
+        let amd = Sample {
+            name: "Radeon".to_owned(),
+            draw: 40.0,
+            rated: 100.0,
+            unit: Unit::Percent,
+            state: CardState::default(),
+        };
+        assert_eq!(amd.log_text(), "Radeon: 40 % busy");
+    }
+
+    #[test]
     fn the_busiest_card_counts() {
         let card = |draw: f64, rated: f64| Sample {
             name: "card".to_owned(),
             draw,
             rated,
             unit: Unit::Watts,
+            state: CardState::default(),
         };
         assert_eq!(busiest(&[]), None);
         assert_eq!(busiest(&[card(100.0, 0.0)]), None);
@@ -851,12 +961,14 @@ mod tests {
                     draw: 35.5,
                     rated: 355.0,
                     unit: Unit::Watts,
+                    state: CardState::default(),
                 },
                 Sample {
                     name: "Radeon RX 6800".to_owned(),
                     draw: 203.0,
                     rated: 250.0,
                     unit: Unit::Watts,
+                    state: CardState::default(),
                 },
             ]
         );

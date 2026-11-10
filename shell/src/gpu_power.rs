@@ -9,7 +9,7 @@
 use std::sync::mpsc;
 use std::time::Duration;
 
-use rvp_app::gpu_power::{Sample, Unit};
+use rvp_app::gpu_power::{CardState, Sample, Unit};
 
 /// How often the cards are read.
 const INTERVAL: Duration = Duration::from_secs(1);
@@ -49,10 +49,11 @@ fn read() -> Vec<Sample> {
     samples.collect()
 }
 
-/// One line of the C++ side: `unit<TAB>draw<TAB>rated<TAB>name`, the
-/// unit `W` (watts) or `%` (a share in percent).
+/// One line of the C++ side: `unit<TAB>draw<TAB>rated<TAB>load<TAB>
+/// graphics<TAB>memory<TAB>temperature<TAB>pstate<TAB>name`, the unit `W`
+/// (watts) or `%` (a share in percent), -1 for a part the reader lacks.
 fn parse(line: &str) -> Option<Sample> {
-    let mut fields = line.splitn(4, '\t');
+    let mut fields = line.splitn(9, '\t');
     let unit = match fields.next()? {
         "W" => Unit::Watts,
         "%" => Unit::Percent,
@@ -60,12 +61,24 @@ fn parse(line: &str) -> Option<Sample> {
     };
     let draw = fields.next()?.parse().ok()?;
     let rated = fields.next()?.parse().ok()?;
+    let mut part = || -> Option<Option<u32>> {
+        let value: i64 = fields.next()?.parse().ok()?;
+        Some(u32::try_from(value).ok())
+    };
+    let state = CardState {
+        load: part()?,
+        graphics_mhz: part()?,
+        memory_mhz: part()?,
+        temperature: part()?,
+        pstate: part()?,
+    };
     let name = fields.next()?.to_owned();
     Some(Sample {
         name,
         draw,
         rated,
         unit,
+        state,
     })
 }
 
@@ -76,17 +89,26 @@ mod tests {
     #[test]
     fn the_native_lines_become_samples() {
         assert_eq!(
-            parse("W\t36.400\t350.000\tRTX 30-series card"),
+            parse("W\t182.400\t300.000\t54\t2790\t13801\t61\t1\tRTX 50-series card"),
             Some(Sample {
-                name: "RTX 30-series card".to_owned(),
-                draw: 36.4,
-                rated: 350.0,
+                name: "RTX 50-series card".to_owned(),
+                draw: 182.4,
+                rated: 300.0,
                 unit: Unit::Watts,
+                state: CardState {
+                    load: Some(54),
+                    graphics_mhz: Some(2790),
+                    memory_mhz: Some(13801),
+                    temperature: Some(61),
+                    pstate: Some(1),
+                },
             })
         );
+        // AMD's adapter counter has no state.
         assert_eq!(
-            parse("%\t42.5\t100\tAMD Radeon RX 7800 XT").map(|sample| sample.unit),
-            Some(Unit::Percent)
+            parse("%\t42.5\t100\t-1\t-1\t-1\t-1\t-1\tAMD Radeon RX 7800 XT")
+                .map(|sample| (sample.unit, sample.state)),
+            Some((Unit::Percent, CardState::default()))
         );
         assert_eq!(parse("W\t36.4\tNVIDIA"), None);
         assert_eq!(parse("kW\t1\t2\tcard"), None);

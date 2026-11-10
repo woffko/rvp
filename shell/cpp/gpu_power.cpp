@@ -6,7 +6,9 @@
 //   nvmlDeviceGetPowerUsage (milliwatts; a one-second average on Ampere
 //   and later), the rated power the default power limit, else the one in
 //   force. None of these calls needs administrator rights. NVML is
-//   loaded on the first reading, never linked: RVP runs without it.
+//   loaded on the first reading, never linked: RVP runs without it. The
+//   load, clocks, temperature and performance state go to the log at
+//   Debug; a driver's NVML without one of those calls leaves it out.
 // - On Windows, AMD's cards through Windows' own counter: D3DKMT's adapter
 //   performance data (WDDM 2.4) gives the draw in tenths of a percent of
 //   the card's power; a driver that does not fill it reports 0. AMD's
@@ -51,12 +53,26 @@ std::mutex &lock()
     return mutex;
 }
 
-// One reading as src/gpu_power.rs parses it:
-// `unit<TAB>draw<TAB>rated<TAB>name`, the unit `W` or `%`.
-void append(std::string &lines, char unit, double draw, double rated, const char *name)
+// A card's load (percent), graphics and memory clocks (MHz), temperature
+// (degrees Celsius) and performance state; -1 where the reader has none.
+struct CardState {
+    long long load = -1;
+    long long graphics = -1;
+    long long memory = -1;
+    long long temperature = -1;
+    long long pstate = -1;
+};
+
+// One reading as src/gpu_power.rs parses it: `unit<TAB>draw<TAB>rated<TAB>
+// load<TAB>graphics<TAB>memory<TAB>temperature<TAB>pstate<TAB>name`, the
+// unit `W` or `%`.
+void append(std::string &lines, char unit, double draw, double rated, const CardState &state,
+            const char *name)
 {
-    char numbers[64];
-    std::snprintf(numbers, sizeof numbers, "%c\t%.3f\t%.3f\t", unit, draw, rated);
+    char numbers[160];
+    std::snprintf(numbers, sizeof numbers, "%c\t%.3f\t%.3f\t%lld\t%lld\t%lld\t%lld\t%lld\t", unit,
+                  draw, rated, state.load, state.graphics, state.memory, state.temperature,
+                  state.pstate);
     lines += numbers;
     for (const char *c = name; *c != '\0'; ++c)
         lines += (*c == '\t' || *c == '\n' || *c == '\r') ? ' ' : *c;
@@ -67,6 +83,13 @@ void append(std::string &lines, char unit, double draw, double rated, const char
 using NvmlReturn = int;
 using NvmlDevice = struct NvmlDeviceSt *;
 constexpr NvmlReturn nvmlSuccess = 0;
+struct NvmlUtilization {
+    unsigned int gpu;
+    unsigned int memory;
+};
+constexpr int nvmlClockGraphics = 0;
+constexpr int nvmlClockMemory = 2;
+constexpr int nvmlTemperatureGpu = 0;
 
 struct Nvml {
     void *library = nullptr;
@@ -82,6 +105,11 @@ struct Nvml {
     NvmlReturn (*enforced)(NvmlDevice, unsigned int *) = nullptr;
     NvmlReturn (*rated)(NvmlDevice, unsigned int *) = nullptr;
     NvmlReturn (*name)(NvmlDevice, char *, unsigned int) = nullptr;
+    // For the log; any of them may be missing.
+    NvmlReturn (*utilization)(NvmlDevice, NvmlUtilization *) = nullptr;
+    NvmlReturn (*clock)(NvmlDevice, int, unsigned int *) = nullptr;
+    NvmlReturn (*temperature)(NvmlDevice, int, unsigned int *) = nullptr;
+    NvmlReturn (*pstate)(NvmlDevice, int *) = nullptr;
 };
 
 Nvml &nvml()
@@ -124,7 +152,7 @@ bool startNvml(Nvml &state)
     if (state.library == nullptr)
         state.library = openNvml();
     void *library = state.library;
-    return library != nullptr && find(library, "nvmlInit_v2", state.init)
+    const bool ready = library != nullptr && find(library, "nvmlInit_v2", state.init)
         && find(library, "nvmlShutdown", state.shutdown)
         && find(library, "nvmlDeviceGetCount_v2", state.count)
         && find(library, "nvmlDeviceGetHandleByIndex_v2", state.handle)
@@ -132,6 +160,36 @@ bool startNvml(Nvml &state)
         && find(library, "nvmlDeviceGetEnforcedPowerLimit", state.enforced)
         && find(library, "nvmlDeviceGetPowerManagementDefaultLimit", state.rated)
         && find(library, "nvmlDeviceGetName", state.name) && state.init() == nvmlSuccess;
+    if (ready) {
+        // For the log: a missing one leaves its part out.
+        find(library, "nvmlDeviceGetUtilizationRates", state.utilization);
+        find(library, "nvmlDeviceGetClockInfo", state.clock);
+        find(library, "nvmlDeviceGetTemperature", state.temperature);
+        find(library, "nvmlDeviceGetPerformanceState", state.pstate);
+    }
+    return ready;
+}
+
+// The card's state for the log, where NVML has the calls.
+CardState nvmlState(const Nvml &library, NvmlDevice device)
+{
+    CardState state;
+    NvmlUtilization utilization{};
+    if (library.utilization != nullptr && library.utilization(device, &utilization) == nvmlSuccess)
+        state.load = utilization.gpu;
+    unsigned int value = 0;
+    if (library.clock != nullptr && library.clock(device, nvmlClockGraphics, &value) == nvmlSuccess)
+        state.graphics = value;
+    if (library.clock != nullptr && library.clock(device, nvmlClockMemory, &value) == nvmlSuccess)
+        state.memory = value;
+    if (library.temperature != nullptr
+        && library.temperature(device, nvmlTemperatureGpu, &value) == nvmlSuccess)
+        state.temperature = value;
+    int pstate = 0;
+    if (library.pstate != nullptr && library.pstate(device, &pstate) == nvmlSuccess && pstate >= 0
+        && pstate <= 15)
+        state.pstate = pstate;
+    return state;
 }
 
 void readNvml(std::string &lines)
@@ -162,7 +220,7 @@ void readNvml(std::string &lines)
         char name[96] = {};
         if (state.name(device, name, sizeof name) != nvmlSuccess)
             std::snprintf(name, sizeof name, "NVIDIA GPU %u", index);
-        append(lines, 'W', draw / 1000.0, rated / 1000.0, name);
+        append(lines, 'W', draw / 1000.0, rated / 1000.0, nvmlState(state, device), name);
     }
 }
 
@@ -246,7 +304,7 @@ void readAdapters(std::string &lines)
         query.pPrivateDriverData = &perf;
         query.PrivateDriverDataSize = sizeof perf;
         if (D3DKMTQueryAdapterInfo(&query) == 0)
-            append(lines, '%', perf.Power / 10.0, 100.0, adapter.name.c_str());
+            append(lines, '%', perf.Power / 10.0, 100.0, CardState{}, adapter.name.c_str());
     }
 }
 
