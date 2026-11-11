@@ -1,15 +1,17 @@
 //! RIFE (TensorRT) without RVP's window (M18; `crates/app/src/tensorrt.rs`):
 //! installs NVIDIA's files from MIRROR (a folder URL that holds the
-//! archives, `file://` too) into FOLDER as RVP does, unless they are there,
-//! then measures RVP's own RIFE (TensorRT) script at 720p, 1080p and 1440p
-//! with the calibration's core (the first measurement builds the engine,
-//! minutes). `VSSCRIPT_PATH` names RVP's VapourSynth runtime, whose
-//! `vs-mlrt` folder the installation takes.
+//! archives, `file://` too; `-` for the servers RVP downloads from) into
+//! FOLDER as RVP does, unless they are there, then measures RVP's own RIFE
+//! (TensorRT) script at 720p, 1080p and 1440p with the calibration's core
+//! (the first measurement builds the engine, minutes); `install` stops
+//! after the installation. `VSSCRIPT_PATH` names RVP's VapourSynth runtime,
+//! whose `vs-mlrt` folder the installation takes. The kit's `m18trt` step
+//! runs it on the Ubuntu boot.
 //!
 //! `cargo run --release -p rvp-app --example rife_trt -- FOLDER MIRROR
-//! [fast|medium|quality]`
+//! [fast|medium|quality|install]`
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::atomic::AtomicBool;
 use std::time::Duration;
 
@@ -20,7 +22,7 @@ use rvp_engine::calibrate::{Probe, measure};
 fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
     let (Some(folder), Some(mirror)) = (args.first(), args.get(1)) else {
-        eprintln!("usage: rife_trt FOLDER MIRROR [fast|medium|quality]");
+        eprintln!("usage: rife_trt FOLDER MIRROR [fast|medium|quality|install]");
         std::process::exit(2);
     };
     let folder = PathBuf::from(folder);
@@ -37,38 +39,13 @@ fn main() {
         std::process::exit(2);
     };
     if installed(&folder).is_none() {
-        let installer = Installer::start(Job {
-            folder: folder.clone(),
-            package: package.clone(),
-            archives: archives(),
-            mirror: Some(mirror.clone()),
-            builder: None,
-        })
-        .expect("installer");
-        'install: loop {
-            std::thread::sleep(Duration::from_millis(500));
-            for event in installer.take() {
-                match event {
-                    Event::Progress { stage, done, total } => {
-                        println!("progress {stage:?} {done} of {total}");
-                    }
-                    Event::Finished(Ok(done)) => {
-                        println!(
-                            "installed {} for {} ({} files)",
-                            done.version,
-                            done.builder,
-                            done.files.len()
-                        );
-                        break 'install;
-                    }
-                    Event::Finished(Err(error)) => {
-                        println!("install failed: {error}");
-                        std::process::exit(1);
-                    }
-                    Event::Cancelled => std::process::exit(1),
-                }
-            }
-        }
+        install(&folder, &package, mirror);
+    }
+    if let Some(done) = installed(&folder) {
+        println!("installation {} for {}", done.version, done.builder);
+    }
+    if args.get(2).map(String::as_str) == Some("install") {
+        return;
     }
     let path = folder.join("rife-trt-check.vpy");
     let files = Files {
@@ -111,6 +88,43 @@ fn main() {
                 }
             }
             Err(error) => println!("size={width}x{height} error={error}"),
+        }
+    }
+}
+
+/// Installs NVIDIA's files into `folder` as RVP does (`-`: from the
+/// archives' own servers); exits on a failure.
+fn install(folder: &Path, package: &Path, mirror: &str) {
+    let installer = Installer::start(Job {
+        folder: folder.to_path_buf(),
+        package: package.to_path_buf(),
+        archives: archives(),
+        mirror: (mirror != "-").then(|| mirror.to_owned()),
+        builder: None,
+    })
+    .expect("installer");
+    loop {
+        std::thread::sleep(Duration::from_millis(500));
+        for event in installer.take() {
+            match event {
+                Event::Progress { stage, done, total } => {
+                    println!("progress {stage:?} {done} of {total}");
+                }
+                Event::Finished(Ok(done)) => {
+                    println!(
+                        "installed {} for {} ({} files)",
+                        done.version,
+                        done.builder,
+                        done.files.len()
+                    );
+                    return;
+                }
+                Event::Finished(Err(error)) => {
+                    println!("install failed: {error}");
+                    std::process::exit(1);
+                }
+                Event::Cancelled => std::process::exit(1),
+            }
         }
     }
 }

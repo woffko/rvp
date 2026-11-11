@@ -114,6 +114,13 @@
 #   m18     milestone M18: the smoothing and GPU budget self-tests (MVTools
 #           with a VapourSynth runtime, else Blend) and the smoothing tests;
 #           the GPU modes are the Ubuntu boot's (CHECKLIST.md)
+#   m18trt  M18's RIFE (TensorRT) on an NVIDIA card, after vapoursynth:
+#           NVIDIA's runtime installed as RVP installs it (from
+#           RVP_TENSORRT_MIRROR, else NVIDIA's and PyPI's servers, 3.8 GB)
+#           into the kit's folder, then RVP's RIFE (TensorRT) script measured
+#           at 720p, 1080p and 1440p (the first builds the engine, minutes);
+#           only at a power limit of at most 90 % of the card's default
+#           (CHECKLIST.md section 10), with nvidia-smi before and after
 #   m3desktop  optional, not in m3all: an "RVP (kit)" entry in
 #           ~/.local/share/applications so that Files can open videos in
 #           the running RVP (single instance); delete the file to undo
@@ -126,7 +133,8 @@
 #           m2svp m6svp report
 #   m7all   m6all with m7 after m6
 #   m8all   m7all with m8package and m8 after m7
-#   m17all  m8all with whisper, and m9 to m16 and m18 after m8 (goal S)
+#   m17all  m8all with whisper, and m9 to m16, m18 and m18trt after m8
+#           (goal S)
 #
 # environment:
 #   RVP_KIT_DIR     build and download directory (default ~/.cache/rvp-kit)
@@ -136,6 +144,8 @@
 #   RVP_SKIN        .dsf skin for S3 and the m-steps (default: none for S3,
 #                   which then paints nothing; RVP Default for RVP)
 #   RVP_VPY         motion interpolation script for S2
+#   RVP_TENSORRT_MIRROR  folder URL with NVIDIA's Linux wheels for m18trt
+#                   (file:// too; default: NVIDIA's and PyPI's servers)
 #   VSSCRIPT_PATH   libvapoursynth-script.so to use (default: searched)
 #   RVP_VS_PLUGINS  extra VapourSynth plugins for S2, ':' separated (default:
 #                   the kit's mvtools)
@@ -2201,6 +2211,66 @@ step_m18() {
     kit_result m18 "$bad" "vsscript=${vsscript:-none}$summary"
 }
 
+# The card's power limit and its default in whole watts, "LIMIT DEFAULT".
+nvidia_power() {
+    nvidia-smi --query-gpu=power.limit,power.default_limit --format=csv,noheader,nounits 2> /dev/null |
+        head -1 | awk -F', *' '{ printf "%d %d\n", $1, $2 }'
+}
+
+step_m18trt() {
+    local log=$LOG_DIR/m18trt.log runtime power limit default before after code line bad=0 summary
+    if [ "$(gpu_vendor)" != nvidia ]; then
+        record m18trt SKIPPED "no NVIDIA card"
+        return 0
+    fi
+    runtime=$(vs_runtime)
+    if [ ! -e "$runtime/vs-mlrt/libvstrt.so" ]; then
+        record m18trt SKIPPED "no vs-mlrt in RVP's VapourSynth runtime: run vapoursynth first"
+        return 0
+    fi
+    # GPU runs go at a real power limit (D17): 90 % of the default or less.
+    power=$(nvidia_power)
+    limit=${power% *}
+    default=${power#* }
+    if [ "${limit:-0}" -le 0 ] || [ "${default:-0}" -le 0 ] || [ $((limit * 10)) -gt $((default * 9)) ]; then
+        record m18trt SKIPPED "power limit ${limit:-?} W of ${default:-?} W: set at most 90 % first (CHECKLIST.md section 10)"
+        return 0
+    fi
+    : > "$log"
+    before=$(nvidia-smi --query-gpu=name,driver_version,compute_cap,power.draw,power.limit,temperature.gpu \
+        --format=csv,noheader 2>&1)
+    echo "before: $before" >> "$log"
+    (
+        cd "$REPO" || exit 1
+        spike_env
+        export QMAKE MPV_LIB_DIR VSSCRIPT_PATH=$runtime/libvapoursynth-script.so.0 PYTHONDONTWRITEBYTECODE=1
+        QMAKE=$(qt_dir)/bin/qmake
+        MPV_LIB_DIR=$(mpv_lib_dir)
+        cargo run --release -p rvp-app --example rife_trt -- "$KIT_DIR/tensorrt" "${RVP_TENSORRT_MIRROR:--}" medium
+    ) >> "$log" 2>&1
+    code=$?
+    # A card that no longer answers stops everything (AGENTS.md).
+    if ! after=$(nvidia-smi --query-gpu=name,power.draw,temperature.gpu --format=csv,noheader 2>&1); then
+        echo "after: $after" >> "$log"
+        record m18trt FAIL "nvidia-smi no longer answers after the run: stop and tell the owner"
+        exit 1
+    fi
+    echo "after: $after" >> "$log"
+    summary="$(grep -m1 '^installation ' "$log")"
+    kit_check "$log" tensorrt_installed "$(grep -q '^installation ' "$log" && echo 1 || echo 0)" "$summary" ||
+        bad=$((bad + 1))
+    for size in 1280x720 1920x1080 2560x1440; do
+        line=$(grep -m1 "^size=$size " "$log")
+        summary="$summary, ${line:-size=$size missing}"
+    done
+    # 1080p at 60 frames a second, as the calibration asks of an engine.
+    line=$(grep -m1 '^size=1920x1080 ' "$log" | sed -n 's/.*output_fps=\([0-9.]*\).*/\1/p')
+    kit_check "$log" rife_trt_keeps_1080p60 "$(awk -v fps="${line:-0}" 'BEGIN { print (fps >= 60) ? 1 : 0 }')" \
+        "${line:-no measurement} fps" || bad=$((bad + 1))
+    [ "$code" -eq 0 ] || bad=$((bad + 1))
+    kit_result m18trt "$bad" "$summary, power limit $limit W of $default W"
+}
+
 step_report() {
     local file
     file=$REPO/docs/test-runs/$(date +%Y-%m-%d)-$(hostname).md
@@ -2250,13 +2320,13 @@ for step in "$@"; do
         m7all) set -- check deps mpv mvtools m2build m2 m3 m4 m6 m7 m2input m2gpu m6gpu m2svp m6svp report ;;
         m8all) set -- check deps mpv mvtools m2build m2 m3 m4 m6 m7 m8package m8 m2input m2gpu m6gpu m2svp m6svp report ;;
         m17all) set -- check deps mpv mvtools whisper vapoursynth m2build m2 m3 m4 m6 m7 m8package m8 m9 m10 m11 m12 m13 m14 m15 m16 \
-            m18 m2input m2gpu m6gpu m2svp m6svp report ;;
+            m18 m18trt m2input m2gpu m6gpu m2svp m6svp report ;;
     esac
 done
 overall=0
 for step in "$@"; do
     case $step in
-        check | deps | mpv | mvtools | whisper | vapoursynth | build | s1 | s2 | s3 | input | m2build | m2 | m2input | m2gpu | m2svp | m3 | m4 | m6 | m7 | m8package | m8 | m8removed | m9 | m10 | m11 | m12 | m13 | m14 | m15 | m16 | m18 | m6svp | m6gpu | m3desktop | report)
+        check | deps | mpv | mvtools | whisper | vapoursynth | build | s1 | s2 | s3 | input | m2build | m2 | m2input | m2gpu | m2svp | m3 | m4 | m6 | m7 | m8package | m8 | m8removed | m9 | m10 | m11 | m12 | m13 | m14 | m15 | m16 | m18 | m18trt | m6svp | m6gpu | m3desktop | report)
             "step_$step" || overall=1
             ;;
         all | m2all | m3all | m4all | m6all | m7all | m8all | m17all) ;;

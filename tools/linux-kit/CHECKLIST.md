@@ -14,7 +14,7 @@ Nothing is installed system-wide by the kit.
 - [ ] Boot Ubuntu 26.10 and log in to a **GNOME Wayland** session (the
       default). Check with `echo $XDG_SESSION_TYPE` → `wayland`.
 - [ ] NVIDIA driver installed and working: `nvidia-smi` lists the
-      RTX 30-series card.
+      RTX 50-series card (an RTX 30-series card until 2026-11-07).
 - [ ] Packages. Run `tools/linux-kit/kit.sh check`; it prints the exact
       `sudo apt-get install -y ...` line for whatever is missing. Run that
       line, then run `check` again until it passes. The list includes
@@ -428,6 +428,21 @@ when absent; none of them is ever committed):
 - [ ] **dvdauthor** for `m16` (`sudo apt-get install -y dvdauthor`, which
       has `spumux`): the step makes the synthetic menu DVD and Blu-ray in the
       kit's folder once. `RVP_DVD_MENU` and `RVP_BD_MENU` name other copies.
+- [ ] **NVIDIA's Linux wheels** for `m18trt` and RIFE (TensorRT) in RVP:
+      TensorRT 10.15.1.29's and CUDA 13.2's runtime and NVRTC wheels, as
+      `crates/app/src/tensorrt.rs` pins them, are on the Windows partition
+      in `Users/<user>/rvp-test/linux-boot/trt-linux` (never committed):
+      `export RVP_TENSORRT_MIRROR=file:///path/to/trt-linux` (an absolute
+      path after `file://`). Without it the step and RVP's Download…
+      fetch 3.8 GB from NVIDIA and PyPI.
+- [ ] **The card's power limit** for every GPU step and check (D17: GPU
+      test runs go at 90 % of the card's default), as an administrator:
+      read the default with
+      `nvidia-smi --query-gpu=power.default_limit --format=csv`, set
+      `sudo nvidia-smi -pl WATTS` with 90 % of it before the GPU steps,
+      and `sudo nvidia-smi -pl DEFAULT` after the session (a reboot also
+      puts it back). `m18trt` is skipped above 90 %. Should `nvidia-smi`
+      stop answering, stop everything.
 
 From a terminal inside the GNOME session:
 
@@ -436,8 +451,8 @@ cd ~/rvp && git pull
 tools/linux-kit/kit.sh m17all
 ```
 
-`m17all` is `m8all` with `m9` to `m16` and `m18` after `m8`; each step
-also runs alone (`kit.sh m11 report`). What appears on screen:
+`m17all` is `m8all` with `m9` to `m16`, `m18` and `m18trt` after `m8`;
+each step also runs alone (`kit.sh m11 report`). What appears on screen:
 
 - `m9`: RVP's window several times with mpv's controller over the video,
   then each classic skin (main window, equalizer and playlist docked under
@@ -452,6 +467,8 @@ also runs alone (`kit.sh m11 report`). What appears on screen:
   skipped), `m16` shows the synthetic discs' menus.
 - `m15` with `RVP_URSERVER`: Unified Remote's manager listens on port
   9510 for the step's duration.
+- `m18trt`: no window; the card works hard for a few minutes while
+  TensorRT builds RIFE's engine and the script is measured.
 
 Then try by hand (the parts only a desktop and its hardware can check):
 
@@ -489,6 +506,30 @@ Then try by hand (the parts only a desktop and its hardware can check):
 - [ ] **SVP 4 for Linux** with RVP's own smoothing: with SVP 4 Manager
       running SVP attaches to a file, and RVP's smoothing stays off while
       SVP's filter plays (and for SVP's first 8 s).
+- [ ] **RIFE (TensorRT) in RVP** (after 2026-11-01; at the power limit,
+      with RVP started from the terminal that exports
+      `RVP_TENSORRT_MIRROR`): Video > Motion Smoothing's Download… (the
+      consent to NVIDIA's terms, then the installation for the card,
+      `sm120` on the RTX 50-series card), Calibrate… and Start (each engine
+      measured; RIFE (TensorRT)'s engine built, about two minutes), then a
+      1080p film with RIFE (TensorRT): the rate rises, the picture has no
+      fine grid over the in-between frames (TensorRT 10.16's fault), and
+      the Log page at Debug writes the playback's dropped frames and the
+      card's load, clocks and temperature every 3 s to `rvp.log`.
+- [ ] **Smoothing's other new parts**: "At a scene change" repeats a
+      scene's last frame at a cut instead of morphing; a file starts and
+      a seek resumes without a burst of dropped frames; "Step down after
+      dropped frames over" and the drop at once to a lighter step.
+- [ ] **Seeks with smoothing** (Time jump page, "Jumps with motion
+      smoothing"): the arrows, a click on the seek bar and a drag show
+      the target's frame at once, then the smoothed picture; `rvp.log` at
+      Debug has `seek:` lines with both times. With the Vulkan renderer
+      (through XWayland) the frame shows over RVP's native video window.
+- [ ] **The rest since goal S**: the OSD Messages page's colours,
+      outline and shadow on the volume notice; Stop, then Play in GNOME's
+      media controls plays the same file on from where it stopped; each of
+      PotPlayer's bundled skins (`Skins/` on the Windows partition) opens
+      and lays out as on Windows, its labels sized to this system's fonts.
 
 ## Steps and what they record
 
@@ -525,7 +566,8 @@ Then try by hand (the parts only a desktop and its hardware can check):
 | `m14` | graphical session, cargo | the M14 self-test passes on RVP Default (and on `RVP_SKIN`), the autostart entry is as it was, and the settings, translations, menus and synthetic skin tests pass |
 | `m15` | graphical session, cargo; `RVP_URSERVER` optional | the M15 self-test passes; with Unified Remote Server: it runs, its web client connects, the remote's actions reach RVP, the token is not in RVP's log, the server's log has no errors; the control API's and the remote's tests pass |
 | `m16` | graphical session, cargo, dvdauthor | the system has libdvdnav and libbluray, the M16 self-test shows and works both discs' menus, and the shell's navigation tests ran on them |
-| `m18` | graphical session, cargo | the smoothing and GPU budget self-tests pass (MVTools with a VapourSynth runtime, else Blend) and the smoothing tests pass |
+| `m18` | graphical session, cargo | the smoothing and GPU budget self-tests pass (MVTools with a VapourSynth runtime, else Blend; seeks skip the frames before the target and ask for the target's picture) and the smoothing tests pass |
+| `m18trt` | NVIDIA card at 90 % of its power or less, `vapoursynth`, cargo; `RVP_TENSORRT_MIRROR` optional | TensorRT is installed for the card as RVP installs it, RVP's RIFE (TensorRT) script makes 1080p at 60 frames a second or more (720p and 1440p are in the detail), and `nvidia-smi` answers afterwards |
 | `m3desktop` | `m2build` | the desktop entry was written |
 | `report` | — | the Markdown report was written |
 

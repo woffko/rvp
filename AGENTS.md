@@ -346,7 +346,10 @@ smoothing for users without SVP, after a study of the engines.
   (NVIDIA's comes in at run time by `$ORIGIN/vsmlrt-cuda`), and
   `check-deb.sh` leaves `vs-mlrt/` out of its library check.
   `cargo run -p rvp-app --example rife_trt -- FOLDER MIRROR` installs and
-  measures without RVP's window (`VSSCRIPT_PATH` at RVP's runtime);
+  measures without RVP's window (`VSSCRIPT_PATH` at RVP's runtime; MIRROR
+  `-` is NVIDIA's servers, a last argument `install` stops after the
+  installation; the kit's `m18trt` step runs it on the Ubuntu boot, only
+  at a power limit of 90 % or less);
   `cargo run -p rvp-engine --example render_vf -- FILE START FRAMES OUT
   [VF]` writes the frames a filter makes as PNG files, to compare engines.
 - The control panel (F7) is a second window (`shell/qml/ControlPanel.qml`)

@@ -92,8 +92,10 @@ TRT_OSS=$WORK/tensorrt-oss-$TRT_OSS_TAG
 [ -d "$TRT_OSS/.git" ] || kit_clone https://github.com/NVIDIA/TensorRT.git "$TRT_OSS" "$TRT_OSS_TAG"
 
 # vstrt: CUDA's static runtime, NVIDIA's libnvinfer.so.10 from
-# vsmlrt-cuda/ next to it.
-cmake -S "$VSMLRT/vstrt" -B "$WORK/vstrt-build" -G Ninja --fresh \
+# vsmlrt-cuda/ next to it. Each build starts from an empty folder
+# (Ubuntu 22.04's CMake 3.22 has no --fresh).
+rm -rf "$WORK/vstrt-build" "$WORK/trtexec-build"
+cmake -S "$VSMLRT/vstrt" -B "$WORK/vstrt-build" -G Ninja \
     -D CMAKE_BUILD_TYPE=Release \
     -D VAPOURSYNTH_INCLUDE_DIRECTORY="$VS_INCLUDE" \
     -D TENSORRT_HOME="$TRT_HOME" \
@@ -112,7 +114,7 @@ if [ ! -f "$TRT_OSS/.rvp-patched" ]; then
     sed -i 's/fp16 || bf16 || int8 || fp8 || int4 || best/0/g' "$SAMPLES/common/sampleOptions.cpp"
     touch "$TRT_OSS/.rvp-patched"
 fi
-cmake -S "$SAMPLES/trtexec" -B "$WORK/trtexec-build" -G Ninja --fresh \
+cmake -S "$SAMPLES/trtexec" -B "$WORK/trtexec-build" -G Ninja \
     -D CMAKE_BUILD_TYPE=Release \
     -D CUDAToolkit_ROOT="$CUDA" \
     -D CMAKE_CXX_STANDARD=20 \
