@@ -17,7 +17,10 @@
 //!   "Filters" lists what plays the file, as PotPlayer lists its
 //!   filter graph there: the source, the video decoder (hardware or
 //!   software), the video filters, the video output, the audio decoder, the
-//!   audio filters and the audio output, as lines without a command.
+//!   audio filters and the audio output. As PotPlayer's lines open their
+//!   filter's property page, each opens the settings page of its part
+//!   ([`filter_page`]; the owner, 2026-11-11: lines without a command
+//!   showed greyed out).
 //! * A skin menu item names a command (`ID_OPEN_URL`), a built-in submenu
 //!   (`CMD_POPUPMENU_PLAY_GOTO`, in place with `NoSubMenu='1'`) or nothing
 //!   (a separator). [`popup_source`] says which part of PotPlayer's menu
@@ -33,7 +36,7 @@ use std::sync::OnceLock;
 use rvp_engine::{Chapter, Engine, PropertyId, Track, TrackKind};
 use serde_json::{Value, json};
 
-use crate::action::{Action, ListAction};
+use crate::action::{Action, ListAction, SettingsPage};
 use crate::app::{App, UiRequest};
 use crate::commands::track_label;
 
@@ -368,6 +371,9 @@ pub enum Command {
     Skin(crate::skins::SkinChoice),
     /// A preset to activate (M14): 0 the default, then the list's.
     Preset(usize),
+    /// The settings window at a page ("Filters"' lines); pages without an
+    /// action of their own in [`crate::action::ACTIONS`] too.
+    Settings(SettingsPage),
 }
 
 /// An audio output choice of the Audio menu's lists.
@@ -499,6 +505,7 @@ impl Command {
             Command::Speech(choice) => format!("z:{}", choice.id()),
             Command::Skin(choice) => format!("d:{}", choice.id()),
             Command::Preset(index) => format!("p:{index}"),
+            Command::Settings(page) => format!("q:{}", page.key()),
         }
     }
 
@@ -533,6 +540,10 @@ impl Command {
             "z" => crate::speech::SpeechChoice::parse(value).map(Command::Speech),
             "d" => crate::skins::SkinChoice::parse(value).map(Command::Skin),
             "p" => value.parse().ok().map(Command::Preset),
+            "q" => SettingsPage::ALL
+                .into_iter()
+                .find(|page| page.key() == value)
+                .map(Command::Settings),
             "h" => {
                 if let Some(index) = value.strip_prefix("post") {
                     index.parse().ok().map(|index| Command::Shader(true, index))
@@ -593,6 +604,32 @@ fn chain_entries(text: &str) -> Vec<(Option<&str>, &str)> {
             (!name.is_empty()).then_some((label, name))
         })
         .collect()
+}
+
+/// The settings page of a filter in mpv's video (`video`) or audio chain,
+/// by its label: the page that turns it on and sets it; filters RVP did
+/// not put there, the chain's own page.
+fn filter_page(label: Option<&str>, video: bool) -> SettingsPage {
+    use crate::audio::chain;
+    match label {
+        Some(crate::smoothing::LABEL) => SettingsPage::Smoothing,
+        Some(label) if crate::smoothing::FRUC_LABELS.contains(&label) => SettingsPage::Smoothing,
+        Some("svp" | crate::video::SCRIPT_LABEL) => SettingsPage::Svp,
+        Some(crate::picture::RESIZE_LABEL) => SettingsPage::Resize,
+        Some(crate::picture::CROP_LABEL | crate::picture::MARGIN_LABEL) => SettingsPage::ExtendCrop,
+        Some(crate::stereo::STEREO_LABEL | crate::stereo::VR_LABEL) => SettingsPage::Stereo,
+        Some(crate::equalizer::LABEL) => SettingsPage::Equalizer,
+        Some(crate::normalizer::LABEL | chain::REVERB) => SettingsPage::Normalizer,
+        Some(crate::normalizer::TEMPO_LABEL) => SettingsPage::Playback,
+        Some(
+            chain::CHANNEL | chain::VOICE | chain::CRYSTALITY | chain::DENOISE | chain::CROSSFEED,
+        ) => SettingsPage::AudioEffects,
+        Some(chain::PREAMP | chain::GAINS) => SettingsPage::AudioVolume,
+        // The deinterlacer, the forced matrix, the effects, others' filters.
+        _ if video => SettingsPage::Video,
+        // The speakers' mix, AC3 encoding, the user's own filters.
+        _ => SettingsPage::Audio,
+    }
 }
 
 /// What a filter of RVP's is, or mpv's name of another one.
@@ -856,6 +893,7 @@ impl App {
                 };
                 self.activate_preset(engine, &name, true)
             }
+            Command::Settings(page) => Some(UiRequest::Preferences(Some(page.key()))),
             Command::EqualizerPreset(index) => self.set_equalizer_preset(engine, index),
             Command::Speakers(index) => self.set_speakers(engine, index),
             Command::Audio(choice) => self.audio_choice(engine, choice),
@@ -1365,13 +1403,27 @@ impl App {
         items
     }
 
+    /// The video output that runs: the renderer is taken at start, so the
+    /// window's kind tells it (a changed setting waits for the next start).
+    fn video_output(&self) -> &'static str {
+        if !self.native_video {
+            return "libmpv render API (OpenGL)";
+        }
+        match self.settings.render.renderer {
+            crate::render::Renderer::Vulkan => "gpu-next in RVP's window (Vulkan)",
+            crate::render::Renderer::Direct3d11 => "gpu-next in RVP's window (Direct3D 11)",
+            crate::render::Renderer::OpenGl => "gpu-next in RVP's window",
+        }
+    }
+
     /// What plays the file, from the source to the outputs ("Filters").
     fn pipeline(&self, live: &Live) -> Vec<MenuItem> {
         if !self.model.media_loaded() {
             return Vec::new();
         }
-        let info = |label: String| MenuItem {
+        let info = |label: String, page: SettingsPage| MenuItem {
             label,
+            command: Some(Command::Settings(page)),
             ..MenuItem::default()
         };
         let codec = |kind: TrackKind| {
@@ -1382,7 +1434,7 @@ impl App {
         };
         let mut lines = Vec::new();
         if let Some(format) = self.model.text(PropertyId::FileFormat) {
-            lines.push(info(format!("Source: {format}")));
+            lines.push(info(format!("Source: {format}"), SettingsPage::Decoders));
         }
         if let Some(video) = codec(TrackKind::Video) {
             let decoding = match self.model.text(PropertyId::HwdecCurrent) {
@@ -1391,13 +1443,22 @@ impl App {
                 }
                 _ => "software".to_owned(),
             };
-            lines.push(info(format!("Video decoder: {video} ({decoding})")));
+            lines.push(info(
+                format!("Video decoder: {video} ({decoding})"),
+                SettingsPage::Decoders,
+            ));
             for (label, name) in
                 chain_entries(self.model.text(PropertyId::VideoFilters).unwrap_or(""))
             {
-                lines.push(info(format!("Video filter: {}", filter_text(label, name))));
+                lines.push(info(
+                    format!("Video filter: {}", filter_text(label, name)),
+                    filter_page(label, true),
+                ));
             }
-            lines.push(info("Video output: libmpv render API (OpenGL)".to_owned()));
+            lines.push(info(
+                format!("Video output: {}", self.video_output()),
+                SettingsPage::Video,
+            ));
         }
         let audio = codec(TrackKind::Audio).or_else(|| {
             self.model
@@ -1405,14 +1466,17 @@ impl App {
                 .map(str::to_owned)
         });
         if let Some(audio) = audio {
-            lines.push(info(format!("Audio decoder: {audio}")));
+            lines.push(info(format!("Audio decoder: {audio}"), SettingsPage::Audio));
             for (label, name) in
                 chain_entries(self.model.text(PropertyId::AudioFilters).unwrap_or(""))
             {
-                lines.push(info(format!("Audio filter: {}", filter_text(label, name))));
+                lines.push(info(
+                    format!("Audio filter: {}", filter_text(label, name)),
+                    filter_page(label, false),
+                ));
             }
             if let Some(output) = self.model.text(PropertyId::CurrentAo) {
-                lines.push(info(format!("Audio output: {output}")));
+                lines.push(info(format!("Audio output: {output}"), SettingsPage::Audio));
             }
         }
         lines
@@ -1741,8 +1805,42 @@ mod tests {
         ] {
             assert_eq!(Command::parse(&command.id()), Some(command), "{command:?}");
         }
+        // Every settings page, with an action of its own or not.
+        for page in SettingsPage::ALL {
+            let command = Command::Settings(page);
+            assert_eq!(Command::parse(&command.id()), Some(command), "{page:?}");
+        }
+        assert_eq!(Command::parse("q:no-such"), None);
         assert_eq!(Command::parse("w:no-such"), None);
         assert_eq!(Command::parse("garbage"), None);
+    }
+
+    #[test]
+    fn the_video_output_is_the_renderer_that_runs() {
+        let dir = std::env::temp_dir().join(format!("rvp-menu-output-{}", std::process::id()));
+        let mut app = App::new(crate::Settings::default(), &dir).expect("app");
+        assert_eq!(app.video_output(), "libmpv render API (OpenGL)");
+        app.native_video = true;
+        app.settings.render.renderer = crate::render::Renderer::Vulkan;
+        assert_eq!(app.video_output(), "gpu-next in RVP's window (Vulkan)");
+        app.settings.render.renderer = crate::render::Renderer::Direct3d11;
+        assert_eq!(app.video_output(), "gpu-next in RVP's window (Direct3D 11)");
+        // Vulkan's filters, SVP's and the user's own go to their pages.
+        assert_eq!(
+            filter_page(Some("rvpsmoothvk"), true),
+            SettingsPage::Smoothing
+        );
+        assert_eq!(filter_page(Some("svp"), true), SettingsPage::Svp);
+        assert_eq!(filter_page(None, true), SettingsPage::Video);
+        assert_eq!(
+            filter_page(Some("rvpreverb"), false),
+            SettingsPage::Normalizer
+        );
+        assert_eq!(
+            filter_page(Some("rvpcrossfeed"), false),
+            SettingsPage::AudioEffects
+        );
+        assert_eq!(filter_page(None, false), SettingsPage::Audio);
     }
 
     #[test]

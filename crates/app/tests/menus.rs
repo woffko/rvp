@@ -6,7 +6,7 @@
 use std::path::PathBuf;
 
 use rvp_app::menu::{Command, Live, MenuItem, to_json};
-use rvp_app::{Action, App, Repeat, Settings};
+use rvp_app::{Action, App, Repeat, Settings, SettingsPage};
 use rvp_engine::{Chapter, PropertyId, Track, TrackKind, Value};
 use rvp_skin::menu::{UserMenu, UserMenuItem};
 
@@ -321,8 +321,32 @@ fn filters_list_what_plays_the_file() {
             "Audio output: wasapi",
         ]
     );
-    // Information only, as PotPlayer's lines without a property page.
-    assert!(filters.children.iter().all(|line| line.command.is_none()));
+    // Each line opens its part's settings page, as PotPlayer's open their
+    // filter's property page.
+    let pages: Vec<Option<SettingsPage>> = filters
+        .children
+        .iter()
+        .map(|line| match line.command {
+            Some(Command::Settings(page)) => Some(page),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(
+        pages,
+        [
+            SettingsPage::Decoders,
+            SettingsPage::Decoders,
+            SettingsPage::Video,
+            SettingsPage::Svp,
+            SettingsPage::Video,
+            SettingsPage::Audio,
+            SettingsPage::Equalizer,
+            SettingsPage::Normalizer,
+            SettingsPage::Playback,
+            SettingsPage::Audio,
+        ]
+        .map(Some)
+    );
     // Nothing plays: no Filters menu.
     app.model
         .set(PropertyId::IdleActive, Some(Value::Flag(true)));
