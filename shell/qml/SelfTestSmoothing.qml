@@ -20,6 +20,8 @@ Item {
     required property var host
     // The runtime has MVTools: smoothing turned on runs it.
     property bool mvtools: false
+    // The thumbnail core's pictures before the seek.
+    property int thumbnailsBefore: 0
 
     function diagnostics() { return JSON.parse(player.diagnostics()) }
     function chain() { return String(diagnostics().vf) }
@@ -66,14 +68,22 @@ Item {
                 t.waitFor("blend_without_mvtools", () => s.smoothing === "Blend"
                               && chain().indexOf("@rvpsmooth") < 0, 3000, () => shown(s))
             break
-        case 5:
+        case 5: {
             // SVP's way: mpv loads the script again after a seek, whose
             // first second shows the original (`original-first`); the
-            // filter stays in, and the rate rises again.
-            if (mvtools)
+            // filter stays in, and the rate rises again. The frames before
+            // the target skip the filter, and the thumbnail core renders
+            // the target for the window meanwhile.
+            if (mvtools) {
+                t.check("seeks_skip_frames_before_the_target", diagnostics().hr_seek_framedrop === "yes",
+                        diagnostics().hr_seek_framedrop)
+                const stats = s.thumbnail_stats
+                smoothing.thumbnailsBefore = stats.rendered + stats.cancelled
                 player.key(Qt.Key_Right, 0)
+            }
             t.next()
             break
+        }
         case 6:
             if (mvtools)
                 t.waitFor("mvtools_smooths_after_a_seek", () => s.smoothing.startsWith("MVTools")
@@ -83,9 +93,19 @@ Item {
             else
                 t.next()
             break
-        case 7:
+        case 7: {
+            // The target's picture was asked for (whether it came before
+            // mpv's own or not), and none shows once playback restarted.
+            if (mvtools) {
+                const stats = s.thumbnail_stats
+                Tools.log("metric seek_pictures_shown=" + s.seek_picture_serial)
+                t.check("seek_picture_asked_and_gone", stats.rendered + stats.cancelled > smoothing.thumbnailsBefore
+                            && s.seek_picture_width === 0,
+                        JSON.stringify(stats) + " picture " + s.seek_picture_width + " serial " + s.seek_picture_serial)
+            }
             t.next()
             break
+        }
         case 8: {
             // The setting and the plan it led to.
             const recent = player.log_recent()

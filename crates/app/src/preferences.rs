@@ -586,6 +586,10 @@ impl App {
             self.hold_preloaded(engine);
             self.apply_smoothing(engine);
         }
+        if old.playback.seek_skip_before_target != self.settings.playback.seek_skip_before_target {
+            let plan = self.smoothing_plan();
+            self.apply_seek_framedrop(engine, &plan);
+        }
         if old.log != self.settings.log
             && let Some(error) = self.apply_log(engine)
         {

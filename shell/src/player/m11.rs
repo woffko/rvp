@@ -6,13 +6,14 @@
 //! Dialogs get their data as JSON in the `dialog` property and open with
 //! [`request::DIALOG`]; QML (`PlaybackDialogs.qml`, `SceneBrowser.qml`)
 //! answers through the invokables here. Pictures go into the atlas cache
-//! under `thumb/preview` and `thumb/scene/N` and a `ThumbView` paints them.
+//! under `thumb/preview`, `thumb/scene/N` and `thumb/seek` (a seek's target
+//! over the video) and a `ThumbView` paints them.
 
 use std::path::PathBuf;
 use std::pin::Pin;
 use std::time::Instant;
 
-use cxx_qt_lib::QString;
+use cxx_qt_lib::{QRectF, QString};
 use rvp_app::thumbs::ThumbEvent;
 use rvp_app::{PowerTimer, UiRequest};
 use rvp_engine::PropertyId;
@@ -122,6 +123,17 @@ impl qobject::Player {
                     let key = rvp_app::view::thumbnail_key(&path);
                     list_changed |= insert_picture(&key, &picture).is_some();
                 }
+                ThumbEvent::SeekPicture { picture, place } => {
+                    if let Some((width, height)) = insert_picture("thumb/seek", &picture) {
+                        let [x, y, w, h] = place;
+                        self.as_mut()
+                            .set_seek_picture_place(QRectF::new(x, y, w, h));
+                        self.as_mut().set_seek_picture_height(height);
+                        self.as_mut().set_seek_picture_width(width);
+                        let serial = self.seek_picture_serial().wrapping_add(1);
+                        self.as_mut().set_seek_picture_serial(serial);
+                    }
+                }
                 ThumbEvent::Unavailable(error) => rvp_app::log::report(
                     rvp_app::log::Level::Warning,
                     &format!("thumbnails: {error}"),
@@ -158,6 +170,11 @@ impl qobject::Player {
                 self.set_power_seconds(i32::try_from(seconds).unwrap_or(i32::MAX));
             }
             UiRequest::Power(action) => self.power_now(action),
+            UiRequest::HideSeekPicture => {
+                self.set_seek_picture_width(0);
+                // The video's size: not kept for the next seek.
+                rvp_atlas_remove_prefix("thumb/seek");
+            }
             UiRequest::PowerTimerDialog(kind) => {
                 let timer = match kind {
                     PowerTimer::At => "at",
@@ -592,24 +609,6 @@ pub(super) fn status(player: &qobject::Player, core: &Core) -> Vec<(&'static str
         .and_then(|file| std::fs::read_to_string(file).ok())
         .unwrap_or_default();
     let tracks = core.engine.tracks();
-    let stats = app.thumbnail_stats().map_or_else(
-        || "null".to_owned(),
-        |stats| {
-            json!({
-                "rendered": stats.rendered,
-                "cache_hits": stats.cache_hits,
-                "superseded": stats.superseded,
-                "cancelled": stats.cancelled,
-                "failed": stats.failed,
-                "durations": stats.durations,
-                "last_render_ms": stats.last_render.map(|took| took.as_secs_f64() * 1000.0),
-                "off_gui_thread": stats
-                    .render_thread
-                    .is_some_and(|thread| thread != std::thread::current().id()),
-            })
-            .to_string()
-        },
-    );
     vec![
         (
             "seek_tip",
@@ -618,6 +617,14 @@ pub(super) fn status(player: &qobject::Player, core: &Core) -> Vec<(&'static str
         ("seek_tip_shown", player.seek_tip_shown().to_string()),
         ("preview_width", player.preview_width().to_string()),
         ("preview_height", player.preview_height().to_string()),
+        (
+            "seek_picture_width",
+            player.seek_picture_width().to_string(),
+        ),
+        (
+            "seek_picture_serial",
+            player.seek_picture_serial().to_string(),
+        ),
         ("marks", count(app.seek_marks().len())),
         ("bookmarks", count(marks.bookmarks.len())),
         ("sections", count(marks.sections.len())),
@@ -667,8 +674,30 @@ pub(super) fn status(player: &qobject::Player, core: &Core) -> Vec<(&'static str
             "media_title",
             Value::from(core.engine.get_text("media-title").unwrap_or_default()).to_string(),
         ),
-        ("thumbnail_stats", stats),
+        ("thumbnail_stats", thumbnail_stats(app)),
     ]
+}
+
+/// The thumbnail core's counters as JSON (`null` without the core).
+fn thumbnail_stats(app: &rvp_app::App) -> String {
+    app.thumbnail_stats().map_or_else(
+        || "null".to_owned(),
+        |stats| {
+            json!({
+                "rendered": stats.rendered,
+                "cache_hits": stats.cache_hits,
+                "superseded": stats.superseded,
+                "cancelled": stats.cancelled,
+                "failed": stats.failed,
+                "durations": stats.durations,
+                "last_render_ms": stats.last_render.map(|took| took.as_secs_f64() * 1000.0),
+                "off_gui_thread": stats
+                    .render_thread
+                    .is_some_and(|thread| thread != std::thread::current().id()),
+            })
+            .to_string()
+        },
+    )
 }
 
 impl Core {

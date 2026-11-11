@@ -75,6 +75,13 @@ pub mod qobject {
         #[qproperty(i32, preview_serial)]
         #[qproperty(i32, preview_width)]
         #[qproperty(i32, preview_height)]
+        /// A seek's picture over the video (`thumb/seek`): its size in
+        /// pixels, its place in fractions of the video area, and a serial
+        /// that grows with each picture; hidden with a width of 0.
+        #[qproperty(i32, seek_picture_serial)]
+        #[qproperty(i32, seek_picture_width)]
+        #[qproperty(i32, seek_picture_height)]
+        #[qproperty(QRectF, seek_picture_place)]
         #[qproperty(bool, hide_pointer)]
         #[qproperty(bool, center_window)]
         /// mpv draws into the Direct3D 11 renderer's native window (D4,

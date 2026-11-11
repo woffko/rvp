@@ -1043,6 +1043,18 @@ in %2 seconds</source>
             <translation>Переходить к ключевым кадрам (быстрее, менее точно)</translation>
         </message>
         <message>
+            <source>Jumps with motion smoothing</source>
+            <translation>Переходы при сглаживании движения</translation>
+        </message>
+        <message>
+            <source>Skip the frames before the target (faster exact jumps)</source>
+            <translation>Пропускать кадры до цели (точные переходы быстрее)</translation>
+        </message>
+        <message>
+            <source>Show the target frame at once, until the smoothed picture comes</source>
+            <translation>Сразу показывать кадр цели, пока не придёт сглаженный</translation>
+        </message>
+        <message>
             <source>Enable the skip feature</source>
             <translation>Включить пропуск</translation>
         </message>
@@ -2857,6 +2869,10 @@ in %2 seconds</source>
         <message>
             <source>Show the original first for</source>
             <translation>Сначала показывать оригинал</translation>
+        </message>
+        <message>
+            <source>Also for RIFE (TensorRT) (about 60 frames drop at the switch)</source>
+            <translation>И для RIFE (TensorRT) (при смене теряется около 60 кадров)</translation>
         </message>
         <message>
             <source>Step down after dropped frames over</source>

@@ -932,6 +932,41 @@ Window {
         z: 1
     }
 
+    // A seek's target over the video until mpv's picture is there, while a
+    // smoothing engine starts again after the seek (rvp_app::thumbs): the
+    // thumbnail core's frame at the video's place, cut to the video area.
+    Item {
+        id: seekPicture
+        visible: player.seek_picture_width > 0 && player.has_video
+        x: player.video_rect.x
+        y: player.video_rect.y
+        width: player.video_rect.width
+        height: player.video_rect.height
+        z: 1.4
+        clip: true
+        ThumbView {
+            id: seekPictureView
+            x: player.seek_picture_place.x * seekPicture.width
+            y: player.seek_picture_place.y * seekPicture.height
+            width: player.seek_picture_width
+            height: player.seek_picture_height
+            key: "thumb/seek"
+            image_width: player.seek_picture_width
+            image_height: player.seek_picture_height
+            smooth: true
+            transform: Scale {
+                xScale: player.seek_picture_place.width * seekPicture.width
+                        / Math.max(1, player.seek_picture_width)
+                yScale: player.seek_picture_place.height * seekPicture.height
+                        / Math.max(1, player.seek_picture_height)
+            }
+            Connections {
+                target: player
+                function onSeek_picture_serialChanged() { seekPictureView.update() }
+            }
+        }
+    }
+
     // D4's Direct3D 11 renderer (M12): mpv draws into a native window over
     // the video item (cpp/video_window.cpp). It follows the video's place,
     // hides while no video shows, and leaves holes where RVP's own layers
@@ -949,8 +984,9 @@ Window {
         width: player.video_rect.width,
         height: player.video_rect.height,
         visible: player.has_video && root.visibility !== Window.Minimized && root.visibility !== Window.Hidden,
-        holes: [videoHole(seekTip), videoHole(powerBox), videoHole(infoBox), videoHole(miscInfoBox),
-                videoHole(messageBox), videoHole(sceneLoader.item), videoHole(slideshowLoader.item)]
+        holes: [videoHole(seekPicture), videoHole(seekTip), videoHole(powerBox), videoHole(infoBox),
+                videoHole(miscInfoBox), videoHole(messageBox), videoHole(sceneLoader.item),
+                videoHole(slideshowLoader.item)]
             .filter(hole => hole !== null)
             .concat(player.overlay && staticSkin.visible
                     ? JSON.parse(player.chrome_bars || "[]").filter(bar => root.inShownBar(bar[0], bar[1], bar[2], bar[3]))

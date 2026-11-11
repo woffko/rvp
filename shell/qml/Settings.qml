@@ -1070,6 +1070,9 @@ ApplicationWindow {
                         Amount { label: qsTr("Shift+Left / Right"); path: "seek-seconds.2"; values: [0.5, 1, 2, 3, 5, 10, 15, 20, 30, 45, 60, 90, 120, 180, 300, 600, 900, 1800, 3600]; format: win.seconds }
                         Amount { label: qsTr("Ctrl+Alt+Left / Right"); path: "seek-seconds.3"; values: [0.5, 1, 2, 3, 5, 10, 15, 20, 30, 45, 60, 90, 120, 180, 300, 600, 900, 1800, 3600]; format: win.seconds }
                         Check { path: "keyframe-seeks"; text: qsTr("Jump to keyframes (faster, less exact)") }
+                        Heading { text: qsTr("Jumps with motion smoothing") }
+                        Check { path: "playback.seek-skip-before-target"; text: qsTr("Skip the frames before the target (faster exact jumps)") }
+                        Check { path: "playback.seek-picture"; text: qsTr("Show the target frame at once, until the smoothed picture comes") }
                     }
 
                     Page {
@@ -2109,6 +2112,10 @@ ApplicationWindow {
                             path: "smoothing.original-first"
                             values: win.view.choices["smoothing-original-first"] || [1]
                             format: v => v === 0 ? qsTr("Off") : qsTr("%1 s").arg(v)
+                        }
+                        Check {
+                            path: "smoothing.original-first-tensorrt"
+                            text: qsTr("Also for RIFE (TensorRT) (about 60 frames drop at the switch)")
                         }
                         Choice {
                             label: qsTr("At a scene change")

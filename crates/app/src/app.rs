@@ -184,6 +184,9 @@ pub enum UiRequest {
     /// The notice before an ending: its text and the seconds left, or
     /// hidden (`None`).
     PowerNotice(Option<(String, u64)>),
+    /// The seek's picture over the video goes: mpv's own is there
+    /// ([`ThumbEvent::SeekPicture`](crate::thumbs::ThumbEvent)).
+    HideSeekPicture,
     /// Shut down, sleep or hibernate the computer now (the shell's
     /// platform code, or its dry-run hook).
     Power(crate::action::PowerAction),
@@ -1790,7 +1793,10 @@ impl App {
             self.tracking = Tracking::On;
         }
         let target = self.keep_after_a(target);
-        engine.seek_with(target, !self.settings.keyframe_seeks)
+        let exact = !self.settings.keyframe_seeks;
+        engine.seek_with(target, exact)?;
+        self.request_seek_picture(target, exact, Instant::now());
+        Ok(())
     }
 
     /// The volume keys and the wheel: RVP's volume, or the system's wave or
@@ -1852,7 +1858,9 @@ impl App {
         if matches!(self.tracking, Tracking::Resuming(_)) {
             self.tracking = Tracking::On;
         }
-        drop(engine.seek_with(Seek::Fraction(fraction), false));
+        if engine.seek_with(Seek::Fraction(fraction), false).is_ok() {
+            self.request_seek_picture(Seek::Fraction(fraction), false, Instant::now());
+        }
     }
 
     /// The mouse let the seek bar go at `fraction`: the last seek (exact
@@ -1994,7 +2002,8 @@ impl App {
                 EngineEvent::Preloaded { hook, video } => {
                     self.smoothing_preloaded(engine, *hook, *video, now);
                 }
-                // The shell's (M9).
+                // The shell's (M9); a seek's picture goes at the restart
+                // (`App::seek_picture_tick`).
                 EngineEvent::PlaybackRestart
                 | EngineEvent::Shutdown
                 | EngineEvent::ClientMessage(_) => {}
@@ -2012,6 +2021,7 @@ impl App {
         let mut requests = Vec::new();
         self.log_events(&events);
         let (mut save_now, failed) = self.handle_events(engine, &events, now, &mut requests);
+        requests.extend(self.seek_picture_tick(&events, now));
         if failed {
             // `<Can't open>`, then the next playable entry (or stop).
             self.library.update_current(None, false);

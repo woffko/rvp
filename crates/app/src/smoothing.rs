@@ -217,6 +217,25 @@ pub struct SmoothingSettings {
     pub original_first: u32,
     /// How a cut shows: one of [`SCENE_CHANGES`].
     pub scene_change: String,
+    /// The original first for RIFE (TensorRT) too (off by default: its
+    /// first frames after a start or seek take about a second, which mpv
+    /// waits for when they come first; with the original first, motion
+    /// resumes at once but about 60 frames drop at the switch, the host's
+    /// runs of 2026-11-08).
+    pub original_first_tensorrt: bool,
+}
+
+impl SmoothingSettings {
+    /// The seconds of the original first for `engine` (the scripts'
+    /// `original`).
+    #[must_use]
+    pub fn original_for(&self, engine: Engine) -> u32 {
+        if engine == Engine::RifeTrt && !self.original_first_tensorrt {
+            0
+        } else {
+            self.original_first
+        }
+    }
 }
 
 impl Default for SmoothingSettings {
@@ -230,6 +249,7 @@ impl Default for SmoothingSettings {
             drop_window: 20,
             original_first: 1,
             scene_change: "normal".to_owned(),
+            original_first_tensorrt: false,
         }
     }
 }
@@ -667,7 +687,7 @@ fn python_path(path: &Path) -> String {
 /// (a fraction), making `rate`. `rife` names RIFE's plugin and model,
 /// `mvtools` MVTools' plugin where the runtime does not load it itself
 /// (RVP's Linux runtime: its compiled-in plugin folder is the build's).
-/// `original` is [`SmoothingSettings::original_first`], `scene` the cut
+/// `original` is [`SmoothingSettings::original_for`] the engine, `scene` the cut
 /// threshold ([`scene_threshold`]).
 #[must_use]
 pub fn script(
@@ -757,20 +777,11 @@ pub fn script(
     // is the source's frames, repeated at the rate, while the engine fills
     // its pipeline from the frames asked for ahead. Adding the filter later
     // instead dropped 80 frames as mpv's chain changed (the host, 1080p).
-    // Not for RIFE (TensorRT): its first frames after a load take about a
-    // second, which mpv waits for before its clock runs when they come
-    // first, while the original's frames start the clock and leave that
-    // second to the switch (the host's runs of 2026-11-08, 1080p: about 60
-    // frames dropped at each switch, at most 2 without the original, as
-    // also when the streams had run once while the script loaded).
+    // RIFE (TensorRT) gets none unless the page asks for it
+    // (`SmoothingSettings::original_for`).
     if let Some(threshold) = scene {
         cut_script(&mut text, source, rate, threshold);
     }
-    let original = if engine == Engine::RifeTrt {
-        0
-    } else {
-        original
-    };
     let first = rate.0 * u64::from(original) / rate.1.max(1);
     if first > 0 {
         original_script(&mut text, source, rate, first);
@@ -937,6 +948,9 @@ pub(crate) struct Smoothing {
     applied: Option<Plan>,
     /// Blend's options are set.
     blend: bool,
+    /// What mpv got last for `hr-seek-framedrop` (`None`: the engine's
+    /// "no", `App::apply_seek_framedrop`).
+    framedrop: Option<bool>,
     /// The watch over the filter in force (`App::smoothing_watch`).
     watch: FilterWatch,
     /// The plan waited for SVP when it was made (`App::drain` re-plans
@@ -1327,7 +1341,7 @@ impl App {
                 source,
                 rate,
                 &files,
-                smoothing.original_first,
+                smoothing.original_for(engine),
                 scene,
             )
             .as_bytes(),
@@ -1393,6 +1407,7 @@ impl App {
     /// RVP's filter (with the decoder it needs). Returns the new plan.
     pub(crate) fn apply_smoothing(&mut self, engine: &Mpv) -> Option<Plan> {
         let plan = self.smoothing_plan();
+        self.apply_seek_framedrop(engine, &plan);
         if self.smoothing.applied.as_ref() == Some(&plan) {
             return None;
         }
@@ -1433,6 +1448,26 @@ impl App {
             drop(self.apply_video_filters(engine));
         }
         Some(plan)
+    }
+
+    /// A motion-compensated engine's filter is what mpv got last.
+    pub(crate) fn smoothing_filter_in_force(&self) -> bool {
+        matches!(self.smoothing.applied, Some(Plan::Filter { .. }))
+    }
+
+    /// Exact seeks skip the frames before the target, before the video
+    /// filters, while RVP's smoothing filter runs and the Playback page
+    /// allows it (`Playback::seek_skip_before_target`): every frame from
+    /// the keyframe on went through the engine, up to 4.5 s with RIFE.
+    /// The engine starts mpv with "no" for SVP's filter, which the plan
+    /// never runs beside.
+    pub(crate) fn apply_seek_framedrop(&mut self, engine: &Mpv, plan: &Plan) {
+        let skip =
+            self.settings.playback.seek_skip_before_target && matches!(plan, Plan::Filter { .. });
+        if self.smoothing.framedrop.unwrap_or(false) != skip {
+            self.smoothing.framedrop = Some(skip);
+            drop(engine.set_text("hr-seek-framedrop", if skip { "yes" } else { "no" }));
+        }
     }
 
     /// Video > Motion Smoothing's commands; the notice says what runs.
@@ -2111,22 +2146,29 @@ mod tests {
             None,
         );
         assert!(!at_once.contains("FrameEval"));
-        // RIFE (TensorRT) starts with its own frames.
-        let tensorrt = script(
-            Engine::RifeTrt,
-            Preset::Medium,
-            (24000, 1001),
-            (60, 1),
-            &Files {
-                tensorrt: Some((Path::new("/trt"), Path::new("/vs-mlrt"))),
-                ..Files::default()
-            },
-            1,
-            None,
-        );
-        assert!(
-            tensorrt.contains("vsmlrt.RIFE(") && !tensorrt.contains("FrameEval(clip, original)")
-        );
+        // RIFE (TensorRT) starts with its own frames unless the page asks
+        // for the original first.
+        let mut settings = on(Engine::RifeTrt);
+        assert_eq!(settings.original_for(Engine::RifeTrt), 0);
+        assert_eq!(settings.original_for(Engine::MvTools), 1);
+        settings.original_first_tensorrt = true;
+        assert_eq!(settings.original_for(Engine::RifeTrt), 1);
+        let tensorrt = |original| {
+            script(
+                Engine::RifeTrt,
+                Preset::Medium,
+                (24000, 1001),
+                (60, 1),
+                &Files {
+                    tensorrt: Some((Path::new("/trt"), Path::new("/vs-mlrt"))),
+                    ..Files::default()
+                },
+                original,
+                None,
+            )
+        };
+        assert!(tensorrt(0).contains("vsmlrt.RIFE(") && !tensorrt(0).contains("FrameEval"));
+        assert!(tensorrt(1).contains("vsmlrt.RIFE(") && tensorrt(1).contains("FrameEval"));
         let mut settings = on(Engine::MvTools);
         settings.original_first = 90;
         let mut notes = Vec::new();

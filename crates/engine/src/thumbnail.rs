@@ -13,8 +13,11 @@
 //! - a frame of a file at a time, fitted into a box keeping the video's
 //!   shape (or filling the box with mpv's black bars), at a keyframe near
 //!   the time (fast) or exactly;
-//! - the seek bar's preview keeps one waiting request: a newer one replaces
-//!   it, and the one being rendered finishes;
+//! - a seek's target over the video and the seek bar's preview each keep
+//!   one waiting request: a newer one replaces it, and the one being
+//!   rendered finishes; the seek's comes first, but takes turns with a
+//!   waiting preview (a drag asks for both all the time), and its
+//!   pictures (the video's size) are not cached;
 //! - other requests wait in order of their group (scenes, a contact sheet,
 //!   then the list) and their arrival; [`Thumbnailer::cancel`] drops a group's waiting
 //!   requests and abandons its request under way;
@@ -51,6 +54,9 @@ const SLICE: f64 = 0.002;
 /// Who asked for a picture; a group's requests are cancelled together.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Group {
+    /// A seek's target, shown over the video until the player's picture
+    /// is there: only the newest waiting request counts, before any other.
+    Seek,
     /// The seek bar's preview: only the newest waiting request counts.
     Preview,
     /// A scene browser's pictures.
@@ -230,7 +236,8 @@ impl Cache {
 
 #[derive(Debug, Default)]
 struct State {
-    /// The seek bar's waiting preview.
+    /// The waiting seek target and the seek bar's waiting preview.
+    seek: Option<Job>,
     preview: Option<Job>,
     /// Other waiting jobs by (group, ticket); durations after every group.
     frames: BTreeMap<(Group, Ticket), Job>,
@@ -239,6 +246,8 @@ struct State {
     current: Option<(Ticket, Option<Group>)>,
     /// Set when the job under way was cancelled.
     abandoned: bool,
+    /// The last job was a seek's target: a waiting preview goes next.
+    seek_served: bool,
     outcomes: Vec<Outcome>,
     cache: Cache,
     next_ticket: Ticket,
@@ -250,7 +259,13 @@ struct State {
 
 impl State {
     fn next_job(&mut self) -> Option<Job> {
-        if let Some(job) = self.preview.take() {
+        let turn = if self.seek_served && self.preview.is_some() {
+            None
+        } else {
+            self.seek.take()
+        };
+        self.seek_served = turn.is_some();
+        if let Some(job) = turn.or_else(|| self.preview.take()) {
             return Some(job);
         }
         if let Some((_, job)) = self.frames.pop_first() {
@@ -346,8 +361,13 @@ impl Thumbnailer {
             ticket,
             work: Work::Frame(request),
         };
-        if group == Group::Preview {
-            if state.preview.replace(job).is_some() {
+        let slot = match group {
+            Group::Seek => Some(&mut state.seek),
+            Group::Preview => Some(&mut state.preview),
+            Group::Scenes | Group::Sheet | Group::List => None,
+        };
+        if let Some(slot) = slot {
+            if slot.replace(job).is_some() {
                 state.stats.superseded += 1;
             }
         } else {
@@ -381,9 +401,12 @@ impl Thumbnailer {
     pub fn cancel(&self, group: Group) {
         let mut state = self.shared.lock();
         let mut dropped = 0;
-        if group == Group::Preview && state.preview.take().is_some() {
-            dropped += 1;
-        }
+        let slot = match group {
+            Group::Seek => state.seek.take(),
+            Group::Preview => state.preview.take(),
+            Group::Scenes | Group::Sheet | Group::List => None,
+        };
+        dropped += usize::from(slot.is_some());
         let before = state.frames.len();
         state.frames.retain(|(candidate, _), _| *candidate != group);
         dropped += before - state.frames.len();
@@ -420,7 +443,10 @@ impl Thumbnailer {
     #[must_use]
     pub fn waiting(&self) -> usize {
         let state = self.shared.lock();
-        usize::from(state.preview.is_some()) + state.frames.len() + state.durations.len()
+        usize::from(state.seek.is_some())
+            + usize::from(state.preview.is_some())
+            + state.frames.len()
+            + state.durations.len()
     }
 
     #[must_use]
@@ -631,7 +657,11 @@ impl Worker<'_> {
                 if state.abandoned {
                     return;
                 }
-                state.cache.insert(key(&request), Arc::clone(&picture));
+                // A seek's picture is as large as the video and seldom
+                // asked again: the cache keeps the small ones.
+                if group != Group::Seek {
+                    state.cache.insert(key(&request), Arc::clone(&picture));
+                }
                 state.stats.rendered += 1;
                 state.stats.render_thread = Some(thread::current().id());
                 state.stats.last_render = Some(started.elapsed());

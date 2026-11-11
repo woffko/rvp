@@ -271,7 +271,17 @@ smoothing for users without SVP, after a study of the engines.
   (`std.PlaneStats`; R73 has no `misc`) is a scene's last, and the
   engine's frames up to the next scene's first repeat it instead of
   morphing one scene into the other; that part ends in `AssumeFPS`, since
-  mpv times each frame by its `_DurationNum`/`_DurationDen`. WSL's builds share the
+  mpv times each frame by its `_DurationNum`/`_DurationDen`. Seeks (the
+  owner, 2026-11-10): while RVP's filter runs, exact seeks skip the frames
+  before the target (`hr-seek-framedrop`, `playback.seek-skip-before-target`,
+  `App::apply_seek_framedrop`; the engine starts mpv with "no" for SVP's
+  `@svp`), and the thumbnail core's frame of the target (`Group::Seek`)
+  shows over the video at its `osd-dimensions` place until mpv's playback
+  restarts (`playback.seek-picture`, `crate::thumbs`; only with filters
+  that leave the picture alone, no rotation and the picture's shape on the
+  screen). WSL's sysroot libmpv (Ubuntu's 0.37) has no `vapoursynth`
+  filter: the smoothing self-test runs MVTools on the kit's libmpv (kit
+  step `m18`, the VMs). WSL's builds share the
   host's processors through the hypervisor, and RVP's process priority
   does not win them back (2026-11-06, MVTools under a full WSL load: 45,
   44 and 38 dropped frames a second at normal, above normal and high):
@@ -319,7 +329,9 @@ smoothing for users without SVP, after a study of the engines.
   before moving to it. mpv loads
   the script again at every start and seek, and RIFE (TensorRT)'s first
   frames after a load take about a second: it has no original frames
-  first, so mpv waits for them before its clock runs (with the original
+  first unless the page's "Also for RIFE (TensorRT)" asks for them
+  (`smoothing.original-first-tensorrt`, `SmoothingSettings::original_for`),
+  so mpv waits for them before its clock runs (with the original
   first, the switch dropped about 60 frames; frames made while the script
   loads did not help, the host's runs of 2026-11-08). `--install-tensorrt` installs at once (tests);
   `RVP_TENSORRT_MIRROR` (a folder URL, `file://` too) replaces NVIDIA's

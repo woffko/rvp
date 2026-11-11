@@ -172,6 +172,15 @@ pub struct Playback {
     pub seek_markers: bool,
     /// Playback pauses while the mouse holds the seek bar.
     pub pause_while_seeking: bool,
+    /// Exact seeks drop the frames before the target before the video
+    /// filters (mpv's `hr-seek-framedrop`; the owner, 2026-11-10: with
+    /// RIFE a seek took up to 4.5 s, every frame from the keyframe on going
+    /// through it). Never while SVP's filter runs: it needs them.
+    pub seek_skip_before_target: bool,
+    /// After a seek while a smoothing filter runs, the target's frame from
+    /// the thumbnail core shows over the video until the smoothed picture
+    /// is there ([`App::seek_picture`]).
+    pub seek_picture: bool,
     pub shuffle: bool,
     /// The pointer hides over the playing video in the window too (it
     /// always does in fullscreen).
@@ -219,6 +228,8 @@ impl Default for Playback {
             preview_time: true,
             seek_markers: true,
             pause_while_seeking: false,
+            seek_skip_before_target: true,
+            seek_picture: true,
             shuffle: false,
             hide_pointer: true,
             close_at_end: false,

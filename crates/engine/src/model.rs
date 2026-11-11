@@ -108,6 +108,12 @@ properties! {
     // M9: the OSD's size in pixels (the video's): the pointer's scale.
     OsdWidth = "osd-dimensions/w", Int;
     OsdHeight = "osd-dimensions/h", Int;
+    // The video's distance from the OSD's edges (negative where a zoom
+    // takes it past them): where a seek's picture goes.
+    OsdMarginLeft = "osd-dimensions/ml", Int;
+    OsdMarginTop = "osd-dimensions/mt", Int;
+    OsdMarginRight = "osd-dimensions/mr", Int;
+    OsdMarginBottom = "osd-dimensions/mb", Int;
 }
 
 impl PropertyId {

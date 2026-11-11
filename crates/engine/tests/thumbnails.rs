@@ -225,6 +225,79 @@ fn a_newer_preview_replaces_the_waiting_one() {
 }
 
 #[test]
+fn a_seeks_target_comes_first_and_is_not_cached() {
+    let (thumbnailer, wakeups) = start();
+    // Pictures queued before the seek wait behind its target (at most the
+    // one under way comes first); only the newest seek target counts.
+    let list: Vec<_> = (0..8)
+        .map(|n| thumbnailer.request(request(LONG, f64::from(n) * 6.0, Group::List)))
+        .collect();
+    let preview = thumbnailer.request(request(LONG, 50.0, Group::Preview));
+    let replaced = thumbnailer.request(exact(request(LONG, 31.0, Group::Seek)));
+    let seek = thumbnailer.request(exact(request(LONG, 32.3, Group::Seek)));
+    let outcomes = collect(&thumbnailer, &wakeups, list.len() + 2);
+    let order: Vec<_> = outcomes
+        .iter()
+        .filter_map(|outcome| match outcome {
+            Outcome::Picture { ticket, .. } => Some(*ticket),
+            _ => None,
+        })
+        .collect();
+    let at = |ticket| order.iter().position(|got| *got == ticket);
+    assert_eq!(at(replaced), None, "replaced: {order:?}");
+    assert!(at(seek).expect("the target") <= 1, "{order:?}");
+    assert!(at(seek) < at(preview), "{order:?}");
+    let shown = outcomes.iter().find_map(|outcome| match outcome {
+        Outcome::Picture {
+            ticket, picture, ..
+        } if *ticket == seek => Some(picture.shown),
+        _ => None,
+    });
+    // The exact frame: 10 fps, so within a frame of the time.
+    let shown = shown.expect("the target's picture");
+    assert!((shown - 32.3).abs() < 0.11, "{shown}");
+    assert!(
+        thumbnailer
+            .cached(&exact(request(LONG, 32.3, Group::Seek)))
+            .is_none()
+    );
+    assert_eq!(thumbnailer.stats().superseded, 1);
+    // A stream of seek targets (a drag) takes turns with the preview.
+    let first = thumbnailer.request(exact(request(LONG, 12.0, Group::Seek)));
+    let preview = thumbnailer.request(request(LONG, 40.0, Group::Preview));
+    let second = thumbnailer.request(exact(request(LONG, 14.0, Group::Seek)));
+    let deadline = Instant::now() + Duration::from_secs(20);
+    let mut turns = Vec::new();
+    while !turns.contains(&second) {
+        assert!(Instant::now() < deadline, "turns: {turns:?}");
+        let _ = wakeups.recv_timeout(Duration::from_millis(200));
+        for outcome in thumbnailer.take() {
+            if let Outcome::Picture { ticket, .. } = outcome {
+                turns.push(ticket);
+            }
+        }
+    }
+    // The preview may still come after the second target.
+    std::thread::sleep(Duration::from_millis(300));
+    for outcome in thumbnailer.take() {
+        if let Outcome::Picture { ticket, .. } = outcome {
+            turns.push(ticket);
+        }
+    }
+    assert!(
+        turns == [first, preview, second] || turns == [second, preview],
+        "{turns:?} for {first}, {preview}, {second}"
+    );
+}
+
+fn exact(request: FrameRequest) -> FrameRequest {
+    FrameRequest {
+        exact: true,
+        ..request
+    }
+}
+
+#[test]
 fn cancelling_drops_a_groups_requests() {
     let (thumbnailer, wakeups) = start();
     let list: Vec<_> = (0..20)
