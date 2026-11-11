@@ -248,7 +248,10 @@ smoothing for users without SVP, after a study of the engines.
   page's `drop-window` (20 s by default; 0 never), or more than half of
   them over 5 s (at once; RIFE then gives way to MVTools, as its presets
   change only its GPU threads), takes a lighter step for the rest of the
-  file (`App::smoothing_watch`). Checks: `crates/app/tests/smoothing.rs` (with
+  file (`App::smoothing_watch`); one that keeps up while the output drops
+  a frame in each second for 10 s (left behind by other programs' load
+  until the next seek) gets a seek to where playback is, at most once a
+  minute (`LagWatch`). Checks: `crates/app/tests/smoothing.rs` (with
   `VSSCRIPT_PATH`), `rvp --selftest=smoothing`,
   `tools/windows-vm/m18-all.ps1`, and on the host, with permission,
   `tools/windows-vm/m18-host.ps1` (each GPU mode in RVP's window at the

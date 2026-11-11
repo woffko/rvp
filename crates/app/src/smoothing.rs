@@ -33,6 +33,11 @@
 //!   at 60 fps but not 1080p (RIFE quality at 1080p: 40 to 50 of 60 frames
 //!   a second dropped, the card at 99 %), and a minute's drop window held
 //!   such a step for a minute before the step at once came in.
+//! * A filter that keeps up while the output drops a frame in each second
+//!   for 10 s (the state other programs' load left behind until the next
+//!   seek, the owner's log of 2026-11-11) gets a seek to where playback is,
+//!   at most once a minute, and none again in a file where the drops came
+//!   back within that minute (`LagWatch`).
 //! * MVTools and RIFE run in the VapourSynth runtime RVP ships (never
 //!   SVP's). The scripts end with `core.clear_cache()`: mpv answers the
 //!   frames a script asks for while it loads with black ones (MVTools asks
@@ -953,6 +958,9 @@ pub(crate) struct Smoothing {
     framedrop: Option<bool>,
     /// The watch over the filter in force (`App::smoothing_watch`).
     watch: FilterWatch,
+    /// The watch over a steady frame a second the output drops
+    /// (`App::smoothing_watch`).
+    lag: LagWatch,
     /// The plan waited for SVP when it was made (`App::drain` re-plans
     /// when that ends).
     pub(crate) svp_hold: bool,
@@ -994,6 +1002,7 @@ impl Smoothing {
         self.dropped = 0;
         self.ran.clear();
         self.watch = FilterWatch::default();
+        self.lag = LagWatch::default();
     }
 }
 
@@ -1119,6 +1128,102 @@ impl FilterWatch {
         } else {
             Verdict::Wait
         }
+    }
+}
+
+/// The log's line for a window of dropped frames the watch judged.
+fn log_judged(judged: Judged, before: &str) {
+    crate::log::write(
+        if judged.too_many {
+            crate::log::Level::Warning
+        } else {
+            crate::log::Level::Debug
+        },
+        &format!(
+            "smoothing: {before} dropped {} of {:.0} frames over {:.0} s ({})",
+            judged.dropped,
+            judged.frames,
+            judged.seconds,
+            if judged.at_once {
+                "over half: a lighter step at once"
+            } else if judged.too_many {
+                "over 5 %: a lighter step"
+            } else {
+                "kept"
+            }
+        ),
+    );
+}
+
+/// The watch over a filter that keeps up while the output stays a frame
+/// behind the sound: after other programs had taken the processors, mpv
+/// went on dropping a frame in each second until the next seek (the
+/// owner's log of 2026-11-11: 57 s with RIFE (TensorRT), five and a half
+/// minutes with MVTools). A seek to where playback is lets the filter's
+/// frames come in time again.
+#[derive(Debug, Default)]
+struct LagWatch {
+    /// The last tick: the drops so far, the playback time, when.
+    last: Option<(i64, f64, Instant)>,
+    /// Seconds in a row that dropped one to [`LAG_MOST`] frames.
+    steady: u32,
+    /// When playback last picked up again.
+    resynced: Option<Instant>,
+    /// The pattern came back soon after a seek: none again for the file.
+    given_up: bool,
+}
+
+/// Seconds in a row of a few dropped frames before playback picks up
+/// again, and the most a second may drop to count.
+const LAG_SECONDS: u32 = 10;
+const LAG_MOST: i64 = 3;
+/// The pattern back this soon after a seek means seeks do not help here.
+const LAG_AGAIN: Duration = Duration::from_secs(60);
+
+/// What the lag watch makes of a tick.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Lag {
+    Wait,
+    /// Seek to where playback is.
+    PickUp,
+    /// The pattern came back after the last seek: left for this file.
+    GiveUp,
+}
+
+impl LagWatch {
+    fn tick(&mut self, tick: &Tick) -> Lag {
+        if self.given_up {
+            return Lag::Wait;
+        }
+        let Some((dropped, time, at)) = self.last.replace((tick.dropped, tick.time, tick.now))
+        else {
+            return Lag::Wait;
+        };
+        let seconds = tick.now.duration_since(at).as_secs_f64();
+        let new = tick.dropped - dropped;
+        let steady = tick.playing
+            && (tick.speed - 1.0).abs() < 1e-6
+            && played_on(time, tick.time, seconds, tick.speed)
+            && (1..=LAG_MOST).contains(&new)
+            && tick.filter_fps > tick.source_fps * 1.2;
+        if !steady {
+            self.steady = 0;
+            return Lag::Wait;
+        }
+        self.steady += 1;
+        if self.steady < LAG_SECONDS {
+            return Lag::Wait;
+        }
+        self.steady = 0;
+        if self
+            .resynced
+            .is_some_and(|at| tick.now.duration_since(at) < LAG_AGAIN)
+        {
+            self.given_up = true;
+            return Lag::GiveUp;
+        }
+        self.resynced = Some(tick.now);
+        Lag::PickUp
     }
 }
 
@@ -1455,6 +1560,31 @@ impl App {
         matches!(self.smoothing.applied, Some(Plan::Filter { .. }))
     }
 
+    /// The lag watch's tick ([`LagWatch`]): a seek to where playback is,
+    /// once the output dropped a frame in each second for a while.
+    fn smoothing_lag(&mut self, engine: &Mpv, tick: &Tick, before: &str) {
+        match self.smoothing.lag.tick(tick) {
+            Lag::Wait => {}
+            Lag::PickUp => {
+                crate::log::write(
+                    crate::log::Level::Info,
+                    &format!(
+                        "smoothing: {before} kept up, but the output dropped a frame in each \
+                         second for {LAG_SECONDS} s: playback picks up from here"
+                    ),
+                );
+                self.resync_audio(engine);
+            }
+            Lag::GiveUp => crate::log::write(
+                crate::log::Level::Info,
+                &format!(
+                    "smoothing: {before}: the dropped frames came back after the seek; \
+                     left as they are for this file"
+                ),
+            ),
+        }
+    }
+
     /// Exact seeks skip the frames before the target, before the video
     /// filters, while RVP's smoothing filter runs and the Playback page
     /// allows it (`Playback::seek_skip_before_target`): every frame from
@@ -1531,13 +1661,17 @@ impl App {
     /// for the session; one that leaves the output dropping more than
     /// [`DROP_SHARE`] of its frames over the drop window, or more than
     /// [`AT_ONCE_SHARE`] over [`AT_ONCE`], takes one step lighter for the
-    /// rest of the file. Either way the next plan runs, with a notice.
+    /// rest of the file. Either way the next plan runs, with a notice. A
+    /// filter that keeps up while the output drops a frame in each second
+    /// gets a seek to where playback is ([`LagWatch`]).
     pub fn smoothing_watch(&mut self, engine: &Mpv, now: Instant) -> Option<UiRequest> {
         let Some(Plan::Filter {
             engine: running, ..
         }) = self.smoothing.applied.clone()
         else {
             self.smoothing.watch = FilterWatch::default();
+            self.smoothing.lag.last = None;
+            self.smoothing.lag.steady = 0;
             return None;
         };
         let tick = Tick {
@@ -1550,6 +1684,7 @@ impl App {
             dropped: self.model.int(PropertyId::FrameDropCount).unwrap_or(0),
         };
         let before = self.smoothing_plan().text();
+        self.smoothing_lag(engine, &tick, &before);
         let window = match self.settings.smoothing.drop_window {
             0 => None,
             seconds => Some(Duration::from_secs(u64::from(seconds))),
@@ -1559,26 +1694,7 @@ impl App {
             self.smoothing.ran.insert(running);
         }
         if let Some(judged) = self.smoothing.watch.judged {
-            crate::log::write(
-                if judged.too_many {
-                    crate::log::Level::Warning
-                } else {
-                    crate::log::Level::Debug
-                },
-                &format!(
-                    "smoothing: {before} dropped {} of {:.0} frames over {:.0} s ({})",
-                    judged.dropped,
-                    judged.frames,
-                    judged.seconds,
-                    if judged.at_once {
-                        "over half: a lighter step at once"
-                    } else if judged.too_many {
-                        "over 5 %: a lighter step"
-                    } else {
-                        "kept"
-                    }
-                ),
-            );
+            log_judged(judged, &before);
         }
         match verdict {
             Verdict::Wait => return None,
@@ -2174,6 +2290,90 @@ mod tests {
         let mut notes = Vec::new();
         settings.validate(&mut notes);
         assert_eq!((settings.original_first, notes.len()), (30, 1));
+    }
+
+    #[test]
+    fn a_frame_dropped_each_second_picks_playback_up_once_a_minute_at_most() {
+        let start = Instant::now();
+        let tick = |n: u64, time: f64, dropped: i64| Tick {
+            now: start + Duration::from_secs(n),
+            playing: true,
+            time,
+            speed: 1.0,
+            source_fps: 23.976,
+            filter_fps: 59.94,
+            dropped,
+        };
+        #[allow(clippy::cast_precision_loss)] // seconds of a test
+        let run = |watch: &mut LagWatch, seconds: std::ops::Range<u64>, per_second: i64| {
+            seconds
+                .filter_map(|n| {
+                    let lag = watch.tick(&tick(
+                        n,
+                        n as f64,
+                        i64::try_from(n).unwrap_or(0) * per_second,
+                    ));
+                    (lag != Lag::Wait).then_some((n, lag))
+                })
+                .collect::<Vec<_>>()
+        };
+        // A frame each second: after 10 s in a row, a seek; the pattern back
+        // within a minute: left for the file.
+        let mut watch = LagWatch::default();
+        assert_eq!(
+            run(&mut watch, 0..40, 1),
+            [(10, Lag::PickUp), (20, Lag::GiveUp)]
+        );
+        assert!(run(&mut watch, 40..100, 1).is_empty());
+        // Back after more than a minute: another seek.
+        let mut watch = LagWatch::default();
+        assert_eq!(run(&mut watch, 0..11, 1), [(10, Lag::PickUp)]);
+        assert!(run(&mut watch, 11..12, 0).is_empty());
+        assert_eq!(run(&mut watch, 80..91, 1), [(90, Lag::PickUp)]);
+        // Smooth playback, or a burst the steps judge, is left alone.
+        let mut watch = LagWatch::default();
+        assert!(run(&mut watch, 0..60, 0).is_empty());
+        assert!(run(&mut watch, 60..120, 20).is_empty());
+        // A seek in between starts the count again: 7 steady seconds, a
+        // jump, then 9 more are not 10 in a row; the 10th is.
+        let mut watch = LagWatch::default();
+        assert!(run(&mut watch, 0..8, 1).is_empty());
+        let after_seek = |n: u64| {
+            tick(
+                n,
+                300.0 + f64::from(u32::try_from(n).unwrap_or(0)),
+                i64::try_from(n).unwrap_or(0),
+            )
+        };
+        assert_eq!(watch.tick(&after_seek(8)), Lag::Wait);
+        for n in 9..18 {
+            assert_eq!(watch.tick(&after_seek(n)), Lag::Wait, "second {n}");
+        }
+        assert_eq!(watch.tick(&after_seek(18)), Lag::PickUp);
+        // A pause between: not playing breaks the count too.
+        let mut watch = LagWatch::default();
+        assert!(run(&mut watch, 0..8, 1).is_empty());
+        assert_eq!(
+            watch.tick(&Tick {
+                playing: false,
+                ..tick(8, 8.0, 8)
+            }),
+            Lag::Wait
+        );
+        assert_eq!(watch.steady, 0);
+        // A filter that does not keep up is the steps' (not a seek's).
+        let mut watch = LagWatch::default();
+        for n in 0..30 {
+            let slow = Tick {
+                filter_fps: 24.0,
+                ..tick(
+                    n,
+                    f64::from(u32::try_from(n).unwrap_or(0)),
+                    i64::try_from(n).unwrap_or(0),
+                )
+            };
+            assert_eq!(watch.tick(&slow), Lag::Wait);
+        }
     }
 
     #[test]
