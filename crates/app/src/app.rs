@@ -602,7 +602,8 @@ impl App {
         let mut options = EngineOptions::player();
         options.hwdec = self.effective_hwdec();
         options.ipc_server = self.svp.endpoint.clone().or_else(|| {
-            Some(self.settings.ipc_server.trim().to_owned()).filter(|server| !server.is_empty())
+            Some(crate::svp::configured_endpoint(&self.settings).to_owned())
+                .filter(|server| !server.is_empty())
         });
         options.extra.push((
             "volume-max".to_owned(),
@@ -2077,14 +2078,8 @@ impl App {
         if let Some(top) = self.on_top_change() {
             requests.push(UiRequest::OnTop(top));
         }
-        requests.extend(self.watch_svp(now));
+        requests.extend(self.svp_tick(engine, now));
         requests.extend(self.speech_tick(engine, now));
-        // RVP's smoothing starts once SVP had its chance.
-        let hold = self.svp.holds_smoothing();
-        if hold != self.smoothing.svp_hold {
-            self.smoothing.svp_hold = hold;
-            self.apply_smoothing(engine);
-        }
         if self.started
             && changes.contains(PropertyId::Volume)
             && let Some(volume) = self.model.double(PropertyId::Volume)

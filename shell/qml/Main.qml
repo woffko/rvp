@@ -921,6 +921,15 @@ Window {
         }
     }
 
+    // The window thread's beat for the log's seconds at Debug (video::beat):
+    // its longest pause shows how long the thread was held.
+    Timer {
+        interval: 20
+        repeat: true
+        running: player.beat_running
+        onTriggered: player.window_beat()
+    }
+
     MpvItem {
         id: video
         x: player.video_rect.x
@@ -3106,11 +3115,15 @@ Window {
             break
         case 319: {
             // SVP mode on an endpoint of the test's own: SVP does not attach
-            // (no Manager on the test machines), and RVP says why.
+            // (no Manager on the test machines), and RVP says why. SVP
+            // support is off by default.
             const endpoint = Qt.platform.os === "windows" ? "rvp-selftest-svp" : t.outDir + "/svp.sock"
             t.room()
+            const off = t.status().svp_status
+            const enabled = JSON.parse(player.set_setting("svp-enabled", "true"))
             const result = JSON.parse(player.set_setting("ipc-server", JSON.stringify(endpoint)))
-            t.check("svp_mode_on", !result.error && s.loaded, endpoint + " " + (result.error || ""))
+            t.check("svp_mode_on", off === "SVP mode is off" && !enabled.error && !result.error && s.loaded,
+                    endpoint + " " + off + " " + (enabled.error || "") + (result.error || ""))
             t.next()
             break
         }
@@ -3122,7 +3135,7 @@ Window {
                           + s.playing + " time " + s.time + " path " + s.path)
             break
         case 321: {
-            const result = JSON.parse(player.set_setting("ipc-server", "\"\""))
+            const result = JSON.parse(player.set_setting("svp-enabled", "false"))
             const status = t.status().svp_status
             t.check("svp_mode_off", !result.error && status === "SVP mode is off", "status " + status)
             t.next()

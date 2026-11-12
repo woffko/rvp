@@ -457,6 +457,9 @@ pub struct Second {
     /// The share of the processors' time that was busy, and that RVP took
     /// (0 to 1).
     pub processors: Option<(f64, f64)>,
+    /// At Debug: the window thread's work in RVP's tick of the second and
+    /// its longest pause beyond a 20 ms timer, in milliseconds.
+    pub window: Option<(u32, u32)>,
 }
 
 /// The log's state in the [`App`].
@@ -695,6 +698,12 @@ impl App {
                 "; processors {:.0} % busy, RVP {:.0} %",
                 busy * 100.0,
                 ours * 100.0
+            );
+        }
+        if let Some((work, pause)) = second.window {
+            let _ = write!(
+                line,
+                "; window thread: tick {work} ms, longest pause {pause} ms"
             );
         }
         write(level, &line);

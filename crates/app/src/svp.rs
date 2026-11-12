@@ -1,9 +1,12 @@
 //! SVP mode (M6): SVP 4 Manager attaches to RVP through mpv's JSON IPC and
 //! inserts its VapourSynth filter (`@svp`) into RVP's chain (spike S1).
 //!
-//! * SVP mode is on while the IPC endpoint (`ipc-server`) is set. RVP's
-//!   defaults are the endpoints SVP's own mpv uses: the pipe `mpvpipe` on
-//!   Windows and the socket `/tmp/mpvsocket` on Linux.
+//! * SVP mode is on while the SVP page's "Enable SVP support"
+//!   (`svp-enabled`, off by default: the owner, 2026-11-12) is on and the
+//!   IPC endpoint (`ipc-server`) is set. RVP's default endpoints are the
+//!   ones SVP's own mpv uses: the pipe `mpvpipe` on Windows and the socket
+//!   `/tmp/mpvsocket` on Linux. With it off RVP opens no endpoint, decodes
+//!   as the Video page says and waits for no SVP before its own smoothing.
 //! * Only one process can hold an endpoint. When it is taken (a second RVP
 //!   window, `/new`, or another mpv), RVP uses the name SVP's
 //!   `mpvSockets.lua` gives a process, `<temp>/mpvSockets/<pid>`; SVP's own
@@ -35,10 +38,20 @@ use crate::settings::Settings;
 /// How long after a file starts SVP has to attach before RVP looks why not.
 pub const ATTACH_WAIT: Duration = Duration::from_secs(8);
 
-/// SVP mode: an endpoint is set.
+/// SVP mode: SVP support is on and an endpoint is set.
 #[must_use]
 pub fn svp_mode(settings: &Settings) -> bool {
-    !settings.ipc_server.trim().is_empty()
+    settings.svp_enabled && !settings.ipc_server.trim().is_empty()
+}
+
+/// The endpoint the settings ask for: none (empty) while SVP mode is off.
+#[must_use]
+pub fn configured_endpoint(settings: &Settings) -> &str {
+    if svp_mode(settings) {
+        settings.ipc_server.trim()
+    } else {
+        ""
+    }
 }
 
 /// The endpoint SVP's `mpvSockets.lua` gives process `pid`: in Lua's
@@ -483,6 +496,20 @@ impl App {
         None
     }
 
+    /// After mpv's events and each second (a paused file has few events,
+    /// and the answer that SVP 4 Manager does not run, which ends the wait,
+    /// came only once it played: the owner's log of 2026-11-12): SVP's
+    /// watch, and RVP's smoothing once SVP had its chance.
+    pub fn svp_tick(&mut self, engine: &rvp_engine::Engine, now: Instant) -> Option<UiRequest> {
+        let request = self.watch_svp(now);
+        let hold = self.svp.holds_smoothing();
+        if hold != self.smoothing.svp_hold {
+            self.smoothing.svp_hold = hold;
+            self.apply_smoothing(engine);
+        }
+        request
+    }
+
     /// SVP's status for the settings window.
     #[must_use]
     pub fn svp_status(&self) -> String {
@@ -495,7 +522,7 @@ impl App {
     /// VapourSynth runtime the process points mpv at.
     pub fn prepare_svp(&mut self, vapoursynth: Option<PathBuf>) {
         let endpoint = choose_endpoint(
-            &self.settings.ipc_server,
+            configured_endpoint(&self.settings),
             std::process::id(),
             endpoint_in_use,
         );
@@ -512,6 +539,24 @@ impl App {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn svp_mode_needs_svp_support_and_an_endpoint() {
+        // Off by default (the owner, 2026-11-12), with the endpoint kept.
+        let mut settings = Settings::default();
+        assert!(!settings.svp_enabled && !svp_mode(&settings));
+        assert_eq!(configured_endpoint(&settings), "");
+        assert!(!settings.ipc_server.is_empty());
+        settings.svp_enabled = true;
+        assert!(svp_mode(&settings));
+        assert_eq!(
+            configured_endpoint(&settings),
+            rvp_engine::default_ipc_server()
+        );
+        settings.ipc_server = "  ".to_owned();
+        assert!(!svp_mode(&settings));
+        assert_eq!(configured_endpoint(&settings), "");
+    }
 
     #[test]
     fn rvp_looks_for_its_own_runtime_and_never_svps() {

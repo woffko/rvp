@@ -170,6 +170,38 @@ pub fn take_drawn(playing: bool) -> Option<(u32, u32)> {
     ))
 }
 
+/// The window thread's beat for the log's seconds at Debug: a 20 ms timer
+/// of `Main.qml` ([`BEAT_MS`]) calls [`beat`] while a file plays, and the
+/// longest time between two beats shows how long the thread was held (the
+/// owner's log of 2026-11-12: a frame dropped in each second while
+/// neither the processors nor the card were busy).
+static LAST_BEAT: AtomicU64 = AtomicU64::new(0);
+static LONGEST_BEAT: AtomicU64 = AtomicU64::new(0);
+
+/// The beat timer's interval in milliseconds.
+pub const BEAT_MS: u64 = 20;
+
+/// A beat of the window thread's timer.
+pub fn beat() {
+    let now = u64::try_from(EPOCH.get_or_init(Instant::now).elapsed().as_micros()).unwrap_or(0);
+    let last = LAST_BEAT.swap(now, Ordering::Relaxed);
+    if last != 0 {
+        LONGEST_BEAT.fetch_max(now.saturating_sub(last), Ordering::Relaxed);
+    }
+}
+
+/// How long the window thread was held beyond the beat's interval at most
+/// since the last call, in milliseconds; `None` when the timer did not run
+/// (the next beat starts again).
+pub fn take_pause(beating: bool) -> Option<u32> {
+    let longest = LONGEST_BEAT.swap(0, Ordering::Relaxed) / 1000;
+    if !beating {
+        LAST_BEAT.store(0, Ordering::Relaxed);
+        return None;
+    }
+    Some(u32::try_from(longest.saturating_sub(BEAT_MS)).unwrap_or(u32::MAX))
+}
+
 /// The video item's renderer is going away. Qt also builds and drops
 /// renderers for window grabs while the window is hidden (the self-test in
 /// Windows session 0); `vo=libmpv` cannot take a new render context for the

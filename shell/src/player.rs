@@ -571,6 +571,7 @@ pub struct PlayerRust {
     pub(crate) seek_picture_width: i32,
     pub(crate) seek_picture_height: i32,
     pub(crate) seek_picture_place: QRectF,
+    pub(crate) beat_running: bool,
     pub(crate) hide_pointer: bool,
     pub(crate) center_window: bool,
     pub(crate) native_video: bool,
@@ -3265,6 +3266,7 @@ impl qobject::Player {
     }
 
     pub(crate) fn tick(mut self: Pin<&mut Self>) {
+        let started = Instant::now();
         let Some(core) = self.as_mut().core_mut() else {
             return;
         };
@@ -3273,12 +3275,13 @@ impl qobject::Player {
         let calibrated = core.app.calibration_tick(core.engine, Instant::now());
         let installed = core.app.tensorrt_tick(core.engine);
         let reloaded = core.app.watch_subtitle_files(core.engine);
+        let svp = core.app.svp_tick(core.engine, Instant::now());
         let speech = core.app.speech_tick(core.engine, Instant::now());
         if let Err(error) = core.app.tick(Instant::now()) {
             let text = format!("cannot save the playback state: {error}");
             self.as_mut().show_message(&text);
         }
-        for request in [watched, calibrated, installed, reloaded]
+        for request in [watched, calibrated, installed, reloaded, svp]
             .into_iter()
             .flatten()
             .chain(speech)
@@ -3290,16 +3293,29 @@ impl qobject::Player {
         self.as_mut().tick_misc_info();
         self.as_mut().tick_taskbar();
         self.as_mut().tick_gpu_power();
-        self.as_mut().tick_log();
+        self.as_mut().tick_log(started.elapsed());
         self.check_native_video();
     }
 
     /// The log's second of playback: mpv's frame counters with the frames
-    /// the window drew and the processors' load (the Log page).
-    fn tick_log(self: Pin<&mut Self>) {
+    /// the window drew, the processors' load and, at Debug, the window
+    /// thread's second (`work`: this tick's time so far) (the Log page).
+    fn tick_log(mut self: Pin<&mut Self>, work: std::time::Duration) {
+        let beating = *self.beat_running();
+        let pause = crate::video::take_pause(beating);
+        let Some(core) = self.as_mut().core_mut() else {
+            return;
+        };
+        let playing = core.app.model.playing();
+        let beat = playing && rvp_app::log::enabled(rvp_app::log::Level::Debug);
+        if beat != beating {
+            self.as_mut().set_beat_running(beat);
+        }
         let Some(core) = self.core_mut() else {
             return;
         };
+        let window =
+            pause.map(|pause| (u32::try_from(work.as_millis()).unwrap_or(u32::MAX), pause));
         let drawn = crate::video::take_drawn(core.app.model.playing());
         // Every second: smoothing's steps down judge other programs' load.
         let processors = core.load.sample();
@@ -3308,8 +3324,11 @@ impl qobject::Player {
             return;
         }
         rvp_app::log::set_utc_offset(crate::ffi::bridge::rvp_utc_offset());
-        core.app
-            .log_second(&rvp_app::log::Second { drawn, processors });
+        core.app.log_second(&rvp_app::log::Second {
+            drawn,
+            processors,
+            window,
+        });
     }
 
     /// The GPU power budget (D17): the cards are read while it is on (or

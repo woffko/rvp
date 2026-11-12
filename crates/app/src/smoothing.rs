@@ -1586,14 +1586,15 @@ impl App {
     }
 
     /// Exact seeks skip the frames before the target, before the video
-    /// filters, while RVP's smoothing filter runs and the Playback page
-    /// allows it (`Playback::seek_skip_before_target`): every frame from
-    /// the keyframe on went through the engine, up to 4.5 s with RIFE.
-    /// The engine starts mpv with "no" for SVP's filter, which the plan
-    /// never runs beside.
+    /// filters, while the Playback page allows it
+    /// (`Playback::seek_skip_before_target`) and SVP's filter cannot be
+    /// there: RVP's smoothing filter runs (which the plan never runs beside
+    /// SVP's), or SVP mode is off. Every frame from the keyframe on went
+    /// through the engine, up to 4.5 s with RIFE. The engine starts mpv
+    /// with "no" for SVP's filter, which needs them.
     pub(crate) fn apply_seek_framedrop(&mut self, engine: &Mpv, plan: &Plan) {
-        let skip =
-            self.settings.playback.seek_skip_before_target && matches!(plan, Plan::Filter { .. });
+        let skip = self.settings.playback.seek_skip_before_target
+            && (matches!(plan, Plan::Filter { .. }) || !crate::svp::svp_mode(&self.settings));
         if self.smoothing.framedrop.unwrap_or(false) != skip {
             self.smoothing.framedrop = Some(skip);
             drop(engine.set_text("hr-seek-framedrop", if skip { "yes" } else { "no" }));

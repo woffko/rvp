@@ -972,7 +972,11 @@ step_m2svp() {
         return 0
     fi
     m2_env
-    rm -rf "$RVP_STATE_DIR"
+    # SVP support on (off by default), on RVP's default endpoint.
+    export RVP_CONFIG_DIR=$LOG_DIR/m2svp-config RVP_STATE_DIR=$LOG_DIR/m2svp-state
+    rm -rf "$RVP_CONFIG_DIR" "$RVP_STATE_DIR"
+    mkdir -p "$RVP_CONFIG_DIR"
+    printf '{\n  "svp-enabled": true\n}\n' > "$RVP_CONFIG_DIR/settings.json"
     vsscript=$(find_vsscript)
     VSSCRIPT_PATH=${vsscript:-${VSSCRIPT_PATH:-}} PYTHONDONTWRITEBYTECODE=1 \
         "$(rvp_bin)" --selftest=playback --play-seconds=40 --svp "--out=$out" "--skin=${RVP_SKIN:-}" \
@@ -1492,7 +1496,7 @@ step_m6svp() {
     rm -rf "$RVP_CONFIG_DIR" "$RVP_STATE_DIR"
     # SVP mode on RVP's default endpoint (/tmp/mpvsocket).
     kit_settings
-    printf '{\n  "ipc-server": "/tmp/mpvsocket"\n}\n' > "$RVP_CONFIG_DIR/settings.json"
+    printf '{\n  "svp-enabled": true,\n  "ipc-server": "/tmp/mpvsocket"\n}\n' > "$RVP_CONFIG_DIR/settings.json"
     vsscript=$(find_vsscript)
     : > "$log"
     echo "== first window" >> "$log"

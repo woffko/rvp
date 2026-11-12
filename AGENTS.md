@@ -226,8 +226,11 @@ smoothing for users without SVP, after a study of the engines.
 - M18's motion smoothing (D18, `crates/app/src/smoothing.rs`): a plan per
   file (off by default; MVTools medium up to 1080p, Blend above, at the
   display's rate; off while `@svp` is in the chain or RVP's own script slot
-  runs, and, while SVP 4 Manager runs, for SVP's 8 s after a file starts:
-  SVP does not attach to a video RVP's filter already plays) made by
+  runs, and, in SVP mode while SVP 4 Manager runs, for SVP's 8 s after a
+  file starts: SVP does not attach to a video RVP's filter already plays;
+  SVP mode needs the SVP page's "Enable SVP support", `svp-enabled`, off
+  by default since 2026-11-12, and the wait's check runs each second,
+  paused too: `App::svp_tick`) made by
   `App::apply_smoothing`. MVTools and RIFE are RVP's filter `@rvpsmooth`,
   last among RVP's; their scripts end with `core.clear_cache()` (mpv answers
   frames a script asks for while it loads with black ones, which
@@ -277,8 +280,9 @@ smoothing for users without SVP, after a study of the engines.
   mpv times each frame by its `_DurationNum`/`_DurationDen`. Seeks (the
   owner, 2026-11-10): while RVP's filter runs, exact seeks skip the frames
   before the target (`hr-seek-framedrop`, `playback.seek-skip-before-target`,
-  `App::apply_seek_framedrop`; the engine starts mpv with "no" for SVP's
-  `@svp`), and the thumbnail core's frame of the target (`Group::Seek`)
+  `App::apply_seek_framedrop`, and without a filter while SVP mode is off;
+  the engine starts mpv with "no" for SVP's `@svp`), and the thumbnail
+  core's frame of the target (`Group::Seek`)
   shows over the video at its `osd-dimensions` place until mpv's playback
   restarts (`playback.seek-picture`, `crate::thumbs`; only with filters
   that leave the picture alone, no rotation and the picture's shape on the
@@ -393,8 +397,10 @@ smoothing for users without SVP, after a study of the engines.
   `log::report` (the standard error and the log); mpv's come on a weak
   client of the player's core read on another thread, never through the
   window's thread. Debug adds a line per second of playback: mpv's frame
-  counters, the frames the OpenGL renderer drew (`video::take_drawn`) and
-  the processors' load (`shell/src/cpu.rs`, `rvp_platform::load`).
+  counters, the frames the OpenGL renderer drew (`video::take_drawn`), the
+  processors' load (`shell/src/cpu.rs`, `rvp_platform::load`) and the
+  window thread's tick and longest pause (a 20 ms QML timer while a file
+  plays, `video::beat`).
 
 ## Packages and the desktop (M8)
 

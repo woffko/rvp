@@ -508,10 +508,10 @@ impl App {
             }
         };
         let mut endpoint_changed = None;
-        if old.ipc_server != new.ipc_server {
+        if crate::svp::configured_endpoint(&old) != crate::svp::configured_endpoint(&new) {
             // Another process may hold the endpoint (see crate::svp).
             let endpoint = crate::svp::choose_endpoint(
-                &new.ipc_server,
+                crate::svp::configured_endpoint(&new),
                 std::process::id(),
                 crate::svp::endpoint_in_use,
             );
@@ -611,8 +611,13 @@ impl App {
         let filters = old.effects != new.effects
             || old.vapoursynth != new.vapoursynth
             || old.video_effects != new.video_effects;
-        if filters || old.hwdec != new.hwdec || old.ipc_server != new.ipc_server {
+        let svp_changed = crate::svp::svp_mode(old) != crate::svp::svp_mode(new);
+        if filters || old.hwdec != new.hwdec || old.ipc_server != new.ipc_server || svp_changed {
             self.apply_decoding(engine);
+        }
+        if svp_changed {
+            let plan = self.smoothing_plan();
+            self.apply_seek_framedrop(engine, &plan);
         }
         if filters && let Err(error) = self.apply_video_filters(engine) {
             applied.notes.push(error);

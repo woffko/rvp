@@ -1204,6 +1204,12 @@ impl qobject::Player {
         }
     }
 
+    // A QML invokable is a method of its object; the beat is the thread's.
+    #[allow(clippy::unused_self)]
+    pub(crate) fn window_beat(&self) {
+        crate::video::beat();
+    }
+
     pub(crate) fn tensorrt_status(&self) -> QString {
         self.core().map_or_else(QString::default, |core| {
             QString::from(&core.app.tensorrt_status().to_string())

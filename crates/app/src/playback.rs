@@ -175,7 +175,8 @@ pub struct Playback {
     /// Exact seeks drop the frames before the target before the video
     /// filters (mpv's `hr-seek-framedrop`; the owner, 2026-11-10: with
     /// RIFE a seek took up to 4.5 s, every frame from the keyframe on going
-    /// through it). Never while SVP's filter runs: it needs them.
+    /// through it). Not in SVP mode unless RVP's own smoothing filter runs:
+    /// SVP's filter needs them (`App::apply_seek_framedrop`).
     pub seek_skip_before_target: bool,
     /// After a seek while a smoothing filter runs, the target's frame from
     /// the thumbnail core shows over the video until the smoothed picture

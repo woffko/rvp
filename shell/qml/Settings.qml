@@ -1070,9 +1070,9 @@ ApplicationWindow {
                         Amount { label: qsTr("Shift+Left / Right"); path: "seek-seconds.2"; values: [0.5, 1, 2, 3, 5, 10, 15, 20, 30, 45, 60, 90, 120, 180, 300, 600, 900, 1800, 3600]; format: win.seconds }
                         Amount { label: qsTr("Ctrl+Alt+Left / Right"); path: "seek-seconds.3"; values: [0.5, 1, 2, 3, 5, 10, 15, 20, 30, 45, 60, 90, 120, 180, 300, 600, 900, 1800, 3600]; format: win.seconds }
                         Check { path: "keyframe-seeks"; text: qsTr("Jump to keyframes (faster, less exact)") }
-                        Heading { text: qsTr("Jumps with motion smoothing") }
-                        Check { path: "playback.seek-skip-before-target"; text: qsTr("Skip the frames before the target (faster exact jumps)") }
-                        Check { path: "playback.seek-picture"; text: qsTr("Show the target frame at once, until the smoothed picture comes") }
+                        Heading { text: qsTr("Exact jumps") }
+                        Check { path: "playback.seek-skip-before-target"; text: qsTr("Skip the frames before the target (faster; not with SVP support on)") }
+                        Check { path: "playback.seek-picture"; text: qsTr("With motion smoothing, show the target frame until the smoothed one") }
                     }
 
                     Page {
@@ -1917,7 +1917,9 @@ ApplicationWindow {
 
                     Page {
                         Heading { text: qsTr("SVP") }
+                        Check { path: "svp-enabled"; text: qsTr("Enable SVP support (SVP 4 Manager attaches to RVP)") }
                         Field {
+                            enabled: win.s["svp-enabled"] === true
                             label: qsTr("IPC endpoint SVP attaches to")
                             path: "ipc-server"
                             placeholder: qsTr("empty: SVP mode off")

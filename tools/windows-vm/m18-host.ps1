@@ -162,8 +162,8 @@ foreach ($run in $table) {
         smoothing = [ordered]@{ enabled = ($engine -ne 'off'); engine = $(if ($engine -eq 'off') { 'mvtools' } else { $engine })
             preset = $preset; target = 'display' }
     }
-    # Only the SVP run keeps SVP's pipe.
-    if ($name -notlike 'svp-*') { $settings['ipc-server'] = '' }
+    # Only the SVP run turns SVP support on (off by default) on its pipe.
+    if ($name -like 'svp-*') { $settings['svp-enabled'] = $true } else { $settings['ipc-server'] = '' }
     $settings | ConvertTo-Json -Depth 4 | Set-Content -Path "$dir\config\settings.json" -Encoding ascii
     $mpvOptions = "ao=null,log-file=$dir\mpv.log"
     if ($Loop) { $mpvOptions += ',loop-file=inf' }

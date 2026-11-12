@@ -82,6 +82,9 @@ pub mod qobject {
         #[qproperty(i32, seek_picture_width)]
         #[qproperty(i32, seek_picture_height)]
         #[qproperty(QRectF, seek_picture_place)]
+        /// The window thread's beat timer runs (the log's seconds at
+        /// Debug while a file plays; `video::beat`).
+        #[qproperty(bool, beat_running)]
         #[qproperty(bool, hide_pointer)]
         #[qproperty(bool, center_window)]
         /// mpv draws into the Direct3D 11 renderer's native window (D4,
@@ -354,6 +357,10 @@ pub mod qobject {
         /// The calibration window's Cancel.
         #[qinvokable]
         fn cancel_calibration(self: Pin<&mut Self>);
+
+        /// A beat of the window thread's timer (`video::beat`).
+        #[qinvokable]
+        fn window_beat(self: &Self);
 
         /// RIFE (TensorRT)'s installation as JSON (the Motion Smoothing
         /// page): `state`, `stage`, `done`, `total`, `download`, `kept`,

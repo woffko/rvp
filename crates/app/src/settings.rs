@@ -23,6 +23,10 @@ pub struct Settings {
     pub skin: Option<PathBuf>,
     /// mpv `hwdec`.
     pub hwdec: String,
+    /// SVP 4 Manager may attach to RVP (SVP mode, with `ipc_server`): off
+    /// by default (the owner, 2026-11-12), when RVP opens no endpoint and
+    /// waits for no SVP before its own smoothing.
+    pub svp_enabled: bool,
     /// mpv `input-ipc-server` for SVP; empty turns it off.
     pub ipc_server: String,
     /// Seek steps in seconds: Left/Right, Ctrl, Shift, Ctrl+Alt. PotPlayer's
@@ -185,6 +189,7 @@ impl Default for Settings {
         Self {
             skin: None,
             hwdec: "auto-copy".to_owned(),
+            svp_enabled: false,
             ipc_server: rvp_engine::default_ipc_server().to_owned(),
             seek_seconds: [5.0, 30.0, 60.0, 300.0],
             volume_step: 1.0,

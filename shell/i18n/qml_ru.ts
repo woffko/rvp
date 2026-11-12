@@ -1043,16 +1043,16 @@ in %2 seconds</source>
             <translation>Переходить к ключевым кадрам (быстрее, менее точно)</translation>
         </message>
         <message>
-            <source>Jumps with motion smoothing</source>
-            <translation>Переходы при сглаживании движения</translation>
+            <source>Exact jumps</source>
+            <translation>Точные переходы</translation>
         </message>
         <message>
-            <source>Skip the frames before the target (faster exact jumps)</source>
-            <translation>Пропускать кадры до цели (точные переходы быстрее)</translation>
+            <source>Skip the frames before the target (faster; not with SVP support on)</source>
+            <translation>Пропускать кадры до цели (быстрее; не при включённом SVP)</translation>
         </message>
         <message>
-            <source>Show the target frame at once, until the smoothed picture comes</source>
-            <translation>Сразу показывать кадр цели, пока не придёт сглаженный</translation>
+            <source>With motion smoothing, show the target frame until the smoothed one</source>
+            <translation>При сглаживании показывать кадр цели до сглаженного</translation>
         </message>
         <message>
             <source>Enable the skip feature</source>
@@ -2753,6 +2753,10 @@ in %2 seconds</source>
         <message>
             <source>SVP</source>
             <translation>SVP</translation>
+        </message>
+        <message>
+            <source>Enable SVP support (SVP 4 Manager attaches to RVP)</source>
+            <translation>Включить поддержку SVP (SVP 4 Manager подключается к RVP)</translation>
         </message>
         <message>
             <source>IPC endpoint SVP attaches to</source>
