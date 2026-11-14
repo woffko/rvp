@@ -373,13 +373,26 @@ SYSTEM = re.compile(
 )
 
 # Qt's plugin folders the window needs: Wayland and X11, input methods,
-# the desktop portal's file dialogs, images and icons.
+# images and icons.
 QT_PLUGINS = [
     "platforms", "platforminputcontexts", "wayland-decoration-client",
     "wayland-graphics-integration-client", "wayland-shell-integration", "xcbglintegrations",
     "imageformats", "iconengines",
 ]
-QT_PLATFORM_THEMES = ["libqxdgdesktopportal.so"]
+# The desktop's own dialogs: the portal's (Qt takes it inside Flatpak or
+# Snap) and GTK 3's, which Qt takes on GNOME and the other GTK desktops.
+# Without gtk3 the packages showed Qt Quick's own file dialog there (the
+# Ubuntu boot run, 2026-11-14): small, of one size, without the network
+# drives of GTK's "Other Locations".
+QT_PLATFORM_THEMES = ["libqxdgdesktopportal.so", "libqgtk3.so"]
+
+# GTK 3's libraries, which only the gtk3 theme reaches: the system's, never
+# bundled, and a Recommends rather than a Depends, since Qt passes over a
+# theme whose libraries are missing and shows its own dialog.
+GTK = re.compile(
+    r"^(libgtk-3|libgdk-3|libpangocairo-1\.0|libpango-1\.0|libatk-1\.0|libcairo-gobject|libcairo"
+    r"|libgdk_pixbuf-2\.0)\.so(\.|$)"
+)
 
 # Ubuntu 24.04 renamed these packages (the 64-bit time_t transition); a
 # .deb built on 22.04 accepts either name.
@@ -456,6 +469,8 @@ def linux_appdir(args, appdir: Path) -> set[str]:
                 continue
             if SYSTEM.match(name):
                 relied.add(name)
+                continue
+            if GTK.match(name):
                 continue
             source = next((place / name for place in places if (place / name).exists()), None)
             source = source or system.get(name)
@@ -564,8 +579,10 @@ def deb(appdir: Path, relied: set[str], target: Path, epoch: int) -> None:
             f"Depends: {debian_depends(relied)}\n"
             # The programs RVP runs: the master volume and recording
             # (pactl, parec), text to speech (spd-say), the desktop's
-            # handler cache (update-desktop-database).
-            "Recommends: pulseaudio-utils, speech-dispatcher, desktop-file-utils\n"
+            # handler cache (update-desktop-database); GTK 3 for the
+            # desktop's file dialogs (the gtk3 theme, GTK above).
+            "Recommends: pulseaudio-utils, speech-dispatcher, desktop-file-utils,"
+            " libgtk-3-0 | libgtk-3-0t64\n"
             "Section: video\n"
             "Priority: optional\n"
             "Description: PotPlayer-style media player\n"

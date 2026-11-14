@@ -165,6 +165,14 @@ ApplicationWindow {
         if (index >= 0)
             showPage(index)
     }
+    // The page tabs' arrows, for the self-test: whether they show, where
+    // the row is scrolled, and one arrow's click.
+    function tabScroll() {
+        return { overflows: tabs.overflows, x: tabs.view ? tabs.view.contentX : 0 }
+    }
+    function scrollTabs(step) {
+        tabs.scrollBy(step)
+    }
     function groupOf(key) {
         for (const group of tree) {
             if (group.page === key || group.pages.indexOf(key) >= 0)
@@ -948,19 +956,63 @@ ApplicationWindow {
                 Layout.fillHeight: true
                 spacing: 0
 
-                // The selected group's pages, as PotPlayer shows them.
-                TabBar {
-                    id: tabs
-                    objectName: "pageTabs"
+                // The selected group's pages, as PotPlayer shows them. Qt
+                // Quick's TabBar only scrolls with the wheel or a drag when
+                // its tabs do not fit (the Video group's ten pages on
+                // Linux's fonts); PotPlayer's tab control then shows two
+                // arrows at the row's end, which move it by one tab without
+                // choosing a page.
+                RowLayout {
                     Layout.fillWidth: true
-                    Repeater {
-                        model: win.tabKeys
-                        delegate: TabButton {
-                            required property string modelData
-                            text: win.titleOf(modelData)
-                            width: implicitWidth
-                            onClicked: win.showKey(modelData)
+                    spacing: 0
+
+                    TabBar {
+                        id: tabs
+                        objectName: "pageTabs"
+                        Layout.fillWidth: true
+                        readonly property var view: contentItem
+                        readonly property bool overflows: contentWidth > width + 1
+                        Repeater {
+                            model: win.tabKeys
+                            delegate: TabButton {
+                                required property string modelData
+                                text: win.titleOf(modelData)
+                                width: implicitWidth
+                                onClicked: win.showKey(modelData)
+                            }
                         }
+                        // One tab further to the left (step -1) or right (1).
+                        function scrollBy(step) {
+                            if (!view || view.contentX === undefined)
+                                return
+                            const end = Math.max(0, view.contentWidth - view.width)
+                            const x = view.contentX
+                            let target = step > 0 ? end : 0
+                            for (let i = 0; i < count; ++i) {
+                                const tab = itemAt(i)
+                                if (step > 0 && tab.x > x + 1) {
+                                    target = tab.x
+                                    break
+                                }
+                                if (step < 0 && tab.x < x - 1)
+                                    target = tab.x
+                            }
+                            view.contentX = Math.max(0, Math.min(target, end))
+                        }
+                    }
+                    ToolButton {
+                        objectName: "pageTabsLeft"
+                        visible: tabs.overflows
+                        enabled: tabs.view && tabs.view.contentX > 1
+                        text: "‹"
+                        onClicked: tabs.scrollBy(-1)
+                    }
+                    ToolButton {
+                        objectName: "pageTabsRight"
+                        visible: tabs.overflows
+                        enabled: tabs.view && tabs.view.contentX < tabs.view.contentWidth - tabs.view.width - 1
+                        text: "›"
+                        onClicked: tabs.scrollBy(1)
                     }
                 }
 

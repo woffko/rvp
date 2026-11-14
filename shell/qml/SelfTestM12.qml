@@ -482,6 +482,23 @@ Item {
             t.check("settings_tree_tabs", loader.currentGroup.page === "video" && keys[0] === "video"
                         && keys.indexOf("capture") >= 0 && loader.rows.some(r => r.key === "capture"),
                     loader.currentGroup.title + ": " + keys.join(","))
+            // Tabs that do not fit show two arrows, which move the row by a
+            // tab each way; tabs that fit show none. The row goes back to
+            // its start first (it follows the chosen page on its own).
+            const shown = loader.tabScroll()
+            if (shown.overflows) {
+                for (let i = 0; i < keys.length && loader.tabScroll().x > 0; ++i)
+                    loader.scrollTabs(-1)
+                const start = loader.tabScroll().x
+                loader.scrollTabs(1)
+                const right = loader.tabScroll().x
+                loader.scrollTabs(-1)
+                const left = loader.tabScroll().x
+                t.check("settings_tab_arrows", start === 0 && right > start && left < right,
+                        "x " + shown.x + ", " + start + " -> " + right + " -> " + left)
+            } else {
+                t.check("settings_tab_arrows", true, "the tabs fit: no arrows")
+            }
             loader.close()
             break
         }

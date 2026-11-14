@@ -422,7 +422,10 @@ smoothing for users without SVP, after a study of the engines.
   user (HKCU); its uninstaller removes only the files it installed and,
   of shared keys, those it created (`Software\RVP\Created`).
 - Linux packages bundle Qt, libmpv and the libraries a desktop may lack,
-  and use the system's for the rest (`SYSTEM` in package.py). RVP's binary
+  and use the system's for the rest (`SYSTEM` in package.py). Qt's `gtk3`
+  theme gives GNOME's file dialogs (without it Qt Quick's own showed):
+  GTK 3's libraries are the system's, never bundled, and a Recommends
+  (`GTK` in package.py). RVP's binary
   for them carries `-Wl,-rpath,$ORIGIN/../lib -Wl,--disable-new-dtags`:
   no LD_LIBRARY_PATH, which programs RVP starts would inherit.
 - MPRIS and idle inhibit: `crates/platform` (zbus; zbus's builder queues a
