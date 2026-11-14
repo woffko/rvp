@@ -125,8 +125,20 @@ void *openLibrary()
     return LoadLibraryExW(L"libbluray-4.dll", nullptr,
                           LOAD_LIBRARY_SEARCH_APPLICATION_DIR | LOAD_LIBRARY_SEARCH_SYSTEM32);
 #else
-    void *library = dlopen("libbluray.so.2", RTLD_NOW | RTLD_LOCAL);
-    return library != nullptr ? library : dlopen("libbluray.so", RTLD_NOW | RTLD_LOCAL);
+    // libbluray 1.4 and later are .so.4 (Ubuntu 26.04 and later; the
+    // Windows build's 1.5.1 is libbluray-4.dll), 1.3 is .so.2 (Ubuntu 22.04
+    // and 24.04); the bare name only comes with the development package.
+    // The one libmpv already loaded (the package's own, or the system's)
+    // comes first, so that one libbluray serves the process.
+    for (const char *name : {"libbluray.so.4", "libbluray.so.2"}) {
+        if (void *library = dlopen(name, RTLD_NOW | RTLD_LOCAL | RTLD_NOLOAD))
+            return library;
+    }
+    for (const char *name : {"libbluray.so.4", "libbluray.so.2", "libbluray.so"}) {
+        if (void *library = dlopen(name, RTLD_NOW | RTLD_LOCAL))
+            return library;
+    }
+    return nullptr;
 #endif
 }
 

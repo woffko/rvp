@@ -17,7 +17,10 @@ fn the_synthetic_skin_has_every_bitmap() {
 
 #[test]
 fn the_local_skins_load() {
-    let Some(folder) = std::env::var_os("RVP_WINAMP_SKINS") else {
+    // An empty value is unset too: the Linux kit passes the variable on
+    // as it found it.
+    let Some(folder) = std::env::var_os("RVP_WINAMP_SKINS").filter(|value| !value.is_empty())
+    else {
         eprintln!("note: RVP_WINAMP_SKINS is not set; the local skins were skipped");
         return;
     };

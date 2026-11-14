@@ -355,8 +355,8 @@ smoothing for users without SVP, after a study of the engines.
   `cargo run -p rvp-app --example rife_trt -- FOLDER MIRROR` installs and
   measures without RVP's window (`VSSCRIPT_PATH` at RVP's runtime; MIRROR
   `-` is NVIDIA's servers, a last argument `install` stops after the
-  installation; the kit's `m18trt` step runs it on the Ubuntu boot, only
-  at a power limit of 90 % or less);
+  installation; the kit's `m18trt` step runs it on the Ubuntu boot, at
+  the card's own power limit since 2026-11-14, the owner's decision);
   `cargo run -p rvp-engine --example render_vf -- FILE START FRAMES OUT
   [VF]` writes the frames a filter makes as PNG files, to compare engines.
 - The control panel (F7) is a second window (`shell/qml/ControlPanel.qml`)
@@ -600,7 +600,8 @@ smoothing for users without SVP, after a study of the engines.
   through RVP's own navigators (D8 approved libdvdnav, libdvdread and
   libbluray, `docs/spikes/s7-disc-menus.md`): `shell/cpp/disc.cpp` and
   `bluray.cpp` load `libdvdnav-4.dll` and `libbluray-4.dll` from RVP's
-  folder (Linux: the system's `.so.4` and `.so.2`), `shell/src/disc`
+  folder (Linux: the system's `libdvdnav.so.4` and `libbluray.so.4`, or
+  `.so.2` before libbluray 1.4, Ubuntu 24.04 and older), `shell/src/disc`
   drives them, `shell/src/player/m16.rs` is the window's part, and
   `crates/app/src/disc` holds what needs no library (SPU decoding, the
   highlight, the Blu-ray plane). Without a library the disc plays as

@@ -118,9 +118,9 @@
 #           NVIDIA's runtime installed as RVP installs it (from
 #           RVP_TENSORRT_MIRROR, else NVIDIA's and PyPI's servers, 3.8 GB)
 #           into the kit's folder, then RVP's RIFE (TensorRT) script measured
-#           at 720p, 1080p and 1440p (the first builds the engine, minutes);
-#           only at a power limit of at most 90 % of the card's default
-#           (CHECKLIST.md section 10), with nvidia-smi before and after
+#           at 720p, 1080p and 1440p (the first builds the engine, minutes),
+#           with nvidia-smi before and after; the card's power limit is
+#           recorded (no 90 % limit on the Ubuntu boot since 2026-11-14)
 #   m3desktop  optional, not in m3all: an "RVP (kit)" entry in
 #           ~/.local/share/applications so that Files can open videos in
 #           the running RVP (single instance); delete the file to undo
@@ -777,7 +777,11 @@ run_input_check() {
         profile=$(gsettings get org.gnome.desktop.peripherals.mouse accel-profile 2> /dev/null)
         [ -z "$profile" ] || gsettings set org.gnome.desktop.peripherals.mouse accel-profile flat
     fi
-    python3 "$REPO/tools/linux-kit/input-check.py" "$@" > "$log" 2>&1
+    # The socket input_ready found: it runs in a command substitution, so
+    # its export does not reach this shell (without it ydotool looks in
+    # $XDG_RUNTIME_DIR and exits with 2).
+    YDOTOOL_SOCKET=${YDOTOOL_SOCKET:-/tmp/.ydotool_socket} \
+        python3 "$REPO/tools/linux-kit/input-check.py" "$@" > "$log" 2>&1
     status=$?
     [ -z "$profile" ] || gsettings set org.gnome.desktop.peripherals.mouse accel-profile "$profile"
     return "$status"
@@ -2058,15 +2062,17 @@ step_m15() {
     else
         # The server in user space: its data in the step's folder (HOME),
         # its remotes the bundled ones and RVP's in custom/RVP, with the
-        # icons m8package drew when they are there. The remote reads RVP's
-        # token where an installed RVP keeps it: $XDG_STATE_HOME/rvp.
+        # pictures m8package drew (the icons and the layout's mute.png,
+        # without which the server does not load the remote) when they
+        # are there. The remote reads RVP's token where an installed RVP
+        # keeps it: $XDG_STATE_HOME/rvp.
         remotes=$ur/remotes
         pidfile=$ur/urserver.pid
         state=$ur/state
         mkdir -p "$remotes/custom" "$ur/home" "$state"
         cp -a "$(dirname "$server")/remotes" "$remotes/bundled"
         cp -a "$REPO/remote/unified-remote/RVP" "$remotes/custom/RVP"
-        cp "$(m8_dir)"/look/remote/unified-remote/RVP/icon*.png "$remotes/custom/RVP/" 2> /dev/null
+        cp "$(m8_dir)"/look/remote/unified-remote/RVP/*.png "$remotes/custom/RVP/" 2> /dev/null
         HOME=$ur/home XDG_STATE_HOME=$state "$server" "--remotes=$remotes" --daemon "--pidfile=$pidfile" \
             >> "$log" 2>&1
         for _ in $(seq 1 30); do
@@ -2117,11 +2123,12 @@ step_m15() {
                 "$(grep -q -F -f <(tr -d '[:space:]' < "$token"; echo) "$LOG_DIR/m15-selftest.out" &&
                     echo 0 || echo 1)" || bad=$((bad + 1))
         fi
-        # The server's log about RVP's remote has no errors.
+        # The server's log about RVP's remote has no errors (its error
+        # lines are marked "(E)": "could not find remote: RVP.Player").
         curl -fs "$manager/system/log/6/6" 2> /dev/null | tr '"' '\n' | grep RVP > "$ur/log.txt"
         tail -12 "$ur/log.txt" | sed 's/^/unified_remote_log /' >> "$log"
         kit_check "$log" m15_unified_remote_log_clean \
-            "$(grep -qiE 'error|fail' "$ur/log.txt" && echo 0 || echo 1)" || bad=$((bad + 1))
+            "$(grep -qiE 'error|fail|could not|\(E\)' "$ur/log.txt" && echo 0 || echo 1)" || bad=$((bad + 1))
         # Its own process only, by its pidfile.
         [ -s "$pidfile" ] && kill "$(cat "$pidfile")" 2> /dev/null
     fi
@@ -2154,12 +2161,15 @@ step_m16() {
         record m16 SKIPPED "no synthetic DVD: install dvdauthor (it has spumux) or set RVP_DVD_MENU"
         return 0
     fi
-    # RVP's navigators load the system's libdvdnav and libbluray; no
-    # libdvdcss, libaacs or keys come with RVP.
-    for lib in libdvdnav.so.4 libbluray.so.2; do
-        kit_check "$log" "m16_system_has_$lib" \
-            "$(/sbin/ldconfig -p | awk -v lib="$lib" '$1 == lib { found = 1 } END { exit !found }' &&
-                echo 1 || echo 0)" || bad=$((bad + 1))
+    # RVP's navigators load the system's libdvdnav and libbluray (.so.4
+    # from 1.4 on, Ubuntu 26.04 and later; .so.2 before), never the
+    # development package's bare name; no libdvdcss, libaacs or keys come
+    # with RVP.
+    for lib in libdvdnav.so.4 "libbluray.so.4 libbluray.so.2"; do
+        kit_check "$log" "m16_system_has_${lib%% *}" \
+            "$(/sbin/ldconfig -p | awk -v libs="$lib" 'BEGIN { n = split(libs, want, " ") }
+                { for (i = 1; i <= n; i++) if ($1 == want[i]) found = 1 } END { exit !found }' &&
+                echo 1 || echo 0)" "$lib" || bad=$((bad + 1))
     done
     [ -d "$bd/BDMV" ] && must+=(m16_bd_menu_shows)
     kit_run m16 selftest --selftest=m16 "--out=$out" --mpv-options=ao=null "--dvd-menus=$dvd" "--bd-menus=$bd"
@@ -2232,14 +2242,11 @@ step_m18trt() {
         record m18trt SKIPPED "no vs-mlrt in RVP's VapourSynth runtime: run vapoursynth first"
         return 0
     fi
-    # GPU runs go at a real power limit (D17): 90 % of the default or less.
+    # The card's power limit goes into the result. The owner dropped D17's
+    # 90 % limit for the Ubuntu boot on 2026-11-14 (the RTX 50-series card).
     power=$(nvidia_power)
     limit=${power% *}
     default=${power#* }
-    if [ "${limit:-0}" -le 0 ] || [ "${default:-0}" -le 0 ] || [ $((limit * 10)) -gt $((default * 9)) ]; then
-        record m18trt SKIPPED "power limit ${limit:-?} W of ${default:-?} W: set at most 90 % first (CHECKLIST.md section 10)"
-        return 0
-    fi
     : > "$log"
     before=$(nvidia-smi --query-gpu=name,driver_version,compute_cap,power.draw,power.limit,temperature.gpu \
         --format=csv,noheader 2>&1)

@@ -435,13 +435,9 @@ when absent; none of them is ever committed):
       `export RVP_TENSORRT_MIRROR=file:///path/to/trt-linux` (an absolute
       path after `file://`). Without it the step and RVP's Download…
       fetch 3.8 GB from NVIDIA and PyPI.
-- [ ] **The card's power limit** for every GPU step and check (D17: GPU
-      test runs go at 90 % of the card's default), as an administrator:
-      read the default with
-      `nvidia-smi --query-gpu=power.default_limit --format=csv`, set
-      `sudo nvidia-smi -pl WATTS` with 90 % of it before the GPU steps,
-      and `sudo nvidia-smi -pl DEFAULT` after the session (a reboot also
-      puts it back). `m18trt` is skipped above 90 %. Should `nvidia-smi`
+- [ ] **The card's power limit**: none is needed on the Ubuntu boot since
+      2026-11-14 (the owner, with the RTX 50-series card); the GPU steps run at
+      the card's own limit, which `m18trt` records. Should `nvidia-smi`
       stop answering, stop everything.
 
 From a terminal inside the GNOME session:
@@ -506,8 +502,7 @@ Then try by hand (the parts only a desktop and its hardware can check):
 - [ ] **SVP 4 for Linux** with RVP's own smoothing: with SVP 4 Manager
       running SVP attaches to a file, and RVP's smoothing stays off while
       SVP's filter plays (and for SVP's first 8 s).
-- [ ] **RIFE (TensorRT) in RVP** (after 2026-11-01; at the power limit,
-      with RVP started from the terminal that exports
+- [ ] **RIFE (TensorRT) in RVP** (after 2026-11-01; with RVP started from the terminal that exports
       `RVP_TENSORRT_MIRROR`): Video > Motion Smoothing's Download… (the
       consent to NVIDIA's terms, then the installation for the card,
       `sm120` on the RTX 50-series card), Calibrate… and Start (each engine
@@ -567,7 +562,7 @@ Then try by hand (the parts only a desktop and its hardware can check):
 | `m15` | graphical session, cargo; `RVP_URSERVER` optional | the M15 self-test passes; with Unified Remote Server: it runs, its web client connects, the remote's actions reach RVP, the token is not in RVP's log, the server's log has no errors; the control API's and the remote's tests pass |
 | `m16` | graphical session, cargo, dvdauthor | the system has libdvdnav and libbluray, the M16 self-test shows and works both discs' menus, and the shell's navigation tests ran on them |
 | `m18` | graphical session, cargo | the smoothing and GPU budget self-tests pass (MVTools with a VapourSynth runtime, else Blend; seeks skip the frames before the target and ask for the target's picture) and the smoothing tests pass |
-| `m18trt` | NVIDIA card at 90 % of its power or less, `vapoursynth`, cargo; `RVP_TENSORRT_MIRROR` optional | TensorRT is installed for the card as RVP installs it, RVP's RIFE (TensorRT) script makes 1080p at 60 frames a second or more (720p and 1440p are in the detail), and `nvidia-smi` answers afterwards |
+| `m18trt` | NVIDIA card, `vapoursynth`, cargo; `RVP_TENSORRT_MIRROR` optional | TensorRT is installed for the card as RVP installs it, RVP's RIFE (TensorRT) script makes 1080p at 60 frames a second or more (720p and 1440p are in the detail), and `nvidia-smi` answers afterwards |
 | `m3desktop` | `m2build` | the desktop entry was written |
 | `report` | — | the Markdown report was written |
 

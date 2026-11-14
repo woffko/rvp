@@ -1,5 +1,5 @@
 // Blu-ray menus (M16): libbluray, loaded at run time (libbluray-4.dll
-// beside rvp.exe on Windows, the system's libbluray.so.2 on Linux), so that
+// beside rvp.exe on Windows, the system's libbluray.so.4 or .so.2 on Linux), so that
 // RVP builds and runs without it. Thin calls: libbluray's overlay events
 // are copied into a queue the caller drains; `shell/src/disc/bluray.rs`
 // holds the logic.

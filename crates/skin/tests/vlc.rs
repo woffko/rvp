@@ -9,7 +9,9 @@ use rvp_skin::{Skin, SkinArchive};
 
 #[test]
 fn the_local_themes_build() {
-    let Some(folder) = std::env::var_os("RVP_VLC_SKINS") else {
+    // An empty value is unset too: the Linux kit passes the variable on
+    // as it found it.
+    let Some(folder) = std::env::var_os("RVP_VLC_SKINS").filter(|value| !value.is_empty()) else {
         eprintln!("note: RVP_VLC_SKINS is not set; the local themes were skipped");
         return;
     };
