@@ -160,7 +160,7 @@ In this file "～" only marks where a pattern attaches to a word ("～して
   punctuation or the end of the text is next to them: "自動選択 (推奨)",
   "有効にする (Shift+N)", "ハードウェアデコード (ビデオ) がオン". Quotation
   marks are 「」 (『』 inside them), for the source's “…” and its straight
-  "...": "「%1」に PotPlayer のキーを割り当て直しました", "「追加先」".
+  "...": "「%1」を PotPlayer のキーに戻しました", "「再生」ページ".
   When a text names another label, page or menu, it quotes that label's
   Japanese text exactly ("「ウィンドウを新しく開いたビデオに合わせる」が
   オンのとき (「再生」ページ)"); menu paths keep the source's ">" between
@@ -263,7 +263,10 @@ In this file "～" only marks where a pattern attaches to a word ("～して
   "Default" as a value is "既定" ("(既定)", "既定に戻す", "mpv の既定");
   "RVP Default", the skin's name, stays. "Center" / "Centre" is "中央" as
   a position or alignment and "センター" as the speaker and its channel
-  ("センターチャンネル"). "Display" is "ディスプレイ" as a monitor and
+  ("センターチャンネル"); the Settings context's single "Center", shared
+  by the mixer's slider and the alignment choices, is "中央". The other
+  shared short words read in both places as "上", "下", "左", "右" and
+  "Windows の既定". "Display" is "ディスプレイ" as a monitor and
   "表示" as showing. "Close" is "閉じる" (windows, dialogs, panels), "Exit"
   "終了" (RVP itself: "RVP を終了"), and "Close Playback" "再生を終了" (see
   the glossary). An action bound to a key or gesture is "操作"; the action
@@ -338,7 +341,7 @@ In this file "～" only marks where a pattern attaches to a word ("～して
 | album | アルバム | A tab of the playlist (a named list), not a music album; the album named "Default" stays 「Default」. |
 | entry | 項目 | One item of the playlist; the source's "item" is the same word: "選択した項目を削除". |
 | sort | 並べ替え | "並べ替え", "フォルダー順に並べ替え", "昇順 (A から Z)". |
-| add / remove / delete | 追加 / 削除 / 削除 | Japanese says 削除 for removing an entry and for deleting a file: the object tells them apart. Removing names the entry or the list ("項目を削除", "プレイリストから削除"); deleting the file itself always names the file ("ファイルを削除") or the Recycle Bin ("ごみ箱に移動"). Never write a bare 削除 where a file could be meant. |
+| add / remove / delete | 追加 / 削除 / 削除 | Japanese says 削除 for removing an entry and for deleting a file: the object tells them apart. Removing names the entry or the list ("項目を削除", "プレイリストから削除"); deleting the file itself always names the file ("ファイルを削除") or the Recycle Bin ("ごみ箱に移動"). Never write a bare 削除 where a file could be meant. Removing something from the sound, the picture or the text (low frequencies, the voice, notes for the hearing impaired) is 除去. |
 | recycle bin / trash | ごみ箱 / ごみ箱 | One word for Windows' and Linux's, in Windows' spelling with hiragana ごみ. "ごみ箱に移動". |
 | import / export | インポート / エクスポート | |
 | window / main window | ウィンドウ / メインウィンドウ | |
@@ -441,3 +444,44 @@ In this file "～" only marks where a pattern attaches to a word ("～して
 | bit depth / 10-bit | ビット深度 / 10 ビット | "10 ビット出力". |
 | channel layout (5.1, 7.1) | チャンネル構成 (5.1、7.1) | |
 | Auto select (recommended) | 自動選択 (推奨) | The same for every spelling of the source ("(Recommended)", "(recommended)"). |
+
+## Other terms
+
+Words the translation settled on beyond the glossary, used the same way
+everywhere.
+
+| English | Japanese | Note |
+|---------|----------|------|
+| Cycle X (menu actions) | X を切り替え | "アスペクト比を切り替え", "再生終了時の動作を切り替え"; "Cycle Stay on Top" is "常に手前に表示の切り替え", since "常に手前に表示を切り替え" misreads. |
+| Increase / Decrease (a level) | 上げる / 下げる | Volume, brightness, contrast, hue, saturation, pre-amp, speed: "音量を上げる", "明るさを %1% 下げる". |
+| Increase / Decrease (a size) | 拡大 / 縮小 | Window size, margins, font size: "下の余白を拡大", "フォントサイズを縮小". Spacing is "広げる" / "狭める". |
+| Increase / Decrease (a sync) | 遅らせる / 早める | "字幕同期を %1 ms 遅らせる", "音声同期を %1 ms 早める": what the change does to the sound or the subtitles. |
+| step (a setting's amount per press) | ステップ | "音量のステップ", "同期のステップ"; the speed's is "速度の刻み". A step of the smoothing ladder is "段階". |
+| Start (a time) / Start (a button) | 開始 / 開始 | Both 開始 ("開始と終了", the calibration's and the speech job's button); "Starting point" (jump to the beginning) is "先頭", "Middle point" "中間点". |
+| Now (a button that takes the position) | 現在位置 | The subtitle browser's start and end. |
+| Keep (a button that leaves things as they are) | そのまま | Beside "移動" and "リセット". |
+| repeat (a frame) | 繰り返す | "シーンの最後のフレームを繰り返す"; playback's repeat is リピート. |
+| deblock / deband | ブロックノイズ除去 / バンディング除去 | |
+| soften | ソフト化 | The pair of シャープ化. |
+| temporal (Temporary) denoise | 時間軸ノイズ除去 | PotPlayer's "Temporary Denoise" is the temporal noise reducer. |
+| Super Resolution (GPU) | 超解像 | "GPU 超解像"; NVIDIA's and Intel's product names stay. |
+| copy-back | コピーバック | Hardware decoding that copies the frames back to memory. |
+| endpoint / pipe / socket | エンドポイント / パイプ / ソケット | SVP's IPC connection. |
+| process priority: Idle / Below normal / Normal / Above normal / High | 低 / 通常以下 / 通常 / 通常以上 / 高 | The Windows priority classes' usual Japanese names. |
+| log levels: Critical / Warning / Info / Debug | 重大 / 警告 / 情報 / デバッグ | Help texts quote them: "「情報」レベル". |
+| found / missing | あり / なし | "この環境: MVTools あり、RIFE なし". |
+| Multiple instances | 複数起動 | A running RVP is an "インスタンス" ("新しいインスタンスで再生"). |
+| AutoPlay | 自動再生 | Windows' word. |
+| jump list | ジャンプリスト | Windows' word. |
+| Equirectangular / Dual fisheye / Cubemap | 正距円筒図法 / デュアル魚眼 / キューブマップ | 360° projections; "Equi-angular cubemap" is "等角キューブマップ". |
+| Row / Column interleave | 行インターリーブ / 列インターリーブ | 3D output modes. |
+| Extend (the picture) | 拡張 | "%1:%2 に拡張"; a file's extension is 拡張子. |
+| Voice Removal / Voice Emphasis | 声の除去 / 声の強調 | |
+| Store (into a folder) | 保存 | "キャプチャした画像を再生フォルダーに保存 (可能な場合)"; the folder is the "保存先フォルダー". |
+| Record Audio / Record Video / Record Stream | 録音 / ビデオを録画 / ストリームを録画 | Recording sound is 録音, recording video or a stream 録画. |
+| Shoulders / pad (gamepad) | ショルダーボタン / 方向パッド | |
+| the context menu entries "Add to" / "Play with" | 「Add to RVP's album」 / 「Play with RVP」 | Explorer's file context menu shows RVP's entries in English, so the strings quote them exactly as they show: "ファイルのコンテキストメニューに「Play with RVP」を追加". |
+| Navigate / Channel Control / Broadcast Effects | ナビゲーション / チャンネル操作 / 配信エフェクト | Submenu titles; Channel Control is the TV channels' menu. Broadcast Effects are PotPlayer's tools for internet live streaming, which Japanese calls 配信 (not 放送, TV broadcasting). |
+| Seamless Playback | シームレス再生 | PotPlayer's joining of files without a gap. |
+| Move (the DVD Control and Extend/Crop submenus) | 移動 | |
+| EULA | EULA | "CUDA の EULA"; the agreements' own names stay in English. |
