@@ -124,7 +124,8 @@ mpv cannot draw; searching for subtitles online is put off for later.
 - **Other players' skins.** Classic Winamp skins, VLC skins, and mpv's
   on-screen controllers.
 - **Remote control.** A small built-in control service (off by default)
-  and a ready-made Unified Remote remote for your phone.
+  and a ready-made remote for Unified Remote on your phone (its Full app,
+  which custom remotes need).
 
 Some things cannot work everywhere. On Linux, a Wayland desktop does not
 let programs place their windows or keep them on top, and Direct3D's HDR
