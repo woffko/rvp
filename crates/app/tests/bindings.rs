@@ -138,8 +138,16 @@ struct Harness {
 
 impl Harness {
     fn new() -> Self {
-        let dir =
-            std::env::temp_dir().join(format!("rvp-bindings-{}-{}", std::process::id(), line!()));
+        // A folder for each harness: the tests run in parallel, and one
+        // that shared another's folder removed it or loaded its album
+        // (CI's play_after_stop_resumes_the_file_that_played found three
+        // entries where it opened two).
+        static NEXT: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+        let dir = std::env::temp_dir().join(format!(
+            "rvp-bindings-{}-{}",
+            std::process::id(),
+            NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+        ));
         let _ = std::fs::remove_dir_all(&dir);
         let mut settings = Settings {
             reopen_last_file: false,
