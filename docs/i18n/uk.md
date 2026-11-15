@@ -55,7 +55,10 @@ names and keys stay as README lists them.
 - **Titles** of windows, pages, groups and columns are noun phrases:
   Відтворення, Повноекранний режим, Тривалість, Налаштування
   візуалізації. A window that a command opens keeps the command's words
-  without the ellipsis, as the source does: Перейти до часу/кадру.
+  without the ellipsis, as the source does (Перейти до заданого
+  часу/кадру), or takes the noun phrase of what it sets where the
+  command's words would run long: Adjust Audio Sync is Синхронізація
+  звуку.
 - **Questions** in dialogs take the infinitive: Перемістити файли (%1)
   до Кошика? Повернути типові значення параметрів сторінки «%1»? The
   answer buttons are infinitives too: Перемістити, Залишити.
@@ -154,7 +157,7 @@ names and keys stay as README lists them.
   режимі; список where the menu or page is the playlist's); use a noun
   phrase instead of a clause (Пауза під час згортання); write the
   compounds with аудіо-, відео-, авто- and мульти- as one word, as the
-  orthography wants (аудіофайл, відеодоріжка, автовибір, автоповорот);
+  orthography wants (аудіофайл, відеодоріжка, автовибір, авторегулювання);
   use only the abbreviations above. Never cut words or make up
   abbreviations.
 - **Words that trap** (Russianisms and calques, and Ukrainian's own
@@ -189,6 +192,9 @@ names and keys stay as README lists them.
     середовище. The home folder is домашня тека, the clipboard буфер
     обміну, an optical drive привід and a drive letter диск (диск V:).
   - A text line is рядок; a row of pictures (thumbnails, scenes) is ряд.
+  - A window that "has the keyboard" has the focus: коли фокус в іншому вікні, поки вікно RVP не у фокусі, передавати фокус клавіатури.
+  - "While playback is off" is коли нічого не відтворюється, never коли відтворення вимкнено.
+  - Some short words are one message shared by sliders and choices (Left, Right, Top, Bottom, Center, Windows' default): use a form that fits all of them (Зліва, Справа, Зверху, Знизу, Центр, Типовий для Windows).
   - "&" is і or та (Add & Edit: Додати та змінити).
 - **Keys:** inside a combination, keys keep the names RVP's menus show:
   Ctrl+Left, Shift+Right, Alt+Enter, Space, PgUp, X1, X2 (Left / Right
@@ -245,7 +251,7 @@ names and keys stay as README lists them.
 | recycle bin / trash | Кошик / смітник | Windows' Recycle Bin is a name: Кошик, до Кошика. Linux's trash: смітник. |
 | import / export | імпортувати / експортувати | Nouns імпорт / експорт: Імпорт налаштувань. |
 | window / main window | вікно / головне вікно |  |
-| fullscreen / windowed | на весь екран / у вікні | The command and the state: На весь екран, на весь екран на іншому дисплеї; a named mode or page: повноекранний режим, віконний режим. |
+| fullscreen / windowed | на весь екран / у вікні | The command and its variants: На весь екран, На весь екран (на іншому дисплеї). As a condition (in fullscreen, only in fullscreen) always у повноекранному режимі: after a verb, на весь екран reads as "over the whole screen" (Лише в повноекранному режимі). The mode or page: Повноекранний режим. |
 | maximize / minimize | розгорнути / згорнути | Restore: відновити; to the taskbar or tray: на панель завдань, у трей. |
 | always on top / stay on top | завжди зверху / поверх інших вікон |  |
 | opacity | непрозорість | Trap: transparency (Transparency of the menus) is прозорість. |
@@ -273,7 +279,7 @@ names and keys stay as README lists them.
 | touch | сенсорне керування | Page name Сенсорне керування; the input itself: дотик (проведення одним пальцем). |
 | controller / gamepad | контролер / геймпад | The Xbox controller: контролер Xbox. |
 | video / picture / image | відео / зображення / зображення | Ukrainian has one word for the video's picture and a still image; a picture file is also зображення. Відео is neuter and not inflected. |
-| frame | кадр | Genitive кадру. |
+| frame | кадр | Genitive кадру. A source frame is кадр джерела (never вихідний кадр, which reads as an output frame); a screen frame is кадр екрана. |
 | frame rate / fps | частота кадрів / кадр/с | 60 кадр/с; FPS in a command name is частота кадрів (Convert Subtitle FPS: Змінити частоту кадрів субтитрів). |
 | aspect ratio | співвідношення сторін | AR in the source is the same term written out. |
 | crop | обрізати | Noun обрізання. |
@@ -344,3 +350,9 @@ names and keys stay as README lists them.
 | bit depth / 10-bit | глибина кольору / 10-бітний | The adjective agrees with its noun: 10-бітне виведення; the sample formats agree with формат: 16-бітний, 32-бітний (з рухомою комою). |
 | channel layout (5.1, 7.1) | схема каналів (5.1, 7.1) |  |
 | Auto select (recommended) | Автовибір (рекомендовано) | Auto select alone: Автовибір. |
+| instance | екземпляр | Terms added while translating. Multiple instances: Кілька екземплярів. |
+| remote | пульт | A remote program or device: пульти на телефоні. |
+| runtime | середовище | RVP's VapourSynth runtime: середовище VapourSynth від RVP; CUDA's runtime: середовище виконання CUDA. |
+| script / plugin | скрипт / плагін | VapourSynth's, mpv's and ASS scripts alike. |
+| stick | стік | A gamepad's stick: лівий стік. |
+| Critical / Warning / Info / Debug | Критичні / Попередження / Відомості / Налагодження | The log levels, quoted in help texts: рівень «Налагодження». |

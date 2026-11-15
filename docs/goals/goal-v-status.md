@@ -96,7 +96,7 @@ glossary has all 144 rows in order (checked by script, 217 term pairs by
 | `de` | Sie; object first, infinitive last | „…“, Ctrl not Strg (RVP's key names), hyphen at long compounds' joints |
 | `it` | tu; imperative commands | « », loanwords file/playlist/skin with their gender |
 | `pl` | 59; 1 (a text too long), fixed | PASS | yes |
-| `uk` | 47; 0 | | |
+| `uk` | 47; 0 | PASS | yes |
 | `pl` | second person singular imperative; perfective commands, imperfective checkboxes | no noun after a number (three plural forms), „…” |
 | `uk` | ви; perfective infinitives | тека, типовий, ’ (U+2019), Cyrillic units |
 | `tr` | siz only where the source speaks to the user; verb last | "%1 %" becomes "%%1"; nothing attached to %N |
