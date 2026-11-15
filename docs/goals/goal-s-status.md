@@ -357,4 +357,6 @@ did not run; the VM's runs checked the removal (goal J).
 - The Linux audit after the run (`docs/audits/linux.md`, two read-only
   audits merged and checked again): 3 high, 16 medium and 27 low
   findings, fixed by goal U on the Ubuntu boot and goal U-W on the
-  Windows VM (`docs/PLAN.md`). NVScaler on OpenGL ES is its H2.
+  Windows VM (`docs/PLAN.md`). NVScaler on OpenGL ES is its H2. Goal U
+  fixed them on Linux on 2026-11-15 (`docs/goals/goal-u-status.md`),
+  NVScaler and m6svp's second window among them; goal U-W is next.

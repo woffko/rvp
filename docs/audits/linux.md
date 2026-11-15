@@ -23,7 +23,9 @@ Line numbers are from `c3f58dc`. **Win** marks a fix whose code also runs
 on Windows; per D19 it needs the Windows VM's check too.
 
 The work plan at the end groups the findings into packages for goal U
-(`docs/PLAN.md`).
+(`docs/PLAN.md`). Goal U fixed them on 2026-11-15
+(`docs/goals/goal-u-status.md` says how each was checked and what was
+left); goal U-W checks on Windows those that reach it.
 
 ## High
 

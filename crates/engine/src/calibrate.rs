@@ -106,6 +106,17 @@ pub fn measure(
     drop(mpv.request_log_messages("error"));
     let result = run(&mpv, probe, cancel, timeout);
     drop(mpv.command("quit", &[]));
+    // The core unloads the file, and the script's filters with it (vs-mlrt's
+    // TensorRT engine, RIFE's Vulkan device), before it says it shuts down:
+    // waited for, they are gone when this returns. Dropped at once, the
+    // core tore them down on its own thread while the process exited, and
+    // TensorRT's library crashed in its exit (the kit's m18trt, goal U).
+    let deadline = Instant::now() + Duration::from_secs(10);
+    while Instant::now() < deadline {
+        if let Some(Ok(Event::Shutdown) | Err(_)) = mpv.wait_event(0.1) {
+            break;
+        }
+    }
     result
 }
 

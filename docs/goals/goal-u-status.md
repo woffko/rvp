@@ -1,10 +1,19 @@
 # Goal U status: the Linux audit's fixes
 
-Started 2026-11-14 on the owner's Ubuntu 26.10 boot (GNOME 51 on Wayland,
-RTX 50-series card, NVIDIA 615.71.09). The findings are those of
-`docs/audits/linux.md` (H1 to H3, M1 to M16, L1 to L27); the work plan
-is its last section. Goal U-W checks on the Windows VM what reaches
-Windows ("For goal U-W" below).
+Started 2026-11-14, done 2026-11-15 on the owner's Ubuntu 26.10 boot
+(GNOME 51 on Wayland, RTX 50-series card, NVIDIA 615.71.09). Result: **done on
+Linux**. Every finding of `docs/audits/linux.md` (H1 to H3, M1 to M16, L1
+to L27) is fixed with its check, but for three parts left with their
+reasons: L18's activation token (Qt's private API), L25's source mirror
+for vs-mlrt and TensorRT, and the owner's missing tab arrows, which did not
+reproduce (the tabs' overlap the owner showed after package 10 is fixed).
+Four more problems turned up and were fixed on the way: CI's bindings test
+sharing its folder, an exit that waited for the speech thread, the
+calibration core's end racing the process's, and code.videolan.org's
+outage in CI. The work plan is the audit's last section; the final kit
+run is in package 11 and `docs/test-runs/2026-11-15-ubuntu-boot.md`.
+Goal U-W checks on the Windows VM what reaches Windows ("For goal U-W"
+below).
 
 ## The owner's decisions (2026-11-14)
 
@@ -41,6 +50,7 @@ recommended option:
 | 8 | Recording | M15 fixed (below) |
 | 9 | Smoothing and TensorRT | M11, L1, L2, L3 fixed (below) |
 | 10 | Texts, the AUR package, code rules | M10, M14, L26, L27 fixed; the tab arrows' check made strict, the owner's case not reproduced (below) |
+| 11 | Close | L25 fixed but its source mirror; m6svp as on Windows; the tabs' overlap fixed; the final kit run passed (below) |
 
 ## Package 1: checks that pass without testing
 
@@ -208,7 +218,8 @@ none either), and L25 to package 11.
 - **Checks:** `cargo xtask ci`; `crates/platform/tests/linux.rs` (6 tests
   on a private bus); kit step m12 PASS on this boot (self-test 27/0, with
   the fullscreen's screen change). m8's `idle_inhibit_without_mpris` needs
-  this package's .deb installed: package 11's m8 run.
+  this package's .deb installed: package 11's m8 run passed it ("RVP's
+  inhibitor, no MPRIS name").
 - **L19, a skin with windows chosen on Wayland:** the switch says on the
   OSD that the skin's windows need X11 and RVP starts through XWayland for
   it from the next start (`prefer_x11` reads the skin at start).
@@ -419,3 +430,94 @@ The audit's plan had M7 and L15 in no package; both are here.
   controls in Russian) and M12's self-test with the settings window at
   848 px (`settings_tab_arrows`: both arrows inside, the row scrolled by a
   tab each way).
+
+## Package 11: close
+
+- **The owner's screenshot after package 10 (2026-11-15):** scrolled, the
+  settings' page tabs were drawn over the search field on the left and
+  under the arrows on the right, which showed only on hover (when their
+  background covered the tabs). The TabBar clips its tabs now (e2fed86);
+  M12's `settings_tab_arrows` requires it and grabs the window: the arrows
+  show beside the last tab and the search field is clear.
+- **L25, the kit:** every RVP run of `kit_run` and m6svp's two windows have
+  a time limit (`KIT_RUN_TIMEOUT`, 900 s by default: M14's self-test once
+  waited at exit and held the kit up); `step_mpv` runs in a subshell (its
+  exports and `cd` no longer leak, `exit` ends it, not the kit) and fails
+  when `./update`, `./rebuild` or `./install` fails (a failed rebuild had
+  passed on the last libmpv); `input-check.py`'s drag lets the button go
+  whatever fails; `build-vstrt-linux.sh` checks VapourSynth's headers by
+  their SHA-256. Left: `sources.sh` mirrors neither vs-mlrt nor TensorRT
+  (NVIDIA's archives come from NVIDIA's servers or
+  `RVP_TENSORRT_MIRROR`; vs-mlrt's from its release, by SHA-256).
+- **m6svp's second window (the owner's answer):** it runs
+  `--selftest=svp --svp-second` and passes on RVP's diagnostic ("SVP did
+  not attach", no `@svp` in its filters), as Windows' check does.
+- **Found on the way, a crash at the calibration core's end:** the
+  kit's m18trt measured well (720p 285, 1080p 136, 1440p 75 frames a
+  second) and then failed: `rife_trt` ended with 132 (SIGILL). Under gdb
+  the mpv core's thread was destroying the VapourSynth filter (VSScript,
+  then vs-mlrt's TensorRT engine in `libnvinfer`) while the process
+  exited: `calibrate::measure` sent `quit` and dropped its handle at once,
+  and `mpv_destroy` does not wait. It waits for the core's `Shutdown` now
+  (up to 10 s), which comes once the file and its filters are gone; RVP's
+  own calibration takes the same path. m18trt passed twice after it
+  (`rife_trt exit 0`, which its log now records).
+- **Found on the way, M10's Audio Stretching check:** since package 5 the
+  master volume's OSD text comes from its thread, and it arrived after
+  Shift+J's "Audio Stretching : 101%" and took the OSD over (m10 failed
+  twice in the final run). The self-test gives the volume's answer a
+  second first.
+
+### The final run (2026-11-15, this boot, the .deb of 444110e installed)
+
+| Step | Result |
+|------|--------|
+| m2build | PASS |
+| m8 | PASS, 15 checks: the installed .deb is the built one; MPRIS; `idle_inhibit` (RVP's own inhibitor while playing, none paused); `idle_inhibit_without_mpris`; the crash logs |
+| m2 | PASS |
+| m3 | PASS (the second instance through `$XDG_RUNTIME_DIR`, 3 kills, 3 resumes) |
+| m9 | PASS (OSC 17/0, ModernZ 15/0, uosc 17/0, four VLC themes 10/0 each; Winamp SKIPPED: no skins without the Windows partition) |
+| m10 | PASS after the Audio Stretching wait above (96/0, the recording whole) |
+| m11 | PASS (41/0) |
+| m12 | PASS (self-test 27/0, shaders 15/0 with NVScaler, Vulkan 11/0) |
+| m13 | PASS (17/0, whisper on) |
+| m14 | PASS (50/0; skin SKIPPED: no BlackSpace without the Windows partition) |
+| m15 | PASS (12/0, Unified Remote's log clean) |
+| m16 | PASS (27/0) |
+| m18 | PASS (smoothing 20/0, GPU 16/0) |
+| m6svp | PASS: the first window attached to SVP in 1.7 s and reached its rate; the second showed RVP's diagnostic ("another player holds /tmp/mpvsocket, so this window listens on /tmp/mpvSockets/<pid>") |
+| m18trt | PASS after the calibration core's fix above (720p 307, 1080p 145, 1440p 71 frames a second; `rife_trt exit 0`) |
+
+`nvidia-smi` answered after every step (the card at its own 300 W limit).
+
+## For goal U-W
+
+The Windows VM cannot be reached from this boot (it runs on the same PC's
+Windows). These changes of goal U reach Windows; goal U-W builds the
+Windows bundle at goal U's last commit and runs the VM's checks below.
+
+| Change | Package | What it changes on Windows | VM check |
+|--------|---------|----------------------------|----------|
+| Disc tests fail without their library when their disc is given | 1 | `shell/src/disc/tests.rs` | `m16-all.ps1` (the libraries are beside the bundle) |
+| M12's window-size steps (860x540, the dialog once) and the fullscreen's screen check | 1, 4 | `SelfTestM12.qml` | M12's self-test on the VM (one screen: the screen part is skipped) |
+| Package versions with the commit's time | 2 | the NSIS installer's and the ZIP's names and `VERSION` | `m8-all.ps1` (install, uninstall, the portable ZIP) |
+| `touch_all` sets 0644/0755 | 2 | the Windows bundle's files' modes (ZIP entries) | `m8-all.ps1` |
+| curl's missing-program message | 2 | `tensorrt.rs` (System32's curl exists) | `m18-all.ps1` |
+| `requestRaise` shows a hidden window; the tray hides only when its icon shows | 4 | `Main.qml`, `Tray.qml` | `m14-all.ps1` (the tray, a second instance) |
+| The speech page's state (`tts_state`) and its Timer; M14's voices check | 5 | `Settings.qml`, `SelfTestM14.qml` (Windows always "ready") | `m14-all.ps1` |
+| M14's clipboard check waits up to 2 s | 5 | `SelfTestM14.qml` | `m14-all.ps1` |
+| Path lists one entry each (`-append`, `change-list`) | 7 | `/same`, `/sub`, `/aud` and the external audio folders | `m11-all.ps1` (`tests/m11.rs` with `;` in the names) |
+| `file_url` escapes; MPRIS's URL code keeps `\` as a separator on Windows only | 7 | the URLs QML opens, `media::file_url` | `m12`'s and `m13`'s folder dialogs, `m11-all.ps1` |
+| `Tools.open_url` in QML's place of `Qt.openUrlExternally` | 7 | `QDesktopServices::openUrl` as before | `m14-all.ps1` (the Settings' folder buttons by hand) |
+| New windows are waited for | 7 | `/new`'s child | `m11-all.ps1` |
+| `/cd:D` | 7 | unchanged result `D:` | `tests` of `sources.rs` |
+| `desktop_exec` escaping | 7 | Linux only in use | none |
+| XDG user folders | 7 | Windows keeps `%USERPROFILE%\Pictures` etc. | `m12`'s capture (the default folder) |
+| `audio-client-name` "RVP" and "RVP (second device)" | 8 | WASAPI's session name | `m10-all.ps1` (`tests/second_device.rs`, the recording) |
+| The lighter step for RIFE (TensorRT); TensorRT's files renamed into place; Remove stops a calibration | 9 | `smoothing.rs`, `tensorrt.rs` | `m18-all.ps1`, and RIFE (TensorRT) on the host with permission |
+| The calibration's key by content | 9 | one more calibration per machine | `m18-all.ps1` (`--calibrate`) |
+| Settings: Windows-only controls kept on Windows, new texts | 10 | `Settings.qml` (Windows' texts unchanged) | `m14-all.ps1` (the texts fit) |
+| The page tabs clipped; M12's tab-arrow check at 848 px | 10 | `Settings.qml`, `SelfTestM12.qml` | M12's self-test |
+| m6svp's second window and `--svp-second` | 11 | `Main.qml`'s svp self-test option | the host's SVP check, with permission |
+| The calibration core waits for its shutdown | 11 | `crates/engine/src/calibrate.rs` (RVP's calibration, `render_vf`'s users) | `m18-all.ps1` with `--calibrate`, and RIFE (TensorRT) on the host with permission |
+| M10's self-test waits a second before Audio Stretching | 11 | `Main.qml` | `m10-all.ps1` |

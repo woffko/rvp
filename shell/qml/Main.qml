@@ -3288,7 +3288,11 @@ Window {
             // Audio Stretching: Shift+J raises the pitch 1 % (rubberband in
             // the tempo filter's place), Shift+K takes it back. Away from
             // the file's end, where chain changes wait for the next file
-            // (a slow machine gets near the short file's end by now).
+            // (a slow machine gets near the short file's end by now). The
+            // master volume's last answer comes from its thread first
+            // (Linux): later, it took the OSD over from this one's.
+            if (Date.now() - t.stepStarted < 1000)
+                break
             if (s.duration > 0 && s.duration - s.time < 8) {
                 if (Date.now() - t.roomAsked > 2000) {
                     t.roomAsked = Date.now()

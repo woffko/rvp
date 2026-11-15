@@ -2364,6 +2364,7 @@ step_m18trt() {
         cargo run --release -p rvp-app --example rife_trt -- "$KIT_DIR/tensorrt" "${RVP_TENSORRT_MIRROR:--}" medium
     ) >> "$log" 2>&1
     code=$?
+    echo "rife_trt exit $code" >> "$log"
     # A card that no longer answers stops everything (AGENTS.md).
     if ! after=$(nvidia-smi --query-gpu=name,power.draw,temperature.gpu --format=csv,noheader 2>&1); then
         echo "after: $after" >> "$log"
