@@ -109,6 +109,8 @@ themselves.
   and codes. File-type filters keep their ASCII parentheses with a
   space before them, because Qt's file dialog reads the patterns from
   them: 「PotPlayer 外觀 (*.dsf)」, 「設定 (*.json)」, 「所有檔案 (*)」.
+  Only the filters do: a dialog's title or a menu item that shows a
+  pattern takes full-width ones (「開啟 DVD 檔案（*.IFO）...」).
   Menu paths keep the source's " > " between the Chinese labels:
   「影片 > 延伸/裁切 > 移動」. The one source string with a line break
   ("%1\nin %2 seconds") keeps it; no others get one.
@@ -129,7 +131,7 @@ themselves.
   Taiwan's Windows, GNOME and KDE; “” is the mainland's GB standard and
   reads as such. When a text names another label, page or menu, it
   quotes that label's Chinese text exactly: `在檔案右鍵選單中加入「加入至」`,
-  `「視窗配合新開啟的影片」開啟時套用（「播放」頁面）。`; a quotation
+  `「依新開啟的影片調整視窗」開啟時套用這些設定（「播放」頁面）。`; a quotation
   inside a quoted text takes 『』.
 - **Spacing.** One half-width space between Chinese characters and
   Latin letters, digits or a placeholder, on both sides, the usual
@@ -209,7 +211,17 @@ themselves.
   斯洛維尼亞文, 喬治亞文, 亞塞拜然文, 波士尼亞文, 威爾斯文, 寮文). The
   language's own name (the Language context) is 「繁體中文」, which
   readers in Taiwan, Hong Kong and Macau all recognise.
-- **Words with two meanings in the source.** A file's extension is
+- **Words with two meanings in the source.** "Start" is 開始 as a
+  command (a button, the menu's speech "Start") and 起始 as a point in
+  time (the subtitle browser's Start, "Start and end" 「起始與結束時間」);
+  the menu's "Starting point" (jump to the file's start) is 開頭.
+  "Move" is 轉移 for giving a key to another action (Keys and Mouse)
+  and 跳至 for DVD Control's Move submenu, which lists the disc's titles
+  to go to; moving the picture (Extend/Crop's Move Left...) is 左移,
+  右移, 上移, 下移.
+  Moving A-B points "Backward" / "Forward" is 提前 / 延後. A sound's
+  level is 位準; the picture's levels (Level Control, Auto Level Control)
+  are 色階. An ICC profile is 色彩描述檔, never 設定檔. A file's extension is
   副檔名, extending the picture 延伸 ("Extend/Crop" 「延伸/裁切」). A
   frame in time is 影格, the picture's area (Extend/Crop, Resize, "video
   frame") 畫面. Black bars are 黑邊, the skin's bars 控制列. A saved set
@@ -218,7 +230,9 @@ themselves.
   Recording video or a stream is 錄製 and recording sound 錄音; what
   the log writes down is 記錄. "Correct" is 校正, "calibrate" 校準. mpv's, FFmpeg's and RVP's
   filters, of the picture and of the sound, are 濾鏡; a frequency filter
-  (HPF) is 濾波器; DirectShow's filters are 篩選器. "Default" as a value
+  (HPF) is 濾波器; DirectShow's filters are 篩選器 ("Video Transform
+  Filter" 「影片轉換篩選器」). The menu "Filters" lists mpv's own chain
+  (source, decoders, filters, outputs) and is 「濾鏡」. "Default" as a value
   is 預設 or 預設值; "RVP Default", the skin's name, stays. The "nav bar"
   and "navigation bar" of PotPlayer's menus are the seek bar 進度列.
   "Remember" is 記住, "store" and "save" 儲存. The home folder is
@@ -285,7 +299,7 @@ themselves.
 | album | 專輯 | RVP's (PotPlayer's) named list, one tab of the playlist. "Album art" is a music album's 專輯封面. The album named "Default" is data and stays. |
 | entry | 項目 | Also "item". |
 | sort | 排序 | "Sort by" 「排序方式」; ascending 遞增, descending 遞減 (「遞增（A 到 Z）」). |
-| add / remove / delete | 新增 / 移除 / 刪除 | "Add X" is 新增 X (新增檔案, 新增資料夾, 新增書籤); "add ... to Y" is 加入 Y (加入播放佇列, 加入我的最愛). 移除 takes an entry off a list; 刪除 deletes the file itself, or a bookmark or album. |
+| add / remove / delete | 加入 / 移除 / 刪除 | Existing files, folders, URLs and subtitles are 加入 to a list (加入檔案, 加入資料夾, 加入網址, 加入播放佇列, 加入我的最愛); a new thing is 新增 (新增書籤, 新增專輯, 新增預設集, the list buttons "Add" and "Add…"). Never 新增資料夾 for "Add Folder": in Taiwan's Windows it means "New folder". 移除 takes an entry off a list; 刪除 deletes the file itself, or a bookmark or album. |
 | recycle bin / trash | 資源回收筒 / 垃圾桶 | Windows' name / the Linux desktops'. |
 | import / export | 匯入 / 匯出 | Never 導入 / 導出. |
 | window / main window | 視窗 / 主視窗 | Never 窗口. |
@@ -388,3 +402,23 @@ themselves.
 | bit depth / 10-bit | 位元深度 / 10 位元 | 位元 for bit, 位元組 for byte: "%1-bit" 「%1 位元」. |
 | channel layout (5.1, 7.1) | 聲道配置（5.1、7.1） | |
 | Auto select (recommended) | 自動選擇（建議） | "(Recommended)" is 「（建議）」 everywhere; never 推薦. |
+| luma / chroma | 亮度 / 色度 | The effects' strengths and offsets (「柔化：亮度」, 「色度偏移 X」). |
+| metadata | 中繼資料 | Never 元數據 or 元資料. |
+| step (an increment) | 級距 | "Speed step" 「速度級距」, "Volume step", "Sync step", "Move step". |
+| slideshow / transition | 投影片放映 / 轉場 | |
+| session | 工作階段 | An X11 or desktop session. |
+| socket / pipe | 通訊端 / 管道 | SVP's IPC endpoint. |
+| library / runtime / build | 程式庫 / 執行環境 / 組建 | VSScript's library, RVP's VapourSynth runtime, whisper.cpp's CUDA and BLAS builds. |
+| history | 歷程記錄 | Opened files' history; 記錄 alone is the log's. |
+| instance | 執行個體 | "Multiple instances" 「多重執行個體」. |
+| listen | 監聽 | The remote control's server: 「只在此電腦上監聽」. |
+| temporal / temporary (denoise) | 時域 / 時域 | PotPlayer's "Temporary Denoise" is temporal: 「時域降噪」. |
+| fit / fill / stretch | 最適大小 / 填滿 / 延展 | The slideshow's fill modes; "Fit to the video area" 「符合影片區域」. |
+| dithering / clipping | 遞色 / 削波 | |
+| wet / dry / feedback | 濕聲 / 乾聲 / 回授 | Freeverb's levels and Crystality's echo. |
+| anamorphic | 變形 | 「為變形（anamorphic）影片製作的腳本」. |
+| licence / EULA | 授權條款 / 終端使用者授權合約 | "CUDA's EULA" as a short label stays 「CUDA 的 EULA」. |
+| nits | 尼特 | 「%1 尼特」. |
+| play folder | 播放中檔案的資料夾 | The folder of the file that plays ("Store ... into play folders" 「存到播放中檔案的資料夾」); never 播放資料夾. |
+| broadcast (live streaming) | 直播 | PotPlayer's "Broadcast Effects" are live-streaming overlays: 「直播效果」, not 廣播 (radio). |
+| Center / Centre (alignment) | 中央 / 中央 | The middle choice of the settings' alignment lists (beside 左 / 右 or 上 / 下), shared with the mixer's Center channel. The menus' "Align Center" command is 置中對齊, and a window or picture placed in the middle is 置中. |

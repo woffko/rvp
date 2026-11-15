@@ -126,7 +126,7 @@ translated by every language afterwards and reviewed with the fixes.
 | `uk` | 47; 0, then 1 choice shortened for its box | PASS | yes |
 | `zh_CN` | 36; 0 | PASS | yes |
 | `tr` | 88; 0, then 1 choice shortened for its box | | yes |
-| `zh_TW` | 47; 1, fixed | | |
+| `zh_TW` | 47; 1, fixed | | yes |
 
 ## Found on the way
 
