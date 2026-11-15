@@ -13,6 +13,12 @@ translated, reviewed through a blind back-translation, fixed and looked
 at again, fitting every settings text under Xvfb, and each language's
 screenshot tour looked through. RVP starts in the system's language.
 Goal V-W checks on the Windows VM what the last section lists.
+CI at d87cb90 (the last of goal V's commits): every job green, with
+`package-windows` (the installer in the fourteen languages) on its
+second attempt; the first failed only goal U's open media-controls check
+(`m8-smtc.ps1`: "Opened" for 30 s, then Pause, Play, Next, Previous and
+Stop passed; goal U-W's), and `package-linux`'s Ubuntu 26.10 container
+check passed.
 
 | Step | What | State |
 |------|------|-------|
