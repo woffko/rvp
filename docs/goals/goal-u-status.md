@@ -488,8 +488,10 @@ The audit's plan had M7 and L15 in no package; both are here.
   shown (`media_controls.rs`, Windows only; built and checked by CI's
   Windows jobs only, since this boot builds no Windows code). Resent in
   the first 10 s only (0fcee8b), the check passed once and then, on a
-  slower runner (fd2d538), the status came but Next stayed off. Goal U-W
-  runs `m8-smtc.ps1` and `m8-all.ps1` on the VM a few times.
+  slower runner (fd2d538), the status came but Next stayed off; resent
+  every 2 s (4504b38) it passed ("Playing '[1/2] clip-a.mkv'", Pause and
+  Next on), and that run was green in every job. Goal U-W runs
+  `m8-smtc.ps1` and `m8-all.ps1` on the VM a few times.
 
 ### The final run (2026-11-15, this boot, the .deb of 444110e installed)
 
