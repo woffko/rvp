@@ -195,6 +195,10 @@ fn capture(
             drop(child.wait());
             break;
         };
+        // A parec that ended inside a frame left part of it: the next one's
+        // bytes start a frame of their own (kept, they shifted every later
+        // sample; the Linux audit's M15).
+        pending.clear();
         let (sender, chunks) = mpsc::channel::<Vec<u8>>();
         let reader = std::thread::spawn(move || {
             let mut buffer = vec![0u8; 16 * 1024];

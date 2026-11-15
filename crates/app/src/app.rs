@@ -618,6 +618,11 @@ impl App {
             "volume-max".to_owned(),
             crate::volume::mpv_volume_max(self.settings.volume_max),
         ));
+        // The program the sound server shows for the stream, and by which
+        // the recording finds the main one (`rvp_platform::pulse`).
+        options
+            .extra
+            .push(("audio-client-name".to_owned(), "RVP".to_owned()));
         options
             .extra
             .push(("audio-channels".to_owned(), self.audio_channels()));

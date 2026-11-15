@@ -38,6 +38,7 @@ recommended option:
 | 5 | The window thread | M3, M4 (all of it, package 6's part too), L5, L6 fixed (below) |
 | 6 | Speech and the joystick | M4 in package 5; L20 fixed, not tried with a controller (below) |
 | 7 | Paths, files and processes | M1, M5, M7, L7 to L16 fixed (below; L15 and M7 had no package) |
+| 8 | Recording | M15 fixed (below) |
 
 ## Package 1: checks that pass without testing
 
@@ -319,3 +320,15 @@ The audit's plan had M7 and L15 in no package; both are here.
 - **Checks:** `cargo xtask ci` (the unit tests above and m11's switches
   test with libmpv); the desktop's kit steps (m3's second instance through
   the channel, m11, m14) run with packages 8 and 9 (below).
+
+## Package 8: recording
+
+- **M15, RVP's sound recorded on Linux:** each `parec`'s bytes start a
+  frame of their own (the 1 to 7 bytes a process ended with shifted every
+  later sample); the main core's stream is `audio-client-name` "RVP" and
+  the second audio device's "RVP (second device)" (the sound settings
+  showed both as "mpv"), and the recording takes the stream by that name
+  (`pulse::stream_of`; by order alone it moved to the second device's
+  stream once mpv reopened the main one). Tests:
+  `pulse::tests::the_main_stream_is_found_by_its_name`. The desktop's m10
+  (the recording) runs with package 9 (below).

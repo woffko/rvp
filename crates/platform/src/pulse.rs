@@ -55,14 +55,27 @@ pub fn change_master(change: SystemVolume) -> Result<String, String> {
     }
 }
 
-/// The index of the first playback stream (sink input) of process `pid`:
-/// the main player's, which starts before the second audio device's.
+/// RVP's main core's playback stream (sink input) in process `pid`: the
+/// one named [`MAIN_STREAM`] (`audio-client-name`), else its first. The
+/// second audio device's stream has a name of its own: by order alone the
+/// recording moved to it once mpv opened the main one again (the Linux
+/// audit's M15).
 ///
 /// # Errors
 /// Fails without `pactl` or a sound server.
 pub fn stream_of(pid: u32) -> Result<Option<u32>, String> {
-    Ok(stream_in(&pactl(&["list", "sink-inputs"])?, pid))
+    Ok(stream_in(
+        &pactl(&["list", "sink-inputs"])?,
+        pid,
+        MAIN_STREAM,
+    ))
 }
+
+/// The main core's `audio-client-name`, which the sound server shows as
+/// the stream's program (it was mpv's own "mpv").
+pub const MAIN_STREAM: &str = "RVP";
+/// The second audio device's core's.
+pub const SECOND_STREAM: &str = "RVP (second device)";
 
 /// Starts `parec` on the stream `index`: its standard output is the
 /// stream's sound as 32-bit float stereo at [`RATE`].
@@ -134,23 +147,30 @@ fn volume_percent(text: &str) -> Option<f64> {
     percent.trim().parse().ok()
 }
 
-/// The first sink input in `pactl list sink-inputs`'s answer whose
-/// `application.process.id` is `pid`.
-fn stream_in(text: &str, pid: u32) -> Option<u32> {
+/// The sink input in `pactl list sink-inputs`'s answer of process `pid`
+/// whose `application.name` is `name`, else the process's first.
+fn stream_in(text: &str, pid: u32, name: &str) -> Option<u32> {
     let wanted = format!("application.process.id = \"{pid}\"");
-    let mut current = None;
-    let mut found = Vec::new();
+    let named = format!("application.name = \"{name}\"");
+    // Each stream: its index, whether it is the process's, its name's.
+    let mut streams: Vec<(u32, bool, bool)> = Vec::new();
     for line in text.lines() {
         let line = line.trim();
         if let Some(index) = line.strip_prefix("Sink Input #") {
-            current = index.trim().parse::<u32>().ok();
-        } else if line == wanted
-            && let Some(index) = current
-        {
-            found.push(index);
+            if let Ok(index) = index.trim().parse::<u32>() {
+                streams.push((index, false, false));
+            }
+        } else if let Some(stream) = streams.last_mut() {
+            stream.1 |= line == wanted;
+            stream.2 |= line == named;
         }
     }
-    found.into_iter().min()
+    let own = streams.iter().filter(|stream| stream.1);
+    own.clone()
+        .filter(|stream| stream.2)
+        .map(|stream| stream.0)
+        .min()
+        .or_else(|| own.map(|stream| stream.0).min())
 }
 
 #[cfg(test)]
@@ -167,8 +187,16 @@ mod tests {
     #[test]
     fn rvps_first_stream_is_found_by_its_process() {
         let text = "Sink Input #71\n\tDriver: protocol-native.c\n\tProperties:\n\t\tapplication.name = \"Firefox\"\n\t\tapplication.process.id = \"999\"\n\nSink Input #84\n\tProperties:\n\t\tmedia.name = \"film.mkv\"\n\t\tapplication.process.id = \"4242\"\nSink Input #80\n\tProperties:\n\t\tapplication.process.id = \"4242\"\n";
-        assert_eq!(stream_in(text, 4242), Some(80));
-        assert_eq!(stream_in(text, 999), Some(71));
-        assert_eq!(stream_in(text, 1), None);
+        assert_eq!(stream_in(text, 4242, MAIN_STREAM), Some(80));
+        assert_eq!(stream_in(text, 999, MAIN_STREAM), Some(71));
+        assert_eq!(stream_in(text, 1, MAIN_STREAM), None);
+    }
+
+    #[test]
+    fn the_main_stream_is_found_by_its_name() {
+        // The second device's stream came first (mpv reopened the main one).
+        let text = "Sink Input #90\n\tProperties:\n\t\tapplication.name = \"RVP (second device)\"\n\t\tapplication.process.id = \"4242\"\nSink Input #95\n\tProperties:\n\t\tapplication.name = \"RVP\"\n\t\tapplication.process.id = \"4242\"\n";
+        assert_eq!(stream_in(text, 4242, MAIN_STREAM), Some(95));
+        assert_eq!(stream_in(text, 4242, SECOND_STREAM), Some(90));
     }
 }

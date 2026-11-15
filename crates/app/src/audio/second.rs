@@ -130,6 +130,8 @@ impl Second {
             ipc_server: None,
             extra: [
                 ("audio-device", device),
+                // Its own name: the recording takes the main core's stream.
+                ("audio-client-name", "RVP (second device)"),
                 ("vid", "no"),
                 ("sid", "no"),
                 ("audio-display", "no"),
