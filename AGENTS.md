@@ -748,6 +748,10 @@ smoothing for users without SVP, after a study of the engines.
   another's: a skin with windows of its own and the Vulkan renderer start
   RVP through XWayland (`player::prefer_x11`, `QT_QPA_PLATFORM=xcb` before
   Qt starts, unless the user chose a platform).
+- RVP asks Qt for desktop OpenGL on Linux (`rvp_setup_graphics`, the
+  default `QSurfaceFormat`'s renderable type): on Wayland Qt's EGL took
+  NVIDIA's OpenGL ES 3.2, where libplacebo has no `rgba32f` (NVScaler
+  failed). `RVP_GL_ES=1` leaves the API to the driver.
 - The Vulkan renderer on Linux is a native child QWindow (X11) that mpv's
   `x11vk` draws into. `Qt::WindowTransparentForInput` keeps the pointer
   for RVP's window under it, and also selects SubstructureRedirect, with

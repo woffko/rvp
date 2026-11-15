@@ -33,6 +33,7 @@ recommended option:
 | 0 | Start | The boot run's report, its status sections, the audit and goal U's entry committed with dbde0cd and c3f58dc, and pushed |
 | 1 | Checks that pass without testing | M9, M13 fixed (below) |
 | 2 | Packages and CI | H1, H3, M8, M16, L4, L22, L23, L24 fixed (below) |
+| 3 | OpenGL on Linux | H2 fixed and checked; M12 and L21 fixed (below) |
 
 ## Package 1: checks that pass without testing
 
@@ -129,3 +130,32 @@ recommended option:
   pass on the AppDir (`rvp` and 181 libraries). The AppDir's functional
   self-test under Xvfb with `XDG_CURRENT_DESKTOP=GNOME` passed. CI's
   `package-linux` (built on 22.04, checked on 26.10) is below.
+
+## Package 3: OpenGL on Linux
+
+The audit's plan had no package for L21 (the Vulkan window's handle);
+it is here, with the video window. L15 goes to package 7, M7 too (it has
+none either), and L25 to package 11.
+
+- **H2, OpenGL ES on Wayland:** `rvp_setup_graphics` sets the default
+  `QSurfaceFormat`'s renderable type to desktop OpenGL on Linux before
+  `QGuiApplication` (`RVP_GL_ES=1` leaves the API to the driver), and
+  M12's shader self-test checks it (`opengl_desktop`). On this boot
+  (2026-11-15): kit step m12 PASS for the first time (self-test 27/0,
+  shaders 15/0 with NVScaler, Vulkan 11/0), `GL_VERSION 4.6.0 NVIDIA
+  615.71.09` on Wayland (it was `OpenGL ES 3.2`); the shader self-test
+  through XWayland (`QT_QPA_PLATFORM=xcb`) 11 of 11 on 4.6.0 NVIDIA, and
+  under Xvfb 11 of 11 on Mesa's 4.6 compatibility profile.
+- **M12, a layer over the whole video:** when the holes leave no region,
+  the Vulkan renderer's X11 window goes where no video shows (an empty
+  `setMask` is "no mask" to Qt's xcb, which showed mpv's window whole
+  over the layer). Not reproduced on purpose: fixed from the code.
+- **L21, the window's handle:** a `QPointer`, deleted at exit after mpv
+  let its window go; m12's Vulkan run ends cleanly with it.
+- **Found on the way:** CI's `play_after_stop_resumes_the_file_that_played`
+  had failed since 2026-11-12 on both systems (an album of three where it
+  opened two): every harness of `crates/app/tests/bindings.rs` used one
+  folder (the process and `Harness::new`'s line) and the parallel tests
+  removed or loaded each other's state. Each harness has its own folder
+  now. CI's `package-linux` of 6b8938e failed on code.videolan.org
+  refusing connections (dav1d's clone), not on RVP.

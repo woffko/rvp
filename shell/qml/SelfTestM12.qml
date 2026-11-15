@@ -84,6 +84,12 @@ Item {
             if (t.waitFor("shader_file_plays", () => s.loaded && s.time > 0.3, 20000)) {
                 const found = /GL_VERSION='([^']*)'/.exec(Tools.read_file(log, 0))
                 glVersion = found ? found[1] : ""
+                // Linux asks for desktop OpenGL (rvp_setup_graphics): on
+                // Wayland NVIDIA's EGL gave OpenGL ES 3.2, without the
+                // rgba32f that NVScaler's passes use.
+                if (Qt.platform.os === "linux")
+                    t.check("opengl_desktop", glVersion !== "" && !glVersion.startsWith("OpenGL ES"),
+                            "GL_VERSION " + glVersion)
             }
             break
         case 2:

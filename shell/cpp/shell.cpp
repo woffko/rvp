@@ -30,6 +30,7 @@
 #include <QtGui/QIcon>
 #include <QtGui/QImage>
 #include <QtGui/QImageReader>
+#include <QtGui/QSurfaceFormat>
 #include <QtGui/QOpenGLContext>
 #include <QtGui/QOpenGLFunctions>
 #include <QtGui/QPainter>
@@ -621,6 +622,19 @@ bool rvp_instance_listen(rust::Str name)
 void rvp_setup_graphics()
 {
     QQuickWindow::setGraphicsApi(QSGRendererInterface::OpenGL);
+#ifdef Q_OS_LINUX
+    // Desktop OpenGL, as GLX (X11, XWayland) and WGL give it anyway: on
+    // Wayland Qt's EGL takes the driver's first API unless the format asks,
+    // and NVIDIA's gave OpenGL ES 3.2, where libplacebo has no rgba32f and
+    // NVScaler's passes failed (the Ubuntu boot run, the Linux audit's H2).
+    // RVP_GL_ES=1 leaves the choice to the driver, for an EGL without
+    // desktop OpenGL.
+    if (qEnvironmentVariableIntValue("RVP_GL_ES") != 1) {
+        QSurfaceFormat format = QSurfaceFormat::defaultFormat();
+        format.setRenderableType(QSurfaceFormat::OpenGL);
+        QSurfaceFormat::setDefaultFormat(format);
+    }
+#endif
 }
 
 Tools *Tools::instance = nullptr;

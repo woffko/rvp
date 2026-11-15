@@ -29,6 +29,7 @@
 #include <QtCore/QJsonArray>
 #include <QtCore/QJsonDocument>
 #include <QtCore/QJsonObject>
+#include <QtCore/QPointer>
 #include <QtGui/QGuiApplication>
 #include <QtGui/QRegion>
 #include <QtGui/QWindow>
@@ -169,9 +170,11 @@ QWindow *mainWindow()
 #ifdef Q_OS_LINUX
 namespace {
 
-QWindow *&linuxWindow()
+// A child of the main window, which Qt deletes with it: guarded, it reads
+// as null afterwards.
+QPointer<QWindow> &linuxWindow()
 {
-    static QWindow *window = nullptr;
+    static QPointer<QWindow> window;
     return window;
 }
 
@@ -210,7 +213,7 @@ std::size_t rvp_video_window_create()
     }
     return reinterpret_cast<std::size_t>(video.window);
 #elif defined(Q_OS_LINUX)
-    QWindow *&window = linuxWindow();
+    QPointer<QWindow> &window = linuxWindow();
     if (window != nullptr)
         return static_cast<std::size_t>(window->winId());
     QWindow *parent = mainWindow();
@@ -255,9 +258,11 @@ void rvp_video_window_close()
         video.thread.join();
     video.window = nullptr;
 #elif defined(Q_OS_LINUX)
-    QWindow *&window = linuxWindow();
-    if (window != nullptr)
-        window->setGeometry(-10, -10, 1, 1);
+    // mpv let its window inside go before this call (main.rs): RVP's goes
+    // too, before the main window that holds it.
+    QPointer<QWindow> &window = linuxWindow();
+    delete window.data();
+    window = nullptr;
 #endif
 }
 
@@ -322,7 +327,12 @@ void Tools::place_video_window(const QString &place) const
             shown -= QRect(qRound(hole.at(0).toDouble() - rect.x()), qRound(hole.at(1).toDouble() - rect.y()),
                            qRound(hole.at(2).toDouble()), qRound(hole.at(3).toDouble()));
     }
-    const bool visible = object.value(QStringLiteral("visible")).toBool() && !rect.isEmpty();
+    // Holes over the whole video leave no region, which Qt's xcb takes for
+    // "no mask": mpv's window would show whole over the layer that covers
+    // it (Windows' empty region hides the child). It goes where no video
+    // shows instead (the Linux audit's M12).
+    const bool visible = object.value(QStringLiteral("visible")).toBool() && !rect.isEmpty()
+        && !shown.isEmpty();
     if (visible) {
         window->setGeometry(rect);
         window->setMask(shown);
