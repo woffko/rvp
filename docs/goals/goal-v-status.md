@@ -119,7 +119,7 @@ translated by every language afterwards and reviewed with the fixes.
 | Language | Review: issues, then left after the second look | Fit | Committed |
 |----------|------------------------------------------------|-----|-----------|
 | `pt_BR` | 137; 0, then 4 in the titles and shortened texts, fixed | PASS | yes |
-| `de` | 51; 0 | PASS | |
+| `de` | 51; 0 | PASS | yes |
 | `es` | 37; 1, fixed | PASS | |
 | `fr` | 64; 4, fixed | PASS | |
 | `it` | 45; 1, fixed, then 1 more in the shortened texts, fixed | PASS | |

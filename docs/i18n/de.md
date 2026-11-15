@@ -171,6 +171,46 @@ the settings window's 240-pixel labels and 300-pixel choice lists.
   subtitle browser (a new line) is "Einfügen", as Paste is; they never
   meet in one window. "Default" as a value is "Standard"; "RVP
   Default", the skin's name, stays.
+- **Recurring labels**, settled during the translation:
+  - "Start" is "Start" everywhere, as a button too; "Stop" is "Stopp".
+  - "Up" / "Down" buttons are "Nach oben" / "Nach unten".
+  - "Cycle X" is "X durchschalten".
+  - "On Screen Control" (PotPlayer's page and item for the skin's bars
+    over the video) is "Leisten über dem Video", never
+    "Bildschirmsteuerung", which reads as controlling the monitor.
+  - "AI" is "KI" ("Whisper-KI-Modell").
+  - "Keep Video Frame" is "Videobild ... halten", never "festhalten",
+    which reads as freezing the picture.
+  - The video's "Display AR" (the aspect ratio the file gives) is
+    "Anzeige-Seitenverhältnis", not the screen's.
+  - "none" that RVP inserts into other strings is "nicht vorhanden", which
+    agrees with any noun.
+  - Choices in a list take no article ("Eigene Größe", "Letzte
+    Position"); a full sentence after a colon starts with a capital.
+  - "Seamless Playback" (joining files without a gap) is "Lückenlose
+    Wiedergabe".
+  - "X Settings..." in the menus is "X-Einstellungen..." when the
+    compound stays short ("Skin-Einstellungen...",
+    "Wiedergabe-Einstellungen..."), and "Einstellungen der X..."
+    otherwise ("Einstellungen der Videoverarbeitung...").
+  - Increase / Decrease are "erhöhen" / "verringern" for values (volume,
+    brightness, sync, speed) and "vergrößern" / "verkleinern" for sizes
+    and margins.
+  - "... step" (a slider's increment) is "Schrittweite"; under a
+    "Synchronisation" heading the plain "Schrittweite (< und >)" is enough.
+  - The list of recent items is "Verlauf" ("Verlauf speichern und
+    anzeigen", "URL-Verlauf").
+  - The "Video Capture" page and menu are "Aufnahme"; the "Recording"
+    heading on that page is "Aufzeichnung".
+  - Screen frame / source frame are "Bildschirmbild" / "Quellbild".
+  - Deblock, Deband and Soften are "Deblocking", "Debanding" and
+    "Weichzeichnen"; a subtitle's box is "Box".
+  - RVP's state folder is "Zustandsordner", the home folder
+    "Benutzerordner".
+  - "Sync" stands alone only in the page names "Sprache/Sync/Sonstiges"
+    and the menu items that open them; elsewhere it is "Synchronisation".
+  - "Every" before a time is "Alle" ("Alle (Sekunden)").
+  - The desktop entry's GenericName is "Mediaplayer".
 - **Genders of the loanwords**, kept the same throughout: der Skin (die
   Skins), die Playlist (die Playlists), das Album (die Alben), der
   Stream, die Engine (die Engines), das Token, der Tooltip, der
@@ -223,7 +263,7 @@ the settings window's 240-pixel labels and 300-pixel choice lists.
 | angle | Kamerawinkel | "Kamerawinkel-Menü". |
 | disc menu | Disc-Menü | "DVD-Menü", "Blu-ray-Menü" where the source names the disc. |
 | drag and drop | Ziehen und Ablegen | Dropped files are "abgelegte Dateien". |
-| recent files | zuletzt geöffnete Dateien | Recent items: "zuletzt geöffnete Einträge". |
+| recent files | zuletzt geöffnete Dateien | The list of recent items is "Verlauf" ("URL-Verlauf"). |
 | favorites | Favoriten | |
 | file association / file type | Dateizuordnung / Dateityp | The page is "Zuordnung". |
 | playlist | Playlist | die Playlist; not "Wiedergabeliste" (long, and it repeats "Wiedergabe" in the playback texts). |
@@ -277,7 +317,7 @@ the settings window's 240-pixel labels and 300-pixel choice lists.
 | hardware decoding / decoder | Hardware-Decodierung / Decoder | Spelled with c throughout: "decodieren", "Codierung", "Codec". |
 | HDR | HDR | |
 | 3D / 360° video / anaglyph / side by side / top and bottom | 3D / 360°-Video / Anaglyph / nebeneinander / übereinander | "3D-Video", "360°-Videomodus"; SBS and TAB stay as abbreviations beside the German. |
-| bars / letterbox / margin | Balken / Letterbox / Rand | "schwarze Balken"; "Unterer Rand", "Seitenrand". |
+| bars / letterbox / margin | Balken / Letterbox / Rand | "schwarze Balken"; "Unterer Rand", "Seitenrand". The skin's bars (its controls over the video) are "Leisten", not "Balken". |
 | frame capture / screenshot | Bildaufnahme / Screenshot | Saving the current frame; the saved files are "Bilder". Not screen capture. |
 | motion smoothing | Bewegungsglättung | |
 | frame interpolation | Zwischenbildberechnung | The word German TVs use; "interpolieren" for the verb. |

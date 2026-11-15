@@ -2,9 +2,11 @@
 Type=Application
 Name=RVP
 GenericName=Media Player
+GenericName[de]=Mediaplayer
 GenericName[pt_BR]=Reprodutor de mídia
 GenericName[ru]=Медиаплеер
 Comment=Play video and audio files
+Comment[de]=Video- und Audiodateien abspielen
 Comment[pt_BR]=Reproduzir arquivos de vídeo e áudio
 Comment[ru]=Воспроизведение видео- и аудиофайлов
 Exec=rvp %F
