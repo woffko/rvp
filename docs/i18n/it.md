@@ -138,6 +138,36 @@ below is used the same way in every string.
   Auto «Auto», player «lettore» («Lettore multimediale»), display and
   screen «schermo», monitor «monitor», home folder «cartella home»,
   click «clic» («clic sinistro», «doppio clic»).
+- **Decided while translating**, one way everywhere: "Cycle X" (actions
+  that step through choices) «Alterna X»; Start as a button «Avvia», as a
+  point in time (a subtitle's or a column's start) «Inizio»; Top, Bottom,
+  Left, Right as fields «Alto», «Basso», «Sinistra», «Destra»; Width and
+  Height «Larghezza», «Altezza»; luma and chroma «luminanza» and
+  «crominanza»; offset «offset»; Deblock «Rimozione blocchi»; Deband
+  «Riduzione banding»; focus «focus»; a slideshow's slide «diapositiva»;
+  copy-back (hardware decoding) «copia di ritorno», "copies the frames
+  back" «ricopia i fotogrammi in memoria»; "play folder" (the playing
+  file's folder) «cartella del file»; "Store ... (if available)" «Salva ...
+  (se possibile)»; "Prefer specified ..." «Preferisci ... indicati»;
+  Voice Emphasis «Risalto voce», Voice Removal «Rimozione voce»; Soften
+  «Ammorbidisci»; PotPlayer's "Temporary" denoise means temporal:
+  «temporale». Example values in fields follow an Italian user
+  («ita,eng», «it,en»). The language list of whisper stays lowercase
+  («inglese», «italiano»).
+- **Decided at review:** a sync is not a quantity: "Increase/Decrease
+  audio sync by %1" is «Ritarda/Anticipa l'audio di %1», the subtitles'
+  «Ritarda/Anticipa i sottotitoli di %1» (positive sync is later);
+  the three "keep audio sync changes" choices (Settings and the menu
+  alike) name what they keep, short enough for their boxes: «Non
+  mantenere il ritardo audio», «Mantieni il ritardo audio fino
+  all'uscita», «Mantieni sempre il ritardo audio» (actions also show
+  alone on the Keys and Mouse page). PotPlayer's Shader Stacker is a «catena di
+  shader» («Catena...»). The PreAmp actions are «Alza/Abbassa la
+  preamplificazione». A window that has the keyboard «ha il focus» (no
+  «ha la tastiera»). Minimized is always «ridotto a icona». Never «lei»
+  for a thing: repeat the noun. DVD Control's "Move" (a disc's titles) is
+  «Vai a»; elsewhere Move is «Sposta». Seamless Playback is
+  «Riproduzione senza interruzioni».
 
 ## Glossary
 
