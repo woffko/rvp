@@ -525,6 +525,15 @@ pub fn plan(settings: &SmoothingSettings, facts: &Facts, lightened: Lightened) -
     }
 }
 
+/// Whether the GPU budget's lighter step changes a filter of `engine` at
+/// `preset`, as [`plan`] takes it: RIFE, on Vulkan or TensorRT, gives way
+/// to MVTools, the others take a lighter preset down to Fast. With RIFE
+/// (TensorRT) at Fast the budget took the step for none and went on to
+/// Blend (the Linux audit's M11).
+fn lighter_changes(engine: Engine, preset: Preset) -> bool {
+    engine.is_rife() || preset != Preset::Fast
+}
+
 /// One step down the plan's ladder from `engine` at `preset`: a lighter
 /// preset down to Fast, then MVTools at the `wanted` preset but at most
 /// Medium (RIFE and `fruc_vulkan` give way), then nothing (Blend).
@@ -1801,7 +1810,7 @@ impl App {
     pub(crate) fn smoothing_step_changes(&self, step: Step) -> bool {
         match (step, self.smoothing_plan()) {
             (Step::SmoothingLighter, Plan::Filter { engine, preset, .. }) => {
-                engine == Engine::Rife || preset != Preset::Fast
+                lighter_changes(engine, preset)
             }
             (Step::SmoothingBlend, Plan::Filter { .. })
             | (Step::SmoothingOff, Plan::Filter { .. } | Plan::Blend) => true,
@@ -1813,6 +1822,15 @@ impl App {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_lighter_step_takes_both_rifes_to_mvtools() {
+        for engine in [Engine::Rife, Engine::RifeTrt] {
+            assert!(lighter_changes(engine, Preset::Fast), "{engine:?}");
+        }
+        assert!(!lighter_changes(Engine::MvTools, Preset::Fast));
+        assert!(lighter_changes(Engine::MvTools, Preset::Medium));
+    }
 
     fn facts() -> Facts {
         Facts {

@@ -304,7 +304,9 @@ smoothing for users without SVP, after a study of the engines.
   the last one, scaled by the pixels, cannot keep 60 with room (RIFE at
   2160p took the host's GPU down). Results and the machine's key
   (`shell/src/hardware.rs`, `rvp_hardware` in `gpu_power.cpp`, libmpv,
-  the engines' files, `calibration::VERSION`: bump it when the scripts
+  the engines' files by their contents, not their times or the kernel's
+  release: a package or kernel update alone does not run it again, the
+  owner, 2026-11-14; `calibration::VERSION`: bump it when the scripts
   change) are in `<state>/calibration.json`; each file starts at the
   first step of the ladder that keeps its rate with a fifth to spare.
   NVIDIA Optical Flow is not measured. Steps down taken while other

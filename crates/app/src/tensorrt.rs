@@ -526,7 +526,12 @@ fn install(job: &Job, cancel: &AtomicBool, sender: &Sender<Event>) -> Result<Ins
         if let Some(parent) = destination.parent() {
             std::fs::create_dir_all(parent).map_err(|error| error.to_string())?;
         }
-        std::fs::copy(&source, &destination)
+        // Copied beside and renamed over, as `unpack` does: written in
+        // place, a plugin a running RVP still maps (VapourSynth never lets
+        // one go) could kill it with SIGBUS (the Linux audit's L1).
+        let fresh = destination.with_extension("new");
+        std::fs::copy(&source, &fresh)
+            .and_then(|_| std::fs::rename(&fresh, &destination))
             .map_err(|error| format!("{}: {error}", source.display()))?;
         files.push(to.to_owned());
     }
@@ -753,6 +758,13 @@ impl App {
         let asked = std::thread::Builder::new()
             .name("rvp-tensorrt-card".to_owned())
             .spawn(move || {
+                // A card the system put to sleep is not woken for the
+                // question (D17): asked once something wakes it (the Linux
+                // audit's L2).
+                #[cfg(target_os = "linux")]
+                while !crate::gpu_power::nvidia_awake(Path::new("/sys/bus/pci/devices")) {
+                    std::thread::sleep(Duration::from_secs(5));
+                }
                 drop(sender.send(compute_capability().and_then(|cap| builder_for(&cap))));
             });
         trt.card = match asked {
@@ -882,6 +894,8 @@ impl App {
         if self.tensorrt.installer.is_some() {
             return Err("TensorRT is being installed".to_owned());
         }
+        // A calibration measuring RIFE (TensorRT) stops first: its files go.
+        self.stop_calibration_run();
         let folder = self.tensorrt_folder();
         if folder.exists() {
             std::fs::remove_dir_all(&folder)

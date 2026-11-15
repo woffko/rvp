@@ -310,7 +310,10 @@ pub fn most_left(done: &[Point], available: &[Engine], failed: &[Engine]) -> usi
 
 /// The machine's key: `hardware` (the processors, the graphics cards and
 /// their drivers, from the shell), libmpv's version and the engines'
-/// files (their sizes and times), with [`VERSION`].
+/// files (their contents), with [`VERSION`]. Not the files' times: a
+/// package update sets them all, and the calibration ran again for
+/// engines that had not changed (the owner, 2026-11-14, the Linux audit's
+/// L3).
 #[must_use]
 pub fn key(hardware: &str, mpv_version: &str, files: &[PathBuf]) -> String {
     let mut parts = vec![
@@ -319,14 +322,7 @@ pub fn key(hardware: &str, mpv_version: &str, files: &[PathBuf]) -> String {
         mpv_version.trim().to_owned(),
     ];
     for file in files {
-        let stamp = std::fs::metadata(file).ok().map(|meta| {
-            let modified = meta
-                .modified()
-                .ok()
-                .and_then(|time| time.duration_since(std::time::UNIX_EPOCH).ok())
-                .map_or(0, |since| since.as_secs());
-            format!("{}:{modified}", meta.len())
-        });
+        let stamp = content_stamp(file);
         parts.push(format!(
             "{}={}",
             file.file_name()
@@ -335,6 +331,34 @@ pub fn key(hardware: &str, mpv_version: &str, files: &[PathBuf]) -> String {
         ));
     }
     parts.join("; ")
+}
+
+/// A file's size and the SHA-256 of its first and last 64 KiB: what a
+/// rebuilt library or another model changes (its header, its build ID),
+/// read without the whole file (TensorRT's library is over 1 GB).
+fn content_stamp(file: &Path) -> Option<String> {
+    use sha2::{Digest, Sha256};
+    use std::fmt::Write as _;
+    use std::io::{Read as _, Seek as _, SeekFrom};
+    const SAMPLE: u64 = 64 * 1024;
+    let mut open = std::fs::File::open(file).ok()?;
+    let size = open.metadata().ok()?.len();
+    let mut hash = Sha256::new();
+    let mut buffer = Vec::new();
+    open.by_ref().take(SAMPLE).read_to_end(&mut buffer).ok()?;
+    if size > SAMPLE {
+        open.seek(SeekFrom::Start(size.saturating_sub(SAMPLE).max(SAMPLE)))
+            .ok()?;
+        open.take(SAMPLE).read_to_end(&mut buffer).ok()?;
+    }
+    hash.update(&buffer);
+    let digest = hash.finalize();
+    let mut short = String::new();
+    for byte in digest.iter().take(8) {
+        // Writing to a String does not fail.
+        let _ = write!(short, "{byte:02x}");
+    }
+    Some(format!("{size}:{short}"))
 }
 
 /// Reads the calibration in `folder`; `None` when there is none or it
@@ -758,6 +782,14 @@ impl App {
         self.calibration.only = Some(engine);
     }
 
+    /// Stops a calibration that runs (its files are about to go), without
+    /// the Cancel's "none on its own until Start".
+    pub(crate) fn stop_calibration_run(&self) {
+        if let Some(runner) = &self.calibration.runner {
+            runner.cancel();
+        }
+    }
+
     /// The calibration window's Cancel: stops the run; none starts on its
     /// own until Start.
     pub fn cancel_calibration(&mut self) {
@@ -1002,6 +1034,33 @@ impl App {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_key_follows_the_engines_contents_not_their_times() {
+        let dir =
+            std::env::temp_dir().join(format!("rvp-calibration-contents-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).expect("dir");
+        let plugin = dir.join("libmvtools.so");
+        std::fs::write(&plugin, vec![7u8; 200_000]).expect("plugin");
+        let files = [plugin.clone()];
+        let before = key("cpu; cards", "mpv 0.41", &files);
+        // A package update touches every file: the same key.
+        let file = std::fs::File::options()
+            .write(true)
+            .open(&plugin)
+            .expect("open");
+        file.set_modified(std::time::UNIX_EPOCH + std::time::Duration::from_secs(1_000_000))
+            .expect("time");
+        drop(file);
+        assert_eq!(key("cpu; cards", "mpv 0.41", &files), before);
+        // Another build of the plugin: another key.
+        let mut changed = vec![7u8; 200_000];
+        changed[10] = 8;
+        std::fs::write(&plugin, changed).expect("plugin");
+        assert_ne!(key("cpu; cards", "mpv 0.41", &files), before);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
 
     fn point(engine: Engine, preset: Preset, size: (u32, u32), fps: f64) -> Point {
         Point {

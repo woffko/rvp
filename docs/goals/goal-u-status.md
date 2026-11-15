@@ -39,6 +39,7 @@ recommended option:
 | 6 | Speech and the joystick | M4 in package 5; L20 fixed, not tried with a controller (below) |
 | 7 | Paths, files and processes | M1, M5, M7, L7 to L16 fixed (below; L15 and M7 had no package) |
 | 8 | Recording | M15 fixed (below) |
+| 9 | Smoothing and TensorRT | M11, L1, L2, L3 fixed (below) |
 
 ## Package 1: checks that pass without testing
 
@@ -332,3 +333,25 @@ The audit's plan had M7 and L15 in no package; both are here.
   stream once mpv reopened the main one). Tests:
   `pulse::tests::the_main_stream_is_found_by_its_name`. The desktop's m10
   (the recording) runs with package 9 (below).
+
+## Package 9: smoothing and TensorRT
+
+- **M11, the budget's lighter step after RIFE (TensorRT):** the step
+  counts as a change for both RIFE engines, as the plan takes them to
+  MVTools (`lighter_changes`; with RIFE (TensorRT) at Fast the budget went
+  straight to Blend). This reaches Windows. Test:
+  `smoothing::tests::the_lighter_step_takes_both_rifes_to_mvtools`.
+- **L1, TensorRT's package files:** `libvstrt` and `trtexec` are copied
+  beside and renamed over, as `unpack` does with NVIDIA's (written in
+  place, a plugin a running RVP still maps could kill it with SIGBUS); the
+  page's Remove stops a calibration that runs first. This reaches Windows.
+- **L2, `nvidia-smi` at start:** on Linux the question waits until the
+  NVIDIA card is awake (`gpu_power::nvidia_awake`), as D17 asks: a laptop's
+  sleeping card was woken at every start.
+- **L3, the calibration's key:** the engines' files by their contents
+  (their size and SHA-256 of their first and last 64 KiB), no longer
+  their times, and the hardware without the kernel's release (the owner's
+  answer): a package or kernel update alone no longer runs the
+  calibration again. The new key differs from the old one, so each
+  machine calibrates once more. This reaches Windows (the files' part).
+  Test: `calibration::tests::the_key_follows_the_engines_contents_not_their_times`.

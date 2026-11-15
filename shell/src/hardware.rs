@@ -57,11 +57,13 @@ pub(crate) fn describe() -> String {
     }
     // The C++ side describes nothing here today.
     let native = crate::ffi::bridge::rvp_hardware();
+    // Not the kernel's release: a kernel update ran the calibration again
+    // for the same card and driver (the owner, 2026-11-14, the Linux
+    // audit's L3).
     format!(
-        "{cpu}; {} processors; cards {}; nvidia {}; kernel {}{native}",
+        "{cpu}; {} processors; cards {}; nvidia {}{native}",
         threads(),
         cards.into_iter().collect::<Vec<_>>().join(","),
-        read("/sys/module/nvidia/version"),
-        read("/proc/sys/kernel/osrelease")
+        read("/sys/module/nvidia/version")
     )
 }
