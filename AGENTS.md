@@ -611,7 +611,10 @@ smoothing for users without SVP, after a study of the engines.
   is installed (`HKCU\Software\RVP\UnifiedRemote` notes where) and the
   uninstaller removes those files.
 - Unified Remote Server is installed on the Windows test VM only, never
-  on the host without permission. On port 9510 its manager reloads
+  on the host without permission. The owner's Ubuntu boot has their own
+  (started with the session): a second server for the same user stops
+  it, so the kit's `m15` leaves Unified Remote out while one runs. Custom
+  remotes such as RVP's need Unified Remote's Full app on the phone. On port 9510 its manager reloads
   remotes (`/system/reload`) and its web-client protocol runs a remote's
   action (`/client/connect`, then `/client/request` packets: handshake,
   authenticate, `Action` 7 with `Run`); the manager's

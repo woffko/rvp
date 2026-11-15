@@ -2144,6 +2144,7 @@ step_m15() {
     local log=$LOG_DIR/m15.log out=$LOG_DIR/m15-out media bad=0 summary word
     local ur=$LOG_DIR/m15-urserver server="" remotes pidfile state manager=http://127.0.0.1:9510
     local actions=(play_pause volume_down mute mute play_pause) rvp waited token up candidate
+    local why="RVP_URSERVER names no unpacked Unified Remote Server"
     m2_ready m15 || return 0
     m2_env
     media=$(kit_media)
@@ -2154,11 +2155,19 @@ step_m15() {
     for candidate in "${RVP_URSERVER:-/nonexistent}/opt/urserver/urserver" "${RVP_URSERVER:-/nonexistent}/urserver"; do
         [ -x "$candidate" ] && { server=$candidate; break; }
     done
+    # Unified Remote runs one server for a user: starting the step's
+    # stopped the user's own, which their session starts (the owner's
+    # boot, 2026-11-15; it came back 20 s later). While one runs, the
+    # remote's part is left out.
+    if [ -n "$server" ] && pgrep -u "$(id -u)" -x urserver > /dev/null; then
+        server=""
+        why="the user's own Unified Remote Server runs, and a second one would stop it (/opt/urserver/urserver-stop stops it until the next login)"
+    fi
     if [ -z "$server" ]; then
         # The control API alone.
         kit_run m15 selftest --selftest=m15 "--out=$out" --mpv-options=ao=null "$media/fixture-60s.mkv"
         word=$(kit_judge m15 selftest) || bad=$((bad + 1))
-        kit_check "$log" m15_unified_remote SKIPPED "RVP_URSERVER names no unpacked Unified Remote Server"
+        kit_check "$log" m15_unified_remote SKIPPED "$why"
         summary="$word unified_remote:SKIPPED"
     else
         # The server in user space: its data in the step's folder (HOME),

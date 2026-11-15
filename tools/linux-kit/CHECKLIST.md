@@ -430,7 +430,9 @@ when absent; none of them is ever committed):
 - [ ] **Unified Remote Server for Linux** for `m15`: its `.deb` unpacked,
       never installed (`dpkg-deb -x urserver-*.deb ~/urserver`), then
       `export RVP_URSERVER=~/urserver`. The step runs it from there with its
-      data in the log folder and stops it at the end.
+      data in the log folder and stops it at the end. A server of your own
+      that runs (Unified Remote's autostart) is left alone: a second one
+      would stop it, so the step then leaves Unified Remote out.
 - [ ] **dvdauthor** for `m16` (`sudo apt-get install -y dvdauthor`, which
       has `spumux`): the step makes the synthetic menu DVD and Blu-ray in the
       kit's folder once. `RVP_DVD_MENU` and `RVP_BD_MENU` name other copies.
@@ -493,7 +495,8 @@ Then try by hand (the parts only a desktop and its hardware can check):
 - [ ] **File types** (Association, Apply to System): RVP's Open With entry
       lists the chosen types; your default player stays the default.
 - [ ] **The remote**: Remote Control, "Add to Unified Remote" with Unified
-      Remote Server installed; the phone's remote plays and pauses RVP.
+      Remote Server installed; the phone's remote plays and pauses RVP
+      (custom remotes need Unified Remote's Full app on the phone).
 - [ ] **A webcam or capture card** if you have one: Open > Webcam/Other
       Device lists it by name and plays it.
 - [ ] **The screen** (Open > Screen Capture): in an X11 session it plays the
