@@ -37,6 +37,10 @@ so slang and spoken forms are left out; the vocabulary stays Brazilian.
   masculine.
 - **Titles** of windows, pages, menus and groups are noun phrases:
   *Repetição de trecho*, *Galeria de cenas*, *Configurações de toque*.
+- **Register.** Write *apenas*, not the spoken *só*; *imediatamente*, not
+  *na hora*; *é reproduzido* / *em reprodução*, not *toca* (for what
+  plays); *passam a ser* or *são trocados por*, not *viram*; a window
+  has the *foco do teclado*, not the keyboard.
 - **Help texts** are whole sentences in the present tense, with RVP or
   the feature as the subject: *O RVP mede quantos quadros por segundo...*.
   Progress is in the gerund (*Medindo %1…*, *Baixando*, *Verificando*);
@@ -138,13 +142,16 @@ so slang and spoken forms are left out; the vocabulary stays Brazilian.
   PotPlayer's *X Settings...* menu items. Abbreviate only where the source does and the
   control is tight, with a period (*máx.*, *mín.*). Help texts may run
   as long as Portuguese needs.
+- **Rows after README's** in the glossary are terms this translation
+  settled on the way; they are used the same way everywhere.
 - **Names of effects, filters, presets and models** that are names stay
   (*FSR*, *NVScaler*, *KrigBilateral*, *adaptive-sharpen*, *Blend*,
   *SuperEQ*, *tiny*, *base.en*); their descriptions are translated
   (*Blend (mistura de quadros)*, *tiny (não baixado)*). Equalizer
   presets named after genres keep the genre's name Brazilians use
   (*Pop*, *Rock*, *Reggae*, *Ska*, *Techno*, *Dance*) and translate the
-  rest (*Clássica*, *Festa*, *Ao vivo*, *Graves*).
+  rest (*Clássica*, *Clube*, *Festa*, *Ao vivo*, *Suave*, *Graves*, *Agudos*,
+  *Notebook*, *Grande salão*; *Loudness* stays).
 
 ## Glossary
 
@@ -294,3 +301,20 @@ so slang and spoken forms are left out; the vocabulary stays Brazilian.
 | bit depth / 10-bit | profundidade de bits / 10 bits | *%1-bit* is *%1 bits*. |
 | channel layout (5.1, 7.1) | disposição dos canais (5.1, 7.1) | 5.1 and 7.1 keep their period. |
 | Auto select (recommended) | Seleção automática (recomendada) | *Recomendado* agrees with the choice's noun. |
+| operate only | atuar apenas | PotPlayer's *Operate only with video playback* is *Atuar apenas na reprodução de vídeo*. |
+| rescan | atualizar | *Rescan Skin Files* is *Atualizar arquivos de skin*. |
+| play folder | pasta do arquivo reproduzido | *Store ... into play folders (if available)*: *Armazenar ... na pasta do arquivo reproduzido (se possível)*. |
+| over whole runtime | até fechar o RVP | Sync changes kept for the session. |
+| increase / decrease sync | atrasar / adiantar | *Increase Subtitle Sync by %1ms* is *Atrasar legendas em %1 ms*; *Decrease audio sync* is *Adiantar áudio*. |
+| deblock / deband / soften | remoção de blocos / remoção de banding / suavização | Filter names are nouns, like *Nitidez* (*Suavização: raio*); not *desbloquear* (unlock). *Smooth motion* stays *Suavizar movimento*. |
+| pre-resize / post-resize | pré-redimensionamento / pós-redimensionamento | *Pixel shaders pré-redimensionamento*, *Usar pixel shaders pós-redimensionamento*. |
+| shape (of the picture) | proporção | *Keep the video's shape* is *Manter a proporção do vídeo*; *formato* is a file format. |
+| as the output device takes it | conforme o dispositivo de saída aceitar | A choice reads as a whole clause. |
+| copy-back | copy-back | Kept; *copiar os quadros de volta* in prose. |
+| runtime | runtime | RVP's VapourSynth runtime is the *runtime VapourSynth do RVP*. |
+| Critical / Warning / Info / Debug | Crítico / Aviso / Info / Depuração | The log levels. |
+| player | reprodutor | The desktop entry's *Media Player* is *Reprodutor de mídia*; RVP's own player window is the *janela principal*. |
+| clipboard | área de transferência | |
+| mixer | mixagem | *Mixer Settings* is *Configurações de mixagem*. |
+| wet level / dry level | nível com efeito / nível sem efeito | Freeverb's levels. |
+| Style #%1 | Estilo nº %1 | The number sign is *nº*. |
