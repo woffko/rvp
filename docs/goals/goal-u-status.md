@@ -34,6 +34,7 @@ recommended option:
 | 1 | Checks that pass without testing | M9, M13 fixed (below) |
 | 2 | Packages and CI | H1, H3, M8, M16, L4, L22, L23, L24 fixed (below) |
 | 3 | OpenGL on Linux | H2 fixed and checked; M12 and L21 fixed (below) |
+| 4 | Desktop integration | M2, M6, L17, L19 fixed; L18's tray click fixed, its activation token left (below) |
 
 ## Package 1: checks that pass without testing
 
@@ -159,3 +160,39 @@ none either), and L25 to package 11.
   removed or loaded each other's state. Each harness has its own folder
   now. CI's `package-linux` of 6b8938e failed on code.videolan.org
   refusing connections (dav1d's clone), not on RVP.
+
+## Package 4: desktop integration
+
+- **M2, the media-controls switch:** the Linux desktop thread runs with
+  the General page's media controls off too (`Options::mpris`, and
+  `Desktop::mpris` at run time: MPRIS's objects and name come and go on
+  the same connection), so keeping the screen on, the launcher's progress
+  and pausing on lock work without MPRIS, as on Windows (the owner's
+  answer). An MPRIS name that cannot be taken no longer stops the rest
+  (a warning in the log). Checks: `crates/platform/tests/linux.rs`'s
+  `without_mpris_the_screen_still_stays_on` (no MPRIS name, GNOME's
+  Inhibit asked, then MPRIS on and off with the inhibit held), and kit
+  step m8's `idle_inhibit_without_mpris` (RVP's own inhibitor with
+  `general.media-controls` false and no MPRIS name).
+- **M6, "Minimize to tray" without a tray:** the window hides only while
+  the tray shows the icon (`icon.available`); a raise (MPRIS, a second
+  `rvp`) shows a hidden window too. Ubuntu's GNOME has a tray
+  (AppIndicator), so the case without one is fixed from the code.
+- **L17, fullscreen on another display on Wayland:** the window's screen
+  is set before the fullscreen request, which names its output. M12's
+  `fullscreen_other_display` now also checks that the screen changed where
+  two displays lie apart (mirrored ones share one place). On this boot's
+  Wayland (2026-11-15): `screen DP-2 -> DP-1`, PASS.
+- **L18, the tray on Wayland:** a click minimizes the active window and
+  brings back any other (Wayland reports no minimized state). Left: the
+  activation token a second `rvp` could hand over (GNOME may show "RVP is
+  ready" instead of raising the window); Qt takes `XDG_ACTIVATION_TOKEN`
+  only from its own start, and passing one to a running window needs Qt's
+  private Wayland API.
+- **Checks:** `cargo xtask ci`; `crates/platform/tests/linux.rs` (6 tests
+  on a private bus); kit step m12 PASS on this boot (self-test 27/0, with
+  the fullscreen's screen change). m8's `idle_inhibit_without_mpris` needs
+  this package's .deb installed: package 11's m8 run.
+- **L19, a skin with windows chosen on Wayland:** the switch says on the
+  OSD that the skin's windows need X11 and RVP starts through XWayland for
+  it from the next start (`prefer_x11` reads the skin at start).

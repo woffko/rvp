@@ -512,7 +512,8 @@ Window {
             settingsLoader.item.begin(player.settings_page)
             break
         case requestRaise:
-            if (root.visibility === Window.Minimized)
+            // Minimized, or hidden in the tray.
+            if (root.visibility === Window.Minimized || !root.visible)
                 root.showNormal()
             root.raise()
             root.requestActivate()
@@ -752,8 +753,14 @@ Window {
 
     // Moves the window (not fullscreen) onto `screen`, centred.
     function placeOnScreen(screen) {
-        if (!screen || Qt.platform.pluginName === "wayland" || root.screen.name === screen.name)
+        if (!screen || root.screen.name === screen.name)
             return
+        // Wayland places windows itself, but a fullscreen request names its
+        // output, the window's screen (xdg_toplevel.set_fullscreen).
+        if (Qt.platform.pluginName === "wayland") {
+            root.screen = screen
+            return
+        }
         if (root.visibility !== Window.Windowed)
             root.showNormal()
         root.setWindowGeometry(screen.virtualX + Math.max(0, Math.round((screen.width - root.width) / 2)),

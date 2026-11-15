@@ -1,7 +1,9 @@
 //! The desktop's media controls (M8): MPRIS and idle inhibit on Linux
-//! (`rvp_platform::Desktop`), the System Media Transport Controls on
-//! Windows (`crate::media_controls`). Both show `App::media_state` and send
-//! their commands to the window's thread (`Player::media_command`). Windows'
+//! (`rvp_platform::Desktop`, running with the media controls off too:
+//! only MPRIS follows the General page's switch), the System Media
+//! Transport Controls on Windows (`crate::media_controls`). Both show
+//! `App::media_state` and send their commands to the window's thread
+//! (`Player::media_command`). Windows'
 //! counterpart of the idle inhibit is `crate::awake`. On Linux the desktop
 //! also shows the taskbar's progress (the launcher API; Windows' is
 //! `cpp/taskbar.cpp`) and reports the screen lock, as Windows' session
@@ -22,18 +24,25 @@ pub(crate) struct Integration {
     inhibited: bool,
     #[cfg(windows)]
     controls: crate::media_controls::Controls,
+    /// The General page's media controls (MPRIS).
+    #[cfg(target_os = "linux")]
+    media_controls: bool,
     last: Option<MediaState>,
 }
 
 impl Integration {
     /// Starts the controls; `window` is the main window's native handle,
-    /// which Windows' controls belong to.
+    /// which Windows' controls belong to. On Linux it starts without the
+    /// media controls too (`media_controls` false: no MPRIS), for keeping
+    /// the screen on, the launcher's progress and the screen lock, which
+    /// Windows has without it (the owner, 2026-11-14).
     ///
     /// # Errors
     /// Fails where the desktop offers none (no session bus, no controls).
     pub(crate) fn start(
         thread: CxxQtThread<qobject::Player>,
         window: usize,
+        media_controls: bool,
     ) -> Result<Self, String> {
         #[cfg(target_os = "linux")]
         {
@@ -43,6 +52,7 @@ impl Integration {
                 rvp_platform::Options {
                     desktop_entry: "rvp".to_owned(),
                     inhibit_reason: "Playing video".to_owned(),
+                    mpris: media_controls,
                 },
                 move |command| {
                     // Fails only once the window is gone.
@@ -56,11 +66,14 @@ impl Integration {
             Ok(Self {
                 desktop,
                 inhibited: false,
+                media_controls,
                 last: None,
             })
         }
         #[cfg(windows)]
         {
+            // Windows starts its controls only when they are on.
+            let _ = media_controls;
             let controls = crate::media_controls::Controls::start(thread, window)?;
             Ok(Self {
                 controls,
@@ -69,8 +82,18 @@ impl Integration {
         }
         #[cfg(not(any(target_os = "linux", windows)))]
         {
-            let _ = (thread, window);
+            let _ = (thread, window, media_controls);
             Err("no media controls on this system".to_owned())
+        }
+    }
+
+    /// Linux: the General page turned the media controls on or off; MPRIS
+    /// follows, the rest goes on.
+    #[cfg(target_os = "linux")]
+    pub(crate) fn set_media_controls(&mut self, on: bool) {
+        if on != self.media_controls {
+            self.media_controls = on;
+            self.desktop.mpris(on);
         }
     }
 

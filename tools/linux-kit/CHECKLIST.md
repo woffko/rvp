@@ -371,11 +371,14 @@ runs the AppImage's self-test, then asks for the .deb: install it
 sudo apt install ./<the .deb the step names>
 ```
 
-and run `tools/linux-kit/kit.sh m8 report` again. It checks the installed
-copy (self-test, desktop entry, registration for the media types with no
-default changed), MPRIS on GNOME's bus while the test video plays (playing,
-metadata, Pause, Quit) and that GNOME keeps the screen on meanwhile
-(`IsInhibited` of the session manager), and writes crash logs on purpose.
+and run `tools/linux-kit/kit.sh m8 report` again. It checks that the
+installed copy is the one it built (an older one fails the step), the
+installed copy (self-test, desktop entry, registration for the media types
+with no default changed), MPRIS on GNOME's bus while the test video plays
+(playing, metadata, Pause, Quit) and that RVP keeps the screen on meanwhile
+(its own inhibitor among the session manager's, none paused), then with the
+media controls off (still its inhibitor, no MPRIS name), and writes crash
+logs on purpose.
 Afterwards remove the package (`sudo apt remove rvp`) and run
 `tools/linux-kit/kit.sh m8removed report`.
 

@@ -393,16 +393,23 @@ Item {
                               && (!moves() || host.x === area().x + 10), 5000,
                           () => size() + " at " + host.x)) {
                 setSetting("on-top", "fullscreen-playing")
+                before = { screen: host.screen.name }
                 player.run_action("fullscreen-other-display")
             }
             break
-        // Fullscreen on another display (here the only one), and staying
-        // on top while playing in fullscreen.
-        case 13:
+        // Fullscreen on another display (the next one; the VM has one), and
+        // staying on top while playing in fullscreen. Wayland gets the
+        // display through the fullscreen request (the window's screen).
+        case 13: {
+            const screens = Qt.application.screens
+            const apart = screens.length > 1 && screens.some(other => other.virtualX !== screens[0].virtualX
+                                                                 || other.virtualY !== screens[0].virtualY)
             t.waitFor("fullscreen_other_display", () => host.visibility === Window.FullScreen
-                          && s.fullscreen && s.on_top, 5000,
-                      () => "visibility " + host.visibility + " on_top " + s.on_top)
+                          && s.fullscreen && s.on_top && (!apart || host.screen.name !== before.screen), 5000,
+                      () => "visibility " + host.visibility + " on_top " + s.on_top + " screen " + before.screen
+                            + " -> " + host.screen.name)
             break
+        }
         case 14:
             if (host.settled("fullscreen_other"))
                 player.run_action("fullscreen-other-display")

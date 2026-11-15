@@ -184,8 +184,15 @@ impl qobject::Player {
         let audio = want.audio;
         core.look.skin_want = Some(want);
         self.as_mut().relayout();
-        // The new skin's other windows (M9).
+        // The new skin's other windows (M9). Wayland lets no program place
+        // its windows: such a skin runs through XWayland, which RVP takes
+        // at start (`player::prefer_x11`), so a switch on Wayland says so
+        // (the Linux audit's L19).
         self.as_mut().rebuild_extras();
+        #[cfg(target_os = "linux")]
+        if let Some(note) = wayland_windows_note(skin) {
+            self.as_mut().set_osd(QString::from(note));
+        }
         if panel && *self.panel_shown() {
             self.as_mut().show_panel(true);
         }
@@ -880,17 +887,25 @@ impl qobject::Player {
             return;
         };
         let general = core.app.settings.general.clone();
-        if general.media_controls && core.desktop.is_none() && core.look.startup.is_some() {
+        // Linux keeps its desktop thread (the screen kept on, the
+        // launcher's progress, the lock) and turns MPRIS alone on or off.
+        #[cfg(target_os = "linux")]
+        if let Some(desktop) = core.desktop.as_mut() {
+            desktop.set_media_controls(general.media_controls);
+        }
+        let wanted = general.media_controls || cfg!(target_os = "linux");
+        if wanted && core.desktop.is_none() && core.look.startup.is_some() {
             match crate::desktop::Integration::start(
                 thread,
                 crate::ffi::bridge::rvp_main_window_id(),
+                general.media_controls,
             ) {
                 Ok(desktop) => core.desktop = Some(desktop),
                 Err(error) => {
                     rvp_app::log::report(rvp_app::log::Level::Warning, &error);
                 }
             }
-        } else if !general.media_controls {
+        } else if !wanted {
             core.desktop = None;
         }
         crate::ffi::bridge::rvp_taskbar_start(general.taskbar);
@@ -1394,5 +1409,19 @@ fn apply_linux_associations(settings: &rvp_app::registration::AssociationSetting
         "Applied: {} lists {} types for the current user; the desktop's settings choose the defaults.",
         entry.display(),
         rvp_app::registration::listed_types(&text).len()
+    )
+}
+
+/// What a skin with windows of its own says when it is chosen while Qt
+/// draws on Wayland (the session is Wayland's and RVP did not start
+/// through XWayland); `None` otherwise.
+#[cfg(target_os = "linux")]
+fn wayland_windows_note(skin: &rvp_skin::Skin) -> Option<&'static str> {
+    let wayland = std::env::var("QT_QPA_PLATFORM").map_or_else(
+        |_| std::env::var_os("WAYLAND_DISPLAY").is_some_and(|display| !display.is_empty()),
+        |platform| platform.starts_with("wayland"),
+    );
+    (wayland && !skin.extra_windows().is_empty()).then_some(
+        "This skin's windows need X11: RVP starts through XWayland for it from the next start",
     )
 }

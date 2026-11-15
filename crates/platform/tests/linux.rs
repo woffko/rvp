@@ -98,7 +98,14 @@ fn options() -> Options {
     Options {
         desktop_entry: "rvp".to_owned(),
         inhibit_reason: "Playing video".to_owned(),
+        mpris: true,
     }
+}
+
+/// Whether `name` has an owner on the bus.
+fn has_owner(client: &Connection, name: &str) -> bool {
+    let bus = block_on(zbus::fdo::DBusProxy::new(client)).expect("the bus's proxy");
+    block_on(bus.name_has_owner(name.try_into().expect("a bus name"))).expect("NameHasOwner")
 }
 
 /// The next item of a stream (zbus 6 hands out streams only).
@@ -513,6 +520,57 @@ fn inhibit_asks_gnome_then_the_screen_saver_then_the_portal() {
     // Neither of the others was asked again.
     assert_eq!(calls(&portal_calls).len(), 4);
     assert_eq!(calls(&saver_calls).len(), 4);
+}
+
+/// With the media controls off the screen is still kept on (the owner,
+/// 2026-11-14: Windows keeps it, and the Linux audit's M2 found the switch
+/// took the inhibit, the launcher's progress and the lock with MPRIS);
+/// MPRIS comes and goes with the switch.
+#[test]
+fn without_mpris_the_screen_still_stays_on() {
+    let Some(bus) = Bus::start("no-mpris") else {
+        return;
+    };
+    let session_calls = Arc::new(Mutex::new(Vec::<String>::new()));
+    let _session = serve(
+        &bus,
+        "org.gnome.SessionManager",
+        "/org/gnome/SessionManager",
+        FakeSessionManager {
+            calls: Arc::clone(&session_calls),
+        },
+    );
+    let desktop = Desktop::start_at(
+        &bus.address,
+        Options {
+            mpris: false,
+            ..options()
+        },
+        |_| {},
+        |_| {},
+    )
+    .expect("desktop");
+    assert_eq!(desktop.bus_name(), "");
+    let client = bus.connect();
+    assert!(!has_owner(&client, "org.mpris.MediaPlayer2.rvp"));
+    desktop.inhibit(true);
+    wait_for("the inhibit", || {
+        !session_calls.lock().expect("calls").is_empty()
+    });
+    assert_eq!(
+        *session_calls.lock().expect("calls"),
+        ["Inhibit rvp 0 8: Playing video"]
+    );
+    desktop.mpris(true);
+    wait_for("MPRIS's name", || {
+        has_owner(&client, "org.mpris.MediaPlayer2.rvp")
+    });
+    desktop.mpris(false);
+    wait_for("MPRIS's name to go", || {
+        !has_owner(&client, "org.mpris.MediaPlayer2.rvp")
+    });
+    // The inhibit stayed through both.
+    assert_eq!(session_calls.lock().expect("calls").len(), 1);
 }
 
 /// A portal that never answers, as one the bus cannot start.

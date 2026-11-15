@@ -1237,11 +1237,15 @@ impl qobject::Player {
         let skin = core.app.take_skin_files(&mut request.files);
         // The desktop's media controls follow the application from here,
         // unless the General page turns them off; the taskbar's buttons
-        // and progress (M14).
-        if core.app.settings.general.media_controls {
+        // and progress (M14). On Linux the same thread keeps the screen
+        // on, shows the launcher's progress and reports the lock, with the
+        // media controls off too (the Linux audit's M2).
+        let media_controls = core.app.settings.general.media_controls;
+        if media_controls || cfg!(target_os = "linux") {
             match crate::desktop::Integration::start(
                 thread,
                 crate::ffi::bridge::rvp_main_window_id(),
+                media_controls,
             ) {
                 Ok(desktop) => core.desktop = Some(desktop),
                 Err(error) => {

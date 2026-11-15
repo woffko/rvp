@@ -443,7 +443,11 @@ smoothing for users without SVP, after a study of the engines.
   taken name instead of failing, so RVP asks for its name itself with
   DoNotQueue), shown by `shell/src/desktop.rs`. Windows' media controls:
   `shell/src/media_controls.rs` (one FFI point, `GetForWindow`). Both send
-  `MediaCommand`s to the window's thread (`App::media_command`).
+  `MediaCommand`s to the window's thread (`App::media_command`). On Linux
+  the desktop thread runs with the General page's media controls off too
+  and serves MPRIS only while they are on (`Desktop::mpris`): keeping the
+  screen on, the launcher's progress and pausing on lock do not depend on
+  them, as on Windows (owner, 2026-11-14, the Linux audit's M2).
 - Idle inhibit asks GNOME's session manager first, then
   `org.freedesktop.ScreenSaver`, and the portal last: GNOME refuses the
   portal's inhibit for a program outside a sandbox (empty app ID) while

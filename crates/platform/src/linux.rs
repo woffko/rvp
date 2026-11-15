@@ -64,6 +64,12 @@ pub struct Options {
     pub desktop_entry: String,
     /// Why the screen stays on, for the desktop's list of inhibitors.
     pub inhibit_reason: String,
+    /// MPRIS (the desktop's media controls) at start; [`Desktop::mpris`]
+    /// turns it on and off later. Without it the thread still keeps the
+    /// screen on, shows the launcher's progress and reports the lock (the
+    /// owner, 2026-11-14: the General page's switch is the media controls'
+    /// only).
+    pub mpris: bool,
 }
 
 /// RVP on the desktop's bus: MPRIS, idle inhibit, the launcher's progress
@@ -81,6 +87,8 @@ enum Message {
     /// The taskbar state (0 nothing loaded, 1 playing, 2 paused) and the
     /// position as a fraction (below 0: unknown).
     Progress(i32, f64),
+    /// Serve MPRIS (take the name) or no longer.
+    Mpris(bool),
 }
 
 impl Desktop {
@@ -140,14 +148,19 @@ impl Desktop {
             .map_err(|e| format!("desktop thread: {e}"))?;
         let bus_name = start
             .recv_timeout(START_TIMEOUT)
-            .map_err(|_| "MPRIS on the session bus: no answer".to_owned())??;
+            .map_err(|_| "the session bus: no answer".to_owned())??;
         Ok(Self { sender, bus_name })
     }
 
-    /// The bus name RVP took.
+    /// The bus name RVP took at start for MPRIS; empty without it.
     #[must_use]
     pub fn bus_name(&self) -> &str {
         &self.bus_name
+    }
+
+    /// Serves MPRIS (the media controls) or stops: the rest goes on.
+    pub fn mpris(&self, on: bool) {
+        drop(self.sender.try_send(Message::Mpris(on)));
     }
 
     /// The playback state now; MPRIS announces what changed.
@@ -503,21 +516,22 @@ async fn run(
     started: std::sync::mpsc::Sender<Result<String, String>>,
 ) {
     let shared = Arc::new(Mutex::new(stopped()));
-    let (connection, bus_name) = match connect(builder(), &options, &on_command, &shared).await {
-        Ok(connected) => connected,
+    let connection = match builder().build().await {
+        Ok(connection) => connection,
         Err(error) => {
-            drop(started.send(Err(error)));
+            drop(started.send(Err(format!("the session bus: {error}"))));
             return;
         }
     };
-    let player = connection
-        .object_server()
-        .interface::<_, Player>(PATH)
-        .await
-        .ok();
+    let mut mpris = Mpris::default();
+    if options.mpris {
+        mpris
+            .set(true, &connection, &options, &on_command, &shared)
+            .await;
+    }
     // Watched before the start returns: a lock just after it is not missed.
     let mut signals = screen_saver_signals(&connection).await;
-    drop(started.send(Ok(bus_name)));
+    drop(started.send(Ok(mpris.name.clone().unwrap_or_default())));
     let mut held: Option<Inhibit> = None;
     // Whether RVP wants the screen kept on, and the request that asks.
     let mut wanted = false;
@@ -542,12 +556,12 @@ async fn run(
             }
             Event::Message(Message::State(state)) => {
                 let old = std::mem::replace(&mut *lock(&shared), (*state).clone());
-                if let Some(player) = &player {
+                if let Some(player) = &mpris.player {
                     announce(player, &old, &state).await;
                 }
             }
             Event::Message(Message::Seeked(position)) => {
-                if let Some(player) = &player {
+                if let Some(player) = &mpris.player {
                     drop(Player::seeked(player.signal_emitter(), micros(position)).await);
                 }
             }
@@ -567,6 +581,11 @@ async fn run(
                     Some(inhibit) => release(&connection, inhibit).await,
                     None => {}
                 }
+            }
+            Event::Message(Message::Mpris(on)) => {
+                mpris
+                    .set(on, &connection, &options, &on_command, &shared)
+                    .await;
             }
             Event::Message(Message::Progress(state, progress)) => {
                 let visible = state != 0 && progress >= 0.0;
@@ -599,41 +618,90 @@ async fn run(
     }
 }
 
-/// Serves MPRIS on a new connection from `builder` and takes RVP's name;
-/// returns the connection and the name.
-async fn connect(
-    builder: connection::Builder<'static>,
+/// MPRIS on the desktop thread's connection: its name while RVP serves
+/// it, and its player object's handle (for the signals).
+#[derive(Default)]
+struct Mpris {
+    name: Option<String>,
+    player: Option<InterfaceRef<Player>>,
+}
+
+impl Mpris {
+    /// Serves MPRIS (`on`) or stops serving it; a name that cannot be taken
+    /// leaves it off, with a warning: keeping the screen on and the rest
+    /// work without it.
+    async fn set(
+        &mut self,
+        on: bool,
+        connection: &Connection,
+        options: &Options,
+        on_command: &OnCommand,
+        state: &Arc<Mutex<MediaState>>,
+    ) {
+        if on && self.name.is_none() {
+            match serve_mpris(connection, options, on_command, state).await {
+                Ok((name, player)) => (self.name, self.player) = (Some(name), player),
+                Err(error) => rvp_app::log::report(rvp_app::log::Level::Warning, &error),
+            }
+        } else if !on && let Some(name) = self.name.take() {
+            self.player = None;
+            stop_mpris(connection, &name).await;
+        }
+    }
+}
+
+/// Serves MPRIS's objects on `connection` and takes RVP's name; returns
+/// the name and the player object's handle (for its signals).
+async fn serve_mpris(
+    connection: &Connection,
     options: &Options,
     on_command: &OnCommand,
     state: &Arc<Mutex<MediaState>>,
-) -> Result<(Connection, String), String> {
+) -> Result<(String, Option<InterfaceRef<Player>>), String> {
     let error = |e: zbus::Error| format!("MPRIS on the session bus: {e}");
-    let connection = builder
-        .serve_at(
+    let server = connection.object_server();
+    server
+        .at(
             PATH,
             Root {
                 desktop_entry: options.desktop_entry.clone(),
                 on_command: Arc::clone(on_command),
             },
         )
-        .serve_at(
+        .await
+        .map_err(error)?;
+    server
+        .at(
             PATH,
             Player {
                 state: Arc::clone(state),
                 on_command: Arc::clone(on_command),
             },
         )
-        .build()
         .await
         .map_err(error)?;
     let instance = format!("{NAME}.instance{}", std::process::id());
-    let bus_name = if take_name(&connection, NAME).await.is_ok() {
+    let bus_name = if take_name(connection, NAME).await.is_ok() {
         NAME.to_owned()
+    } else if let Err(e) = take_name(connection, &instance).await {
+        stop_mpris(connection, "").await;
+        return Err(error(e));
     } else {
-        take_name(&connection, &instance).await.map_err(error)?;
         instance
     };
-    Ok((connection, bus_name))
+    let player = server.interface::<_, Player>(PATH).await.ok();
+    Ok((bus_name, player))
+}
+
+/// Lets MPRIS's name go (when `name` is not empty) and takes its objects
+/// off the bus.
+async fn stop_mpris(connection: &Connection, name: &str) {
+    if !name.is_empty() {
+        drop(connection.release_name(name.to_owned()).await);
+    }
+    let server = connection.object_server();
+    drop(server.remove::<Player, _>(PATH).await);
+    drop(server.remove::<Root, _>(PATH).await);
 }
 
 /// Takes `name` without queueing: a name another RVP holds fails at once

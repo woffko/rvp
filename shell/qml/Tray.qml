@@ -18,10 +18,14 @@ Item {
         tray.owner.requestActivate()
     }
 
+    // Hidden only where the tray shows the icon: a desktop without a
+    // StatusNotifierItem host (GNOME without its AppIndicator extension)
+    // shows none, and nothing would bring the window back (the Linux
+    // audit's M6).
     Connections {
         target: tray.owner
         function onVisibilityChanged() {
-            if (tray.toTray && tray.owner.visibility === Window.Minimized)
+            if (tray.toTray && icon.available && tray.owner.visibility === Window.Minimized)
                 tray.owner.hide()
         }
     }
@@ -34,7 +38,12 @@ Item {
         onActivated: (reason) => {
             if (reason === Platform.SystemTrayIcon.Context)
                 return
-            if (tray.owner.visible && tray.owner.visibility !== Window.Minimized)
+            // Wayland tells a program nothing of its minimized state: the
+            // active window goes down, any other comes back.
+            const shown = Qt.platform.pluginName === "wayland"
+                ? tray.owner.visible && tray.owner.active
+                : tray.owner.visible && tray.owner.visibility !== Window.Minimized
+            if (shown)
                 tray.owner.showMinimized()
             else
                 tray.restore()

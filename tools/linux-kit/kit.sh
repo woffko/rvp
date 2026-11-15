@@ -1397,6 +1397,32 @@ m8_mpris() {
     fi
 }
 
+# The General page's media controls off: no MPRIS, and RVP still keeps
+# the screen on while the video plays (the Linux audit's M2: the switch
+# took the inhibit, the launcher's progress and the lock with MPRIS).
+m8_inhibit_without_mpris() {
+    local rvp=$1 pid deadline during name
+    kit_settings '"general": { "media-controls": false }'
+    "$rvp" --instance=m8 --skin= "--mpv-options=hwdec=$(m2_hwdec),ao=null" "$(test_video)" \
+        > "$LOG_DIR/m8-nompris-rvp.log" 2>&1 &
+    pid=$!
+    deadline=$((SECONDS + 20))
+    while during=$(m8_rvp_inhibits) && [ "$during" = no ] && [ $SECONDS -lt $deadline ]; do
+        sleep 0.5
+    done
+    name=$(m8_mpris_name "$pid")
+    kill "$pid" 2> /dev/null
+    wait "$pid" 2> /dev/null
+    kit_settings
+    if [ -z "$during" ]; then
+        echo "check idle_inhibit_without_mpris=SKIPPED no GNOME session manager on this bus"
+    elif [ "$during" = yes ] && [ -z "$name" ]; then
+        echo "check idle_inhibit_without_mpris=PASS RVP's inhibitor, no MPRIS name"
+    else
+        echo "check idle_inhibit_without_mpris=FAIL RVP's inhibitor $during, MPRIS name '$name'"
+    fi
+}
+
 # The crash logs of `rvp`: a panic and a fatal signal.
 m8_crash() {
     local rvp=$1 kind text
@@ -1489,6 +1515,7 @@ step_m8() {
                 echo "(a private session bus: $DBUS_SESSION_BUS_ADDRESS)"
             fi
             m8_mpris /usr/bin/rvp
+            m8_inhibit_without_mpris /usr/bin/rvp
             if [ -n "$bus" ]; then
                 kill "${bus##*$'\n'}" 2> /dev/null
                 unset DBUS_SESSION_BUS_ADDRESS
