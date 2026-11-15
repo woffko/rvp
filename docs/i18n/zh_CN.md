@@ -96,7 +96,7 @@ file (`zh_TW.md`); never mix the two.
   `“重新生成”会创建新令牌`. The source's straight quotes (`Add "Add to"`) become
   `“”` too: `添加“添加到”`. English `'s` becomes `的`, or nothing where the
   noun reads well without it (`mpv 默认值`, `RVP 状态文件夹`).
-- **"&"** becomes `和` (`重低音和高音`, `添加和编辑`, `路径和名称`).
+- **"&"** becomes `和` (`低音和高音增强`, `添加和编辑`, `路径和名称`).
 - **Units:** seconds `秒`, minutes `分钟`, hours `小时`, milliseconds `毫秒`, in
   labels too (`%1 秒`, `%1 分钟`, `后退 %1 秒`, `字幕同步减少 %1 毫秒`; the `ms`
   label beside a field is `毫秒`; `Sec.` and `Min` are the same words). Latin
@@ -309,3 +309,35 @@ file (`zh_TW.md`); never mix the two.
 | bit depth / 10-bit | 位深度 / 10 位 | |
 | channel layout (5.1, 7.1) | 声道布局（5.1、7.1） | |
 | Auto select (recommended) | 自动选择（推荐） | Auto select alone is `自动选择`. |
+| filter | 滤镜 | Video and audio filters alike: `RVP 自己的滤镜`, `SVP 的滤镜`, `视频变换滤镜`, `滤镜控制`. |
+| copy-back | 复制回内存 | Hardware decoding that copies the frames back for filters (`auto-copy（SVP 需要复制回内存）`). |
+| step (amount per press) / step down | 步长 / 降级 | A setting's amount per press (`音量步长`, `同步步长`); smoothing taking a lighter preset or engine. |
+| luma / chroma | 亮度 / 色度 | Luma shares `亮度` with brightness; the label's context tells them apart (`柔化：亮度`). |
+| deblock / deband / soften | 去块 / 去色带 / 柔化 | |
+| temporary denoise | 时域降噪 | PotPlayer's "Temporary" and "Temporal" denoise are one filter: `时域降噪`, `时域降噪器：A`. |
+| pre-resize / post-resize | 缩放前 / 缩放后 | Pixel shaders before and after scaling: `缩放前像素着色器`. |
+| consecutive images | 连续截图 | Their count is `张数`, the period `间隔`. |
+| saved frames / storage folder | 截图 / 保存文件夹 | `截图文件夹`, `打开截图保存文件夹`, `设置录音保存文件夹...`. |
+| Start (button or time) | 开始 | Both the command (the `开始` button) and a point in time (a subtitle's `开始`, its End `结束`, `开始和结束`). A-B's points are `起点` / `终点`. |
+| Move (key, DVD titles) | 转移 | Moving a key to another action is `转移`; DVD Control's Move submenu (the disc's titles) is `转到`; moving a picture or subtitle is `移动` (`左移`, `上移`). |
+| cycle | 切换 | `切换宽高比`, `切换字幕`. |
+| swap | 交换 | `交换立体声声道`, `交换左右图像`. |
+| voice removal / voice emphasis | 人声消除 / 人声增强 | |
+| crossfeed | 交叉馈送 | |
+| bass / treble | 低音 / 高音 | Equalizer presets: `低音增强`, `高音增强`, `低音和高音增强`. |
+| EULA | 最终用户许可协议 | `CUDA 许可协议` where a short label has no room. |
+| state folder | 状态文件夹 | RVP's state folder. |
+| runtime (VapourSynth, CUDA) | 运行时 | `RVP 的 VapourSynth 运行时`, `CUDA 运行时`. |
+| endpoint / pipe / socket / portal | 端点 / 管道 / 套接字 / 门户 | IPC terms; the portal is the desktop's (xdg-desktop-portal). |
+| instance | 实例 | `多个实例`, `在新实例中播放`. |
+| extension (file) | 扩展名 | A file's extension; Extend (the picture) is `扩展`. |
+| shoulders / stick | 肩键 / 摇杆 | The gamepad's buttons and sticks. |
+| tone mapping / field order | 色调映射 / 场序 | |
+| anamorphic | 变形（anamorphic） | |
+| seamless playback | 无缝播放 | PotPlayer's joining of files without a gap. |
+| channel control | 频道控制 | The TV channels' menu (not sound channels, `声道`). |
+| levels (video) | 色阶 | The picture's black and white points: `自动色阶`, `色阶调整（Ctrl+L）`, `色阶和偏移`. Sound levels stay `电平` (`混音器电平`, `湿声电平`). |
+| broadcast effects | 直播效果 | PotPlayer's live-streaming tools (logo, pen, scrolling text). |
+| movie subtitles | 视频的文本字幕 | "Movie" is `视频`, never `影片`. |
+
+The rows after "Auto select (recommended)" are terms this translation added.
