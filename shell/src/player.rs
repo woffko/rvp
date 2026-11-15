@@ -805,6 +805,8 @@ pub fn preload_skin() -> Settings {
     let source = skin_source(&cli, &settings);
     #[cfg(target_os = "linux")]
     prefer_x11(&settings, &source);
+    #[cfg(target_os = "linux")]
+    font_language(&settings);
     let thread_source = source.clone();
     let spawned = std::thread::Builder::new()
         .name("rvp-skin".to_owned())
@@ -832,6 +834,27 @@ fn prefer_x11(settings: &Settings, source: &SkinSource) {
             && rvp_skin::vlc::Theme::open(path).is_ok_and(|theme| theme.windows.len() > 1)));
     if windows || settings.render.renderer.native_window() {
         crate::ffi::bridge::rvp_set_env("QT_QPA_PLATFORM", "xcb");
+    }
+}
+
+/// Han characters take their shapes from a language: Japanese's comma
+/// sits low, Traditional Chinese's in the middle, and some characters
+/// differ. fontconfig orders Noto Sans CJK's variants (and other CJK
+/// fonts) by `FC_LANG`, else by the locale, so an interface language
+/// chosen in RVP that is not the locale's would show another language's
+/// shapes (M19: Japanese under a Russian locale had Traditional
+/// Chinese's comma). A chosen language is given to fontconfig through
+/// `FC_LANG` (its tags are lower case with `-`: `zh-tw`), before Qt or
+/// any thread starts; the user's own `FC_LANG` wins, and "auto" is the
+/// locale's language already. A change takes effect at the next start.
+#[cfg(target_os = "linux")]
+fn font_language(settings: &Settings) {
+    let code = settings.general.language.as_str();
+    if matches!(code, "auto" | "en") || std::env::var_os("FC_LANG").is_some() {
+        return;
+    }
+    if rvp_app::general::is_language_code(code) {
+        crate::ffi::bridge::rvp_set_env("FC_LANG", &code.replace('_', "-").to_lowercase());
     }
 }
 
