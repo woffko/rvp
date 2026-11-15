@@ -2,7 +2,9 @@
 Type=Application
 Name=RVP
 GenericName=Media Player
+GenericName[ru]=Медиаплеер
 Comment=Play video and audio files
+Comment[ru]=Воспроизведение видео- и аудиофайлов
 Exec=rvp %F
 Icon=rvp
 Terminal=false

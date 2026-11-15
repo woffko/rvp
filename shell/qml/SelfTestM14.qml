@@ -1,7 +1,9 @@
 // M14's self-test (`rvp --selftest=m14`), loaded by Main.qml's self-test:
 // the skin, its colour themes, the windows' opacity and the audio skin
 // switched while RVP runs, the Misc menu's copied times, the interface
-// in Russian, and the settings window's search and Reset Page. Input goes
+// in a translation (--language=CODE, default the first built in; with
+// --selftest=language these steps alone), and the settings window's
+// search and Reset Page. Input goes
 // through Player's handlers, as in the functional check.
 //
 // Files: testdata/media/fixture-60s.mkv, then fixture-tone.ogg (no video:
@@ -29,6 +31,8 @@ Item {
     property real pointerY: 0
     // The tooltip case 12 opens.
     property var tipShown: null
+    // The translation the language steps check (M19): {code, name}.
+    property var language: null
 
     function view() { return JSON.parse(player.settings_view(false)) }
     function setSetting(path, value) {
@@ -43,7 +47,11 @@ Item {
         const s = t.status()
         switch (t.step) {
         case 0:
-            t.next()
+            // --selftest=language: the language steps alone.
+            if (t.mode === "language")
+                t.step = 30
+            else
+                t.next()
             break
         case 1:
             if (t.waitFor("m14_video_skin", () => s.loaded && String(s.path).endsWith("fixture-60s.mkv")
@@ -382,15 +390,38 @@ Item {
             if (t.waitFor("m14_touch_layout_loads", () => s.skin_id !== baseId, 5000, () => shown(s)))
                 setSetting("accessibility.touch-skin", false)
             break
-        case 30:
-            // Interface language: RVP's Russian translation loads and its
-            // texts fit their controls in the settings window.
-            setSetting("general.language", "ru")
+        case 30: {
+            // The system's language, chosen at the start while the setting
+            // is "auto" (Qt's rules over the translations built in; with
+            // --expect-system-language=CODE, that one).
+            const system = Tools.system_language()
+            const expected = player.option("expect-system-language")
+            t.check("m14_system_language", Qt.uiLanguage === (system === "en" ? "" : system)
+                        && (expected === "" || expected === system),
+                    "system " + system + " ui " + Qt.uiLanguage + " expected " + expected)
+            // Interface language: a translation loads, by its own name,
+            // and its texts fit their controls in the settings window.
+            const built = JSON.parse(Tools.interface_languages())
+            const wanted = player.option("language")
+            language = built.find(known => known.code === wanted) || (wanted === "" ? built[0] : null)
+            if (!language) {
+                t.check("m14_language_loads", false, "no translation " + wanted + " among "
+                        + built.map(known => known.code).join(","))
+                if (t.mode === "language")
+                    t.finish()
+                else
+                    t.step = 33
+                break
+            }
+            setSetting("general.language", language.code)
             t.next()
             break
+        }
         case 31:
-            if (t.waitFor("m14_russian_loads", () => qsTranslate("Menu", "Open File(s)...") === "Открыть файл(ы)...",
-                          5000, () => qsTranslate("Menu", "Open File(s)...") + " " + Qt.uiLanguage)) {
+            if (t.waitFor("m14_language_loads", () => Qt.uiLanguage === language.code
+                              && qsTranslate("Language", "English") === language.name
+                              && qsTranslate("Language", "English") !== "English",
+                          5000, () => language.code + " " + qsTranslate("Language", "English") + " " + Qt.uiLanguage)) {
                 player.run_action("preferences")
             }
             break
@@ -398,7 +429,7 @@ Item {
             const settings = host.settingsWindow()
             if (!settings || !settings.visible) {
                 if (Date.now() - t.stepStarted > 10000) {
-                    t.check("m14_russian_fits", false, "no settings window")
+                    t.check("m14_language_fits", false, language.code + ": no settings window")
                     t.next()
                 }
                 break
@@ -422,10 +453,14 @@ Item {
                 if (page)
                     walk(page, settings.pages[i].key)
             }
-            t.check("m14_russian_fits", overflow.length === 0, overflow.length + " " + overflow.slice(0, 40).join(" | "))
+            t.check("m14_language_fits", overflow.length === 0, language.code + " " + overflow.length + " "
+                    + overflow.slice(0, 40).join(" | "))
             settings.close()
             setSetting("general.language", "en")
-            t.next()
+            if (t.mode === "language")
+                t.finish()
+            else
+                t.next()
             break
         }
         case 33:

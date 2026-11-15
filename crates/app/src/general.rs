@@ -23,10 +23,36 @@ use serde::{Deserialize, Serialize};
 
 use crate::app::{App, UiRequest};
 
-/// RVP's interface languages: the system's (when RVP has it, else
-/// English), English, Russian. RVP's own translations (Qt's .ts files in
-/// `shell/i18n`), never PotPlayer's.
-pub const LANGUAGES: &[(&str, &str)] = &[("auto", ""), ("en", "English"), ("ru", "Русский")];
+/// One of the interface's languages besides English (M19): a translation
+/// built into RVP (Qt's .ts files written for RVP in `shell/i18n`, never
+/// PotPlayer's), named in its own language. The window gives the app
+/// the ones it has ([`App::set_interface_languages`]); no language but
+/// English, the source text, is written into the code.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+pub struct InterfaceLanguage {
+    /// Qt's code: `de`, `pt_BR`, `zh_TW`.
+    pub code: String,
+    /// The language's own name: "Deutsch", "日本語".
+    pub name: String,
+}
+
+/// Whether `code` can name the interface's language: `auto` (the
+/// system's when RVP has it, else English), `en` (English, the source
+/// text) or a translation's code (`de`, `pt_BR`, `zh_Hant`); a language
+/// RVP lacks shows English.
+#[must_use]
+pub fn is_language_code(code: &str) -> bool {
+    if code == "auto" {
+        return true;
+    }
+    let mut parts = code.split('_');
+    let language = parts.next().unwrap_or_default();
+    (2..=3).contains(&language.len())
+        && language.bytes().all(|b| b.is_ascii_lowercase())
+        && parts.all(|part| {
+            (2..=4).contains(&part.len()) && part.bytes().all(|b| b.is_ascii_alphanumeric())
+        })
+}
 
 /// A second start: hands its files over, or opens its own window.
 pub const INSTANCES: &[&str] = &["single", "multiple"];
@@ -44,7 +70,8 @@ pub const START_SIZES: &[&str] = &["last", "custom"];
 // Independent options of PotPlayer's pages.
 #[allow(clippy::struct_excessive_bools)]
 pub struct GeneralSettings {
-    /// The interface's language: a code of [`LANGUAGES`].
+    /// The interface's language: `auto`, `en` or a translation's code
+    /// ([`is_language_code`]).
     pub language: String,
     /// One of [`INSTANCES`].
     pub instances: String,
@@ -170,6 +197,13 @@ impl Default for DialogSettings {
 
 impl GeneralSettings {
     pub(crate) fn validate(&mut self, notes: &mut Vec<String>) {
+        if !is_language_code(&self.language) {
+            notes.push(format!(
+                "general.language {:?} is no language code: auto",
+                self.language
+            ));
+            "auto".clone_into(&mut self.language);
+        }
         let mut choose = |name: &str, value: &mut String, known: &[&str]| {
             if !known.contains(&value.as_str()) {
                 notes.push(format!(
@@ -179,8 +213,6 @@ impl GeneralSettings {
                 known[0].clone_into(value);
             }
         };
-        let languages: Vec<&str> = LANGUAGES.iter().map(|(code, _)| *code).collect();
-        choose("language", &mut self.language, &languages);
         choose("instances", &mut self.instances, INSTANCES);
         choose("tray", &mut self.tray, TRAY);
         choose("start.position", &mut self.start.position, START_POSITIONS);
@@ -241,6 +273,32 @@ pub enum Attention {
 }
 
 impl App {
+    /// Gives the app the interface's languages besides English that the
+    /// window has (M19), for Misc > Interface Language.
+    pub fn set_interface_languages(&mut self, languages: Vec<InterfaceLanguage>) {
+        self.interface_languages = languages;
+    }
+
+    /// The interface's languages besides English that the window has.
+    #[must_use]
+    pub fn interface_languages(&self) -> &[InterfaceLanguage] {
+        &self.interface_languages
+    }
+
+    /// Misc > Interface Language's `index`th code: `auto`, `en`, then the
+    /// window's translations.
+    #[must_use]
+    pub fn interface_language(&self, index: u8) -> Option<String> {
+        match index {
+            0 => Some("auto".to_owned()),
+            1 => Some("en".to_owned()),
+            _ => self
+                .interface_languages
+                .get(usize::from(index) - 2)
+                .map(|language| language.code.clone()),
+        }
+    }
+
     /// The window was minimized or restored, lost or got the focus, or the
     /// screen was locked or unlocked: pauses as the General page says, and
     /// plays on what it paused once nothing holds it.
@@ -340,5 +398,55 @@ mod tests {
         assert_eq!(settings.instances, "single");
         assert_eq!(settings.start.width, 960);
         assert_eq!(settings.dialog.font_size, 0);
+    }
+
+    #[test]
+    fn languages_are_codes_not_a_list() {
+        for code in ["auto", "en", "xx", "xx_YY", "xx_Abcd", "xxx_Abcd_YY"] {
+            assert!(is_language_code(code), "{code}");
+        }
+        for code in ["", "XX", "x", "xx-YY", "xx_", "../xx", "xx_Y", "xx yy"] {
+            assert!(!is_language_code(code), "{code}");
+        }
+        let mut settings = GeneralSettings {
+            language: "Xx!".to_owned(),
+            ..GeneralSettings::default()
+        };
+        let mut notes = Vec::new();
+        settings.validate(&mut notes);
+        assert_eq!(settings.language, "auto", "{notes:?}");
+    }
+
+    #[test]
+    fn the_language_menu_lists_the_windows_translations() {
+        let dir = std::env::temp_dir().join(format!("rvp-languages-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let mut app = App::new(crate::Settings::default(), &dir).expect("app");
+        app.set_interface_languages(vec![InterfaceLanguage {
+            code: "xx".to_owned(),
+            name: "Xxish".to_owned(),
+        }]);
+        let labels = |items: &[crate::menu::MenuItem]| -> Vec<String> {
+            fn walk(items: &[crate::menu::MenuItem], out: &mut Vec<String>) {
+                for item in items {
+                    out.push(item.label.clone());
+                    walk(&item.children, out);
+                }
+            }
+            let mut out = Vec::new();
+            walk(items, &mut out);
+            out
+        };
+        let menu = labels(&app.full_context_menu(&crate::menu::Live::default()));
+        assert!(menu.iter().any(|label| label == "English"));
+        assert!(menu.iter().any(|label| label == "Xxish"), "{menu:?}");
+        assert_eq!(app.interface_language(0).as_deref(), Some("auto"));
+        assert_eq!(app.interface_language(1).as_deref(), Some("en"));
+        assert_eq!(app.interface_language(2).as_deref(), Some("xx"));
+        assert_eq!(app.interface_language(3), None);
+        let request = app.misc_command(crate::misc::MiscCommand::Language(2));
+        assert_eq!(app.settings.general.language, "xx");
+        assert!(matches!(request, Some(UiRequest::Language(code)) if code == "xx"));
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }

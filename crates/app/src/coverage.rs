@@ -98,7 +98,7 @@ const CONTEXT_REASONS: &[(&str, &str)] = &[
     ("101_0_13", "DirectShow filters do not apply to libmpv"),
     (
         "101_0_15_2",
-        "RVP's interface speaks English and Russian, in RVP's own translations; it has no Korean",
+        "PotPlayer's own built-in Korean; RVP's languages are its own translations, listed after English",
     ),
     (
         "101_0_19",
@@ -409,7 +409,7 @@ const RUNTIME_REASONS: &[(&str, &str)] = &[
     ),
     (
         "Misc > Interface Language",
-        "RVP's own translations are English and Russian (Qt's .ts files written for RVP); PotPlayer's language files are PotPlayer's",
+        "RVP's languages are its own translations (Qt's .ts files written for RVP in shell/i18n), listed after English; PotPlayer's language files are PotPlayer's",
     ),
 ];
 

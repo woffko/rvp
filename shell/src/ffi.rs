@@ -33,6 +33,9 @@ pub mod bridge {
         fn rvp_instance_listen(name: &str) -> bool;
         /// Whether an instance listens on `name` (connects and leaves).
         fn rvp_instance_running(name: &str) -> bool;
+        /// The interface's languages (M19): JSON `[{code, name}]` of the
+        /// translations built into RVP, each named in its own language.
+        fn rvp_interface_languages() -> String;
         /// libmpv needs `LC_NUMERIC=C`; Qt sets the user locale on Unix.
         fn rvp_set_c_numeric_locale();
         /// Gives every window RVP's icon (`QGuiApplication::setWindowIcon`).

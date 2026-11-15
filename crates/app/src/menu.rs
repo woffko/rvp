@@ -913,16 +913,23 @@ impl App {
             "101_0_3" => self.favorites_menu(),
             "101_0_13" => self.pipeline(live),
             "101_0_11" => self.smoothing_menu(),
-            // RVP's languages after Auto select (M14).
-            "101_0_15_2" => [1, 2]
-                .into_iter()
-                .map(|index| {
-                    self.window_item(
-                        Action::Misc(crate::misc::MiscCommand::Language(index)),
-                        None,
-                    )
-                })
-                .collect(),
+            // RVP's languages after Auto select (M14): English, then the
+            // window's translations by their own names (M19).
+            "101_0_15_2" => {
+                let mut items = vec![
+                    self.window_item(Action::Misc(crate::misc::MiscCommand::Language(1)), None),
+                ];
+                items.extend(self.interface_languages().iter().enumerate().filter_map(
+                    |(at, language)| {
+                        let index = u8::try_from(at + 2).ok()?;
+                        Some(self.window_item(
+                            Action::Misc(crate::misc::MiscCommand::Language(index)),
+                            Some(&language.name),
+                        ))
+                    },
+                ));
+                items
+            }
             _ => Vec::new(),
         }
     }

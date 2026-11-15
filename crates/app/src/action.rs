@@ -5553,14 +5553,6 @@ pub const ACTIONS: &[ActionInfo] = &[
         &[],
     ),
     info(
-        Action::Misc(MiscCommand::Language(2)),
-        "language-russian",
-        "Русский",
-        None,
-        &[],
-        &[],
-    ),
-    info(
         Action::Popup(crate::menu::MenuPopup::Language),
         "menu-interface-language",
         "Interface Language (menu)",

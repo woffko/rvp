@@ -57,14 +57,14 @@ VIAddVersionKey "LegalCopyright" "GPL-3.0-or-later"
 !insertmacro MUI_UNPAGE_CONFIRM
 !insertmacro MUI_UNPAGE_INSTFILES
 !insertmacro MUI_LANGUAGE "English"
-!insertmacro MUI_LANGUAGE "Russian"
+; RVP's other languages and their LangStrings (shell/i18n, package.py).
+!include "${INCLUDES}\languages.nsh"
 
 !include "${INCLUDES}\types.nsh"
 !include "${INCLUDES}\files.nsh"
 !include "${INCLUDES}\remote.nsh"
 
 LangString REMOTE_SECTION ${LANG_ENGLISH} "Remote for Unified Remote"
-LangString REMOTE_SECTION ${LANG_RUSSIAN} "Пульт для Unified Remote"
 
 ; Unified Remote's custom remotes folder.
 Var RemoteDir

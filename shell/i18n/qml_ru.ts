@@ -270,6 +270,14 @@
         </message>
     </context>
     <context>
+        <name>Language</name>
+        <message>
+            <source>English</source>
+            <extracomment>This language's own name, as its speakers write it: Deutsch, Français, 日本語.</extracomment>
+            <translation>Русский</translation>
+        </message>
+    </context>
+    <context>
         <name>Main</name>
         <message>
             <source>RVP</source>

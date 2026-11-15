@@ -48,10 +48,12 @@ fn build_look(out: &Path) -> PathBuf {
     qrc_path
 }
 
-/// Compiles RVP's translations (`i18n/*_ru.ts`, written for RVP) into
-/// `OUT_DIR/i18n/qml_ru.qm` with Qt's lrelease and lists it beside
-/// Main.qml, where the QML engine loads `i18n/qml_<language>.qm` as
-/// `Qt.uiLanguage` changes; returns the `.qrc` path.
+/// Compiles RVP's translations into `OUT_DIR/i18n/qml_<code>.qm`, one
+/// per language, with Qt's lrelease, and lists them beside Main.qml, where
+/// the QML engine loads `i18n/qml_<code>.qm` as `Qt.uiLanguage` changes;
+/// returns the `.qrc` path. A language is its files `i18n/<part>_<code>.ts`
+/// (`qml` from lupdate, `menu` and `packaging` RVP's own lists), written
+/// for RVP: no language is named here (M19).
 fn build_translations(out: &Path) -> PathBuf {
     println!("cargo::rerun-if-changed=i18n");
     println!("cargo::rerun-if-env-changed=QMAKE");
@@ -69,17 +71,40 @@ fn build_translations(out: &Path) -> PathBuf {
         .unwrap_or_else(|| PathBuf::from("lrelease"));
     let folder = out.join("i18n");
     std::fs::create_dir_all(&folder).expect("create i18n folder");
-    let qm = folder.join("qml_ru.qm");
-    let status = std::process::Command::new(&lrelease)
-        .args(["-silent", "i18n/qml_ru.ts", "i18n/menu_ru.ts", "-qm"])
-        .arg(&qm)
-        .status()
-        .unwrap_or_else(|error| panic!("cannot run {}: {error}", lrelease.display()));
-    assert!(status.success(), "lrelease failed: {status}");
-    let qrc = format!(
-        "<RCC>\n  <qresource prefix=\"/qt/qml/Rvp\">\n    <file alias=\"qml/i18n/qml_ru.qm\">{}</file>\n  </qresource>\n</RCC>\n",
-        qm.display()
-    );
+    let mut languages: std::collections::BTreeMap<String, Vec<PathBuf>> =
+        std::collections::BTreeMap::new();
+    for entry in std::fs::read_dir("i18n").expect("read i18n") {
+        let path = entry.expect("i18n entry").path();
+        if path.extension().is_none_or(|extension| extension != "ts") {
+            continue;
+        }
+        let stem = path
+            .file_stem()
+            .map(|stem| stem.to_string_lossy().into_owned());
+        if let Some((_, code)) = stem.as_deref().and_then(|stem| stem.split_once('_')) {
+            languages.entry(code.to_owned()).or_default().push(path);
+        }
+    }
+    let mut qrc = String::from("<RCC>\n  <qresource prefix=\"/qt/qml/Rvp\">\n");
+    for (code, mut files) in languages {
+        files.sort();
+        let qm = folder.join(format!("qml_{code}.qm"));
+        let status = std::process::Command::new(&lrelease)
+            .arg("-silent")
+            .args(&files)
+            .arg("-qm")
+            .arg(&qm)
+            .status()
+            .unwrap_or_else(|error| panic!("cannot run {}: {error}", lrelease.display()));
+        assert!(status.success(), "lrelease failed for {code}: {status}");
+        writeln!(
+            qrc,
+            "    <file alias=\"qml/i18n/qml_{code}.qm\">{}</file>",
+            qm.display()
+        )
+        .expect("write to a String");
+    }
+    qrc.push_str("  </qresource>\n</RCC>\n");
     let qrc_path = out.join("i18n.qrc");
     std::fs::write(&qrc_path, qrc).expect("write i18n.qrc");
     qrc_path

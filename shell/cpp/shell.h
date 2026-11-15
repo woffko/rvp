@@ -130,6 +130,15 @@ public:
     // The video window as Windows has it (JSON; `exists` false without
     // one), for the self-test.
     Q_INVOKABLE QString video_window_json() const;
+    // The interface's languages (M19): the translations built into RVP
+    // (shell/build.rs, i18n/qml_<code>.qm) as JSON [{code, name}], each
+    // named in its own translation, by name. English, the source text,
+    // is not among them.
+    Q_INVOKABLE QString interface_languages() const;
+    // The language of these the system's UI languages ask for, by Qt's
+    // rules (zh_TW finds zh_TW, pt_PT a Portuguese of another region when
+    // it is the only one); "en" when English comes first or none fits.
+    Q_INVOKABLE QString system_language() const;
 
 signals:
     // A taskbar thumbnail button (M14, cpp/taskbar.cpp): 0 previous, 1
@@ -171,6 +180,8 @@ bool rvp_registry_delete_key(rust::Str key);
 bool rvp_registry_has_key(rust::Str key);
 void rvp_associations_changed();
 rust::String rvp_tts_voices();
+// Tools::interface_languages for Rust (the Interface Language menu).
+rust::String rvp_interface_languages();
 rust::String rvp_tts_outputs();
 // Linux: "loading" until speech-dispatcher's thread connected, then
 // "ready" or "none"; elsewhere "ready".

@@ -530,21 +530,33 @@ smoothing for users without SVP, after a study of the engines.
 ## Preferences, skins and the interface (M14)
 
 - No interface language but English, the source text and the
-  fallback, is written into the code (the owner, 2026-11-15): a language
-  is its translation files, which RVP finds; goal V (M19, D20) removes
-  the places that still name Russian and adds twelve languages.
-- Interface languages are English (the source text) and Russian,
-  written for RVP (`shell/i18n/qml_ru.ts` from lupdate, `menu_ru.ts`
-  for the "Menu" context); `shell/build.rs` compiles them with Qt's
-  lrelease. Every user-visible QML string goes through `qsTr` (with
-  `.arg()` for values); menu and action labels from Rust go through
-  `Tools.tr_menu`, which sets numbers aside as `%1`, `%2`... A QML file
-  that uses `Tools` imports `RvpNative`. After changing strings run
-  `lupdate -no-obsolete -locations none` on the QML files (not the
-  `SelfTest*` ones) into `qml_ru.ts`, translate the new entries and keep
-  Russian texts short enough for their controls: `tests/translations.rs`
-  fails an untranslated string or a lost placeholder, and
-  `--selftest=m14` fails a settings text that does not fit.
+  fallback, is written into the code (the owner, 2026-11-15; M19, D20):
+  a language is its files `shell/i18n/<part>_<code>.ts`, written for
+  RVP: `qml` (from lupdate), `menu` (the "Menu" context, RVP's own list)
+  and `packaging` (the desktop entry's and the installer's strings).
+  `shell/build.rs` compiles each code's files with Qt's lrelease into
+  `qml_<code>.qm`; the window finds them (`Tools.interface_languages`,
+  each named by its translation of "English" in the "Language" context)
+  and gives the app the list for Misc > Interface Language
+  (`App::set_interface_languages`); `general.language` is `auto`, `en`
+  or any code (`general::is_language_code`), and one RVP lacks shows
+  English. `auto` takes `Tools.system_language`: the system's UI
+  languages by Qt's rules, English when it comes first, then a
+  translation of the same language for another region.
+- Every user-visible QML string goes through `qsTr` (with `.arg()` for
+  values); menu and action labels from Rust go through `Tools.tr_menu`,
+  which sets numbers aside as `%1`, `%2`... A QML file that uses `Tools`
+  imports `RvpNative`. After changing strings run `lupdate -no-obsolete
+  -locations none` on the QML files (not the `SelfTest*` ones) into every
+  `qml_<code>.ts`, translate the new entries in each language (its rules
+  in `docs/i18n`) and keep texts short enough for their controls:
+  `tests/translations.rs` fails a string some language lacks, a lost
+  placeholder, a language without its own name and a desktop entry that
+  differs from the files (`tools/i18n/desktop.py` rewrites it), and
+  `--selftest=language --language=CODE` fails a settings text that does
+  not fit. The Windows installer's languages are made by
+  `tools/packaging/package.py` from the same files, each found among
+  NSIS's language files by its LANGID.
 - The QML engine keeps its last translation when `Qt.uiLanguage` names
   a language without a `.qm` file, and loads the system's at start:
   English is `Qt.uiLanguage = ""` (`Main.qml` `applyLanguage`).
@@ -866,6 +878,13 @@ smoothing for users without SVP, after a study of the engines.
 - Ubuntu 22.04 VM shared with another project (`<ubuntu-vm>`, see
   the other project's notes): Linux builds and GNOME Wayland
   behaviour. It has no real GPU.
+- On the owner's Ubuntu boot the owner's own RVP may be playing: test
+  launches of RVP get their own `XDG_RUNTIME_DIR` and session bus
+  (`dbus-run-session`, as `tools/screenshots/tour.sh` does) besides their
+  own settings and state, and only self-tests run. On 2026-11-15 five
+  launches whose arguments came after `--` were no self-tests and handed
+  25 bogus "files" to the owner's playlist through the second instance's
+  channel. Never touch the installed RVP or its state without asking.
 - The owner's Ubuntu 26.10 boot of the same PC (GNOME Wayland; an RTX 50-series card, `sm120`, since 2026-11-07, an RTX 30-series card before; measurements
   before that date are the RTX 30-series card's):
   GPU, SVP and performance checks, run in separate sessions through this

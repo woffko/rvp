@@ -119,16 +119,19 @@ Window {
         Tools.set_app_font(generalLook.dialogFont || "", generalLook.dialogFontSize || 0)
         applyLanguage()
     }
-    // General: "Interface language" (M14): RVP's own translations
-    // (i18n/qml_<language>.qm beside this file), which the engine loads
-    // when Qt.uiLanguage changes; "auto" takes the system's when RVP has it.
+    // General: "Interface language" (M14, M19): RVP's own translations
+    // (i18n/qml_<code>.qm beside this file, whichever the build found),
+    // which the engine loads when Qt.uiLanguage changes; "auto" takes the
+    // one the system's UI languages ask for by Qt's rules, else English.
     function applyLanguage() {
         const wanted = generalLook.language || "auto"
-        const language = wanted === "auto" ? (Qt.locale().name.startsWith("ru") ? "ru" : "en") : wanted
+        const language = wanted === "auto" ? Tools.system_language() : wanted
+        const present = JSON.parse(Tools.interface_languages()).some(known => known.code === language)
         // English is the source text: the engine drops its translation only
         // for an empty language (a language without a file keeps the last
-        // one, and at start it loads the system's).
-        const ui = language === "en" ? "" : language
+        // one, and at start it loads the system's), so a language RVP lacks
+        // shows English too.
+        const ui = present ? language : ""
         if (Qt.uiLanguage !== ui)
             Qt.uiLanguage = ui
     }
@@ -1821,6 +1824,12 @@ Window {
     //                         toggles, transport, volume, an equalizer
     //                         band, the playlist's resize; the file:
     //                         fixture-60s.mkv
+    //   --selftest=language   M14's language steps alone (SelfTestM14.qml):
+    //                         the system's language took at the start
+    //                         (--expect-system-language=CODE), then
+    //                         --language=CODE (default: the first
+    //                         translation built in) loads, and every text
+    //                         of the settings window fits its control
     //   --selftest=tour       the README's screenshots (SelfTestTour.qml,
     //                         tools/screenshots/tour.sh): the player with
     //                         its playlist, the menu, settings pages, the
@@ -1975,6 +1984,8 @@ Window {
             return vlcTick()
         if (selftest.mode === "tour")
             return tourTick()
+        if (selftest.mode === "language")
+            return m14Tick()
         functionalTick()
     }
 

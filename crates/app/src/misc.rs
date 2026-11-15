@@ -96,7 +96,8 @@ pub enum MiscCommand {
     DragTitleOnly,
     /// Misc > Enable touch feature.
     Touch,
-    /// Misc > Interface Language: an index of `general::LANGUAGES`.
+    /// Misc > Interface Language: 0 Auto select, 1 English, then the
+    /// translations the window has ([`App::interface_language`]).
     Language(u8),
 }
 
@@ -107,10 +108,10 @@ impl App {
             return Some(self.toggle_touch());
         }
         if let MiscCommand::Language(index) = command {
-            let (code, _) = crate::general::LANGUAGES.get(usize::from(index))?;
-            (*code).clone_into(&mut self.settings.general.language);
+            let code = self.interface_language(index)?;
+            code.clone_into(&mut self.settings.general.language);
             self.save_settings();
-            return Some(UiRequest::Language((*code).to_owned()));
+            return Some(UiRequest::Language(code));
         }
         let settings = &mut self.settings.copy_time;
         let text = match command {
@@ -173,9 +174,8 @@ impl App {
             MiscCommand::DragTitleOnly => Some(self.settings.input.drag_title_only),
             MiscCommand::Touch => Some(self.settings.accessibility.touch),
             MiscCommand::Language(index) => Some(
-                crate::general::LANGUAGES
-                    .get(usize::from(index))
-                    .is_some_and(|(code, _)| *code == self.settings.general.language),
+                self.interface_language(index)
+                    .is_some_and(|code| code == self.settings.general.language),
             ),
         }
     }

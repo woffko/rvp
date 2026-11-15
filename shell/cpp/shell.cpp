@@ -17,12 +17,14 @@
 #include <QtCore/QJsonArray>
 #include <QtCore/QJsonDocument>
 #include <QtCore/QJsonObject>
+#include <QtCore/QLocale>
 #include <QtCore/QMetaObject>
 #include <QtCore/QMutex>
 #include <QtCore/QPointer>
 #include <QtCore/QProcess>
 #include <QtCore/QProcessEnvironment>
 #include <QtCore/QTimer>
+#include <QtCore/QTranslator>
 #include <QtGui/QClipboard>
 #include <QtGui/QDesktopServices>
 #include <QtGui/QFontDatabase>
@@ -457,6 +459,81 @@ QString Tools::read_file(const QString &path, qint64 from) const
     return QString::fromUtf8(file.readAll());
 }
 
+namespace {
+
+// Where shell/build.rs puts the compiled translations, beside Main.qml.
+const QString i18nFolder = QStringLiteral(":/qt/qml/Rvp/qml/i18n");
+
+// The codes of the built-in translations (qml_<code>.qm), sorted.
+QStringList languageCodes()
+{
+    QStringList codes;
+    const QStringList files = QDir(i18nFolder).entryList({QStringLiteral("qml_*.qm")}, QDir::Files, QDir::Name);
+    for (const QString &file : files)
+        codes.append(QFileInfo(file).completeBaseName().mid(4));
+    return codes;
+}
+
+} // namespace
+
+QString Tools::interface_languages() const
+{
+    QList<QPair<QString, QString>> found;
+    for (const QString &code : languageCodes()) {
+        QTranslator translator;
+        QString name;
+        if (translator.load(i18nFolder + QStringLiteral("/qml_") + code + QStringLiteral(".qm")))
+            // The translation's own name: its translation of "English".
+            name = translator.translate("Language", "English");
+        found.append({name.isEmpty() ? code : name, code});
+    }
+    std::sort(found.begin(), found.end());
+    QJsonArray languages;
+    for (const auto &[name, code] : found)
+        languages.append(QJsonObject{{QStringLiteral("code"), code}, {QStringLiteral("name"), name}});
+    return QString::fromUtf8(QJsonDocument(languages).toJson(QJsonDocument::Compact));
+}
+
+QString Tools::system_language() const
+{
+    const QStringList codes = languageCodes();
+    const auto known = [&codes](const QString &candidate) -> QString {
+        for (const QString &code : codes)
+            if (code.compare(candidate, Qt::CaseInsensitive) == 0)
+                return code;
+        return {};
+    };
+    const QStringList wanted = QLocale::system().uiLanguages();
+    // QTranslator's rule: each UI language in turn, then the same with its
+    // last part dropped (zh_Hant_TW, zh_Hant, zh); English, the source
+    // text, counts as present.
+    for (const QString &language : wanted) {
+        if (QLocale(language).language() == QLocale::English)
+            return QStringLiteral("en");
+        QString candidate = QString(language).replace(QLatin1Char('-'), QLatin1Char('_'));
+        while (!candidate.isEmpty()) {
+            const QString code = known(candidate);
+            if (!code.isEmpty())
+                return code;
+            const qsizetype cut = candidate.lastIndexOf(QLatin1Char('_'));
+            candidate = cut > 0 ? candidate.left(cut) : QString();
+        }
+    }
+    // Then a translation of the same language for another region, of the
+    // same script first (pt_PT finds pt_BR; zh_SG the Simplified one).
+    for (const bool sameScript : {true, false}) {
+        for (const QString &language : wanted) {
+            const QLocale locale(language);
+            for (const QString &code : codes) {
+                const QLocale offered(code);
+                if (offered.language() == locale.language() && (!sameScript || offered.script() == locale.script()))
+                    return code;
+            }
+        }
+    }
+    return QStringLiteral("en");
+}
+
 QString Tools::list_files(const QString &folder) const
 {
     const QStringList names = QDir(folder).entryList(QDir::Files, QDir::Name);
@@ -654,6 +731,12 @@ void rvp_register_native_types()
 bool rvp_has_windows()
 {
     return !QGuiApplication::topLevelWindows().isEmpty();
+}
+
+rust::String rvp_interface_languages()
+{
+    const QByteArray text = Tools().interface_languages().toUtf8();
+    return rust::String(text.constData(), static_cast<std::size_t>(text.size()));
 }
 
 void rvp_set_c_numeric_locale()

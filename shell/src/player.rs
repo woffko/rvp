@@ -905,6 +905,10 @@ fn load_app() -> Result<(App, bool, Option<String>), String> {
     };
     // Captured images' names carry the local date (M12).
     app.set_clock(crate::ffi::bridge::rvp_local_time);
+    // Misc > Interface Language lists the translations built in (M19).
+    app.set_interface_languages(
+        serde_json::from_str(&crate::ffi::bridge::rvp_interface_languages()).unwrap_or_default(),
+    );
     // The skins' `AutoSize` labels take the widths the window draws them at.
     rvp_skin::layout::set_text_measure(qt_text_width);
     Ok((app, portable, message))

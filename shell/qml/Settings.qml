@@ -12,6 +12,9 @@ import RvpNative
 
 ApplicationWindow {
     id: win
+    // Each translation's own name, as the language list shows it (M19).
+    //: This language's own name, as its speakers write it: Deutsch, Français, 日本語.
+    readonly property string languageName: QT_TRANSLATE_NOOP("Language", "English")
     required property Player player
     title: qsTr("Settings")
     // Dialog Box: "Always keep modeless dialog boxes on top" (M14).
@@ -2938,9 +2941,15 @@ ApplicationWindow {
                         Choice {
                             label: qsTr("Interface language")
                             path: "general.language"
-                            values: ["auto", "en", "ru"]
-                            // Each language by its own name.
-                            texts: ({ "auto": qsTr("The system's"), "en": "English", "ru": "Русский" })
+                            // The translations built in (M19), each by its own name.
+                            readonly property var built: JSON.parse(Tools.interface_languages())
+                            values: ["auto", "en"].concat(built.map(language => language.code))
+                            texts: (() => {
+                                const names = { "auto": qsTr("The system's"), "en": "English" }
+                                for (const language of built)
+                                    names[language.code] = language.name
+                                return names
+                            })()
                         }
                         Choice {
                             label: qsTr("Stay on top")

@@ -130,8 +130,8 @@ pub enum UiRequest {
     SettingsChanged(String),
     /// Dropped files ask what to do (M14's advanced drag and drop).
     DropMenu(Vec<String>),
-    /// The interface's language changed (M14): a code of
-    /// `general::LANGUAGES`.
+    /// The interface's language changed (M14): `auto`, `en` or a
+    /// translation's code.
     Language(String),
     /// A change of the system's volume (the master volume).
     SystemVolume(crate::audio::commands::SystemVolume),
@@ -401,6 +401,9 @@ pub struct App {
     /// The local date and time for file names (the window's clock; UTC
     /// without one).
     pub(crate) clock: Option<fn() -> String>,
+    /// The interface's languages besides English that the window has
+    /// (M19; Misc > Interface Language).
+    pub(crate) interface_languages: Vec<crate::general::InterfaceLanguage>,
     /// mpv's own downscaler and chroma scaler, read before RVP sets its
     /// (`App::apply_render`).
     pub(crate) render_defaults: Option<[String; 2]>,
@@ -548,6 +551,7 @@ impl App {
             record: crate::record::RecordState::default(),
             visual: crate::visual::VisualState::default(),
             clock: None,
+            interface_languages: Vec::new(),
             render_defaults: None,
             native_video: false,
             processor_entry: std::cell::RefCell::new(None),
