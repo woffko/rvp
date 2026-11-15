@@ -326,8 +326,13 @@ mod tests {
         );
         // In the user's runtime folder where there is one.
         assert_eq!(
-            channel_in(&cli(&["--instance=t 1"]), Some(Path::new("/run/user/1000"))).as_deref(),
-            Some("/run/user/1000/rvp-t_1")
+            channel_in(&cli(&["--instance=t 1"]), Some(Path::new("/run/user/1000"))),
+            Some(
+                Path::new("/run/user/1000")
+                    .join("rvp-t_1")
+                    .display()
+                    .to_string()
+            )
         );
         assert!(channel(&cli(&["a.mkv"])).is_some_and(|name| {
             Path::new(&name)

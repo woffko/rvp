@@ -723,7 +723,8 @@ mod tests {
         std::fs::write(mains.join("online"), "1\n").unwrap();
         assert_eq!(on_battery_from_sysfs(&root), Some(false));
         // A USB-C charger online, the other one not.
-        let usb = root.join("ucsi-source-psy-USBC000:001");
+        // Linux names it ucsi-source-psy-USBC000:001; Windows takes no `:`.
+        let usb = root.join("ucsi-source-psy-USBC000-001");
         std::fs::create_dir_all(&usb).unwrap();
         std::fs::write(usb.join("type"), "USB\n").unwrap();
         std::fs::write(usb.join("online"), "1\n").unwrap();

@@ -307,6 +307,8 @@ fn user_dirs_entry(text: &str, key: &str, home: &Path) -> Option<PathBuf> {
 mod tests {
     use super::*;
 
+    // user-dirs.dirs is Linux's: its paths are Unix paths.
+    #[cfg(unix)]
     #[test]
     fn user_folders_come_from_user_dirs() {
         let text = "# written by xdg-user-dirs-update\nXDG_DESKTOP_DIR=\"$HOME/Рабочий стол\"\nXDG_VIDEOS_DIR=\"$HOME/Видео\"\nXDG_MUSIC_DIR=\"$HOME/\"\nXDG_PICTURES_DIR=\"/data/Фото\"\n";
