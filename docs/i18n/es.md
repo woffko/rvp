@@ -24,7 +24,10 @@ says it otherwise.
   tecla para “%1” (%2). Esc cancela."); "your" is su ("sus propias
   teclas se mantienen"). Questions in dialogs use the infinitive
   ("¿Enviar %1 archivo(s) a la Papelera de reciclaje?") rather than
-  "¿Desea...?". No "por favor", no exclamations.
+  "¿Desea...?". No "por favor", no exclamations. A sentence never
+  opens with a bare third-person verb that reads as tú's imperative
+  ("Vuelve a medir...", "Lee los archivos..."): give it its subject
+  ("RVP vuelve a medir...") or use se ("Se vuelve a medir...").
 - **Commands** (menu items, buttons, actions) are infinitives in sentence
   case: "Abrir carpeta...", "Agregar marcador", "Restablecer", "Guardar
   como…". Never the imperative ("Abra") or a noun of action
@@ -58,7 +61,7 @@ says it otherwise.
   names take a capital: "Abrir archivos...", "Repetición de sección",
   "Modo de pantalla completa"; the English Title Case is not carried
   over. Capitals stay on names (README's list), acronyms (OSD, GPU, URL,
-  HDR, DPI), key names, Windows places named as Windows names them
+  HDR, PPP for DPI), key names, Windows places named as Windows names them
   (Papelera de reciclaje) and RVP Default. Lowercase after a colon,
   after a slash ("Agregar/seleccionar subtítulos"), inside parentheses
   unless a name begins there, and for languages ("inglés"), days,
@@ -133,7 +136,11 @@ says it otherwise.
   soporta), biblioteca (never librería), guardar (never salvar),
   reproducir a file (never tocar or jugar), activar / desactivar a
   feature (prender and apagar are not for features; apagar is only for
-  the computer).
+  the computer), auriculares (never audífonos), gafas (never lentes or
+  anteojos), en vivo (never en directo), movimiento de cámara (never
+  paneo or panorámica), flotante for floating point
+  (neither coma flotante nor punto flotante), portátil for a laptop
+  ("Modo portátil" for RVP's portable mode).
 - **Keep short labels short.** Menu items, buttons, checkboxes and
   choices stay about as long as the English, a third longer at most.
   Leave out the articles a label can do without ("Abrir carpeta", not
@@ -146,6 +153,19 @@ says it otherwise.
   ("Fullscreen (Keep AR)" → "Pantalla completa (mantener proporción)").
   No word is abbreviated ("config.", "sinc.", "info" are not used);
   help texts may grow.
+- **Recurring labels.** "Cycle X" → "Alternar X"; "Increase" /
+  "Decrease" → "Aumentar" / "Reducir", but the volume goes "Subir" /
+  "Bajar" and a sync moves "Retrasar" / "Adelantar" (later / earlier:
+  "Increase Subtitle Sync by %1 Sec" → "Retrasar subtítulos %1 s");
+  "%1 Sec Forward" / "Backward" → "Avanzar" / "Retroceder %1 s", with a
+  speed "%1x hacia adelante" / "hacia atrás"; "X Settings..." →
+  "Configuración de X..."; "Rescan X" → "Volver a buscar X"; "and later" → "o
+  posterior(es)"; "Guess" (an encoding) → "Detectar"; "Start"
+  as a command is "Iniciar", as a time or a point "Inicio"; the log
+  levels are "Crítico", "Advertencia", "Información" and "Depuración".
+  Example values in empty fields follow a Spanish user ("spa,eng",
+  "es,en", "Música/RVP"); chapter titles stay as files name them
+  ("Opening;Ending;3").
 - **Plain text** as the source: keep its line breaks (and add none),
   its placeholders and its key names (Ctrl, Shift, Alt, Enter, Space,
   Esc, Tab, F1...F12, PgUp, PgDn, Home, End), also in sentences
@@ -236,7 +256,7 @@ says it otherwise.
 | rotate / flip / mirror | girar / voltear / reflejar | "Flip Horizontal" → "Voltear horizontalmente", as the source says. |
 | deinterlace | desentrelazar | Noun: desentrelazado; interlaced: entrelazado. |
 | brightness / contrast / saturation / hue / gamma | brillo / contraste / saturación / matiz / gamma | Hue is matiz, never tono (that is pitch). |
-| sharpen / denoise | enfocar / eliminar ruido | Nouns: enfoque, eliminación de ruido. The sound's noise reduction is reducción de ruido. |
+| sharpen / denoise | enfoque / eliminación de ruido | An effect's name (its checkbox, menu item and sliders) is a noun: "Enfoque (Ctrl+R)", "Eliminación de ruido 3D", and so "Suavizado", "Eliminación de bloques", "Eliminación de bandas"; the verbs are enfocar, eliminar el ruido. The sound's noise reduction is reducción de ruido. |
 | scaler / upscaling / resize | escalador / ampliación / cambiar el tamaño | Upscaler / downscaler: "escalador de ampliación" / "de reducción"; the noun resizing: "cambio de tamaño". |
 | pixel shader | sombreador de píxeles | Shader alone: sombreador. Píxel, plural píxeles. |
 | renderer | renderizador | Also "Audio Renderer": "renderizador de audio". |
@@ -257,7 +277,7 @@ says it otherwise.
 | refresh rate | frecuencia de actualización | |
 | audio / sound | audio / sonido | The Audio menu and page: "Audio". |
 | volume / mute | volumen / silenciar | Up / down: "subir" / "bajar el volumen"; the muted state: "silencio". |
-| master volume | volumen del sistema | "Mute (Master)" → "Silenciar (sistema)". |
+| master volume | volumen del sistema | "Mute (Master)" → "Silenciar (sistema)". RVP's own overall channel level ("Master volume" under individual volume control) is volumen general. |
 | equalizer | ecualizador | |
 | normalizer | normalizador | |
 | reverb | reverberación | |
@@ -299,3 +319,14 @@ says it otherwise.
 | bit depth / 10-bit | profundidad de bits / 10 bits | As an adjective: "de 10 bits". |
 | channel layout (5.1, 7.1) | disposición de canales (5.1, 7.1) | |
 | Auto select (recommended) | Automático (recomendado) | |
+| plugin | complemento | VapourSynth's and AviSynth's plugins. |
+| script | script | El script: VapourSynth's, mpv's and ASS subtitles' scripts; not guion. |
+| driver | controlador | The card's driver; this is why a controller is never controlador. |
+| cycle | alternar | "Cycle Audio Stream" → "Alternar pista de audio". |
+| rescan | volver a buscar | "Rescan Skin Files" → "Volver a buscar máscaras". |
+| headphones | auriculares | Never audífonos. |
+| floating point | flotante | "32 bits (flotante)". |
+| crossfeed | mezcla cruzada | Each channel mixed partly into the other (headphones). |
+| copy-back | copia a memoria | Hardware decoding that copies the frames back for filters. |
+
+The rows after "Auto select (recommended)" are terms this translation added.
