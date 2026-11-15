@@ -31,11 +31,12 @@ settings; the Russian translation helps with meaning, never with wording.
   `Mettre %1 fichier(s) à la corbeille ?`. Status texts are past
   participles in the default masculine: `Appliqué.`, `Importé.`, `Annulé.`
 - **Usual verbs:** Enable `Activer`, Disable `Désactiver`, Use `Utiliser`,
-  Show `Afficher`, Hide `Masquer`, Remember `Mémoriser`, Open `Ouvrir`,
+  Show `Afficher` (never `Montrer`), Hide `Masquer`, Keep `Conserver`, Remember `Mémoriser`, Open `Ouvrir`,
   Load `Charger`, Save `Enregistrer` (never `sauvegarder`, which French
   desktops keep for backups), Record `Enregistrer` (the object tells them
   apart: `Enregistrer l'audio...`), Browse `Parcourir`, Choose `Choisir`,
-  Select `Sélectionner` (a track, a stream: `Choisir`), Undo `Annuler`,
+  Select `Sélectionner` (selected items: `éléments sélectionnés`; a track,
+  a stream: `Choisir`; a button that ticks a group of boxes: `Cocher`), Undo `Annuler`,
   Redo `Rétablir`, Cancel `Annuler`, Close `Fermer`, Exit `Quitter`,
   Restore (a window) `Restaurer`, Restore defaults `Rétablir`, Reload
   `Recharger`, Rescan `Actualiser`, Prompt `Demander`, Prevent `Empêcher`,
@@ -130,8 +131,9 @@ settings; the Russian translation helps with meaning, never with wording.
   `afin de`, `sans` rather than `en l'absence de`, `Taille` rather than
   `Dimensions`); a noun phrase may leave out the article (`Taille de
   fenêtre`, `Synchronisation audio`), a verb phrase keeps it (`Ouvrir le
-  dossier`); the accepted short forms are `auto`, `infos`, `max.`, `n°`
-  and nothing else (write `minimum` in full: `min` is minutes). Never cut
+  dossier`); the accepted short forms are `auto`, `infos`, `max.`, `n°`,
+  and `ext.` where the source itself abbreviates "Ext", and nothing else
+  (write `minimum` in full: `min` is minutes). Never cut
   grammar into telegraphic French (`Police sous-titres`) to win room.
   Help texts may grow.
 - **Spelling:** traditional spelling, as the desktops write it: `boîte`,
@@ -147,7 +149,7 @@ settings; the Russian translation helps with meaning, never with wording.
 | close playback | fermer le média | Stop and unload what plays (file, disc or stream): `Fermer le média`, `Back ferme le média`; not `fermer la lecture`. |
 | previous / next | précédent / suivant | Agree with the noun: `image suivante`, `piste précédente`. |
 | seek | se déplacer | In the file; the noun is `déplacement` (`là où arrive un déplacement`). Not `rechercher`, which is search. |
-| jump | aller à | `Aller à un temps/une image...`; the noun is `saut` (arrow-key time jumps: `Sauts`). |
+| jump | aller à | `Aller à un temps ou une image précis...`; the noun is `saut` (the Time Jump page: `Sauts temporels`); the bookmark dialog's Jump button alone is `Atteindre`. |
 | frame step | image par image | `Avancer image par image`; single steps are `Image suivante` / `Image précédente`. |
 | speed | vitesse | |
 | repeat | répéter | The noun is `répétition`. |
@@ -160,7 +162,7 @@ settings; the Russian translation helps with meaning, never with wording.
 | elapsed / remaining time | écoulé / temps restant | In full: `temps écoulé`, `temps restant`. |
 | chapter | chapitre | |
 | bookmark | signet | |
-| skip (intro, ending) | passer (intro, fin) | `Passer l'intro`, `Passer la fin`, `Passer des chapitres`. Not `sauter`: `saut` is the jump's noun. |
+| skip (intro, ending) | passer (intro, fin) | `Passer l'intro`, `Passer la fin`, `Passer des chapitres`; the Skip menu is `Passer`, the Skip page and Skip Setup `Parties à passer`, the feature `le passage des parties`. Not `sauter`: `saut` is the jump's noun. |
 | seek bar | barre de progression | Also for the source's "nav bar" and "navigation bar". |
 | thumbnail | miniature | |
 | preview | aperçu | |
@@ -192,7 +194,7 @@ settings; the Russian translation helps with meaning, never with wording.
 | always on top / stay on top | toujours au premier plan / rester au premier plan | |
 | opacity | opacité | |
 | skin | habillage | Not `skin`, not `thème` (kept for color themes), not `apparence`. Video skin: `habillage vidéo`; skinned windows: `fenêtres habillées`. |
-| color theme | thème de couleurs | |
+| color theme | thème de couleurs | HSB and RGB are French `TSL` and `RVB`, as in French image editors. |
 | logo | logo | |
 | title bar | barre de titre | |
 | control panel | panneau de contrôle | RVP's F7 window. Never `panneau de configuration`, which is Windows' Control Panel. |
@@ -254,7 +256,7 @@ settings; the Russian translation helps with meaning, never with wording.
 | surround / stereo | surround / stéréo | |
 | output device | périphérique de sortie | |
 | sample rate / bitrate | fréquence d'échantillonnage / débit | |
-| audio delay / audio sync | décalage audio / synchronisation audio | Trap: never `délai` (a time limit). The verb is `synchroniser`. |
+| audio delay / audio sync | décalage audio / synchronisation audio | Trap: never `délai` (a time limit). The feature, its menu and dialogs are `synchronisation` (`Régler la synchronisation audio`); the value and its changes are the `décalage` (`Décalage audio par défaut`, `Augmenter le décalage audio de %1 ms`, `Conserver les décalages audio`). The verb is `synchroniser`. |
 | pitch / time stretching | hauteur / étirement temporel | `hauteur du son` where unclear; not `tonalité` (a musical key). |
 | audio recording | enregistrement audio | |
 | second audio device | second périphérique audio | |
@@ -286,3 +288,30 @@ settings; the Russian translation helps with meaning, never with wording.
 | bit depth / 10-bit | profondeur de bits / 10 bits | |
 | channel layout (5.1, 7.1) | disposition des canaux (5.1, 7.1) | |
 | Auto select (recommended) | Automatique (recommandé) | Auto select alone is `Automatique`. |
+
+## Other terms
+
+Words the translation settled on beyond the glossary, for the same
+consistency.
+
+| English | French | Note |
+|---------|--------|------|
+| Cycle X (menu actions) | Changer de X | `Changer de piste audio`, `Changer d'action de fin de lecture`. |
+| Store (into a folder) | Ranger | `Ranger les images capturées dans le dossier du fichier lu`. |
+| Read (aloud) | Lire à voix haute | Never plain `Lire`, which is play. |
+| Start (a time) / Start (a button) | Début / Démarrer | The subtitle browser's start time is `Début`; the calibration's button is `Démarrer`. |
+| runtime (VapourSynth's, CUDA's) | environnement d'exécution | `l'environnement VapourSynth de RVP` where short. |
+| plugin | plugin | Masculine; `Ajouter des plugins…`. |
+| pipe / endpoint | canal nommé / point de terminaison | SVP's IPC connection. |
+| copy-back | recopie | Hardware decoding that copies the frames back to memory. |
+| deblock / deband | déblocage / anti-banding | |
+| soften | adoucissement | |
+| field (interlaced) | trame | `Trame supérieure d'abord`. |
+| EULA | CLUF | `CLUF de CUDA`. |
+| state folder | dossier d'état | RVP's state folder. |
+| shoulders (gamepad) | gâchettes hautes | |
+| step (a setting's amount per press) | incrément | `Incrément du volume`, `Incrément de déplacement`; never `pas`, which reads as the negation. A step of the smoothing ladder is a `cran`. |
+| thumbnail image (a sheet of thumbnails) | planche de miniatures | `Créer une planche de miniatures`. |
+| compress / stretch (the picture) | comprimer / étirer | Not `compresser` (data). |
+| join (subtitle lines) / split | fusionner / scinder | |
+| seamless playback | lecture sans interruption | |
