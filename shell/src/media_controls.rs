@@ -24,7 +24,7 @@ type Shown = (Status, String, bool, bool);
 
 /// The main window's media controls.
 pub(crate) struct Controls {
-    controls: SystemMediaTransportControls,
+    smtc: SystemMediaTransportControls,
     shown: Option<Shown>,
     /// When the controls started, and when the state was last sent: in
     /// their first seconds the same state goes again each second. A status
@@ -89,7 +89,7 @@ impl Controls {
             }))
             .map_err(|e| error(&e))?;
         Ok(Self {
-            controls,
+            smtc: controls,
             shown: None,
             started: Instant::now(),
             sent: None,
@@ -118,14 +118,14 @@ impl Controls {
     }
 
     fn update(&self, state: &MediaState) -> windows::core::Result<()> {
-        self.controls.SetPlaybackStatus(match state.status {
+        self.smtc.SetPlaybackStatus(match state.status {
             Status::Playing => MediaPlaybackStatus::Playing,
             Status::Paused => MediaPlaybackStatus::Paused,
             Status::Stopped => MediaPlaybackStatus::Stopped,
         })?;
-        self.controls.SetIsNextEnabled(state.can_next)?;
-        self.controls.SetIsPreviousEnabled(state.can_previous)?;
-        let updater = self.controls.DisplayUpdater()?;
+        self.smtc.SetIsNextEnabled(state.can_next)?;
+        self.smtc.SetIsPreviousEnabled(state.can_previous)?;
+        let updater = self.smtc.DisplayUpdater()?;
         if state.status == Status::Stopped {
             return updater.ClearAll();
         }

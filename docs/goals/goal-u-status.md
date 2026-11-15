@@ -486,8 +486,10 @@ The audit's plan had M7 and L15 in no package; both are here.
   unchanged one again (goal U likely made the first update come earlier).
   The controls now send their state again each second in their first 10
   seconds (`media_controls.rs`, Windows only; built and checked by CI's
-  Windows jobs only, since this boot builds no Windows code). Goal U-W
-  runs `m8-smtc.ps1` and `m8-all.ps1` on the VM a few times.
+  Windows jobs only, since this boot builds no Windows code): 0fcee8b's
+  `package-windows` passed it ("Playing '[1/2] clip-a.mkv'", Pause and
+  Next on). Goal U-W runs `m8-smtc.ps1` and `m8-all.ps1` on the VM a few
+  times.
 
 ### The final run (2026-11-15, this boot, the .deb of 444110e installed)
 
