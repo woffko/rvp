@@ -46,7 +46,10 @@ cmake -Wno-dev -G Ninja -S "$WORK/spirv-headers" -B "$WORK/spirv-headers/build" 
     -DCMAKE_INSTALL_PREFIX="$WORK/spirv-prefix" -DSPIRV_HEADERS_ENABLE_TESTS=OFF
 cmake --install "$WORK/spirv-headers/build"
 
+# A build folder of its own each time: the copy below takes every library
+# in it, and an earlier build's (another backend's) would ship too.
 BUILD=$WORK/whisper-build
+rm -rf "$BUILD"
 loader=$(ls /usr/lib/x86_64-linux-gnu/libvulkan.so 2> /dev/null || ls /usr/lib/libvulkan.so)
 cmake -Wno-dev -G Ninja -S "$SRC" -B "$BUILD" \
     -DCMAKE_BUILD_TYPE=Release \

@@ -16,7 +16,8 @@ optdepends=('libpulse: the master volume and audio recording (pactl, parec)'
             'libdvdnav: DVD menus'
             'libbluray: Blu-ray menus'
             'desktop-file-utils: the Association page updates the handler cache'
-            'whisper.cpp: subtitles from audio')
+            'whisper.cpp: subtitles from audio'
+            'curl: the TensorRT download for RIFE (TensorRT)')
 makedepends=('rustup' 'clang' 'python')
 options=('!lto')
 source=("rvp-$pkgver.tar.gz")

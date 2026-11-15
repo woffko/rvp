@@ -427,7 +427,18 @@ smoothing for users without SVP, after a study of the engines.
   GTK 3's libraries are the system's, never bundled, and a Recommends
   (`GTK` in package.py). RVP's binary
   for them carries `-Wl,-rpath,$ORIGIN/../lib -Wl,--disable-new-dtags`:
-  no LD_LIBRARY_PATH, which programs RVP starts would inherit.
+  no LD_LIBRARY_PATH, which programs RVP starts would inherit. That RPATH
+  also serves the system's libraries loaded under RVP (GTK, its image
+  loaders, Kerberos), so a library they share with RVP's must never be
+  bundled: every part of glibc (`libmvec` too), GCC's runtimes and the
+  libraries of stable soname the system's stack loads (FriBidi, Brotli,
+  LZ4, ACL, Kerberos, Little CMS, libjpeg, WebP) are `SYSTEM` (owner,
+  2026-11-14, the Linux audit's H3; a bundled nettle had broken the
+  system's GnuTLS). Libraries whose soname changes between releases
+  (ICU, libxml2) stay bundled. Bundled libraries are stripped, Qt's QML
+  modules RVP does not use are left out (`QML_LEFT_OUT`), and every file
+  is 0644 or 0755 whatever the umask. The version is
+  `0.0.1+git.<commit's UTC time>.<hash>`, so packages sort by commit.
 - MPRIS and idle inhibit: `crates/platform` (zbus; zbus's builder queues a
   taken name instead of failing, so RVP asks for its name itself with
   DoNotQueue), shown by `shell/src/desktop.rs`. Windows' media controls:
@@ -756,7 +767,12 @@ smoothing for users without SVP, after a study of the engines.
   `bin/vapoursynth/`: VapourSynth R73 with VSScript patched to start the
   relocatable Python beside it, never through `PYTHONHOME`, which would
   reach the programs RVP starts). The runtime's compiled-in plugin folder
-  is the build's: RVP's scripts load MVTools and RIFE by their paths.
+  is a path that exists nowhere (`/dev/null/vapoursynth-plugins`): RVP's
+  scripts load MVTools and RIFE by their paths. CI builds both parts
+  (kit steps `mvtools whisper vapoursynth`, cached by their scripts and
+  versions); `m8package` fails without them unless `RVP_PACKAGE_SLIM=1`
+  says the packages are meant without them, and `check-deb.sh` checks
+  them.
 - On the shared Ubuntu VM the kit runs as the kit's user in the owner's GNOME session
   through `tools/linux-kit/attach-session.sh` (ACL entries it takes back).
 

@@ -115,6 +115,7 @@ jobs:
         id: kit
         run: |
           echo "key=$(grep -E '^(QT_VERSION|MPV_COMMIT|MPV_BUILD|FFMPEG_COMMIT|LIBPLACEBO_COMMIT)=' tools/linux-kit/kit.sh | tr '\n' '-')" >> "$GITHUB_OUTPUT"
+          echo "parts=$(grep -E '^(MVTOOLS_TAG|VS_TAG|VULKAN_HEADERS_TAG|GLSLANG_TAG|SHADERC_COMMIT)=' tools/linux-kit/kit.sh | tr '\n' '-')" >> "$GITHUB_OUTPUT"
       - name: Qt and libmpv cache
         uses: actions/cache@v4
         with:
@@ -124,6 +125,23 @@ jobs:
           key: kit-ubuntu-22.04-${{ steps.kit.outputs.key }}
       - name: Qt and libmpv
         run: tools/linux-kit/kit.sh deps mpv
+      # The packages carry whisper.cpp's engine (subtitles from audio) and
+      # RVP's VapourSynth runtime with MVTools, RIFE and vs-mlrt (motion
+      # smoothing): built once per change of their scripts or the kit's
+      # versions, then cached (m8package fails without them).
+      - name: The packages' parts cache
+        id: parts
+        uses: actions/cache@v4
+        with:
+          path: |
+            ${{ env.RVP_KIT_DIR }}/mvtools/build/libmvtools.so
+            ${{ env.RVP_KIT_DIR }}/mvtools/.kit-mvtools
+            ${{ env.RVP_KIT_DIR }}/whisper/whisper-out
+            ${{ env.RVP_KIT_DIR }}/vs-runtime
+          key: parts-ubuntu-22.04-${{ steps.kit.outputs.parts }}${{ hashFiles('tools/whisper/build-linux.sh', 'tools/whisper/version.cmake', 'tools/vapoursynth/build-linux.sh', 'tools/vapoursynth/build-vstrt-linux.sh', 'tools/vapoursynth/*.patch', 'tools/linux-kit/sources.sh') }}
+      - name: whisper.cpp, MVTools and RVP's VapourSynth runtime
+        if: steps.parts.outputs.cache-hit != 'true'
+        run: tools/linux-kit/kit.sh mvtools whisper vapoursynth
       - name: Packages
         run: |
           tools/linux-kit/kit.sh m8package

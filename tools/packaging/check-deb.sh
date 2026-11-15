@@ -84,6 +84,28 @@ else
     check qt_plugins FAIL "missing:$absent"
 fi
 
+# The packages' parts: whisper.cpp's engine (subtitles from audio) and
+# RVP's VapourSynth runtime with MVTools, RIFE and vs-mlrt (motion
+# smoothing). CI's packages lacked both without a word (the Linux audit's
+# H1); RVP_PACKAGE_SLIM=1 says a package is meant without them.
+if [ "${RVP_PACKAGE_SLIM:-}" = 1 ]; then
+    echo "check package_parts=SKIPPED RVP_PACKAGE_SLIM=1"
+else
+    absent=""
+    for part in bin/whisper/whisper-cli bin/vapoursynth/libvapoursynth-script.so.0 \
+        bin/vapoursynth/vs-plugins/libmvtools.so bin/vapoursynth/rife/librife_linux_x86-64.so \
+        bin/vapoursynth/vs-mlrt/libvstrt.so bin/vapoursynth/vs-mlrt/trtexec; do
+        [ -e "/opt/rvp/$part" ] || absent="$absent $part"
+    done
+    if [ -n "$absent" ]; then
+        check package_parts FAIL "missing:$absent"
+    elif ! /opt/rvp/bin/whisper/whisper-cli --help > /dev/null 2>&1; then
+        check package_parts FAIL "whisper-cli --help failed"
+    else
+        check package_parts PASS "whisper.cpp and the VapourSynth runtime"
+    fi
+fi
+
 apt-get install -y -q xvfb xauth libgl1-mesa-dri > /tmp/xvfb.log 2>&1 || tail -5 /tmp/xvfb.log
 
 selftest() {
@@ -120,6 +142,11 @@ selftest() {
 functional=(--selftest --out=/tmp/rvp/out --skin= --mpv-options=ao=null,hwdec=no
     "$fixtures/fixture-60s.mkv" "$fixtures/fixture-3s.mkv")
 selftest deb "" /usr/bin/rvp "${functional[@]}"
+# GNOME's name makes Qt load the gtk3 theme, and with it the system's GTK
+# 3 under rvp's run path: a library RVP bundles that GTK's stack needs
+# newer would fail here (the Linux audit's H3). GTK comes with the .deb's
+# Recommends.
+selftest deb_gtk "" env XDG_CURRENT_DESKTOP=GNOME /usr/bin/rvp "${functional[@]}"
 selftest appimage "" env APPIMAGE_EXTRACT_AND_RUN=1 "$packages"/RVP-*-x86_64.AppImage "${functional[@]}"
 selftest m11 "" /usr/bin/rvp --selftest=m11 --out=/tmp/rvp/out --skin= --mpv-options=ao=null,hwdec=no \
     "--dvd-folder=$fixtures/dvd" "--audio=$fixtures/fixture-3s.mkv" "--clip=$fixtures/fixture-60s.mkv" \

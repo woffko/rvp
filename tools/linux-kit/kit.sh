@@ -165,6 +165,8 @@
 #   RVP_SPEECH_CLIP m13: the speech clip (default: made with espeak-ng)
 #   RVP_URSERVER    m15: Unified Remote Server for Linux unpacked (its
 #                   .deb's root or its opt/urserver)
+#   RVP_PACKAGE_SLIM 1: m8package makes packages without whisper.cpp and
+#                   the VapourSynth runtime (by default it fails without them)
 #   RVP_DVD_MENU, RVP_BD_MENU  m16: the synthetic discs (default: made in
 #                   the kit's folder)
 set -u
@@ -1240,10 +1242,19 @@ step_whisper() {
 step_m8package() {
     local log=$LOG_DIR/m8package.log out runtime url KIT_WHISPER="" KIT_VAPOURSYNTH=""
     out=$(m8_dir)
-    # The engine for subtitles from audio and the VapourSynth runtime, when
-    # the `whisper` and `vapoursynth` steps built them.
+    # The engine for subtitles from audio and the VapourSynth runtime, which
+    # the `whisper` and `vapoursynth` steps build: the packages carry both
+    # (CI's lacked them without a word, the Linux audit's H1), unless
+    # RVP_PACKAGE_SLIM=1 says they are meant without them.
     [ -x "$(whisper_out)/whisper-cli" ] && KIT_WHISPER=$(whisper_out)
     [ -e "$(vs_runtime)/libvapoursynth-script.so.0" ] && KIT_VAPOURSYNTH=$(vs_runtime)
+    if [ "${RVP_PACKAGE_SLIM:-}" != 1 ] && { [ -z "$KIT_WHISPER" ] || [ -z "$KIT_VAPOURSYNTH" ]; }; then
+        local lacking=""
+        [ -n "$KIT_WHISPER" ] || lacking=" whisper.cpp (step whisper)"
+        [ -n "$KIT_VAPOURSYNTH" ] || lacking="$lacking${lacking:+,} the VapourSynth runtime (step vapoursynth)"
+        record m8package FAIL "no$lacking: build it first, or RVP_PACKAGE_SLIM=1 for packages without"
+        return 1
+    fi
     runtime=$KIT_DIR/appimage-runtime-x86_64
     url=$(sed -n 's/^    "\(https:.*runtime-x86_64\)"$/\1/p' "$REPO/tools/packaging/package.py")
     (

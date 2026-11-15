@@ -108,8 +108,12 @@ SRC=$WORK/vapoursynth
 rm -rf "$SRC" "$WORK/vs-build"
 kit_clone https://github.com/vapoursynth/vapoursynth.git "$SRC" "$VS_TAG"
 git -C "$SRC" apply "$HERE/vsscript-own-python.patch"
+# The core's own plugin folder, which it scans at every start, is a path
+# that can exist nowhere (under /dev/null, no folder): RVP's scripts load
+# MVTools and RIFE by their paths, and the build's folder compiled in
+# would be scanned on every machine (a /home path another user might make).
 PKG_CONFIG_PATH=$ZIMG/lib/pkgconfig:$OUT/python/lib/pkgconfig meson setup "$WORK/vs-build" "$SRC" --prefix="$OUT/python" --libdir=lib \
-    --buildtype=release -Denable_vspipe=false "-Dpython3_bin=$PY" -Dplugindir="$OUT/vs-plugins"
+    --buildtype=release -Denable_vspipe=false "-Dpython3_bin=$PY" -Dplugindir=/dev/null/vapoursynth-plugins
 ninja -C "$WORK/vs-build" -j "$JOBS" install
 # The core and VSScript beside each other at the runtime's top, where RVP
 # looks for VSScript; the Python module finds the core there.
@@ -150,11 +154,12 @@ cp "$WORK/vstrt/vs-mlrt-$VSMLRT_TAG/scripts/vsmlrt.py" "$WORK/vstrt/vs-mlrt-$VSM
 "$WORK/build-venv/bin/py7zr" x "$(fetch "$RIFE_ONNX_URL" "vs-mlrt-rife_v8.7z" "$RIFE_ONNX_SHA256")" "$WORK/rife-onnx"
 cp "$WORK/rife-onnx/rife/rife_v4.6.onnx" "$OUT/vs-mlrt/models/rife/rife_v4.6.onnx"
 
-# What a player does not need: the Python's own tests, IDLE and Tk, pip
+# What a player does not need: the Python's own tests, IDLE and Tk (its
+# module too, which needs the Tcl/Tk libraries removed here), pip
 # and its installer, its headers, static library and caches; the libraries
 # without their debugging symbols (the Python's carried 100 MB).
 P=$OUT/python/lib/python3.12
-rm -rf "$P"/test "$P"/idlelib "$P"/tkinter "$P"/turtledemo "$P"/ensurepip "$P"/lib2to3 "$P"/pydoc_data \
+rm -rf "$P"/test "$P"/idlelib "$P"/tkinter "$P"/lib-dynload/_tkinter* "$P"/turtledemo "$P"/ensurepip "$P"/lib2to3 "$P"/pydoc_data \
     "$P"/config-3.12-x86_64-linux-gnu "$P"/site-packages/pip "$P"/site-packages/pip-*.dist-info \
     "$OUT"/python/lib/tcl* "$OUT"/python/lib/tk* "$OUT"/python/lib/libtcl* "$OUT"/python/lib/libtk* \
     "$OUT"/python/lib/itcl* "$OUT"/python/lib/thread* "$OUT"/python/share "$OUT"/python/include \

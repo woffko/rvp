@@ -19,8 +19,9 @@ linux: the AppDir, the AppImage and the .deb. Build on the oldest system
     Unified Remote remote in `share/rvp`.
 
 Both read the registered types from packaging/associations.tsv. The
-version is the workspace's plus the commit (no tags): 0.0.1+git.<hash>
-(`RVP_COMMIT` overrides the commit). Outputs are reproducible: sorted
+version is the workspace's plus the commit's time and hash (no tags):
+0.0.1+git.<UTC time>.<hash>, the time first so that versions grow with
+the commits (`RVP_COMMIT` overrides the hash, SOURCE_DATE_EPOCH the time). Outputs are reproducible: sorted
 entries and the commit's time as every file's time.
 
 usage:
@@ -89,7 +90,12 @@ def workspace_version() -> str:
 
 
 def version() -> str:
-    return f"{workspace_version()}+git.{commit()}"
+    """The workspace's version, the commit's time (UTC) and its hash:
+    0.0.1+git.20261114105222.c3f58dc13. The time first, so that a later
+    commit's package sorts higher (dpkg compares the hash's digits and
+    letters, which are random)."""
+    stamp = time.strftime("%Y%m%d%H%M%S", time.gmtime(commit_time()))
+    return f"{workspace_version()}+git.{stamp}.{commit()}"
 
 
 def associations() -> list[tuple[str, str, list[str]]]:
@@ -123,9 +129,15 @@ def run(*args: str, env: dict | None = None) -> None:
 
 
 def touch_all(directory: Path, epoch: int) -> None:
+    """Every file's time the commit's, and its mode 0755 (folders and
+    executables) or 0644, whatever the build's umask (the kit's left the
+    packages group-writable)."""
     for path in sorted(directory.rglob("*"), reverse=True):
         if not path.is_symlink():
+            mode = path.stat().st_mode
+            path.chmod(0o755 if path.is_dir() or mode & 0o111 else 0o644)
             os.utime(path, (epoch, epoch))
+    directory.chmod(0o755)
     os.utime(directory, (epoch, epoch))
 
 
@@ -356,9 +368,22 @@ def windows(args) -> None:
 # rest RVP's binary reaches is bundled, from Qt's and libmpv's folders or
 # the build system. GnuTLS's own libraries (nettle, hogweed, GMP, libtasn1,
 # libidn2, libunistring, p11-kit) come with it: the system's GnuTLS failed
-# with a bundled older nettle (Ubuntu 26.10's needs newer symbols).
+# with a bundled older nettle (Ubuntu 26.10's needs newer symbols). For the
+# same reason the system's GTK 3 (the gtk3 theme), its image loaders and
+# Kerberos get their own libraries, never the bundled copies the binary's
+# RPATH would hand them (the Linux audit's H3): every part of glibc
+# (libmvec too, which libvorbis and x265 reach, and which imports
+# GLIBC_PRIVATE symbols), GCC's OpenMP runtime, FriBidi, Brotli, LZ4, ACL,
+# Kerberos, Little CMS, libjpeg and WebP, whose sonames stay the same across
+# the distributions. Libraries whose sonames change between releases (ICU,
+# libxml2) stay bundled: the system's copy has another name and cannot
+# meet RVP's.
 SYSTEM = re.compile(
     r"^(ld-linux.*|libc|libm|libdl|libpthread|librt|libresolv|libutil|libanl|libgcc_s|libstdc\+\+"
+    r"|libmvec|libnsl|libnss_.*|libthread_db|libBrokenLocale|libc_malloc_debug|libcrypt|libgomp"
+    r"|libfribidi|libbrotlicommon|libbrotlidec|libbrotlienc|liblz4|libacl|libattr"
+    r"|libgssapi_krb5|libkrb5|libk5crypto|libcom_err|libkrb5support|libkeyutils"
+    r"|liblcms2|libjpeg|libwebp|libwebpmux|libwebpdemux|libsharpyuv"
     r"|libGL|libGLX|libGLdispatch|libOpenGL|libEGL|libgbm|libdrm"
     r"|libX11|libX11-xcb|libXau|libXdmcp|libXext|libXfixes|libXrender|libXrandr|libXi|libXcursor"
     r"|libXinerama|libXss|libXv|libXpresent|libXxf86vm|libxshmfence"
@@ -386,6 +411,15 @@ QT_PLUGINS = [
 # drives of GTK's "Other Locations".
 QT_PLATFORM_THEMES = ["libqxdgdesktopportal.so", "libqgtk3.so"]
 
+# Qt's QML modules RVP does not import, nor Qt Quick Controls and Dialogs
+# underneath: copied, they would bring Qt Test, SQL, Particles and others
+# into usr/lib.
+QML_LEFT_OUT = [
+    "QtTest", "Qt/test", "QmlTime", "QtQuick/Particles", "QtQuick/LocalStorage", "QtQuick/VectorImage",
+    "QtQuick/tooling", "Qt/labs/animation", "Qt/labs/assetdownloader", "Qt/labs/sharedimage",
+    "Qt/labs/synchronizer", "Qt/labs/wavefrontmesh", "Qt/labs/settings",
+]
+
 # GTK 3's libraries, which only the gtk3 theme reaches: the system's, never
 # bundled, and a Recommends rather than a Depends, since Qt passes over a
 # theme whose libraries are missing and shows its own dialog.
@@ -405,6 +439,15 @@ T64 = {
     "libnettle8": "libnettle8t64",
     "libhogweed6": "libhogweed6t64",
 }
+
+
+def strip(library: Path) -> None:
+    """Drops a bundled library's symbol table and debugging sections
+    (libmpv's build kept 60 MB of them); rvp keeps its own, which name the
+    functions of a panic's backtrace."""
+    if shutil.which("strip"):
+        library.chmod(library.stat().st_mode | 0o200)
+        subprocess.run(["strip", "--strip-unneeded", str(library)], check=True)
 
 
 def elf_needed(path: Path) -> list[str]:
@@ -456,6 +499,8 @@ def linux_appdir(args, appdir: Path) -> set[str]:
             (usr / "plugins" / "platformthemes").mkdir(parents=True, exist_ok=True)
             shutil.copy2(source, usr / "plugins" / "platformthemes" / theme)
     shutil.copytree(qt / "qml", usr / "qml")
+    for module in QML_LEFT_OUT:
+        shutil.rmtree(usr / "qml" / module, ignore_errors=True)
     places = [qt / "lib", Path(args.mpv)]
     system = system_libraries()
     relied: set[str] = set()
@@ -480,6 +525,7 @@ def linux_appdir(args, appdir: Path) -> set[str]:
             bundled.add(name)
             target = usr / "lib" / name
             shutil.copy2(source.resolve(), target)
+            strip(target)
             pending.append(target)
     # A plugin or QML module that needs a library nobody has is left out.
     for name, users in sorted(missing.items()):
@@ -579,9 +625,10 @@ def deb(appdir: Path, relied: set[str], target: Path, epoch: int) -> None:
             f"Depends: {debian_depends(relied)}\n"
             # The programs RVP runs: the master volume and recording
             # (pactl, parec), text to speech (spd-say), the desktop's
-            # handler cache (update-desktop-database); GTK 3 for the
-            # desktop's file dialogs (the gtk3 theme, GTK above).
-            "Recommends: pulseaudio-utils, speech-dispatcher, desktop-file-utils,"
+            # handler cache (update-desktop-database), RIFE (TensorRT)'s
+            # download (curl); GTK 3 for the desktop's file dialogs (the
+            # gtk3 theme, GTK above).
+            "Recommends: pulseaudio-utils, speech-dispatcher, desktop-file-utils, curl,"
             " libgtk-3-0 | libgtk-3-0t64\n"
             "Section: video\n"
             "Priority: optional\n"

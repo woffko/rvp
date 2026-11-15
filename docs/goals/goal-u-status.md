@@ -32,6 +32,7 @@ recommended option:
 |---|---------|--------|
 | 0 | Start | The boot run's report, its status sections, the audit and goal U's entry committed with dbde0cd and c3f58dc, and pushed |
 | 1 | Checks that pass without testing | M9, M13 fixed (below) |
+| 2 | Packages and CI | H1, H3, M8, M16, L4, L22, L23, L24 fixed (below) |
 
 ## Package 1: checks that pass without testing
 
@@ -79,3 +80,52 @@ recommended option:
   the installed .deb is the built one, and `idle_inhibit` found RVP's own
   inhibitor while playing and none paused, with `IsInhibited 8` already
   true from another program).
+
+## Package 2: packages and CI
+
+- **H1, CI's packages without their parts:** `package-linux` builds
+  MVTools, whisper.cpp and RVP's VapourSynth runtime (kit steps `mvtools
+  whisper vapoursynth`) when its cache misses, keyed by their build
+  scripts and the kit's versions, and caches the results; `m8package`
+  fails without either part unless `RVP_PACKAGE_SLIM=1`, and
+  `check-deb.sh` checks that the package carries them
+  (`package_parts`: whisper-cli runs, VSScript, MVTools, RIFE and
+  vs-mlrt are there).
+- **H3, bundled libraries the system's GTK loads:** `SYSTEM` takes every
+  part of glibc (`libmvec`, `libnsl`, `libnss_*`, `libthread_db`,
+  `libBrokenLocale`, `libc_malloc_debug`, `libcrypt`), GCC's OpenMP, and
+  FriBidi, Brotli, LZ4, ACL, Kerberos (gssapi, krb5, k5crypto, com_err,
+  krb5support, keyutils), Little CMS, libjpeg and WebP (with sharpyuv):
+  their sonames hold across the distributions, so the .deb depends on
+  them. ICU and libxml2 stay bundled (their sonames differ by release).
+  AGENTS.md's packaging note says why.
+- **M8, versions:** `0.0.1+git.<UTC time>.<hash>` (the .deb's
+  `0.0.1+git<time>.<hash>-1`), so a later commit sorts higher.
+- **M16, `_tkinter`:** removed with Tcl/Tk from the runtime's Python.
+- **L4, VapourSynth's plugin folder:** `/dev/null/vapoursynth-plugins`, a
+  path no one can make, instead of the build's.
+- **L22, package contents:** every file 0644 or 0755 whatever the umask
+  (`touch_all`), bundled libraries stripped (`--strip-unneeded`; rvp keeps
+  its symbols for panics' backtraces), and Qt's QML modules RVP does not
+  use left out (`QML_LEFT_OUT`: QtTest, Qt/test, QmlTime, Particles,
+  LocalStorage, VectorImage, tooling and five Qt.labs modules), which
+  keeps Qt Test, Quick Test, SQL and Particles out of `lib/`.
+- **L23, curl:** in the .deb's Recommends and the PKGBUILD's optdepends;
+  a download without curl says so.
+- **L24, whisper's build folder:** made anew for each build.
+- **H3, the container's check:** `check-deb.sh` runs the functional
+  self-test again with `XDG_CURRENT_DESKTOP=GNOME` (`selftest_deb_gtk`),
+  so Qt loads the gtk3 theme and the system's GTK under rvp's run path;
+  `libraries_resolve`'s `ldd -r` of `libqgtk3.so` with the run path does
+  the same for the symbols.
+- **Checks (2026-11-15, this boot):** kit steps `vapoursynth`, `whisper`
+  and `m8package` PASS (`rvp_0.0.1+git20261115052548.a45809a22-1`, 112 MB;
+  the AppImage 141 MB). The runtime has no `_tkinter` and no build path
+  (`strings`: only `/dev/null/vapoursynth-plugins`); `lib/` holds none of
+  the libraries moved to `SYSTEM` (the .deb depends on libacl1, libbrotli1,
+  libfribidi0, libgomp1, libgssapi-krb5-2, libjpeg8, liblcms2-2,
+  liblz4-1, libwebp7, libwebpmux3...), libmpv is stripped (60 to 52 MB),
+  every file is 0644 or 0755, and check-deb's library and plugin checks
+  pass on the AppDir (`rvp` and 181 libraries). The AppDir's functional
+  self-test under Xvfb with `XDG_CURRENT_DESKTOP=GNOME` passed. CI's
+  `package-linux` (built on 22.04, checked on 26.10) is below.

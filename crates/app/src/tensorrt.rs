@@ -595,9 +595,14 @@ fn download(
         .stdout(std::process::Stdio::null())
         .stderr(std::process::Stdio::piped());
     hide_console(&mut command);
-    let mut child = command
-        .spawn()
-        .map_err(|error| format!("curl cannot start: {error}"))?;
+    let mut child = command.spawn().map_err(|error| {
+        // Linux's packages only recommend curl (the Linux audit's L23).
+        if error.kind() == std::io::ErrorKind::NotFound {
+            "curl is not installed: the download needs it (the curl package)".to_owned()
+        } else {
+            format!("curl cannot start: {error}")
+        }
+    })?;
     let status = loop {
         if cancel.load(Ordering::Relaxed) {
             drop(child.kill());
