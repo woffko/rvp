@@ -117,3 +117,8 @@ def translations(code: str, part: str) -> dict[tuple[str, str], str]:
         return {}
     _, messages = read(path)
     return {(m.context, m.source): m.translation for m in messages if m.translation and not m.unfinished}
+
+
+if __name__ == "__main__":
+    # The languages' codes, one a line (tools/i18n/check.sh).
+    print("\n".join(codes()))
