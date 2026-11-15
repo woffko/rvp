@@ -76,6 +76,10 @@ RVP; nothing is taken from another program's Korean strings.
   titled by a verb keeps the noun form: "Adjust Audio Sync" "오디오 싱크
   조절", "Jump to Specified Time/Frame" "지정한 시간/프레임으로 이동". A
   label before a field ends with a colon only where the source has one.
+  What an empty field means ("empty: SVP mode off", "Empty: RVP
+  Default...") is "비어 있으면 ...", never the command-like "비움:". A
+  parenthesis in a checkbox that says what happens when it is off
+  ("otherwise ...") starts with "해제하면", not the colloquial "아니면".
   Korean has no capitals: the source's Title Case means nothing; names
   keep their own case (mpv, libmpv, yt-dlp, whisper.cpp, dav1d).
 - **Sino-Korean words and loanwords.** Use the word a Korean user of
@@ -119,6 +123,9 @@ RVP; nothing is taken from another program's Korean strings.
   as Korean writes and Korean Windows does with "(권장)": "자동
   선택(권장)", "16비트(권장)", "독점 모드(장치가 RVP만 재생)", also after
   a Latin word or a placeholder ("small(다운로드 안 됨)", "“%1”(%2)").
+  File-dialog filters are the exception: Qt reads the pattern from
+  their ASCII parentheses, so the source's space before "(" stays
+  ("미디어 (%1)", "모든 파일 (*)", "PotPlayer 스킨 (*.dsf)").
   Names that contain a parenthesis keep it as they are written: "RIFE
   (TensorRT)", "RIFE (TensorRT, NVIDIA)". Inside, no space after "(" or
   before ")".
@@ -238,16 +245,20 @@ RVP; nothing is taken from another program's Korean strings.
     "다시 불러오기".
   - Picture, image, screen and display: the video's picture is "영상",
     a still image or a picture file "이미지", the area of the monitor
-    "화면", the monitor itself "디스플레이" ("The primary display" "주
-    디스플레이", "the display's rate" "디스플레이 주사율").
+    "화면", the monitor itself "디스플레이", also where the source says
+    monitor ("The primary display" "주 디스플레이", "the display's rate"
+    "디스플레이 주사율", "other monitors" "다른 디스플레이"); only the
+    output kind "Monitor output", beside TV-OUT, stays "모니터 출력".
   - Track and stream: "트랙" and "스트림", each for its own English word
     ("Cycle Audio Stream" "오디오 스트림 전환", "subtitle track" "자막 트랙").
   - Cycle (step through the choices) is "전환": "Cycle Aspect Ratio"
     "화면 비율 전환".
-  - Move: a position, point or picture moves by "이동" ("Move Point A %1
-    Sec. Forward" "A 지점 %1초 앞으로 이동"); a key, an item or a file that
-    goes elsewhere by "옮기기" ("Move it to “%3”?" "“%3” 동작으로
-    옮기시겠습니까?", the Move button "옮기기").
+  - Move is "이동" everywhere, since one English label gets one
+    translation: a position, point or picture ("Move Point A %1 Sec.
+    Forward" "A 지점 %1초 앞으로 이동"), the Keys and Mouse dialog's Move
+    button that gives a key to another action ("“%3” 동작으로
+    이동하시겠습니까?"), and the Move submenus (DVD Control's titles,
+    Extend/Crop's picture position).
   - Increase / Decrease: levels (volume, brightness, contrast,
     saturation, hue) "높이기" / "낮추기"; sizes, margins, spacing and
     amounts "늘리기" / "줄이기"; Decrease / Increase of an audio or
@@ -289,13 +300,13 @@ RVP; nothing is taken from another program's Korean strings.
 | seek | 탐색 | Menu commands that move by a time are "%1초 앞으로" / "%1초 뒤로". |
 | jump | 이동 | "Jump to Specified Time/Frame" "지정한 시간/프레임으로 이동". |
 | frame step | 프레임 단위 이동 | "Next Frame" is "다음 프레임". |
-| speed | 재생 속도 | "속도" alone where the page or menu is about playback. |
+| speed | 속도 | "재생 속도" where the playback rate must be named in a sentence. |
 | repeat | 반복 | Not "다시 실행" (Redo). |
 | A-B repeat / section repeat | A-B 반복 / 구간 반복 | |
 | shuffle | 무작위 재생 | "무작위" alone as a choice next to "반복". |
 | queue | 재생 대기열 | "대기열" where "재생" is already said. |
 | resume / remember position | 이어서 재생 / 재생 위치 기억 | |
-| position | 재생 위치 | "위치" for subtitles, the logo, windows. |
+| position | 위치 | "재생 위치" for the position in the file where it must be named ("Remember playback positions" "재생 위치 기억"). |
 | duration | 길이 | As Windows' file list names it; "Duration: %1" "길이: %1". |
 | elapsed / remaining time | 경과 시간 / 남은 시간 | |
 | chapter | 챕터 | |
@@ -347,7 +358,7 @@ RVP; nothing is taken from another program's Korean strings.
 | settings / preferences | 설정 / 환경 설정 | "X Settings..." is "X 설정...". |
 | page | 페이지 | "the Playback page" "“재생” 페이지". |
 | preset / configuration | 프리셋 / 구성 | Not 사전 설정; "Manage Presets..." "프리셋 관리...". |
-| reset / default | 초기화 / 기본값 | Before a noun "기본" ("기본 오디오 장치"). |
+| reset / default | 초기화 / 기본 | "기본값" for the value and the Default button; "기본" before a noun ("기본 오디오 장치"). |
 | apply | 적용 | A filter or effect is "적용", a setting too. |
 | key / hotkey / shortcut | 키 / 단축키 / 단축키 | In a sentence "Enter 키". |
 | mouse / wheel / button | 마우스 / 휠 / 버튼 | "단추" is not used. |
@@ -360,7 +371,7 @@ RVP; nothing is taken from another program's Korean strings.
 | aspect ratio | 화면 비율 | "AR" in PotPlayer's menus is also "화면 비율"; "비율" alone in tight compounds. |
 | crop | 자르기 | |
 | zoom / pan | 확대 / 이동 | Zoom In / Zoom Out are "확대" / "축소"; pan takes the picture as object ("영상 이동") where "이동" could read as a jump. |
-| rotate / flip / mirror | 회전 / 상하 반전 / 좌우 반전 | |
+| rotate / flip / mirror | 회전 / 상하 반전 / 좌우 반전 | The source's "Flip horizontal" is left-right: "좌우 반전". |
 | deinterlace | 디인터레이스 | |
 | brightness / contrast / saturation / hue / gamma | 밝기 / 대비 / 채도 / 색조 / 감마 | |
 | sharpen / denoise | 선명하게 / 노이즈 제거 | "선명도" for the amount; video noise is "노이즈", sound noise "잡음". |
@@ -400,7 +411,7 @@ RVP; nothing is taken from another program's Korean strings.
 | second audio device | 두 번째 오디오 장치 | "the 2nd device" "두 번째 장치". |
 | pass-through | 패스스루 | |
 | subtitles / subtitle track | 자막 / 자막 트랙 | |
-| external / embedded subtitles | 외부 자막 / 내장 자막 | |
+| external / embedded subtitles | 외부 / 내장 자막 | "외부 오디오" for external audio files. |
 | font / outline / shadow | 글꼴 / 외곽선 / 그림자 | |
 | subtitle position / subtitle delay | 자막 위치 / 자막 지연 | |
 | encoding | 인코딩 | A text's character set; AC3 encoding too. |
@@ -426,3 +437,45 @@ RVP; nothing is taken from another program's Korean strings.
 | bit depth / 10-bit | 비트 심도 / 10비트 | "%1-bit" "%1비트", attached. |
 | channel layout (5.1, 7.1) | 채널 구성(5.1, 7.1) | |
 | Auto select (recommended) | 자동 선택(권장) | "Auto" alone is "자동"; "(Recommended)" is always "(권장)", attached. |
+
+## Other terms
+
+Words the translation settled on beyond the glossary, for the same
+consistency.
+
+| English | Korean | Note |
+|---------|--------|------|
+| Cycle X (menu actions) | X 전환 | "Cycle Audio Stream" "오디오 스트림 전환". |
+| the skin's bars (control bars) | 바 | Not 검은 띠, which are the black bars around the picture. |
+| Top / Bottom / Left / Right / Center | 위쪽 / 아래쪽 / 왼쪽 / 오른쪽 / 가운데 | Shared by margin sliders, alignment choices and window fields; "Top left" "왼쪽 위". |
+| Intro / Ending (skip) | 오프닝 / 엔딩 | |
+| Navigate (submenu) | 탐색 | |
+| Seamless Playback | 끊김 없는 재생 | PotPlayer's joining of files without a gap. |
+| Channel Control | 채널 제어 | The TV channels' menu. |
+| When Playback Finished | 재생 완료 시 | Also the action's name in other strings ("재생 완료 시 동작"). |
+| Record Audio / Record Stream / Record Video | 오디오 녹음 / 스트림 녹화 / 비디오 녹화 | |
+| Reload / Rescan | 다시 불러오기 / 다시 검색 | |
+| Renew (the token) | 갱신 | |
+| Set up (the screen saver) | 지정 | Not 설정, which is settings. |
+| instance | 인스턴스 | |
+| focus | 포커스 | "키보드 포커스". |
+| Custom | 사용자 지정 | |
+| Idle / Below normal / Normal / Above normal / High (priority) | 낮음 / 보통 미만 / 보통 / 보통 초과 / 높음 | |
+| Critical / Warning / Info / Debug (log levels) | 심각 / 경고 / 정보 / 디버그 | |
+| luma / chroma | 휘도 / 색차 | |
+| Deblock / Deband / Soften | 디블로킹 / 디밴딩 / 부드럽게 | |
+| Denoise 3D / Temporal denoise | 3D 노이즈 제거 / 시간축 노이즈 제거 | |
+| keyframe / marker | 키프레임 / 마커 | |
+| optical flow | 광학 흐름 | |
+| motion compensation | 움직임 보상 | |
+| copy-back (hardware decoding) | 메모리 복사 | |
+| GPU Super Resolution | GPU 슈퍼 해상도 | NVIDIA's and Intel's product names stay English. |
+| (not downloaded) / (not installed) | (다운로드 안 됨) / (설치 안 됨) | Attached: "small(다운로드 안 됨)". |
+| AutoPlay / Default Programs | 자동 실행 / 기본 프로그램 | Windows' own words. |
+| About... (menu) | RVP 정보... | Not "정보...", which is also the Info log level. |
+| Crystallization (heading) | Crystality | The effect's name, as on its page and in the menu. |
+| Swap Stereo Channels | 스테레오 채널 좌우 바꾸기 | |
+| Explorer's entries "Add to RVP's album", "Play with RVP" | stay English | Windows shows them in English: “Add to RVP's album”, “Play with RVP”. |
+| Qt's (a value: Qt's own) | Qt 기본값 | "Qt's font" "Qt 글꼴". |
+| At this position / This size | 지정한 위치 / 지정한 크기 | Not 다음, which reads as "next". |
+| Ascending (A to Z) / Descending (Z to A) | 오름차순(A-Z) / 내림차순(Z-A) | |

@@ -128,7 +128,7 @@ translated by every language afterwards and reviewed with the fixes.
 | `tr` | 88; 0, then 1 choice shortened for its box | | yes |
 | `zh_TW` | 47; 1, fixed | | yes |
 | `ja` | 15; 0 | | yes |
-| `ko` | 50; 0 | | |
+| `ko` | 50; 0 | | yes |
 
 ## Found on the way
 
