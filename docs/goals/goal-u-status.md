@@ -467,6 +467,23 @@ The audit's plan had M7 and L15 in no package; both are here.
   Shift+J's "Audio Stretching : 101%" and took the OSD over (m10 failed
   twice in the final run). The self-test gives the volume's answer a
   second first.
+- **Found in CI, Windows:** three of package 7's tests failed on CI's
+  Windows (the instance channel's expected path with `/` where
+  `Path::join` gives `\`, the USB-C charger's folder name with a `:`, and
+  user-dirs.dirs's Unix paths): fixed in 7c652aa, whose Windows jobs pass.
+  `package-linux` of 9e8cc46 rebuilt the packages' parts (vs-mlrt's build
+  now checks VapourSynth's headers) and its Ubuntu 26.10 container check
+  passed.
+  `package-windows`' media-controls check (`m8-smtc.ps1`) failed in three
+  of five runs from 97cb380 on (it had passed in every run before): RVP
+  opened `clip-a.mkv`, the session showed its title but the status
+  "Opened" for 30 s, so `playing_title` and `buttons_playing` failed,
+  while every later step (Pause, Play, Next, Previous, Stop) passed.
+  f83ab88 and 7c652aa passed it with the same code for Windows, and no
+  change of goal U touches that path on Windows (`media_controls.rs`, the
+  media state): goal U-W looks at it on the VM, where the check runs
+  with a desktop (`m8-all.ps1` and the host's media session, with
+  permission).
 
 ### The final run (2026-11-15, this boot, the .deb of 444110e installed)
 
@@ -521,3 +538,4 @@ Windows bundle at goal U's last commit and runs the VM's checks below.
 | m6svp's second window and `--svp-second` | 11 | `Main.qml`'s svp self-test option | the host's SVP check, with permission |
 | The calibration core waits for its shutdown | 11 | `crates/engine/src/calibrate.rs` (RVP's calibration, `render_vf`'s users) | `m18-all.ps1` with `--calibrate`, and RIFE (TensorRT) on the host with permission |
 | M10's self-test waits a second before Audio Stretching | 11 | `Main.qml` | `m10-all.ps1` |
+| (No change: CI's media-controls check failed 3 of 5 runs since 97cb380, see package 11) | - | the first "Playing" status on the hosted runner | `m8-all.ps1`, `m8-smtc.ps1` on the VM a few times |
