@@ -109,6 +109,11 @@ smoothing for users without SVP, after a study of the engines.
   the kit and the host. It drives RVP through its own input handlers,
   never through the window system, and prints `check`, `metric` and
   `status` lines.
+- The README's screenshots (`docs/images`) come from
+  `tools/screenshots/tour.sh` (`--selftest=tour`, `SelfTestTour.qml`, on
+  an Xvfb screen of its own) with RVP Default and frames of Blender's
+  films under CC BY (credited in the README); never PotPlayer's or other
+  third-party skins, nor anyone's own videos.
 - Keep the GUI thread free during playback: no blocking mpv calls in loops
   (`Player::diagnostics` is for rare reads), no disk flushes (use
   `storage::Writer`), and chrome updates through `Player::damaged` only.

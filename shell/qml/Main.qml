@@ -1819,6 +1819,11 @@ Window {
     //                         toggles, transport, volume, an equalizer
     //                         band, the playlist's resize; the file:
     //                         fixture-60s.mkv
+    //   --selftest=tour       the README's screenshots (SelfTestTour.qml,
+    //                         tools/screenshots/tour.sh): the player with
+    //                         its playlist, the menu, settings pages, the
+    //                         control panel, and subtitles with the seek
+    //                         preview, each announced by a tour_shot= line
     //   --selftest=speech     subtitles from a file's audio (SelfTestM13.qml,
     //                         the host session): the whole file with
     //                         --speech-engine and --speech-model, timed,
@@ -1963,7 +1968,25 @@ Window {
             return classicTick()
         if (selftest.mode === "vlc")
             return vlcTick()
+        if (selftest.mode === "tour")
+            return tourTick()
         functionalTick()
+    }
+
+    // --selftest=tour: the README's screenshots (SelfTestTour.qml).
+    Loader {
+        id: tourLoader
+        active: false
+        Component.onCompleted: setSource("SelfTestTour.qml", {
+            player: player, t: selftest, host: root, settings: settingsLoader, panel: panelLoader, menus: menuLoader
+        })
+    }
+    function tourTick() {
+        if (!tourLoader.item) {
+            tourLoader.active = true
+            return
+        }
+        tourLoader.item.tick()
     }
 
     // --selftest=vlc: VLC's skins (SelfTestVlc.qml).
