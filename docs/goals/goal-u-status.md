@@ -484,12 +484,12 @@ The audit's plan had M7 and L15 in no package; both are here.
   not: a status sent before Windows' session manager had taken the
   window's controls in is lost, and `Controls::show` never sent an
   unchanged one again (goal U likely made the first update come earlier).
-  The controls now send their state again each second in their first 10
-  seconds (`media_controls.rs`, Windows only; built and checked by CI's
-  Windows jobs only, since this boot builds no Windows code): 0fcee8b's
-  `package-windows` passed it ("Playing '[1/2] clip-a.mkv'", Pause and
-  Next on). Goal U-W runs `m8-smtc.ps1` and `m8-all.ps1` on the VM a few
-  times.
+  The controls send an unchanged state again every 2 s while it is
+  shown (`media_controls.rs`, Windows only; built and checked by CI's
+  Windows jobs only, since this boot builds no Windows code). Resent in
+  the first 10 s only (0fcee8b), the check passed once and then, on a
+  slower runner (fd2d538), the status came but Next stayed off. Goal U-W
+  runs `m8-smtc.ps1` and `m8-all.ps1` on the VM a few times.
 
 ### The final run (2026-11-15, this boot, the .deb of 444110e installed)
 
@@ -544,4 +544,4 @@ Windows bundle at goal U's last commit and runs the VM's checks below.
 | m6svp's second window and `--svp-second` | 11 | `Main.qml`'s svp self-test option | the host's SVP check, with permission |
 | The calibration core waits for its shutdown | 11 | `crates/engine/src/calibrate.rs` (RVP's calibration, `render_vf`'s users) | `m18-all.ps1` with `--calibrate`, and RIFE (TensorRT) on the host with permission |
 | M10's self-test waits a second before Audio Stretching | 11 | `Main.qml` | `m10-all.ps1` |
-| The media controls send their state again each second in their first 10 s | 11 | `shell/src/media_controls.rs` (Windows only) | `m8-smtc.ps1` and `m8-all.ps1` on the VM, a few times |
+| The media controls send an unchanged state again every 2 s | 11 | `shell/src/media_controls.rs` (Windows only) | `m8-smtc.ps1` and `m8-all.ps1` on the VM, a few times |

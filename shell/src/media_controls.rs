@@ -26,18 +26,18 @@ type Shown = (Status, String, bool, bool);
 pub(crate) struct Controls {
     smtc: SystemMediaTransportControls,
     shown: Option<Shown>,
-    /// When the controls started, and when the state was last sent: in
-    /// their first seconds the same state goes again each second. A status
-    /// sent before Windows' session manager had taken the window's
-    /// controls in was lost, and an unchanged one was never sent again
-    /// (CI's `m8-smtc.ps1`: the title showed, the status stayed "Opened"
-    /// and the buttons off until a Pause).
-    started: Instant,
+    /// When the state was last sent: the same state goes again every
+    /// [`RESEND`]. What was sent before Windows' session manager had taken
+    /// the window's controls in was lost, and an unchanged state was never
+    /// sent again (CI's `m8-smtc.ps1`: the title showed, the status stayed
+    /// "Opened" and the buttons off until a Pause; resent for the first 10
+    /// seconds only, Next stayed off on a slow runner).
     sent: Option<Instant>,
 }
 
-/// How long the state goes again each second after the controls start.
-const RESEND_FOR: Duration = Duration::from_secs(10);
+/// How often an unchanged state goes again (it is shown while the state
+/// changes: during playback, at every drain).
+const RESEND: Duration = Duration::from_secs(2);
 
 fn error(error: &windows::core::Error) -> String {
     format!("media controls: {error}")
@@ -91,7 +91,6 @@ impl Controls {
         Ok(Self {
             smtc: controls,
             shown: None,
-            started: Instant::now(),
             sent: None,
         })
     }
@@ -104,10 +103,7 @@ impl Controls {
             state.can_next,
             state.can_previous,
         );
-        let again = self.started.elapsed() < RESEND_FOR
-            && self
-                .sent
-                .is_none_or(|sent| sent.elapsed() >= Duration::from_secs(1));
+        let again = self.sent.is_none_or(|sent| sent.elapsed() >= RESEND);
         if self.shown.as_ref() == Some(&shown) && !again {
             return;
         }
