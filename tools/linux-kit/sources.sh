@@ -29,15 +29,29 @@ https://github.com/dubhater/vapoursynth-mvtools.git
 # kit_clone URL DIR REF: a working tree of URL at REF (a tag, branch or
 # commit) in DIR, from the source cache when it has the repository.
 kit_clone() {
-    local url=$1 dir=$2 ref=$3 cache
+    local url=$1 dir=$2 ref=$3 cache mirror
     cache=${RVP_KIT_SOURCES:-}/$(basename "$url" .git).git
     if [ -n "${RVP_KIT_SOURCES:-}" ] && [ -d "$cache" ]; then
         git clone -q --no-checkout "$cache" "$dir" || return 1
         git -C "$dir" remote set-url origin "$url"
-    else
-        git clone -q --filter=blob:none --no-checkout "$url" "$dir" || return 1
+    elif ! git clone -q --filter=blob:none --no-checkout "$url" "$dir"; then
+        # A host that does not answer: its mirror, when it has one.
+        mirror=$(kit_mirror "$url")
+        [ -n "$mirror" ] || return 1
+        echo "kit_clone: $url failed, trying $mirror" >&2
+        rm -rf "$dir"
+        git clone -q --filter=blob:none --no-checkout "$mirror" "$dir" || return 1
     fi
     git -C "$dir" -c advice.detachedHead=false checkout -q "$ref"
+}
+
+# The mirror of a repository whose host may not answer: VideoLAN's
+# projects on GitHub (code.videolan.org's GitLab gave 502 and refused
+# connections on 2026-11-14 and 15, and CI's package-linux failed with it).
+kit_mirror() {
+    case $1 in
+        https://code.videolan.org/videolan/*) echo "https://github.com/videolan/${1#https://code.videolan.org/videolan/}" ;;
+    esac
 }
 
 if [ "${BASH_SOURCE[0]}" = "$0" ]; then
