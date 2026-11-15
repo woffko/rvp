@@ -171,12 +171,11 @@ fn the_synthetic_disc_menus_navigate() {
         eprintln!("note: RVP_DVD_MENU is not set (tools/test-clips/make-m16-dvd.sh); skipped");
         return;
     };
+    // With the disc given, a missing library is a failure: a skip let the
+    // Ubuntu boot run's soname miss (libbluray.so.4) pass.
     match available() {
         Ok(version) => eprintln!("libdvdnav {version}"),
-        Err(why) => {
-            eprintln!("note: {why}; skipped");
-            return;
-        }
+        Err(why) => panic!("RVP_DVD_MENU names a disc, but {why}"),
     }
     let _one = ONE_DISC
         .lock()
@@ -259,8 +258,7 @@ fn a_real_disc_reaches_its_menu() {
         return;
     };
     if let Err(why) = available() {
-        eprintln!("note: {why}; skipped");
-        return;
+        panic!("RVP_DVD_REAL names a disc, but {why}");
     }
     let _one = ONE_DISC
         .lock()
@@ -353,10 +351,7 @@ fn the_synthetic_bluray_menus_navigate() {
     };
     match bluray::available() {
         Ok(version) => eprintln!("libbluray {version}"),
-        Err(why) => {
-            eprintln!("note: {why}; skipped");
-            return;
-        }
+        Err(why) => panic!("RVP_BD_MENU names a disc, but {why}"),
     }
     let storage = std::env::temp_dir().join(format!("rvp-bluray-test-{}", std::process::id()));
     let _one = ONE_DISC

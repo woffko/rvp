@@ -1298,11 +1298,32 @@ m8_idle_inhibited() {
         --method org.gnome.SessionManager.IsInhibited 8 2> /dev/null
 }
 
+# Whether RVP itself holds an idle inhibitor of GNOME's session manager:
+# one with its app ID (`rvp`, its desktop entry) whose flags have idle (8).
+# Prints yes or no, nothing without the session manager. Another
+# program's inhibitor (IsInhibited true before RVP started) proves nothing.
+m8_rvp_inhibits() {
+    local list path app flags
+    list=$(gdbus call --session --dest org.gnome.SessionManager --object-path /org/gnome/SessionManager \
+        --method org.gnome.SessionManager.GetInhibitors 2> /dev/null) || return 0
+    for path in $(printf '%s\n' "$list" | grep -o '/org/gnome/SessionManager/Inhibitor[0-9]*'); do
+        app=$(gdbus call --session --dest org.gnome.SessionManager --object-path "$path" \
+            --method org.gnome.SessionManager.Inhibitor.GetAppId 2> /dev/null)
+        flags=$(gdbus call --session --dest org.gnome.SessionManager --object-path "$path" \
+            --method org.gnome.SessionManager.Inhibitor.GetFlags 2> /dev/null |
+            sed -n 's/.*uint32 \([0-9]*\).*/\1/p')
+        if [ "$app" = "('rvp',)" ] && [ $(( ${flags:-0} & 8 )) -ne 0 ]; then
+            echo yes
+            return 0
+        fi
+    done
+    echo no
+}
+
 # MPRIS and idle inhibit while `rvp` plays the test video on its own
 # instance channel; prints check lines.
 m8_mpris() {
     local rvp=$1 pid name status before during paused deadline
-    before=$(m8_idle_inhibited)
     "$rvp" --instance=m8 --skin= "--mpv-options=hwdec=$(m2_hwdec),ao=null" "$(test_video)" \
         > "$LOG_DIR/m8-mpris-rvp.log" 2>&1 &
     pid=$!
@@ -1322,8 +1343,13 @@ m8_mpris() {
             *xesam:title*) echo "check mpris_metadata=PASS" ;;
             *) echo "check mpris_metadata=FAIL" ;;
         esac
-        sleep 2
-        during=$(m8_idle_inhibited)
+        # RVP's own inhibitor while it plays (asked on the desktop thread:
+        # a moment after the playback starts).
+        before=$(m8_idle_inhibited)
+        deadline=$((SECONDS + 6))
+        while during=$(m8_rvp_inhibits) && [ "$during" = no ] && [ $SECONDS -lt $deadline ]; do
+            sleep 0.5
+        done
         gdbus call --session --dest "$name" --object-path /org/mpris/MediaPlayer2 \
             --method org.mpris.MediaPlayer2.Player.Pause 2>&1
         deadline=$((SECONDS + 10))
@@ -1336,13 +1362,16 @@ m8_mpris() {
             *Paused*) echo "check mpris_pause=PASS" ;;
             *) echo "check mpris_pause=FAIL status '$status'" ;;
         esac
-        paused=$(m8_idle_inhibited)
+        deadline=$((SECONDS + 6))
+        while paused=$(m8_rvp_inhibits) && [ "$paused" = yes ] && [ $SECONDS -lt $deadline ]; do
+            sleep 0.5
+        done
         if [ -z "$during" ]; then
             echo "check idle_inhibit=SKIPPED no GNOME session manager on this bus"
-        elif [ "$during" = "(true,)" ] && { [ "$before" != "(false,)" ] || [ "$paused" = "(false,)" ]; }; then
-            echo "check idle_inhibit=PASS before $before playing $during paused $paused"
+        elif [ "$during" = yes ] && [ "$paused" = no ]; then
+            echo "check idle_inhibit=PASS RVP's inhibitor while playing, none paused (IsInhibited 8 at the start: $before)"
         else
-            echo "check idle_inhibit=FAIL before $before playing $during paused $paused"
+            echo "check idle_inhibit=FAIL RVP's inhibitor playing $during paused $paused"
         fi
         gdbus call --session --dest "$name" --object-path /org/mpris/MediaPlayer2 \
             --method org.mpris.MediaPlayer2.Quit > /dev/null 2>&1
@@ -1373,7 +1402,7 @@ m8_crash() {
 }
 
 step_m8() {
-    local log=$LOG_DIR/m8.log out appimage deb installed=0 default_before bus=""
+    local log=$LOG_DIR/m8.log out appimage deb installed=0 default_before bus="" want have
     out=$(m8_dir)
     appimage=$(ls "$out"/RVP-*-x86_64.AppImage 2> /dev/null | head -1)
     deb=$(ls "$out"/rvp_*_amd64.deb 2> /dev/null | head -1)
@@ -1402,19 +1431,25 @@ step_m8() {
         fi
         echo "== .deb $(basename "$deb")"
         default_before=$(xdg-mime query default video/x-matroska 2> /dev/null)
-        if dpkg -s rvp > /dev/null 2>&1; then
-            echo "check deb_installed=PASS installed before this step"
+        # The package this step checks is the one m8package built: an
+        # older installed build would pass every check below for it.
+        want=$(dpkg-deb -f "$deb" Version 2> /dev/null)
+        have=$(dpkg-query -W -f '${Version}' rvp 2> /dev/null)
+        if [ -n "$have" ] && [ "$have" = "$want" ]; then
+            echo "check deb_installed=PASS $want, installed before this step"
         elif sudo -n true 2> /dev/null; then
-            if sudo -n apt-get install -y "$deb" > "$LOG_DIR/m8-apt.log" 2>&1; then
+            if sudo -n apt-get install -y --allow-downgrades "$deb" > "$LOG_DIR/m8-apt.log" 2>&1; then
                 installed=1
-                echo "check deb_installed=PASS"
+                echo "check deb_installed=PASS $want"
             else
                 echo "check deb_installed=FAIL see $LOG_DIR/m8-apt.log"
             fi
+        elif [ -n "$have" ]; then
+            echo "check deb_installed=FAIL $have is installed, this step built $want: sudo apt install $deb"
         else
             echo "check deb_installed=SKIPPED install it first: sudo apt install $deb"
         fi
-        if dpkg -s rvp > /dev/null 2>&1; then
+        if [ -n "$want" ] && [ "$(dpkg-query -W -f '${Version}' rvp 2> /dev/null)" = "$want" ]; then
             [ "$(readlink /usr/bin/rvp)" = /opt/rvp/bin/rvp ] && [ -x /opt/rvp/bin/rvp ] &&
                 echo "check deb_files=PASS" || echo "check deb_files=FAIL"
             if command -v desktop-file-validate > /dev/null 2>&1; then
@@ -1625,8 +1660,11 @@ kit_judge() {
     passes=$(grep -c '^check .*=PASS' "$run" 2> /dev/null)
     fails=$(grep -c '^check .*=FAIL' "$run" 2> /dev/null)
     code=$(sed -n 's/^kit_exit=//p' "$run" 2> /dev/null | tail -1)
+    # A required check must have passed: `=PASS SKIPPED ...` (a self-test
+    # that found no library, no disc...) does not count.
     for must in "$@"; do
-        grep -q "^check $must=PASS" "$run" 2> /dev/null || missing="$missing $must"
+        grep "^check $must=PASS" "$run" 2> /dev/null | grep -qv "=PASS SKIPPED" ||
+            missing="$missing $must"
     done
     echo "$name:${passes:-0}/${fails:-0}${missing:+ missing:${missing# }}"
     [ "${fails:-1}" -eq 0 ] && [ "${passes:-0}" -gt 0 ] && [ -z "$missing" ] && [ "${code:-1}" -eq 0 ]
@@ -2039,6 +2077,19 @@ sys.exit(1)
 PY
 }
 
+# What Unified Remote Server's log says about RVP's remote: the lines the
+# loader writes for it and the session's, then "clean" when the remote was
+# loaded, run and no "(E)" or "(W)" line follows its loading.
+m15_server_log() {
+    awk '
+        /Loader: loading remote: .*\/RVP\/meta\.prop/ { ours = 1; loaded = 1; print; next }
+        /Loader: loading remote:/ { ours = 0; next }
+        ours && /\((E|W)\)/ { bad = 1; print; next }
+        /RVP\.Player/ { print; if (/Agent: loading: RVP\.Player/) used = 1 }
+        END { print (loaded && used && !bad) ? "clean" : "not clean: loaded " loaded + 0 " used " used + 0 " errors " bad + 0 }
+    ' "$1" 2> /dev/null || echo "not clean: no server log $1"
+}
+
 step_m15() {
     local log=$LOG_DIR/m15.log out=$LOG_DIR/m15-out media bad=0 summary word
     local ur=$LOG_DIR/m15-urserver server="" remotes pidfile state manager=http://127.0.0.1:9510
@@ -2123,12 +2174,15 @@ step_m15() {
                 "$(grep -q -F -f <(tr -d '[:space:]' < "$token"; echo) "$LOG_DIR/m15-selftest.out" &&
                     echo 0 || echo 1)" || bad=$((bad + 1))
         fi
-        # The server's log about RVP's remote has no errors (its error
-        # lines are marked "(E)": "could not find remote: RVP.Player").
-        curl -fs "$manager/system/log/6/6" 2> /dev/null | tr '"' '\n' | grep RVP > "$ur/log.txt"
+        # The server's own log (its HOME is the step's): RVP's remote was
+        # loaded and used, and no error or warning follows the loader's
+        # "loading remote: .../RVP/meta.prop" before the next remote. The
+        # loader's errors do not name the remote ("(E) Loader: could not
+        # load layout: File not found" for a missing picture).
+        m15_server_log "$ur/home/.urserver/urserver.log" > "$ur/log.txt"
         tail -12 "$ur/log.txt" | sed 's/^/unified_remote_log /' >> "$log"
         kit_check "$log" m15_unified_remote_log_clean \
-            "$(grep -qiE 'error|fail|could not|\(E\)' "$ur/log.txt" && echo 0 || echo 1)" || bad=$((bad + 1))
+            "$(grep -q '^clean$' "$ur/log.txt" && echo 1 || echo 0)" || bad=$((bad + 1))
         # Its own process only, by its pidfile.
         [ -s "$pidfile" ] && kill "$(cat "$pidfile")" 2> /dev/null
     fi
@@ -2302,7 +2356,7 @@ step_report() {
         echo "| Time | Step | Result | Detail |"
         echo "|------|------|--------|--------|"
         awk -F'\t' '{ printf "| %s | %s | %s | %s |\n", $1, $2, $3, $4 }' "$RESULTS" 2> /dev/null
-        for step in s2 s3 input s1 m2 m3 m4 m6 m7 m8 m9 m10 m11 m12 m13 m14 m15 m16 m18 m2input m2gpu m6gpu \
+        for step in s2 s3 input s1 m2 m3 m4 m6 m7 m8 m9 m10 m11 m12 m13 m14 m15 m16 m18 m18trt m2input m2gpu m6gpu \
             m2svp m6svp; do
             [ -s "$LOG_DIR/$step.log" ] || continue
             echo

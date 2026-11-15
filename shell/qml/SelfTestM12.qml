@@ -341,7 +341,10 @@ Item {
                 player.run_action("window-top-left")
             break
         case 8:
+            // The size dialog opens once (this step on Wayland, which
+            // skips the moves; step 9 polls until it is open).
             if (!moves()) {
+                player.run_action("window-custom-dialog")
                 t.next()
                 break
             }
@@ -350,18 +353,21 @@ Item {
                 player.run_action("window-custom-dialog")
             break
         case 9:
-            if (!moves())
-                player.run_action("window-custom-dialog")
+            // 860x540: no earlier step leaves the window near it (on a
+            // 2560x1440 screen "larger" gave 801x475, already "near"
+            // 800x500, and step 10 passed before the answer applied).
+            // Each request counts as a change, so steady() waits for it.
             if (t.waitFor("window_size_dialog_opens", () => dialogs() && dialogs().current
                               && dialogs().current.objectName === "inputDialog" && dialogs().current.opened,
                           3000)) {
                 dialogs().current.close()
-                dialogs().answer("800x500")
+                dialogs().answer("860x540")
+                m12.geometryChanged = Date.now()
             }
             break
         case 10:
-            if (t.waitFor("window_size_dialog_applies", () => steady() && (near(host.width, 800, 2)
-                                                                           || near(host.height, 500, 2)), 5000,
+            if (t.waitFor("window_size_dialog_applies", () => steady() && (near(host.width, 860, 2)
+                                                                           || near(host.height, 540, 2)), 5000,
                           () => "size " + size()))
                 player.run_action("window-control")
             break
@@ -371,6 +377,7 @@ Item {
                           3000)) {
                 dialogs().current.close()
                 host.placeWindow(720, 480, area().x + 10, area().y + 10)
+                m12.geometryChanged = Date.now()
             }
             break
         case 12:
