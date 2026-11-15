@@ -1704,8 +1704,10 @@ Window {
     //   --selftest=upright    plays a clip (testdata/media/fixture-marker.mkv)
     //                         and compares the picture with --reference=PNG
     //                         (default: the clip's name with .png): upright,
-    //                         not flipped or mirrored; SKIPPED when the grab
-    //                         has no video (Windows session 0)
+    //                         not flipped or mirrored, with the pointer over
+    //                         it and in fullscreen; then, closed, black
+    //                         under the logo; SKIPPED when the grab has no
+    //                         video (Windows session 0)
     //   --selftest=svp        SVP's acceptance (section 7; with
     //                         --svp-second a second window, which shows
     //                         RVP's diagnostic instead): SVP attaches
@@ -1854,6 +1856,9 @@ Window {
         property bool nextSent: false
         // The orientation check saw video in the window's grab.
         property bool seesVideo: false
+        // The orientation check's reference image, kept for after the
+        // file closes.
+        property string reference: ""
         property string outDir: "rvp-selftest"
 
         function begin() {
@@ -2238,10 +2243,42 @@ Window {
             if (Date.now() - t.stepStarted < 700)
                 break
             root.checkPicture("picture_fullscreen_bars", "fullscreen-bars", s, !t.seesVideo)
+            t.reference = root.pictureReference(s)
             player.key(Qt.Key_Return, 0)
+            t.next()
+            break
+        case 7:
+            // Settled in its window first: a new size draws the video again
+            // whatever mpv asks for.
+            if (t.waitFor("upright_windowed", () => !root.isFullscreen && !s.fullscreen
+                              && Date.now() - t.stepStarted > 1500, 4000))
+                player.run_action("close-media")
+            break
+        case 8: {
+            if (Date.now() - t.stepStarted < 1500)
+                break
+            // A closed file leaves no frame behind: mpv's output is gone and
+            // RVP draws the empty picture (black) under the logo. The grid's
+            // points lie outside the logo with the item's own shape.
+            const r = JSON.parse(Tools.compare_frame(video, video.width / Math.max(1, video.height),
+                                                     t.reference))
+            Tools.grab(t.outDir, "closed")
+            if (!t.seesVideo)
+                Tools.log("check picture_black_after_close=SKIPPED the grabs show no video")
+            else
+                t.check("picture_black_after_close", r.dark === true,
+                        (r.error || "") + " loaded " + s.loaded + " picture " + JSON.stringify(r.picture))
             t.finish()
             break
         }
+        }
+    }
+
+    // The reference image of the orientation check: --reference, or the
+    // clip's own `.png`.
+    function pictureReference(s) {
+        return player.option("reference") !== "" ? player.option("reference")
+            : String(s.path).replace(/\.[^.\/\\]+$/, ".png")
     }
 
     // Grabs the window and compares the picture in the video item with the
@@ -2250,8 +2287,7 @@ Window {
     // (session-0 grabs show no video).
     function checkPicture(name, grab, s, skip) {
         const t = selftest
-        const reference = player.option("reference") !== "" ? player.option("reference")
-            : String(s.path).replace(/\.[^.\/\\]+$/, ".png")
+        const reference = root.pictureReference(s)
         const r = JSON.parse(Tools.compare_frame(video, s.video_aspect, reference))
         Tools.grab(t.outDir, grab)
         const detail = "reference " + reference + " distances upright " + r.upright

@@ -140,6 +140,10 @@ pub enum EngineEvent {
     Seek,
     /// A seek finished and playback continues from the new position.
     PlaybackRestart,
+    /// mpv's video output started, changed its size or format, or is gone
+    /// (sent after mpv removed it, when playback stops or a file without
+    /// video starts).
+    VideoReconfig,
     /// An error reported by libmpv, for example a file that cannot be opened.
     Error(String),
     /// A message to RVP's client (`script-message-to main ...`, or
@@ -433,6 +437,7 @@ impl Engine {
             }
             Ok(Event::Seek) => events.push(EngineEvent::Seek),
             Ok(Event::PlaybackRestart) => events.push(EngineEvent::PlaybackRestart),
+            Ok(Event::VideoReconfig) => events.push(EngineEvent::VideoReconfig),
             Ok(Event::Shutdown) => events.push(EngineEvent::Shutdown),
             Ok(Event::ClientMessage(args)) => events.push(EngineEvent::ClientMessage(
                 args.into_iter().map(str::to_owned).collect(),

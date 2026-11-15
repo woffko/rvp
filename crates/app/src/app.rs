@@ -2020,6 +2020,7 @@ impl App {
                 // The shell's (M9); a seek's picture goes at the restart
                 // (`App::seek_picture_tick`).
                 EngineEvent::PlaybackRestart
+                | EngineEvent::VideoReconfig
                 | EngineEvent::Shutdown
                 | EngineEvent::ClientMessage(_) => {}
             }

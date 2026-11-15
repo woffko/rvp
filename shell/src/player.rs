@@ -1322,6 +1322,10 @@ impl qobject::Player {
         for event in &drained.events {
             match event {
                 EngineEvent::PlaybackRestart => crate::metrics::playback_restarted(),
+                // mpv asks for no new frame once its output is gone: the
+                // item draws again, the empty picture (black) in place of
+                // the closed file's last frame under the logo.
+                EngineEvent::VideoReconfig => crate::ffi::bridge::rvp_video_request_update(),
                 EngineEvent::FileLoaded { .. } => {
                     crate::metrics::mark_once("file_loaded_ms");
                     if core.fit == Fit::Requested {
