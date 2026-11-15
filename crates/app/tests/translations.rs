@@ -12,8 +12,10 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 
+use std::time::Instant;
+
 use rvp_app::menu::{Live, MenuItem};
-use rvp_app::{App, Settings};
+use rvp_app::{App, PowerTimer, Settings};
 
 /// `context` -> `source` -> translation (empty when unfinished).
 type Messages = BTreeMap<String, BTreeMap<String, String>>;
@@ -252,14 +254,50 @@ fn every_language_names_itself() {
     }
 }
 
+/// Settings whose menu labels take other forms than the defaults': sync
+/// steps of a second and more, skips of minutes, ratios that are numbers.
+fn other_settings() -> Settings {
+    let mut settings = Settings {
+        audio_delay_step: 1.5,
+        subtitle_delay_step: 1.5,
+        ..Settings::default()
+    };
+    settings.subtitles.sync_step_2 = 0.5;
+    settings.playback.skip.intro_seconds = 90.0;
+    settings.playback.skip.ending_seconds = 120.0;
+    "2.35".clone_into(&mut settings.picture.custom_aspect);
+    "2.35".clone_into(&mut settings.picture.extend_ratio);
+    settings
+}
+
+/// The labels of RVP's menus with the default settings, with
+/// [`other_settings`], and with each kind of shutdown timer set (the
+/// labels the timer's dialog gives).
+fn menu_labels(dir: &Path) -> BTreeSet<String> {
+    let mut labels = BTreeSet::new();
+    let mut add = |app: &App| {
+        walk(&app.full_context_menu(&Live::default()), &mut labels);
+        walk(&app.playlist_menu(&Live::default()), &mut labels);
+    };
+    add(&App::new(Settings::default(), dir).expect("app"));
+    let mut app = App::new(other_settings(), dir).expect("app");
+    add(&app);
+    for (kind, label) in [
+        (PowerTimer::At, "23:30"),
+        (PowerTimer::In, "1:30"),
+        (PowerTimer::In, "0:00:30"),
+    ] {
+        let _ = app.set_power_timer(kind, 60, false, label, Instant::now());
+        add(&app);
+    }
+    labels
+}
+
 #[test]
 fn every_menu_label_has_a_translation_in_every_language() {
     let dir = std::env::temp_dir().join(format!("rvp-translations-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
-    let app = App::new(Settings::default(), &dir).expect("app");
-    let mut labels = BTreeSet::new();
-    walk(&app.full_context_menu(&Live::default()), &mut labels);
-    walk(&app.playlist_menu(&Live::default()), &mut labels);
+    let labels = menu_labels(&dir);
     let _ = std::fs::remove_dir_all(&dir);
     let languages = languages();
     let mut missing = BTreeSet::new();

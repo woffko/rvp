@@ -330,7 +330,12 @@ Item {
                     seconds = seconds * 60 + part
                 // "1:30" is an hour and a half; "45" is minutes.
                 seconds *= parts.length === 3 ? 1 : 60
-                label = timerField.text.trim()
+                // The menu names the time h:mm (h:mm:ss), the forms its
+                // translations have, however it was written ("90" too).
+                const whole = Math.round(seconds)
+                const pad = n => String(n).padStart(2, "0")
+                label = Math.floor(whole / 3600) + ":" + pad(Math.floor(whole % 3600 / 60))
+                        + (whole % 60 ? ":" + pad(whole % 60) : "")
             }
             holder.player.set_power_timer(timerAt.checked ? 0 : 1, seconds, timerExit.checked, label)
         }

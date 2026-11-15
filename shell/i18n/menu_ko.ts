@@ -3318,5 +3318,55 @@
             <extracomment>A submenu's title in RVP's menus.</extracomment>
             <translation>필터</translation>
         </message>
+        <message>
+            <source>Shutdown at %1:%2</source>
+            <extracomment>Misc's shutdown timer item while a timer at a time of day is set (%1:%2 is the time, 23:30).</extracomment>
+            <translation>시스템 종료 시각 %1:%2</translation>
+        </message>
+        <message>
+            <source>Shutdown in %1:%2 (if no time is specified)</source>
+            <extracomment>Misc's shutdown timer item while a timer after a time is set (%1:%2 is hours and minutes, 1:30).</extracomment>
+            <translation>시스템 종료 대기 시간 %1:%2 (시각을 지정하지 않은 경우)</translation>
+        </message>
+        <message>
+            <source>Shutdown in %1:%2:%3 (if no time is specified)</source>
+            <extracomment>Misc's shutdown timer item while a timer after a time is set (%1:%2:%3 is hours, minutes and seconds).</extracomment>
+            <translation>시스템 종료 대기 시간 %1:%2:%3 (시각을 지정하지 않은 경우)</translation>
+        </message>
+        <message>
+            <source>Custom (%1)</source>
+            <extracomment>Aspect Ratio's custom item when the custom ratio is a number (2.35).</extracomment>
+            <translation>사용자 지정(%1)</translation>
+        </message>
+        <message>
+            <source>Extend by aspect ratio (%1)</source>
+            <extracomment>Video &gt; Extend/Crop's item when its aspect ratio is a number (2.35).</extracomment>
+            <translation>화면 비율로 확장(%1)</translation>
+        </message>
+        <message>
+            <source>Crop by aspect ratio (%1)</source>
+            <extracomment>Video &gt; Extend/Crop's item when its aspect ratio is a number (2.35).</extracomment>
+            <translation>화면 비율로 자르기(%1)</translation>
+        </message>
+        <message>
+            <source>Skip Intro %1 Min</source>
+            <extracomment>Skip's item when the length is whole minutes (%1) (Playback &gt; Skip).</extracomment>
+            <translation>오프닝 %1분 건너뛰기</translation>
+        </message>
+        <message>
+            <source>Skip Intro %1 Min %2 Sec</source>
+            <extracomment>Skip's item when the length is minutes and seconds (%1 and %2) (Playback &gt; Skip).</extracomment>
+            <translation>오프닝 %1분 %2초 건너뛰기</translation>
+        </message>
+        <message>
+            <source>Skip Ending %1 Min</source>
+            <extracomment>Skip's item when the length is whole minutes (%1) (Playback &gt; Skip).</extracomment>
+            <translation>엔딩 %1분 건너뛰기</translation>
+        </message>
+        <message>
+            <source>Skip Ending %1 Min %2 Sec</source>
+            <extracomment>Skip's item when the length is minutes and seconds (%1 and %2) (Playback &gt; Skip).</extracomment>
+            <translation>엔딩 %1분 %2초 건너뛰기</translation>
+        </message>
     </context>
 </TS>

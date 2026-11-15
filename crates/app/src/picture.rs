@@ -403,6 +403,16 @@ pub fn parse_ratio(text: &str) -> Option<f64> {
     (value.is_finite() && (0.1..=10.0).contains(&value)).then_some(value)
 }
 
+/// A ratio as the menu shows it: two numbers as `W:H` however they were
+/// written (`16/9`, `16x9`), else the number (`2.35`), so that the menu's
+/// translations need one form of each (`%1:%2`, `%1`).
+pub(crate) fn ratio_label(text: &str) -> String {
+    match text.trim().split_once([':', '/', 'x']) {
+        Some((width, height)) => format!("{}:{}", width.trim(), height.trim()),
+        None => text.trim().to_owned(),
+    }
+}
+
 /// A number for FFmpeg's expressions, without needless digits.
 fn number(value: f64) -> String {
     let text = format!("{value:.6}");
@@ -1507,7 +1517,7 @@ impl App {
                 format!(
                     "{} by aspect ratio ({})",
                     extend_text(method),
-                    picture.extend_ratio
+                    ratio_label(&picture.extend_ratio)
                 )
             }
             PictureCommand::Preset(index) => picture
@@ -1641,6 +1651,14 @@ mod tests {
         assert_eq!(parse_ratio("4:0"), None);
         assert_eq!(parse_ratio("wide"), None);
         assert_eq!(parse_ratio("100:1"), None);
+    }
+
+    #[test]
+    fn ratios_show_in_the_menus_forms() {
+        assert_eq!(ratio_label("16:9"), "16:9");
+        assert_eq!(ratio_label(" 21 / 9 "), "21:9");
+        assert_eq!(ratio_label("16x10"), "16:10");
+        assert_eq!(ratio_label("2.35"), "2.35");
     }
 
     #[test]

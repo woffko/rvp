@@ -3318,5 +3318,55 @@
             <extracomment>A submenu's title in RVP's menus.</extracomment>
             <translation>Filter</translation>
         </message>
+        <message>
+            <source>Shutdown at %1:%2</source>
+            <extracomment>Misc's shutdown timer item while a timer at a time of day is set (%1:%2 is the time, 23:30).</extracomment>
+            <translation>Herunterfahren um %1:%2</translation>
+        </message>
+        <message>
+            <source>Shutdown in %1:%2 (if no time is specified)</source>
+            <extracomment>Misc's shutdown timer item while a timer after a time is set (%1:%2 is hours and minutes, 1:30).</extracomment>
+            <translation>Herunterfahren in %1:%2 (wenn keine Zeit angegeben ist)</translation>
+        </message>
+        <message>
+            <source>Shutdown in %1:%2:%3 (if no time is specified)</source>
+            <extracomment>Misc's shutdown timer item while a timer after a time is set (%1:%2:%3 is hours, minutes and seconds).</extracomment>
+            <translation>Herunterfahren in %1:%2:%3 (wenn keine Zeit angegeben ist)</translation>
+        </message>
+        <message>
+            <source>Custom (%1)</source>
+            <extracomment>Aspect Ratio's custom item when the custom ratio is a number (2.35).</extracomment>
+            <translation>Eigenes (%1)</translation>
+        </message>
+        <message>
+            <source>Extend by aspect ratio (%1)</source>
+            <extracomment>Video &gt; Extend/Crop's item when its aspect ratio is a number (2.35).</extracomment>
+            <translation>Nach Seitenverhältnis erweitern (%1)</translation>
+        </message>
+        <message>
+            <source>Crop by aspect ratio (%1)</source>
+            <extracomment>Video &gt; Extend/Crop's item when its aspect ratio is a number (2.35).</extracomment>
+            <translation>Nach Seitenverhältnis zuschneiden (%1)</translation>
+        </message>
+        <message>
+            <source>Skip Intro %1 Min</source>
+            <extracomment>Skip's item when the length is whole minutes (%1) (Playback &gt; Skip).</extracomment>
+            <translation>Vorspann %1 min überspringen</translation>
+        </message>
+        <message>
+            <source>Skip Intro %1 Min %2 Sec</source>
+            <extracomment>Skip's item when the length is minutes and seconds (%1 and %2) (Playback &gt; Skip).</extracomment>
+            <translation>Vorspann %1 min %2 s überspringen</translation>
+        </message>
+        <message>
+            <source>Skip Ending %1 Min</source>
+            <extracomment>Skip's item when the length is whole minutes (%1) (Playback &gt; Skip).</extracomment>
+            <translation>Abspann %1 min überspringen</translation>
+        </message>
+        <message>
+            <source>Skip Ending %1 Min %2 Sec</source>
+            <extracomment>Skip's item when the length is minutes and seconds (%1 and %2) (Playback &gt; Skip).</extracomment>
+            <translation>Abspann %1 min %2 s überspringen</translation>
+        </message>
     </context>
 </TS>

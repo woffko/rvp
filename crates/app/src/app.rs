@@ -1110,9 +1110,12 @@ impl App {
             Action::SeekBackward(step) | Action::SeekForward(step) => {
                 text.replace("%s", &step_label(self.settings.seek_seconds(step)))
             }
-            Action::AudioDelay(Delay::Earlier | Delay::Later) => {
-                text.replace("%s", &sync_step_label(self.settings.audio_delay_step))
-            }
+            // PotPlayer's audio sync items name their step in ms only
+            // (`Increase audio sync by 50ms`), however long it is.
+            Action::AudioDelay(Delay::Earlier | Delay::Later) => text.replace(
+                "%s",
+                &format!("{:.0}ms", self.settings.audio_delay_step * 1000.0),
+            ),
             Action::SubtitleDelay(Delay::Earlier | Delay::Later) => {
                 text.replace("%s", &sync_step_label(self.settings.subtitle_delay_step))
             }
@@ -1135,9 +1138,10 @@ impl App {
                 "5 Sec.",
                 &format!("{} Sec.", self.settings.playback.ab.behind),
             ),
-            Action::SetAspect(crate::action::Aspect::Custom) => {
-                text.replace("%s", &self.settings.picture.custom_aspect)
-            }
+            Action::SetAspect(crate::action::Aspect::Custom) => text.replace(
+                "%s",
+                &crate::picture::ratio_label(&self.settings.picture.custom_aspect),
+            ),
             Action::Picture(command) => self.picture_label(command, text),
             _ => text.to_owned(),
         }
