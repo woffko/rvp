@@ -471,7 +471,8 @@ smoothing for users without SVP, after a study of the engines.
   crash at exit).
 - Crash logs go to RVP's state folder: panics (`rvp_app::crash`), fatal
   signals and unhandled exceptions with a minidump (`shell/src/crash.rs`).
-  `rvp --crash-test=panic` or `=native` crashes on purpose.
+  `rvp --crash-test=panic` or `=native` crashes on purpose; checks run
+  it with a state folder of their own (it writes the crash log there).
 - The Windows VM's M8 check is `tools/windows-vm/m8-all.ps1` (the
   installer, `m7-all.ps1` on the installed copy, registry before and
   after, the portable ZIP). Windows' media session manager runs only for a

@@ -33,6 +33,10 @@ Item {
     property var tipShown: null
     // The translation the language steps check (M19): {code, name}.
     property var language: null
+    // The fit check's page, when it was shown, and what overflowed.
+    property int fitPage: -1
+    property real fitShown: 0
+    property var fitOverflow: []
 
     function view() { return JSON.parse(player.settings_view(false)) }
     function setSetting(path, value) {
@@ -434,25 +438,59 @@ Item {
                 }
                 break
             }
-            const overflow = []
-            const walk = (item, page) => {
-                for (const child of item.children || []) {
-                    if (!child.visible)
-                        continue
-                    if (child.text !== undefined && typeof child.text === "string" && child.text !== ""
-                            && child.width > 0 && (child.truncated === true
-                                || (child.wrapMode === Text.NoWrap && child.elide === Text.ElideNone
-                                    && child.implicitWidth > child.width + 2 && child.clip !== true)))
-                        overflow.push(page + ": " + child.text)
-                    walk(child, page)
+            // One page a tick, measured once its layout ran: a page walked
+            // right after showPage still had its fields at their implicit
+            // widths.
+            if (fitPage < 0) {
+                fitPage = 0
+                fitOverflow = []
+            }
+            if (fitPage < settings.pages.length) {
+                if (fitShown === 0) {
+                    settings.showPage(fitPage)
+                    fitShown = Date.now()
+                    break
                 }
+                if (Date.now() - fitShown < 150)
+                    break
+                const walk = (item, page) => {
+                    for (const child of item.children || []) {
+                        if (!child.visible)
+                            continue
+                        if (child.text !== undefined && typeof child.text === "string" && child.text !== ""
+                                && child.width > 0 && (child.truncated === true
+                                    || (child.wrapMode === Text.NoWrap && child.elide === Text.ElideNone
+                                        && child.implicitWidth > child.width + 2 && child.clip !== true)))
+                            fitOverflow.push(page + ": " + child.text)
+                        // A choice's shown text, clipped by its box.
+                        const shown = child.displayText !== undefined ? child.contentItem : null
+                        if (shown && shown.contentWidth !== undefined && shown.width > 0
+                                && shown.contentWidth > shown.width - (shown.leftPadding || 0)
+                                   - (shown.rightPadding || 0) + 2)
+                            fitOverflow.push(page + ": " + child.displayText)
+                        walk(child, page)
+                    }
+                }
+                const page = settings.pageItem(fitPage)
+                if (page) {
+                    walk(page, settings.pages[fitPage].key)
+                    // A row wider than the page's column pushes every row
+                    // past the window's edge (a slider's long value did).
+                    for (const column of page.contentChildren || [])
+                        for (const row of column.children || [])
+                            if (row.visible && row.width > 0 && row.x + row.width > page.availableWidth + 2)
+                                fitOverflow.push(settings.pages[fitPage].key + ": wider than the page ("
+                                                 + Math.round(row.x + row.width) + " > "
+                                                 + Math.round(page.availableWidth) + ", "
+                                                 + String(row).split("_QML")[0].split("(")[0] + " "
+                                                 + String(row.label || row.text || "").slice(0, 40) + ")")
+                }
+                fitPage += 1
+                fitShown = 0
+                break
             }
-            for (let i = 0; i < settings.pages.length; i++) {
-                settings.showPage(i)
-                const page = settings.pageItem(i)
-                if (page)
-                    walk(page, settings.pages[i].key)
-            }
+            const overflow = fitOverflow
+            fitPage = -1
             t.check("m14_language_fits", overflow.length === 0, language.code + " " + overflow.length + " "
                     + overflow.slice(0, 40).join(" | "))
             settings.close()

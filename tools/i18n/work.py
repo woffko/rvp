@@ -6,8 +6,12 @@
         translator's chunks in-NN.json: id, part, context, source,
         comment and REF's translation (a second reference for meaning).
     work.py assemble CODE DIR
-        shell/i18n/<part>_CODE.ts from out-*.json and then fixes*.json
-        (id -> translation; later files win).
+        DIR/CODE/ts/<part>_CODE.ts from out-*.json and then fixes*.json
+        (id -> translation; fixes-N.json win over fixes.json by N), kept out of the
+        repository until `install`.
+    work.py install CODE DIR / work.py remove CODE DIR
+        copy the language's .ts files into shell/i18n (to build, check or
+        commit it) / take them out again when git does not track them.
     work.py back CODE DIR [--size N]
         the reviewer's chunks back-NN.json: id, context, comment and the
         translation, without the English or the reference.
@@ -24,6 +28,7 @@ from __future__ import annotations
 import argparse
 import json
 import re
+import shutil
 import sys
 import unicodedata
 from pathlib import Path
@@ -76,8 +81,15 @@ def prepare(code: str, work: Path, reference: str, size: int) -> None:
 
 def translations(work: Path) -> dict[str, str]:
     found: dict[str, str] = {}
-    for pattern in ("out-*.json", "fixes*.json"):
-        for path in sorted(work.glob(pattern)):
+    # The translator's chunks by name, then the fixes by their number
+    # (fixes.json first, then fixes-2.json, fixes-3.json...; other names
+    # last, by name): a file's time is no order, a rewrite changes it.
+    def fix_order(path: Path) -> tuple[int, str]:
+        tail = path.stem[len("fixes"):].lstrip("-")
+        return (1 if tail == "" else int(tail) if tail.isdigit() else 1000, path.name)
+
+    for pattern, key in (("out-*.json", lambda path: (0, path.name)), ("fixes*.json", fix_order)):
+        for path in sorted(work.glob(pattern), key=key):
             for key, value in load(path).items():
                 if isinstance(value, str) and value.strip():
                     found[key] = value
@@ -98,22 +110,51 @@ def assemble(code: str, work: Path) -> None:
             if not text:
                 missing.append(m["id"])
             out.append(tsfile.Message(m["context"], m["source"], m["comment"], text, not text))
-        tsfile.write(tsfile.I18N / f"{part}_{code}.ts", code, out)
+        (work / "ts").mkdir(exist_ok=True)
+        tsfile.write(work / "ts" / f"{part}_{code}.ts", code, out)
     print(f"{code}: {len(messages) - len(missing)} of {len(messages)} translated"
           + (f"; missing {missing[:10]}" if missing else ""))
 
 
-def current(code: str) -> dict[tuple[str, str, str], str]:
+def current(code: str, work: Path) -> dict[tuple[str, str, str], str]:
+    """The language's translations as assembled in the work folder (else
+    as shell/i18n has them)."""
     found = {}
     for part in tsfile.PARTS:
-        for (context, source), text in tsfile.translations(code, part).items():
-            found[(part, context, source)] = text
+        path = work / "ts" / f"{part}_{code}.ts"
+        if not path.is_file():
+            path = tsfile.I18N / f"{part}_{code}.ts"
+        if not path.is_file():
+            continue
+        _, messages = tsfile.read(path)
+        for m in messages:
+            if m.translation and not m.unfinished:
+                found[(part, m.context, m.source)] = m.translation
     return found
+
+
+def install(code: str, work: Path) -> None:
+    for path in sorted((work / "ts").glob(f"*_{code}.ts")):
+        shutil.copy2(path, tsfile.I18N / path.name)
+        print(f"installed {path.name}")
+
+
+def remove(code: str) -> None:
+    import subprocess
+
+    for path in sorted(tsfile.I18N.glob(f"*_{code}.ts")):
+        tracked = subprocess.run(["git", "ls-files", "--error-unmatch", str(path)], cwd=tsfile.ROOT,
+                                 capture_output=True).returncode == 0
+        if tracked:
+            print(f"kept {path.name}: git tracks it")
+        else:
+            path.unlink()
+            print(f"removed {path.name}")
 
 
 def back(code: str, work: Path, size: int) -> None:
     messages = load(work / "messages.json")["messages"]
-    now = current(code)
+    now = current(code, work)
     rows = []
     for m in messages:
         text = now.get((m["part"], m["context"], m["source"]), "")
@@ -164,7 +205,7 @@ def found_term(term: str, text: str) -> bool:
 
 def compare(code: str, work: Path) -> None:
     messages = {m["id"]: m for m in load(work / "messages.json")["messages"]}
-    now = current(code)
+    now = current(code, work)
     backs: dict[str, str] = {}
     for path in sorted(work.glob("back-out-*.json")):
         backs.update(load(path))
@@ -197,7 +238,7 @@ def compare(code: str, work: Path) -> None:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("command", choices=["prepare", "assemble", "back", "compare"])
+    parser.add_argument("command", choices=["prepare", "assemble", "back", "compare", "install", "remove"])
     parser.add_argument("code")
     parser.add_argument("dir", type=Path)
     parser.add_argument("--reference")
@@ -210,6 +251,10 @@ def main() -> int:
         prepare(args.code, work, args.reference, args.size)
     elif args.command == "assemble":
         assemble(args.code, work)
+    elif args.command == "install":
+        install(args.code, work)
+    elif args.command == "remove":
+        remove(args.code)
     elif args.command == "back":
         back(args.code, work, args.size)
     else:

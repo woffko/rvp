@@ -1429,13 +1429,17 @@ m8_inhibit_without_mpris() {
     fi
 }
 
-# The crash logs of `rvp`: a panic and a fatal signal.
+# The crash logs of `rvp`: a panic and a fatal signal, each in a state
+# folder of its own. Never the user's: on 2026-11-15 an unset
+# RVP_STATE_DIR left the installed RVP's crash log in the owner's state
+# folder (and a removal of the variable's folder could have taken it).
 m8_crash() {
-    local rvp=$1 kind text
+    local rvp=$1 kind text state
     for kind in panic native; do
-        rm -rf "$RVP_STATE_DIR"
-        "$rvp" "--crash-test=$kind" > /dev/null 2>&1
-        text=$(cat "$RVP_STATE_DIR"/crash-*.log 2> /dev/null)
+        state=$(mktemp -d)
+        RVP_STATE_DIR=$state RVP_CONFIG_DIR=$state/config "$rvp" "--crash-test=$kind" > /dev/null 2>&1
+        text=$(cat "$state"/crash-*.log 2> /dev/null)
+        rm -rf "$state"
         case $kind:$text in
             panic:*"panic in thread 'main'"*) echo "check crash_log_panic=PASS" ;;
             native:*"fatal signal 11"*) echo "check crash_log_native=PASS" ;;

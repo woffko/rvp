@@ -2035,11 +2035,11 @@ in %2 seconds</source>
         </message>
         <message>
             <source>High quality audio time stretching (Recommended)</source>
-            <translation>Растяжение звука высокого качества (рекомендуется)</translation>
+            <translation>Высокого качества (рекомендуется)</translation>
         </message>
         <message>
             <source>Default quality audio time stretching</source>
-            <translation>Растяжение звука обычного качества</translation>
+            <translation>Обычного качества</translation>
         </message>
         <message>
             <source>Audio pitch shifting</source>

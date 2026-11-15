@@ -3243,5 +3243,80 @@
         <source>{Same as %1st logo}</source>
         <translation>{Как %1-й логотип}</translation>
     </message>
+    <message>
+        <source>Navigate</source>
+        <extracomment>A submenu's title in RVP's menus.</extracomment>
+        <translation>Навигация</translation>
+    </message>
+    <message>
+        <source>Broadcast Effects</source>
+        <extracomment>A submenu's title in RVP's menus.</extracomment>
+        <translation>Эффекты трансляции</translation>
+    </message>
+    <message>
+        <source>Channel Control</source>
+        <extracomment>A submenu's title in RVP's menus.</extracomment>
+        <translation>Управление каналами</translation>
+    </message>
+    <message>
+        <source>Move</source>
+        <extracomment>A submenu's title in RVP's menus.</extracomment>
+        <translation>Переход</translation>
+    </message>
+    <message>
+        <source>Audio Output</source>
+        <extracomment>A submenu's title in RVP's menus.</extracomment>
+        <translation>Вывод звука</translation>
+    </message>
+    <message>
+        <source>Subtitle Option</source>
+        <extracomment>A submenu's title in RVP's menus.</extracomment>
+        <translation>Параметры субтитров</translation>
+    </message>
+    <message>
+        <source>Angle Option</source>
+        <extracomment>A submenu's title in RVP's menus.</extracomment>
+        <translation>Параметры ракурса</translation>
+    </message>
+    <message>
+        <source>Seamless Playback</source>
+        <extracomment>A submenu's title in RVP's menus.</extracomment>
+        <translation>Бесшовное воспроизведение</translation>
+    </message>
+    <message>
+        <source>Subtitle Font Renderer</source>
+        <extracomment>A submenu's title in RVP's menus.</extracomment>
+        <translation>Отрисовка шрифтов субтитров</translation>
+    </message>
+    <message>
+        <source>Stereo 3D Subtitle Mode</source>
+        <extracomment>A submenu's title in RVP's menus.</extracomment>
+        <translation>Режим стереосубтитров 3D</translation>
+    </message>
+    <message>
+        <source>Subtitle Searching</source>
+        <extracomment>A submenu's title in RVP's menus.</extracomment>
+        <translation>Поиск субтитров</translation>
+    </message>
+    <message>
+        <source>Video Renderer</source>
+        <extracomment>A submenu's title in RVP's menus.</extracomment>
+        <translation>Видеорендерер</translation>
+    </message>
+    <message>
+        <source>Video Transform Filter</source>
+        <extracomment>A submenu's title in RVP's menus.</extracomment>
+        <translation>Фильтр преобразования видео</translation>
+    </message>
+    <message>
+        <source>AviSynth</source>
+        <extracomment>A submenu's title in RVP's menus.</extracomment>
+        <translation>AviSynth</translation>
+    </message>
+    <message>
+        <source>Filters</source>
+        <extracomment>A submenu's title in RVP's menus.</extracomment>
+        <translation>Фильтры</translation>
+    </message>
 </context>
 </TS>

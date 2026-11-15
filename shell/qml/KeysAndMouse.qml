@@ -186,7 +186,9 @@ Item {
                     }
                     Label {
                         text: Tools.tr_menu(rowItem.modelData.label)
-                        elide: Text.ElideRight
+                        // Long names (translations) take a second line
+                        // rather than lose their end (M19).
+                        wrapMode: Text.Wrap
                         Layout.preferredWidth: 220
                     }
                     Flow {

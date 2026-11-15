@@ -192,11 +192,14 @@ fn is_name(label: &str) -> bool {
 }
 
 #[test]
-fn every_language_translates_every_qml_and_packaging_string() {
+fn every_language_translates_every_string() {
+    // Every message any language has (the menu's too: submenu titles that
+    // show only while a file plays, such as "Filters", are not in the
+    // test's menus below).
     let languages = languages();
     assert!(!languages.is_empty(), "no translation in shell/i18n");
     let mut missing = Vec::new();
-    for part in ["qml", "packaging"] {
+    for part in ["qml", "menu", "packaging"] {
         let all = union(&languages, part);
         for code in languages.keys() {
             for (context, source) in &all {

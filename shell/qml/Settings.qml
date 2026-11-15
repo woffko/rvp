@@ -364,6 +364,9 @@ ApplicationWindow {
         objectName: "heading"
         font.bold: true
         topPadding: 10
+        // Long headings (translations) wrap within the page (M19).
+        wrapMode: Text.Wrap
+        Layout.fillWidth: true
     }
     component Note: Label {
         opacity: 0.7
@@ -371,7 +374,17 @@ ApplicationWindow {
         Layout.fillWidth: true
     }
     component Check: CheckBox {
+        id: check
         property string path
+        // Long texts (translations) wrap within the page instead of
+        // widening it past the window (M19).
+        Layout.fillWidth: true
+        contentItem: Label {
+            text: check.text
+            wrapMode: Text.Wrap
+            leftPadding: check.indicator.width + check.spacing
+            verticalAlignment: Text.AlignVCenter
+        }
         checked: win.value(path) === true
         onToggled: win.set(path, checked)
     }
@@ -416,6 +429,9 @@ ApplicationWindow {
     // hides that global in this file: Number(text) failed, and typed values
     // never applied.)
     component Amount: RowLayout {
+        // Within the page's width: a long value (a translation) takes room
+        // from the slider, never from the page (M19).
+        Layout.fillWidth: true
         id: amount
         property string label
         property string path
@@ -483,6 +499,9 @@ ApplicationWindow {
         Slider {
             id: slider
             Layout.preferredWidth: 280
+            Layout.maximumWidth: 280
+            Layout.minimumWidth: 120
+            Layout.fillWidth: true
             from: amount.stepped ? 0 : amount.from
             to: amount.stepped ? amount.values.length - 1 : amount.to
             stepSize: amount.stepped ? 1 : amount.step
@@ -563,7 +582,9 @@ ApplicationWindow {
             Layout.preferredWidth: 240
         }
         ComboBox {
-            Layout.preferredWidth: 300
+            // Room for long choices (translations, M19); filling the row
+            // made the page wider than the window.
+            Layout.preferredWidth: 360
             model: choice.values.map(v => choice.texts[v] !== undefined ? choice.texts[v] : v)
             currentIndex: choice.values.indexOf(win.value(choice.path))
             onActivated: (index) => win.set(choice.path, choice.values[index])
@@ -571,6 +592,9 @@ ApplicationWindow {
     }
     component Field: RowLayout {
         id: field
+        // The page's whole width: the hints in the empty field show whole
+        // in every language (M19).
+        Layout.fillWidth: true
         property string label
         property string path
         property string placeholder
@@ -705,6 +729,10 @@ ApplicationWindow {
     component Page: ScrollView {
         id: page
         default property alias content: column.data
+        // The window sets a page's width, never its content: a long row
+        // (a translation) made the stack wider than the window, and the
+        // page's right side went out of sight (M19).
+        implicitWidth: 0
         contentWidth: availableWidth
         ColumnLayout {
             id: column

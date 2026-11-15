@@ -10,9 +10,9 @@ and the fallback, is written into the code.
 |------|------|-------|
 | 1 | No language in the code | done |
 | 2 | Rules and glossaries (`docs/i18n`) | done |
-| 3 | Translation, one agent per language | |
-| 4 | Review by back-translation and scripts | |
-| 5 | Fit checks and screenshots per language (Xvfb) | |
+| 3 | Translation, one agent per language | in progress |
+| 4 | Review by back-translation and scripts | in progress |
+| 5 | Fit checks and screenshots per language (Xvfb) | in progress |
 | 6 | CJK fonts, README, coverage, AGENTS.md | |
 
 ## Step 1: no language in the code
@@ -71,6 +71,13 @@ five locales: `LANGUAGE=ru` ru, `en_US:ru` en (English first wins),
 `--selftest=m14` with both files: 0 failures; the coverage reports
 rewritten (`RVP_BLESS=1`).
 
+CI at d785012 (step 1): every job green; `package-windows` built the
+installer with `languages.nsh` from the LANGID match, and
+`package-linux`'s Ubuntu 26.10 container check passed (the .deb
+installed, rvp and its 177 libraries resolve, whisper.cpp and the
+VapourSynth runtime present, the self-tests of the .deb, with the gtk3
+theme, of the AppImage, M11 and M16 all PASS).
+
 ## Step 2: rules and glossaries
 
 `docs/i18n/README.md` holds the process, the rules every language
@@ -98,6 +105,22 @@ glossary has all 144 rows in order (checked by script, 217 term pairs by
 
 Every file keeps file-dialog filters' parentheses ASCII (Qt reads the
 patterns from them) and RVP's English key names inside combinations.
+
+## Steps 3 to 5: the languages
+
+Each language: its translator agent's chunks (`out-NN.json`), a blind
+back-translation and review by another agent (`issues.json`), the
+translator's fixes, the reviewer's second look, then
+`--selftest=language` under Xvfb and the screenshot tour looked
+through. Fifteen submenu titles that no check had seen (below) were
+translated by every language afterwards and reviewed with the fixes.
+
+| Language | Review: issues, then left after the second look | Fit | Committed |
+|----------|------------------------------------------------|-----|-----------|
+| `pt_BR` | 137; 0, then 4 in the titles and shortened texts, fixed | PASS | |
+| `de` | 51; 0 | PASS | |
+| `es` | 37; 1, fixed | PASS | |
+| `fr` | 64; 4, fixed | PASS | |
 
 ## Found on the way
 
@@ -130,6 +153,43 @@ patterns from them) and RVP's English key names inside combinations.
   which the test does not load. Left open: libmpv's teardown at the
   process's exit is the likely place.
 
+- **The owner's crash log of 07:23 is explained** (goal U's open item):
+  apport's report (`/var/crash/_opt_rvp_bin_rvp.1000.crash`) names the
+  command, `/usr/bin/rvp --crash-test=native`: the kit's m8 step crashed
+  the installed RVP on purpose to check its crash log, and with
+  `RVP_STATE_DIR` unset there the log went to the owner's state folder.
+  `m8_crash` now gives each crash a state folder of its own (and no
+  longer removes whatever folder the variable names).
+
+- **M14's fit check measured too early.** It walked each settings page
+  right after `showPage`, before the page's layout ran: fields still had
+  their implicit widths, so hints in empty fields counted as cut (the
+  first Spanish, French and Portuguese runs listed 8 to 14 such), while a
+  real cut went unseen (Russian's "Открыть текущий/последний элемент
+  заново" on the Keys and Mouse page, elided). The check now shows one
+  page a tick and measures it 150 ms later. With it, the empty fields'
+  hints fit, and the Keys and Mouse page's action names take a second
+  line instead of being elided; `Field` also spans the page's width.
+
+- **The settings pages were wider than the window in long languages.**
+  The page stack took the widest page's width, and a row that cannot
+  shrink (a checkbox's or heading's unwrapped text, a slider row with a
+  long value) pushed every row of its page past the window's right edge,
+  cutting texts and buttons; Russian's subtitle sync and presets pages
+  already did. The screenshots showed it, the fit check did not. Now
+  checkboxes and headings wrap, a slider gives its room to a long value
+  (120 to 280 px), choices are 360 px, and `Field` spans the page; the
+  fit check also fails a row wider than its page and a choice whose text
+  its box clips. Russian's two time stretching choices became shorter.
+- **Fifteen submenu titles untranslated in every language** ("Filters",
+  "Video Renderer", "Audio Output" and others under DVD Control, TV,
+  Subtitles): they show only while a file plays, so the menu test never
+  saw them. Russian has them (appended to `menu_ru.ts`), and
+  `tests/translations.rs` now also fails a menu message one language has
+  and another lacks. The Filters submenu's lines ("Source: ...", "Video
+  decoder: ...") are formatted in Rust with the codecs' names and stay
+  English, as RVP's other Rust-formatted texts.
+
 ## For goal V-W
 
 The Windows VM is not reachable from this boot. These changes reach
@@ -143,3 +203,5 @@ Windows:
 | M14's language steps (`--language`, `--selftest=language`, `m14_system_language`) | 1 | `SelfTestM14.qml` | `m14-all.ps1` |
 | The installer's languages from the files by LANGID | 1 | `languages.nsh`; Russian's component text as before | `m8-all.ps1` (install and uninstall) |
 | `tests/translations.rs` reads `shell/i18n` | 1 | none (headless) | CI's Windows checks |
+| Every visible QML text through `qsTr` | after 1 | dialogs' titles and filters, the audio device page, formats | `m14-all.ps1` (the texts fit), the file dialogs by hand |
+| M14's fit check measures each page after its layout and fails rows wider than the page and clipped choices; checkboxes, headings and action names wrap, sliders give room to long values, choices are 360 px, `Field` spans the page | 5 | `SelfTestM14.qml`, `Settings.qml`, `KeysAndMouse.qml` | `m14-all.ps1`, and the settings window looked at in a long language |
