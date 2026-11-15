@@ -75,12 +75,15 @@ echo 'void rvp_tensorrt_stub(void) {}' > "$TRT_HOME/stub.c"
 cc -shared -fPIC -Wl,-soname,libnvinfer.so.10 -o "$TRT_HOME/lib/libnvinfer.so.10" "$TRT_HOME/stub.c"
 ln -s libnvinfer.so.10 "$TRT_HOME/lib/libnvinfer.so"
 
-# VapourSynth's headers.
+# VapourSynth's headers, checked by their SHA-256 at VS_TAG like every other
+# download (they were not; the Linux audit's L25).
 VS_INCLUDE=$WORK/vs-include
 mkdir -p "$VS_INCLUDE"
-for header in VapourSynth.h VSHelper.h; do
-    curl -fsSL --retry 3 -o "$VS_INCLUDE/$header" \
-        "https://raw.githubusercontent.com/vapoursynth/vapoursynth/$VS_TAG/include/$header"
+for header in VapourSynth.h:0983c937cd369b7e1766913edd3c859ea1f93a79671579729f24eb90a91ce910 \
+    VSHelper.h:11e2c4977127632aa0fb84c67d5d7eb7244764c52a94500797d4a3cac013e382; do
+    curl -fsSL --retry 3 -o "$VS_INCLUDE/${header%%:*}" \
+        "https://raw.githubusercontent.com/vapoursynth/vapoursynth/$VS_TAG/include/${header%%:*}"
+    echo "${header#*:}  $VS_INCLUDE/${header%%:*}" | sha256sum -c --quiet -
 done
 
 # The kit's clone (RVP_KIT_SOURCES, its source cache), once.

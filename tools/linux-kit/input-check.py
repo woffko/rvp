@@ -114,16 +114,20 @@ class Pointer:
         absolute ones, so only the measured absolute scale is trusted."""
         move_to(*self.units(*start))
         ydotool("click", "0x40")  # left button down
-        time.sleep(0.2)
-        steps = 8
-        for step in range(1, steps + 1):
-            move_to(*self.units(start[0] + delta[0] * step / steps, start[1] + delta[1] * step / steps))
-        # Each absolute move passes through the screen corner; give the
-        # client time to follow the last resize before the button goes up.
-        time.sleep(1.0)
-        move_to(*self.units(start[0] + delta[0], start[1] + delta[1]))
-        time.sleep(1.0)
-        ydotool("click", "0x80")  # left button up
+        # The button goes up whatever fails meanwhile: held, it stayed
+        # pressed on the owner's desktop (the Linux audit's L25).
+        try:
+            time.sleep(0.2)
+            steps = 8
+            for step in range(1, steps + 1):
+                move_to(*self.units(start[0] + delta[0] * step / steps, start[1] + delta[1] * step / steps))
+            # Each absolute move passes through the screen corner; give the
+            # client time to follow the last resize before the button goes up.
+            time.sleep(1.0)
+            move_to(*self.units(start[0] + delta[0], start[1] + delta[1]))
+            time.sleep(1.0)
+        finally:
+            ydotool("click", "0x80")  # left button up
         time.sleep(0.6)
 
 

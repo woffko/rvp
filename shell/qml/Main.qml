@@ -1706,7 +1706,9 @@ Window {
     //                         (default: the clip's name with .png): upright,
     //                         not flipped or mirrored; SKIPPED when the grab
     //                         has no video (Windows session 0)
-    //   --selftest=svp        SVP's acceptance (section 7): SVP attaches
+    //   --selftest=svp        SVP's acceptance (section 7; with
+    //                         --svp-second a second window, which shows
+    //                         RVP's diagnostic instead): SVP attaches
     //                         (@svp) within --svp-wait seconds (default
     //                         90), the frame rate reaches at least
     //                         --svp-factor (default 1.9) times the file's,
@@ -2379,6 +2381,16 @@ Window {
                       () => "time " + s.time)
             break
         case 2:
+            // A second window (`--svp-second`, the kit's m6svp): SVP
+            // attaches to the window on its endpoint only, and this one
+            // says why it did not, as on Windows (the owner, 2026-11-14).
+            if (player.has_option("svp-second")) {
+                if (t.waitFor("svp_second_diagnostic", () => String(s.svp_status).startsWith("SVP did not attach")
+                                  && (s.vf === null || s.vf.indexOf("@svp") < 0), 30000,
+                              () => "status " + s.svp_status + ", vf " + s.vf))
+                    t.finish()
+                break
+            }
             // SVP's first run of a profile may build its engine for a while.
             t.waitFor("svp_attached", () => s.vf !== null && s.vf.indexOf("@svp") >= 0,
                       Number(player.option("svp-wait") || "90") * 1000,

@@ -467,7 +467,9 @@ step_mpv() {
         record mpv PASS "libmpv $MPV_COMMIT build $MPV_BUILD in $prefix (already built)"
         return 0
     fi
-    {
+    # A subshell: its exports and its `cd` stay in it, and an `exit` ends
+    # it, not the kit (the Linux audit's L25).
+    (
         export PATH=$KIT_DIR/venv/bin:$PATH
         # A failing clone must not wait for credentials; rerun the step.
         export GIT_TERMINAL_PROMPT=0
@@ -509,10 +511,14 @@ step_mpv() {
             > ffmpeg_options
         printf '%s\n' -Dvulkan=enabled "-Dvulkan-registry=$sdk/share/vulkan/registry/vk.xml" \
             -Dglslang=disabled -Dshaderc=enabled > libplacebo_options
-        ./update
-        ./rebuild "-j$JOBS"
-        ./install
-    } > "$log" 2>&1
+        # A failed rebuild left the last libmpv in place, which passed.
+        ./update && ./rebuild "-j$JOBS" && ./install
+    ) > "$log" 2>&1
+    local built=$?
+    if [ "$built" -ne 0 ]; then
+        record mpv FAIL "exit $built, see $log"
+        return 1
+    fi
     lib=$(ls "$prefix"/lib/x86_64-linux-gnu/libmpv.so.2* "$prefix"/lib/libmpv.so.2* 2> /dev/null | head -1)
     if [ -z "$lib" ]; then
         record mpv FAIL "see $log"
@@ -1578,20 +1584,22 @@ step_m6svp() {
     : > "$log"
     echo "== first window" >> "$log"
     VSSCRIPT_PATH=${vsscript:-${VSSCRIPT_PATH:-}} PYTHONDONTWRITEBYTECODE=1 \
-        "$(rvp_bin)" --selftest=svp "--out=$out" "--skin=${RVP_SKIN:-}" \
+        timeout --kill-after=15 600 "$(rvp_bin)" --selftest=svp "--out=$out" "--skin=${RVP_SKIN:-}" \
         --mpv-options=hwdec=auto-copy "$(s1_video)" > "$LOG_DIR/m6svp-first.log" 2>&1 &
     pid=$!
     # The second window starts once the first holds the endpoint.
     sleep 8
-    # Its own settings and state: two processes must not share them.
+    # Its own settings and state: two processes must not share them. SVP
+    # attaches to the window on its endpoint only: the second one shows
+    # RVP's diagnostic, as on Windows (the owner, 2026-11-14).
     echo "== second window (/new)" >> "$log"
     mkdir -p "$LOG_DIR/m6svp-config2"
     cp "$RVP_CONFIG_DIR/settings.json" "$LOG_DIR/m6svp-config2/"
     rm -rf "$LOG_DIR/m6svp-state2"
     RVP_CONFIG_DIR=$LOG_DIR/m6svp-config2 RVP_STATE_DIR=$LOG_DIR/m6svp-state2 \
         VSSCRIPT_PATH=${vsscript:-${VSSCRIPT_PATH:-}} PYTHONDONTWRITEBYTECODE=1 \
-        "$(rvp_bin)" /new --selftest=svp "--out=$out" "--skin=${RVP_SKIN:-}" \
-        --mpv-options=hwdec=auto-copy "$(s1_video)" > "$LOG_DIR/m6svp-second.log" 2>&1
+        timeout --kill-after=15 300 "$(rvp_bin)" /new --selftest=svp --svp-second "--out=$out" \
+        "--skin=${RVP_SKIN:-}" --mpv-options=hwdec=auto-copy "$(s1_video)" > "$LOG_DIR/m6svp-second.log" 2>&1
     second=$?
     wait "$pid"
     first=$?
@@ -1599,7 +1607,7 @@ step_m6svp() {
     echo "== second window log" >> "$log"
     cat "$LOG_DIR/m6svp-second.log" >> "$log"
     local detail
-    detail="first=$first second=$second $(grep -hE '^svp_endpoint=|^check svp_(attached|target_fps)' "$LOG_DIR/m6svp-first.log" "$LOG_DIR/m6svp-second.log" | tr '\n' ' ')"
+    detail="first=$first second=$second $(grep -hE '^svp_endpoint=|^check svp_(attached|target_fps|second_diagnostic)' "$LOG_DIR/m6svp-first.log" "$LOG_DIR/m6svp-second.log" | tr '\n' ' ')"
     if [ "$first" -eq 0 ] && [ "$second" -eq 0 ]; then
         record m6svp PASS "$detail"
     else
@@ -1681,8 +1689,12 @@ kit_run() {
         cp -a "$KIT_RUN_MPV" "$RVP_CONFIG_DIR/mpv"
     fi
     echo "== $name" >> "$log"
-    "$(rvp_bin)" "$@" > "$run" 2>&1
+    # A run that hangs (a self-test that never ends, an exit that waits)
+    # fails here instead of holding the kit up for good: M14's self-test
+    # once waited at exit (goal U).
+    timeout --kill-after=15 "${KIT_RUN_TIMEOUT:-900}" "$(rvp_bin)" "$@" > "$run" 2>&1
     code=$?
+    [ "$code" -eq 124 ] && echo "kit: $name timed out after ${KIT_RUN_TIMEOUT:-900} s" >> "$run"
     echo "kit_exit=$code" >> "$run"
     cat "$run" >> "$log"
     return "$code"
