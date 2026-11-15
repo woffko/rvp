@@ -26,6 +26,7 @@
 
 #include <fcntl.h>
 #include <linux/joystick.h>
+#include <sys/ioctl.h>
 #include <unistd.h>
 #endif
 
@@ -137,9 +138,15 @@ void emitButton(int button)
 }
 
 // A press or release of the left button where the pointer is, in RVP's
-// window there (the system takes no injected input from a program).
+// window there (the system takes no injected input from a program). With
+// "act only when RVP has the focus" a press while another program has it
+// does nothing, as on Windows (the Linux audit's L20); a release always
+// goes, so no press stays held.
 void click(bool down)
 {
+    Pad &state = pad();
+    if (down && state.focusOnly && QGuiApplication::applicationState() != Qt::ApplicationActive)
+        return;
     const QPoint global = QCursor::pos();
     for (QWindow *window : QGuiApplication::topLevelWindows()) {
         if (!window->isVisible() || !window->geometry().contains(global))
@@ -184,9 +191,11 @@ void readPad()
         if (kind == JS_EVENT_AXIS && event.number < 8) {
             const int before = state.axes[event.number];
             state.axes[event.number] = event.value;
-            // The pad is two axes: a move off the middle is a press.
-            if (!initial && (event.number == kAxisPadX || event.number == kAxisPadY) && before == 0
-                && event.value != 0) {
+            // The pad is two axes: a move off the middle is a press, and so
+            // is a move straight to the other side (a quick left to right
+            // with no centre between them).
+            const bool pressed = event.value != 0 && (before == 0 || (before < 0) != (event.value < 0));
+            if (!initial && (event.number == kAxisPadX || event.number == kAxisPadY) && pressed) {
                 const bool vertical = event.number == kAxisPadY;
                 emitButton(vertical ? (event.value < 0 ? 8 : 9) : (event.value < 0 ? 10 : 11));
             }
@@ -202,7 +211,8 @@ void readPad()
     }
 }
 
-// Opens the first joystick device when none is open.
+// Opens the first gamepad (a joystick device with buttons) when none is
+// open.
 void findPad()
 {
     Pad &state = pad();
@@ -215,6 +225,14 @@ void findPad()
         const int fd = ::open(path.constData(), O_RDONLY | O_NONBLOCK | O_CLOEXEC);
         if (fd < 0)
             continue;
+        // A gamepad has buttons: a laptop's accelerometer is a joystick of
+        // axes alone and would hold the slot of a controller plugged in
+        // later.
+        unsigned char buttons = 0;
+        if (::ioctl(fd, JSIOCGBUTTONS, &buttons) < 0 || buttons < 4) {
+            ::close(fd);
+            continue;
+        }
         state.fd = fd;
         state.notifier = new QSocketNotifier(fd, QSocketNotifier::Read);
         QObject::connect(state.notifier, &QSocketNotifier::activated, readPad);
