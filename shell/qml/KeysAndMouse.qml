@@ -184,25 +184,38 @@ Item {
                     anchors.fill: parent
                     anchors.margins: 4
                     spacing: 6
+                    // In a narrow row the action's name and the keys give
+                    // room down to their minimums; the scope and the
+                    // buttons keep their texts' widths (a layout shrinks
+                    // every item without a minimum, and the keys' column
+                    // had shrunk under its own buttons, M19).
                     Label {
                         text: editor.scopeText(rowItem.modelData.scope)
                         opacity: 0.6
                         Layout.preferredWidth: editor.scopeWidth
+                        Layout.minimumWidth: editor.scopeWidth
                     }
                     Label {
                         text: Tools.tr_menu(rowItem.modelData.label)
                         // Long names (translations) take a second line
                         // rather than lose their end (M19).
                         wrapMode: Text.Wrap
+                        Layout.fillWidth: true
                         Layout.preferredWidth: 220
+                        Layout.minimumWidth: 100
                     }
                     Flow {
+                        id: keysFlow
                         Layout.fillWidth: true
+                        Layout.preferredWidth: 150
+                        Layout.minimumWidth: 110
                         spacing: 4
                         Repeater {
                             model: rowItem.modelData.keys
                             delegate: Button {
                                 required property string modelData
+                                // Never past the column: a longer name elides.
+                                width: Math.min(implicitWidth, keysFlow.width)
                                 text: modelData + "  ×"
                                 flat: true
                                 onClicked: {
@@ -216,6 +229,7 @@ Item {
                             model: rowItem.modelData.gestures
                             delegate: Button {
                                 required property string modelData
+                                width: Math.min(implicitWidth, keysFlow.width)
                                 text: editor.gestureText(modelData) + "  ×"
                                 flat: true
                                 onClicked: {
@@ -228,10 +242,12 @@ Item {
                     }
                     Button {
                         text: qsTr("Key…")
+                        Layout.minimumWidth: implicitWidth
                         onClicked: editor.startCapture(rowItem.modelData)
                     }
                     Button {
                         text: qsTr("Mouse…")
+                        Layout.minimumWidth: implicitWidth
                         visible: rowItem.modelData.scope === "window"
                         onClicked: gestureMenu.popup()
                         Menu {
@@ -248,6 +264,7 @@ Item {
                     }
                     Button {
                         text: qsTr("Reset")
+                        Layout.minimumWidth: implicitWidth
                         onClicked: {
                             editor.player.editor_reset(rowItem.modelData.scope, rowItem.modelData.name)
                             editor.notice = qsTr("“%1” has PotPlayer's keys again").arg(Tools.tr_menu(rowItem.modelData.label))

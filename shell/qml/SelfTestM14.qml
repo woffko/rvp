@@ -462,6 +462,15 @@ Item {
                                     || (child.wrapMode === Text.NoWrap && child.elide === Text.ElideNone
                                         && child.implicitWidth > child.width + 2 && child.clip !== true)))
                             fitOverflow.push(page + ": " + child.text)
+                        // A Flow's item past its right edge lies under
+                        // whatever follows it (the Keys page's key names
+                        // did, under its buttons).
+                        // (A Flow squeezed to no width at all is the worst case.)
+                        if (child.flow !== undefined && child.layoutDirection !== undefined)
+                            for (const item of child.children)
+                                if (item.visible && item.width > 0 && item.x + item.width > child.width + 2)
+                                    fitOverflow.push(page + ": " + (item.text || String(item))
+                                                     + " (past its column)")
                         // A choice's shown text, clipped by its box.
                         const shown = child.displayText !== undefined ? child.contentItem : null
                         if (shown && shown.contentWidth !== undefined && shown.width > 0
