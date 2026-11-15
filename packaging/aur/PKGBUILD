@@ -19,7 +19,8 @@ optdepends=('libpulse: the master volume and audio recording (pactl, parec)'
             'whisper.cpp: subtitles from audio'
             'vapoursynth: motion smoothing (with vapoursynth-plugin-mvtools)'
             'vapoursynth-plugin-mvtools: motion smoothing with MVTools'
-            'curl: the TensorRT download for RIFE (TensorRT)')
+            'curl: the TensorRT download for RIFE (TensorRT)'
+            'noto-fonts-cjk: the Chinese, Japanese and Korean interfaces')
 # lld: qt-build-utils links with lld, gold or mold; qt6-tools: lrelease
 # for the translations (shell/build.rs).
 makedepends=('rustup' 'clang' 'lld' 'python' 'qt6-tools')

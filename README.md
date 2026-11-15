@@ -95,7 +95,12 @@ mpv cannot draw; searching for subtitles online is put off for later.
 - Preferences with search, and presets you can switch between, export and
   import.
 - The F7 control panel for sound, picture, subtitles and playback.
-- An English and a Russian interface.
+- The interface in fourteen languages: English, Russian, Brazilian
+  Portuguese, German, Spanish, French, Italian, Polish, Ukrainian,
+  Turkish, Simplified and Traditional Chinese, Japanese and Korean. RVP
+  starts in the system's language. The translations were written and
+  cross-checked by AI agents, so corrections from native speakers are
+  welcome.
 
 ![The control panel (F7) over the video](docs/images/control-panel.webp)
 

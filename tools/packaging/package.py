@@ -674,9 +674,10 @@ def deb(appdir: Path, relied: set[str], target: Path, epoch: int) -> None:
             # (pactl, parec), text to speech (spd-say), the desktop's
             # handler cache (update-desktop-database), RIFE (TensorRT)'s
             # download (curl); GTK 3 for the desktop's file dialogs (the
-            # gtk3 theme, GTK above).
+            # gtk3 theme, GTK above); Noto CJK for the Chinese, Japanese and
+            # Korean interfaces (M19).
             "Recommends: pulseaudio-utils, speech-dispatcher, desktop-file-utils, curl,"
-            " libgtk-3-0 | libgtk-3-0t64\n"
+            " libgtk-3-0 | libgtk-3-0t64, fonts-noto-cjk\n"
             "Section: video\n"
             "Priority: optional\n"
             "Description: PotPlayer-style media player\n"

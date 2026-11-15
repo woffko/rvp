@@ -6,14 +6,22 @@ checks on the Windows VM what reaches Windows ("For goal V-W" below).
 The owner's rule (2026-11-15): no language but English, the source text
 and the fallback, is written into the code.
 
+State (2026-11-16): done on this boot. RVP has fourteen interface
+languages: English and Russian, and the twelve of goal V (`pt_BR`, `de`,
+`es`, `fr`, `it`, `pl`, `uk`, `tr`, `zh_CN`, `zh_TW`, `ja`, `ko`), each
+translated, reviewed through a blind back-translation, fixed and looked
+at again, fitting every settings text under Xvfb, and each language's
+screenshot tour looked through. RVP starts in the system's language.
+Goal V-W checks on the Windows VM what the last section lists.
+
 | Step | What | State |
 |------|------|-------|
 | 1 | No language in the code | done |
 | 2 | Rules and glossaries (`docs/i18n`) | done |
-| 3 | Translation, one agent per language | in progress |
-| 4 | Review by back-translation and scripts | in progress |
-| 5 | Fit checks and screenshots per language (Xvfb) | in progress |
-| 6 | CJK fonts, README, coverage, AGENTS.md | |
+| 3 | Translation, one agent per language | done |
+| 4 | Review by back-translation and scripts | done |
+| 5 | Fit checks and screenshots per language (Xvfb) | done |
+| 6 | CJK fonts, README, coverage, AGENTS.md | done |
 
 ## Step 1: no language in the code
 
@@ -125,10 +133,44 @@ translated by every language afterwards and reviewed with the fixes.
 | `pl` | 59; 1 (a text too long), fixed | PASS | yes |
 | `uk` | 47; 0, then 1 choice shortened for its box | PASS | yes |
 | `zh_CN` | 36; 0 | PASS | yes |
-| `tr` | 88; 0, then 1 choice shortened for its box | | yes |
-| `zh_TW` | 47; 1, fixed | | yes |
-| `ja` | 15; 0 | | yes |
-| `ko` | 50; 0 | | yes |
+| `tr` | 88; 0, then 1 choice shortened for its box | PASS | yes |
+| `zh_TW` | 47; 1, fixed | PASS | yes |
+| `ja` | 15; 0 | PASS, after the Keys page's scope column (below) | yes |
+| `ko` | 50; 0 | PASS | yes |
+
+The last round (2026-11-16, all commits in, Xvfb): `tools/i18n/check.sh`
+with both tour videos for every language, 13 of 13 PASS (0 texts that
+do not fit) and six shots each, looked through: the settings pages, the
+Keys and Mouse page, the menu, the control panel and the player.
+Chinese, Japanese and Korean show in Noto Sans CJK with no missing
+glyphs (no boxes, no fallback gaps), but Japanese and Simplified
+Chinese had Traditional Chinese's shapes (below). The pictures also
+showed a cut the check had missed, the Keys and Mouse page's key names
+under the row's buttons in every language (below); after both fixes the
+check runs 13 of 13 PASS again, Japanese's and Simplified Chinese's
+tours show their own shapes, and the README's two settings pictures
+were taken again in English (`tour.sh` at 1920x1080).
+
+## Step 6: fonts, README, coverage, AGENTS.md
+
+- **CJK fonts**: the .deb recommends `fonts-noto-cjk` (`package.py`'s
+  Recommends, beside GTK's) and the AUR recipe lists `noto-fonts-cjk`
+  among its optional dependencies; the AppImage uses the system's fonts
+  as before. Windows has its own (Microsoft YaHei, JhengHei, Yu Gothic,
+  Malgun Gothic), which Qt finds by its fallbacks: goal V-W looks at
+  them.
+- **README**: the interface in fourteen languages, named, RVP starting
+  in the system's language, and a note that AI agents wrote and
+  cross-checked the translations, with corrections from native speakers
+  welcome.
+- **Coverage** (`RVP_BLESS=1`): the Interface Language reasons say that
+  RVP lists English and its own translations by their own names and
+  shows English for a language it lacks, and that RVP's built-in
+  language is English where PotPlayer's is Korean
+  (`docs/coverage/menus.md`).
+- **AGENTS.md**'s M14 section: the translation process (`work.py`,
+  `check.sh`), the rule that a settings row must shrink to its page, the
+  CJK fonts, and the filled menu labels' one form per kind of value.
 
 ## Found on the way
 
@@ -197,6 +239,47 @@ translated by every language afterwards and reviewed with the fixes.
   and another lacks. The Filters submenu's lines ("Source: ...", "Video
   decoder: ...") are formatted in Rust with the codecs' names and stay
   English, as RVP's other Rust-formatted texts.
+- **Menu labels filled with a value fell back to English** in some of
+  their forms: the audio sync step of a second or more ("1.5 Sec", where
+  PotPlayer's items name it in ms), a skip of a minute or more ("Skip
+  Intro 1 Min 30 Sec"), a custom or Extend/Crop ratio written as a number
+  or with "/" ("Custom (2.35)"), and the shutdown timer once set
+  ("Shutdown at 23:30"; "In" named the time as typed, "90" too). The
+  audio step is always in ms now, ratios show as `W:H` or the number, the
+  timer's "In" label is `h:mm` (`h:mm:ss`), and every menu file has the
+  other forms (ten messages a language), derived from its reviewed
+  translation of the same item; the time's word order was written by
+  hand for Turkish, Traditional Chinese and Japanese. The menu test now
+  walks the menus with such settings and with each timer set.
+- **The Keys and Mouse page's scope column** was 60 px, which Japanese's
+  "Window" (ウィンドウ) overflows on every row; it takes the longer of
+  its two words in the language shown.
+- **The Keys and Mouse page's key names lay under the row's buttons**
+  in every language, English's README picture too ("MediaPlayPause"
+  under Key...): a `RowLayout` shrinks every item without a minimum
+  width, and the keys' `Flow` had shrunk to almost nothing (Russian's
+  and German's to no width at all). The action's name and the keys now
+  give room down to minimums of their own, the buttons keep their
+  texts' widths, and a key's button never reaches past its column. M14's
+  fit check now also fails a `Flow`'s item past its right edge: run on
+  the old page, it listed 15 in Russian and German; on the new one, 0 in
+  every language.
+- **Japanese and Simplified Chinese in Traditional Chinese's shapes**:
+  the ideographic comma (、) stood in the middle of the line, as
+  Traditional Chinese writes it, where Japanese and Simplified Chinese
+  put it low. Han characters take their shapes from a language, and
+  fontconfig orders Noto Sans CJK's variants by `FC_LANG` or the locale,
+  here the owner's `ru_RU`. The tour under `FC_LANG=ja` showed
+  Japanese's comma. RVP now sets `FC_LANG` from a language chosen in its
+  settings before Qt starts (`player::font_language`, Linux; the user's
+  own `FC_LANG` wins, "auto" is the locale's language already); the
+  Japanese and Simplified Chinese tours without it in the environment
+  show their own shapes. Windows picks its CJK fonts by the system's
+  language: goal V-W looks at a language other than the system's.
+- **Traditional Chinese's "Filters"**: the translator's fix made the
+  submenu 篩選器 (a filter of a list); the reviewer's second look kept
+  濾鏡, since RVP's Filters submenu lists mpv's filter chain, and the
+  glossary says so.
 
 ## For goal V-W
 
@@ -213,3 +296,8 @@ Windows:
 | `tests/translations.rs` reads `shell/i18n` | 1 | none (headless) | CI's Windows checks |
 | Every visible QML text through `qsTr` | after 1 | dialogs' titles and filters, the audio device page, formats | `m14-all.ps1` (the texts fit), the file dialogs by hand |
 | M14's fit check measures each page after its layout and fails rows wider than the page and clipped choices; checkboxes, headings and action names wrap, sliders give room to long values, choices are 360 px, `Field` spans the page | 5 | `SelfTestM14.qml`, `Settings.qml`, `KeysAndMouse.qml` | `m14-all.ps1`, and the settings window looked at in a long language |
+| Twelve new languages (`shell/i18n/*_<code>.ts`) | 3 | the bundle's `.qm` files, the settings window and menus in each | `--selftest=m14 --language=CODE` for every language; the settings window and menus looked at, Chinese, Japanese and Korean in Windows' own fonts |
+| The installer in each language (`languages.nsh` from the packaging files) | 3 | the installer's texts and RVP's components | `m8-all.ps1` (install and uninstall) with the installer in each language |
+| The Keys and Mouse page's scope column takes its words' width; the key names keep their column (minimum widths); M14's fit check fails a `Flow`'s item past its edge | 5 | `KeysAndMouse.qml`, `SelfTestM14.qml` | `m14-all.ps1` in Japanese and Russian, and the Keys and Mouse page looked at |
+| Han characters' shapes follow the system's language on Windows (Qt's fallback fonts); `FC_LANG` is Linux's | 5 | none: `player::font_language` is Linux's | Japanese and Simplified Chinese on the English VM: whether 、 and 。 sit low (Yu Gothic, Microsoft YaHei) or take another language's shapes; record which |
+| Filled menu labels: the audio sync step in ms, ratios as `W:H` or the number, the timer's "In" label as `h:mm`, their forms in every menu file | 5 | `app.rs`, `picture.rs`, `PlaybackDialogs.qml`, the menu files | `tests/translations.rs` built with `cargo xwin test --no-run`; the timer dialog's "In" with "90" shows "1:30" |

@@ -546,8 +546,12 @@ smoothing for users without SVP, after a study of the engines.
   translation of the same language for another region.
 - Every user-visible QML string goes through `qsTr` (with `.arg()` for
   values); menu and action labels from Rust go through `Tools.tr_menu`,
-  which sets numbers aside as `%1`, `%2`... A QML file that uses `Tools`
-  imports `RvpNative`. After changing strings run `lupdate -no-obsolete
+  which sets numbers aside as `%1`, `%2`... A label filled with a value
+  (`App::fill_step`) takes one written form per kind of value (a ratio
+  `W:H` or a number, the timer's `h:mm`, the audio sync step in ms), each
+  with its message in every menu file; `tests/translations.rs` walks the
+  menus also with other settings and each timer set. A QML file that
+  uses `Tools` imports `RvpNative`. After changing strings run `lupdate -no-obsolete
   -locations none` on the QML files (not the `SelfTest*` ones) into every
   `qml_<code>.ts`, translate the new entries in each language (its rules
   in `docs/i18n`) and keep texts short enough for their controls:
@@ -558,6 +562,28 @@ smoothing for users without SVP, after a study of the engines.
   not fit. The Windows installer's languages are made by
   `tools/packaging/package.py` from the same files, each found among
   NSIS's language files by its LANGID.
+- New or changed strings in a language follow `docs/i18n/README.md`'s
+  process: `tools/i18n/work.py` prepares the translator's chunks, the
+  blind back-translation and the side-by-side comparison in a work
+  folder outside the repository, and assembles and installs the `.ts`
+  files; a translator other than the reviewer, then fixes, then a second
+  look. `tools/i18n/check.sh OUT [CODE...]` runs each language's fit
+  check (and, with `TOUR_FIRST` and `TOUR_SECOND`, its screenshot tour)
+  on an Xvfb screen of its own, isolated like the tour.
+- A settings row must be able to shrink to the page's width: checkboxes
+  and headings wrap, sliders give room to long values, choices are
+  360 px; a new control on a page keeps that, or a long language pushes
+  the page past the window (M14's fit check fails a row wider than its
+  page, a choice whose box clips its text and a `Flow`'s item past its
+  edge). In a `RowLayout` every item without `Layout.minimumWidth`
+  can shrink to nothing: give texts that must stay whole their minimum.
+- Chinese, Japanese and Korean need a CJK font: the .deb recommends
+  `fonts-noto-cjk` and the AUR recipe lists `noto-fonts-cjk`; Windows
+  has its own. Han characters take their shapes from a language, which
+  fontconfig takes from `FC_LANG` or the locale: on Linux a language
+  chosen in RVP is set as `FC_LANG` before Qt starts
+  (`player::font_language`; the user's own wins), so it applies from
+  the next start.
 - The QML engine keeps its last translation when `Qt.uiLanguage` names
   a language without a `.qm` file, and loads the system's at start:
   English is `Qt.uiLanguage = ""` (`Main.qml` `applyLanguage`).
