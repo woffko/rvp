@@ -11,7 +11,8 @@ runner's desktop session, which the VM lacks. Precondition met:
 **M8's acceptance on Linux, like M6's, still needs the owner's Ubuntu boot
 run** (`tools/linux-kit/kit.sh m8all`, checklist sections 8 and 9; the
 `/goal` text is in PLAN.md section 10): GNOME 26.10's media controls,
-screen and associations with the installed package.
+screen and associations with the installed package. The run took place
+on 2026-11-14 ("Ubuntu boot run", below).
 
 ## M8 summary
 
@@ -121,12 +122,25 @@ screen and associations with the installed package.
 | NSIS | 3.09 (WSL: Ubuntu's packages, unpacked into `~/rvp-deps/nsis`; CI: the runner's) |
 | AppImage runtime | type2-runtime 20251108 |
 
+## Ubuntu boot run
+
+2026-11-14, the owner's Ubuntu 26.10 boot (GNOME 51 on Wayland, the
+desktop's own session bus), the kit's steps of m17all
+(`docs/goals/goal-s-status.md`, "Ubuntu boot run", has the whole run):
+
+| Check | Result |
+|-------|--------|
+| `m8package` (dbde0cd) | PASS: AppImage 147 MB, .deb 116 MB, built against the kit's Qt and libmpv on 26.10 (with RVP's VapourSynth runtime, vs-mlrt, whisper.cpp and the disc libraries) |
+| `m8` | PASS, 14 checks: the AppImage's self-test; the .deb installed by the owner with `apt` on 26.10, its files, a valid desktop entry, the registration for `video/x-matroska` with GNOME's Showtime still the default, its self-test; MPRIS on GNOME's own bus (playing, metadata, Pause, Quit); the screen kept on while the video plays and released when paused (`IsInhibited 8`: false, true, false), which the VMs could not check; the crash logs (a panic; a native crash) |
+| `m7` (RVP Default on 26.10) | PASS |
+
+On Ubuntu a native crash of the installed copy also reaches apport:
+`--crash-test=native` leaves `/var/crash/_opt_rvp_bin_rvp.<uid>.crash`,
+and apport offers to report it (close it without sending).
+
 ## Open items
 
-- The Ubuntu boot run for M6, M7 and M8 (PLAN.md section 10). The owner
-  installs and removes the .deb when `m8` asks (`sudo apt install`, then
-  `sudo apt remove rvp` and `kit.sh m8removed report`), and tries the
-  checklist's section 9 by hand.
+- The Ubuntu boot run for M6, M7 and M8: done on 2026-11-14 (above).
 - Optional, by hand on the host: the media flyout and the media keys with
   RVP (the portable build of this goal is in
   `C:\Users\<user>\rvp-test\m8-smtc\RVP`; `m8-smtc.ps1` beside it runs

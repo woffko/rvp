@@ -392,6 +392,9 @@ Then try by hand (M8's acceptance on Linux):
 - [ ] The AppImage (`chmod +x` it, run it) plays a film the same way.
 - [ ] `rvp --crash-test=native` ends at once and leaves
       `crash-<time>-native.log` in `~/.local/state/rvp`; delete it after.
+      On Ubuntu apport also catches the crash (as it does `m8`'s): close
+      its report without sending and delete
+      `/var/crash/_opt_rvp_bin_rvp.<uid>.crash`.
 
 ## 10. Milestones M9 to M18 on Linux (goal S)
 

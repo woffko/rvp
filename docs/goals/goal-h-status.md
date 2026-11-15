@@ -13,7 +13,8 @@ fixed ahead of M6.
 **M6's acceptance still needs the owner's Ubuntu boot run**
 (`tools/linux-kit/kit.sh m6all`, checklist section 8): SVP and the GPU on
 Linux, the script slot with SVP's VapourSynth, and the manual checks. This
-goal did not wait for it.
+goal did not wait for it. The run took place on 2026-11-14 ("Ubuntu boot
+run", below).
 
 ## Carry-overs from the Ubuntu boot run
 
@@ -217,9 +218,31 @@ On the Ubuntu boot: `tools/linux-kit/kit.sh m6all` and the manual checks
 of checklist section 8 (M6's acceptance on Linux, the speed carry-over,
 whether SVP for Linux finds a second window, `m6gpu`).
 
+## Ubuntu boot run
+
+2026-11-14, the owner's Ubuntu 26.10 boot (GNOME 51 on Wayland, PipeWire
+1.6.8, RTX 50-series card, SVP 4.7.0.321), the kit's steps of m17all at 71683c5
+(`docs/goals/goal-s-status.md`, "Ubuntu boot run", has the whole run and
+the owner's choices: no Windows partition, so no BlackSpace and no
+PotPlayer script):
+
+| Check | Result |
+|-------|--------|
+| `m6` | PASS: F7's panel, its colour slider and reset, an equalizer band and the EQ button, Shift+P's shader, SVP's diagnostic ("SVP 4 Manager is not running"), the headless video and equalizer tests |
+| Carry-over 1, the speed | 0 frames dropped after 1.1x -> 1x against 0 in steady playback, on PipeWire, where goal G counted 14: fixed |
+| Carry-over 3, upright | PASS in a window, with the pointer over it and in fullscreen with and without the bars (mean colour distance 1.17; flipped 103.5, mirrored 149.2, turned 82.7) |
+| The script slot | RVP's own PotPlayer-style script (`vs.get_core()`) with SVP's VapourSynth: 23.976 -> 43.2 fps. PotPlayer's `motioninterpolation.vpy`: not run |
+| `m6gpu` | 2 frames dropped in 25 s of 4K60 in fullscreen with colours, deband, a shader and the equalizer on (single frames) |
+| `m2svp` | PASS: SVP's filter after 1.66 s, RVP exits with 0 |
+| `m6svp`, SVP's acceptance | The window on `/tmp/mpvsocket`: SVP's filter after 2.1 s, 23.976 fps in, 59.5 out on the 60 Hz screen, in sync after three seeks (avsync 0), RVP's filters in front of `@svp` and SVP's entry untouched: PASS |
+| `m6svp`, the second window (`/new`) | SVP 4 for Linux does not attach to `/tmp/mpvSockets/<pid>` (90 s), as SVP 4 for Windows does not; RVP's diagnostic says why. The answer to this goal's open question: the window SVP serves is the one on SVP's endpoint, on both systems |
+
 ## Open items
 
-1. The Ubuntu boot run of M6 (above).
+1. The Ubuntu boot run of M6: done on 2026-11-14 (above). Left: whether
+   `m6svp` should expect the second window's diagnostic instead of SVP
+   (the owner's), and PotPlayer's script on Linux (the Windows partition
+   was not mounted).
 2. The owner's checks of the control panel and the new commands on
    Windows.
 3. Optional, not planned: a subtitle font choice for the control panel.
