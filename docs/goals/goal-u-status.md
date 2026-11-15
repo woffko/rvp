@@ -479,11 +479,15 @@ The audit's plan had M7 and L15 in no package; both are here.
   opened `clip-a.mkv`, the session showed its title but the status
   "Opened" for 30 s, so `playing_title` and `buttons_playing` failed,
   while every later step (Pause, Play, Next, Previous, Stop) passed.
-  f83ab88 and 7c652aa passed it with the same code for Windows, and no
-  change of goal U touches that path on Windows (`media_controls.rs`, the
-  media state): goal U-W looks at it on the VM, where the check runs
-  with a desktop (`m8-all.ps1` and the host's media session, with
-  permission).
+  f83ab88 and 7c652aa passed it with the same code for Windows, and its
+  rerun failed again. The title reached the session and the status did
+  not: a status sent before Windows' session manager had taken the
+  window's controls in is lost, and `Controls::show` never sent an
+  unchanged one again (goal U likely made the first update come earlier).
+  The controls now send their state again each second in their first 10
+  seconds (`media_controls.rs`, Windows only; built and checked by CI's
+  Windows jobs only, since this boot builds no Windows code). Goal U-W
+  runs `m8-smtc.ps1` and `m8-all.ps1` on the VM a few times.
 
 ### The final run (2026-11-15, this boot, the .deb of 444110e installed)
 
@@ -538,4 +542,4 @@ Windows bundle at goal U's last commit and runs the VM's checks below.
 | m6svp's second window and `--svp-second` | 11 | `Main.qml`'s svp self-test option | the host's SVP check, with permission |
 | The calibration core waits for its shutdown | 11 | `crates/engine/src/calibrate.rs` (RVP's calibration, `render_vf`'s users) | `m18-all.ps1` with `--calibrate`, and RIFE (TensorRT) on the host with permission |
 | M10's self-test waits a second before Audio Stretching | 11 | `Main.qml` | `m10-all.ps1` |
-| (No change: CI's media-controls check failed 3 of 5 runs since 97cb380, see package 11) | - | the first "Playing" status on the hosted runner | `m8-all.ps1`, `m8-smtc.ps1` on the VM a few times |
+| The media controls send their state again each second in their first 10 s | 11 | `shell/src/media_controls.rs` (Windows only) | `m8-smtc.ps1` and `m8-all.ps1` on the VM, a few times |

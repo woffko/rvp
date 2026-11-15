@@ -4,6 +4,8 @@
 //! (one FFI point, AGENTS.md); button presses arrive on a system thread and
 //! go to the window's thread.
 
+use std::time::{Duration, Instant};
+
 use cxx_qt::CxxQtThread;
 use rvp_app::media::{MediaCommand, MediaState, Status};
 use windows::Foundation::TypedEventHandler;
@@ -24,7 +26,18 @@ type Shown = (Status, String, bool, bool);
 pub(crate) struct Controls {
     controls: SystemMediaTransportControls,
     shown: Option<Shown>,
+    /// When the controls started, and when the state was last sent: in
+    /// their first seconds the same state goes again each second. A status
+    /// sent before Windows' session manager had taken the window's
+    /// controls in was lost, and an unchanged one was never sent again
+    /// (CI's `m8-smtc.ps1`: the title showed, the status stayed "Opened"
+    /// and the buttons off until a Pause).
+    started: Instant,
+    sent: Option<Instant>,
 }
+
+/// How long the state goes again each second after the controls start.
+const RESEND_FOR: Duration = Duration::from_secs(10);
 
 fn error(error: &windows::core::Error) -> String {
     format!("media controls: {error}")
@@ -78,6 +91,8 @@ impl Controls {
         Ok(Self {
             controls,
             shown: None,
+            started: Instant::now(),
+            sent: None,
         })
     }
 
@@ -89,12 +104,17 @@ impl Controls {
             state.can_next,
             state.can_previous,
         );
-        if self.shown.as_ref() == Some(&shown) {
+        let again = self.started.elapsed() < RESEND_FOR
+            && self
+                .sent
+                .is_none_or(|sent| sent.elapsed() >= Duration::from_secs(1));
+        if self.shown.as_ref() == Some(&shown) && !again {
             return;
         }
         // The flyout shows what it can; a failed update is not retried.
         drop(self.update(state));
         self.shown = Some(shown);
+        self.sent = Some(Instant::now());
     }
 
     fn update(&self, state: &MediaState) -> windows::core::Result<()> {
