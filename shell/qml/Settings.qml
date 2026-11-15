@@ -168,7 +168,13 @@ ApplicationWindow {
     // The page tabs' arrows, for the self-test: whether they show, where
     // the row is scrolled, and one arrow's click.
     function tabScroll() {
-        return { overflows: tabs.overflows, x: tabs.view ? tabs.view.contentX : 0 }
+        const right = tabsRight.mapToItem(win.contentItem, tabsRight.width, 0)
+        const column = pageColumn.mapToItem(win.contentItem, 0, 0)
+        return { overflows: tabs.overflows, x: tabs.view ? tabs.view.contentX : 0,
+                 arrows: tabsLeft.visible && tabsRight.visible, arrowsEnd: right.x,
+                 window: win.contentItem.width, column: [column.x, pageColumn.width],
+                 tabs: [tabs.width, tabs.contentWidth], columnMinimum: pageColumn.Layout.minimumWidth,
+                 implicit: pageColumn.implicitWidth }
     }
     function scrollTabs(step) {
         tabs.scrollBy(step)
@@ -952,6 +958,7 @@ ApplicationWindow {
             }
 
             ColumnLayout {
+                id: pageColumn
                 Layout.fillWidth: true
                 Layout.fillHeight: true
                 spacing: 0
@@ -1001,6 +1008,7 @@ ApplicationWindow {
                         }
                     }
                     ToolButton {
+                        id: tabsLeft
                         objectName: "pageTabsLeft"
                         visible: tabs.overflows
                         enabled: tabs.view && tabs.view.contentX > 1
@@ -1008,6 +1016,7 @@ ApplicationWindow {
                         onClicked: tabs.scrollBy(-1)
                     }
                     ToolButton {
+                        id: tabsRight
                         objectName: "pageTabsRight"
                         visible: tabs.overflows
                         enabled: tabs.view && tabs.view.contentX < tabs.view.contentWidth - tabs.view.width - 1
@@ -1268,6 +1277,7 @@ ApplicationWindow {
                     Page {
                         Heading { text: qsTr("Screen capture") }
                         Choice {
+                            visible: Qt.platform.os === "windows"
                             label: qsTr("Method")
                             path: "devices.capture"
                             values: ["gdigrab", "ddagrab"]
@@ -1275,6 +1285,10 @@ ApplicationWindow {
                         }
                         Amount { label: qsTr("Frames a second"); path: "devices.capture-fps"; values: [5, 10, 15, 24, 25, 30, 50, 60]; unit: "fps" }
                         Check { path: "devices.capture-pointer"; text: qsTr("Show the mouse pointer") }
+                        Note {
+                            visible: Qt.platform.os !== "windows"
+                            text: qsTr("Linux captures an X11 session's screen (FFmpeg's x11grab); a Wayland desktop gives its screen only through its portal, which FFmpeg cannot open.")
+                        }
                         Heading { text: qsTr("Webcam and other devices") }
                         Field { label: qsTr("Device opened without asking"); path: "devices.webcam"; placeholder: qsTr("ask every time") }
                         Heading { text: qsTr("Discs") }
@@ -3130,14 +3144,23 @@ ApplicationWindow {
                                     associationPage.refresh()
                                 }
                             }
-                            Button { text: qsTr("Clear and Rebuild the Icon Cache"); onClicked: win.player.rebuild_icon_cache() }
                             Button {
+                                visible: Qt.platform.os === "windows"
+                                text: qsTr("Clear and Rebuild the Icon Cache")
+                                onClicked: win.player.rebuild_icon_cache()
+                            }
+                            Button {
+                                visible: Qt.platform.os === "windows"
                                 text: qsTr("Default Programs…")
                                 onClicked: Qt.openUrlExternally("ms-settings:defaultapps?registeredAppUser=RVP")
                             }
                         }
                         Note { text: associationPage.result }
-                        Note { text: qsTr("RVP registers itself for these types and never makes itself their default: Windows' Default apps chooses that. RVP's files show RVP's icon.") }
+                        Note {
+                            text: Qt.platform.os === "windows"
+                                  ? qsTr("RVP registers itself for these types and never makes itself their default: Windows' Default apps chooses that. RVP's files show RVP's icon.")
+                                  : qsTr("RVP registers itself for these types and never makes itself their default: the desktop's default applications choose that.")
+                        }
                     }
 
                     Page {
@@ -3371,7 +3394,10 @@ ApplicationWindow {
                         Check { path: "accessibility.tts.messages"; text: qsTr("Read the messages displayed on the screen") }
                         Check { path: "accessibility.tts.subtitles"; text: qsTr("Read the movie subtitles comprised of text") }
                         Check { path: "accessibility.tts.tooltips"; text: qsTr("Read the tooltips displayed on mouse rollover of skin items") }
+                        // speech-dispatcher plays through the desktop's
+                        // sound: Linux has no choice of output.
                         Choice {
+                            visible: Qt.platform.os === "windows"
                             label: qsTr("Output device")
                             path: "accessibility.output"
                             values: [""].concat(ttsPage.outputs)
@@ -3381,7 +3407,7 @@ ApplicationWindow {
                             label: qsTr("TTS engine (voice)")
                             path: "accessibility.voice"
                             values: [""].concat(ttsPage.voices)
-                            texts: ({ "": qsTr("Windows' default") })
+                            texts: ({ "": Qt.platform.os === "windows" ? qsTr("Windows' default") : qsTr("The system's default") })
                         }
                         Amount { label: qsTr("Speed"); path: "accessibility.rate"; from: -10; to: 10 }
                         Amount { label: qsTr("Volume"); path: "accessibility.volume"; from: 0; to: 100; unit: "%" }
@@ -3389,7 +3415,7 @@ ApplicationWindow {
                             TextField { id: ttsTest; text: qsTr("RVP reads this aloud."); Layout.fillWidth: true }
                             Button { text: qsTr("Test"); onClicked: win.player.speak(ttsTest.text) }
                         }
-                        Note { text: qsTr("Windows' speech (SAPI) reads; on Linux there are no voices yet.") }
+                        Note { text: qsTr("Windows' speech (SAPI) reads, on Linux speech-dispatcher with its voices.") }
                         Heading { text: qsTr("UIA (User Interface Automation) setup for screen reader programs") }
                         Check { path: "accessibility.screen-reader.messages"; text: qsTr("Read the messages displayed on the screen") }
                         Check { path: "accessibility.screen-reader.subtitles"; text: qsTr("Read the movie subtitles comprised of text") }
@@ -3423,7 +3449,7 @@ ApplicationWindow {
                             values: ["off", "left", "right"]
                             texts: ({ "off": qsTr("Off"), "left": qsTr("Left stick (A clicks)"), "right": qsTr("Right stick (A clicks)") })
                         }
-                        Note { text: qsTr("A plays and pauses, B fullscreen, X mute, Y playback info, the shoulders previous and next, Back closes playback, Start plays and pauses, the pad's up and down the volume and left and right seek. Windows only; Linux's controllers come later.") }
+                        Note { text: qsTr("A plays and pauses, B fullscreen, X mute, Y playback info, the shoulders previous and next, Back closes playback, Start plays and pauses, the pad's up and down the volume and left and right seek. Windows' XInput, on Linux the kernel's joystick devices.") }
                     }
 
                     Page {

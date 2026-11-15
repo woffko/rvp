@@ -494,7 +494,13 @@ Item {
         // The settings window: PotPlayer's tree, the group's pages as tabs.
         case 23: {
             const loader = host.settingsWindow()
-            if (!t.waitFor("settings_open_m12", () => loader && loader.visible, 3000))
+            // At the width the owner's window had when its arrows went
+            // missing (848 px, the Ubuntu boot run), or its least.
+            const narrow = loader ? Math.max(848, loader.minimumWidth) : 848
+            if (loader && loader.visible && loader.width !== narrow)
+                loader.width = narrow
+            if (!t.waitFor("settings_open_m12", () => loader && loader.visible && loader.width === narrow
+                               && Date.now() - t.stepStarted > 500, 3000, () => "width " + (loader ? loader.width : 0)))
                 break
             loader.showKey("capture")
             const keys = loader.tabKeys
@@ -514,8 +520,12 @@ Item {
                 const right = loader.tabScroll().x
                 loader.scrollTabs(-1)
                 const left = loader.tabScroll().x
-                t.check("settings_tab_arrows", start === 0 && right > start && left < right,
-                        "x " + shown.x + ", " + start + " -> " + right + " -> " + left)
+                // The arrows show, inside the window (the owner saw none:
+                // the row reached past the window's edge).
+                t.check("settings_tab_arrows", start === 0 && right > start && left < right
+                            && shown.arrows && shown.arrowsEnd <= shown.window + 1,
+                        "x " + shown.x + ", " + start + " -> " + right + " -> " + left
+                        + " " + JSON.stringify(shown))
             } else {
                 t.check("settings_tab_arrows", true, "the tabs fit: no arrows")
             }

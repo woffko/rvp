@@ -490,6 +490,19 @@ pub fn linux_screen_address(
     }
 }
 
+/// The Screen Capture page's rate and pointer as FFmpeg's x11grab takes
+/// them (`demuxer-lavf-o`).
+fn x11grab_options(devices: &Devices) -> (String, String) {
+    (
+        "demuxer-lavf-o".to_owned(),
+        format!(
+            "framerate={},draw_mouse={}",
+            devices.capture_fps,
+            u8::from(devices.capture_pointer)
+        ),
+    )
+}
+
 /// Linux's capture devices from sysfs (`/sys/class/video4linux`): each
 /// device's first node (`index` 0; a webcam's second is its metadata), by
 /// its `/dev` path, in the order of their numbers.
@@ -602,7 +615,13 @@ impl App {
                     std::env::var("XDG_SESSION_TYPE").ok().as_deref(),
                     std::env::var("DISPLAY").ok().as_deref(),
                 ) {
-                    Ok(address) => self.open_now(engine, &[address]),
+                    Ok(address) => {
+                        // The page's rate and pointer reach x11grab as its
+                        // demuxer's options (the Linux audit's M10: they
+                        // were left out).
+                        self.play.next_options = vec![x11grab_options(&devices)];
+                        self.open_now(engine, &[address])
+                    }
                     Err(reason) => Some(UiRequest::Message(reason)),
                 }
             }
@@ -1257,6 +1276,18 @@ mod tests {
         );
         assert!(linux_screen_address(Some("wayland"), Some(":0")).is_err());
         assert!(linux_screen_address(None, None).is_err());
+        let devices = Devices {
+            capture_fps: 25,
+            capture_pointer: false,
+            ..Devices::default()
+        };
+        assert_eq!(
+            x11grab_options(&devices),
+            (
+                "demuxer-lavf-o".to_owned(),
+                "framerate=25,draw_mouse=0".to_owned()
+            )
+        );
         assert_eq!(cd_device("D"), "D:");
         assert_eq!(cd_device("/dev/sr0"), "/dev/sr0");
     }

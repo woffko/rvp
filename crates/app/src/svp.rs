@@ -19,9 +19,9 @@
 //! * SVP needs frames in memory: in SVP mode decoding uses the copy-back
 //!   variant of the chosen hardware decoder ([`copy_back`]), and mpv's
 //!   `hr-seek-framedrop` stays off (the engine sets it).
-//! * SVP's filter runs in RVP's libmpv with a VapourSynth runtime: RVP
-//!   points mpv at SVP's own (rule 8: `~/SVP4/mpv` or `/opt/svp` on Linux,
-//!   `mpv64` in SVP's folder on Windows) unless the settings name one.
+//! * SVP's filter runs in RVP's libmpv with a VapourSynth runtime: RVP's
+//!   own ([`vsscript_candidates`]; never SVP's, goal T) unless the settings
+//!   name one.
 //! * When SVP has not attached a few seconds after a file starts, RVP says
 //!   why it may not have ([`Problem`]), once per session (again after the
 //!   endpoint changed) and on the settings window's SVP page.
@@ -209,13 +209,25 @@ pub fn vsscript_candidates(exe_dir: Option<&Path>) -> Vec<PathBuf> {
         if let Some(dir) = exe_dir {
             list.push(dir.join("vapoursynth").join("libvapoursynth-script.so.0"));
         }
-        list.push(PathBuf::from(
-            "/usr/lib/x86_64-linux-gnu/libvapoursynth-script.so.0",
-        ));
-        list.push(PathBuf::from(
-            "/usr/lib/x86_64-linux-gnu/libvapoursynth-script.so",
-        ));
-        list.push(PathBuf::from("/usr/local/lib/libvapoursynth-script.so"));
+        // The system's at each distribution's library folder: Debian's
+        // multiarch one, Arch's /usr/lib, Fedora's and openSUSE's
+        // /usr/lib64 (the AUR package uses the system's; the Linux
+        // audit's M14), by VSScript's API version (.so.4 since R68) or the
+        // older .so.0.
+        for folder in [
+            "/usr/lib/x86_64-linux-gnu",
+            "/usr/lib",
+            "/usr/lib64",
+            "/usr/local/lib",
+        ] {
+            for name in [
+                "libvapoursynth-script.so.4",
+                "libvapoursynth-script.so.0",
+                "libvapoursynth-script.so",
+            ] {
+                list.push(Path::new(folder).join(name));
+            }
+        }
     }
     list
 }
@@ -618,6 +630,16 @@ mod tests {
                 .all(|path| !path.to_string_lossy().contains("SVP")),
             "{list:?}"
         );
+        // The system's at Arch's and Fedora's folders too (the AUR package).
+        if cfg!(unix) {
+            for system in [
+                "/usr/lib/libvapoursynth-script.so.4",
+                "/usr/lib64/libvapoursynth-script.so.4",
+                "/usr/lib/x86_64-linux-gnu/libvapoursynth-script.so.0",
+            ] {
+                assert!(list.contains(&PathBuf::from(system)), "{system}: {list:?}");
+            }
+        }
         let own = list[0].clone();
         std::fs::create_dir_all(own.parent().expect("folder")).expect("folder");
         std::fs::write(&own, b"").expect("write");

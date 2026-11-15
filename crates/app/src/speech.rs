@@ -709,6 +709,7 @@ fn run_realtime(
         // Pieces are whole multiples of their length, from 0.
         #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
         let first = (position.max(0.0) / PIECE_SECONDS) as u64;
+        // Piece numbers stay far inside f64's exact range.
         #[allow(clippy::cast_precision_loss)]
         let next = (first..=first + PIECES_AHEAD).find(|index| {
             !done.contains(index) && (*index as f64) * PIECE_SECONDS < source.duration
@@ -716,6 +717,7 @@ fn run_realtime(
         let Some(index) = next else {
             continue;
         };
+        // As above: a piece's number.
         #[allow(clippy::cast_precision_loss)]
         let begin = index as f64 * PIECE_SECONDS;
         let end = (begin + PIECE_SECONDS).min(source.duration);

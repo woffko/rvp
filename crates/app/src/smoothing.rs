@@ -2133,7 +2133,7 @@ mod tests {
         // One that raised it is not, when a loop starts mpv's estimate
         // again (the host, 2026-10-20: MVTools went at a clip's end).
         let mut watch = FilterWatch::default();
-        #[allow(clippy::cast_precision_loss)]
+        #[allow(clippy::cast_precision_loss)] // seconds of a test
         let looping = |n: u64| (n % 10) as f64;
         let low_after_loop = |n: u64| if n % 10 < 2 { 24.0 } else { 60.0 };
         assert_eq!(
@@ -2142,7 +2142,7 @@ mod tests {
         );
         // A seek during the first 6 s starts the wait again.
         let mut watch = FilterWatch::default();
-        #[allow(clippy::cast_precision_loss)]
+        #[allow(clippy::cast_precision_loss)] // seconds of a test
         let seek_at_3 = |n: u64| if n < 3 { n as f64 } else { 100.0 + n as f64 };
         assert_eq!(
             ticks(&mut watch, Some(6), 0..10, seek_at_3, |_| 24.0, |_| 0),
@@ -2176,7 +2176,7 @@ mod tests {
         );
         // A loop inside a window leaves it unjudged; the next one counts.
         let mut watch = FilterWatch::default();
-        #[allow(clippy::cast_precision_loss)]
+        #[allow(clippy::cast_precision_loss)] // seconds of a test
         let loop_at_9 = |n: u64| if n < 9 { n as f64 } else { (n - 9) as f64 };
         assert_eq!(
             ticks(
@@ -2237,7 +2237,7 @@ mod tests {
         // A seek inside the short window leaves it unjudged: the wait
         // starts again at the seek, and the next short window counts.
         let mut watch = FilterWatch::default();
-        #[allow(clippy::cast_precision_loss)]
+        #[allow(clippy::cast_precision_loss)] // seconds of a test
         let seek_at_9 = |n: u64| if n < 9 { n as f64 } else { 100.0 + n as f64 };
         assert_eq!(
             ticks(

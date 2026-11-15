@@ -6,7 +6,7 @@
 //! (`shell/qml/Main.qml`, `windowRequest`) carries a [`WindowRequest`] out
 //! with the screen's geometry, which only it knows: sizes keep the video's
 //! shape and stay on the screen, moves stop at its edges. Wayland does not
-//! let a program move its windows (goal S lists them).
+//! let a program move its windows (`docs/coverage/linux.md`).
 
 use serde::{Deserialize, Serialize};
 

@@ -17,8 +17,12 @@ optdepends=('libpulse: the master volume and audio recording (pactl, parec)'
             'libbluray: Blu-ray menus'
             'desktop-file-utils: the Association page updates the handler cache'
             'whisper.cpp: subtitles from audio'
+            'vapoursynth: motion smoothing (with vapoursynth-plugin-mvtools)'
+            'vapoursynth-plugin-mvtools: motion smoothing with MVTools'
             'curl: the TensorRT download for RIFE (TensorRT)')
-makedepends=('rustup' 'clang' 'python')
+# lld: qt-build-utils links with lld, gold or mold; qt6-tools: lrelease
+# for the translations (shell/build.rs).
+makedepends=('rustup' 'clang' 'lld' 'python' 'qt6-tools')
 options=('!lto')
 source=("rvp-$pkgver.tar.gz")
 sha256sums=('SKIP')
@@ -59,7 +63,9 @@ package() {
     for file in "$remote"/*; do
         install -Dm644 "$file" "$pkgdir/usr/share/rvp/$remote/${file##*/}"
     done
-    for file in icon.png icon_hires.png; do
-        install -Dm644 "$srcdir/look/$remote/$file" "$pkgdir/usr/share/rvp/$remote/$file"
+    # Every picture `cargo xtask look` drew for it: the icons and the
+    # layout's mute.png (without which the server does not load the remote).
+    for file in "$srcdir/look/$remote"/*.png; do
+        install -Dm644 "$file" "$pkgdir/usr/share/rvp/$remote/${file##*/}"
     done
 }

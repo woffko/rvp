@@ -343,20 +343,25 @@ pub fn scale_rgba(rgba: &[u8], from: (u32, u32), to: (u32, u32)) -> Vec<u8> {
         height as f64 / new_height.max(1) as f64,
     );
     for (y, row) in out.chunks_exact_mut(new_width * 4).enumerate() {
+        // A row's number, far inside f64's exact range.
         #[allow(clippy::cast_precision_loss)]
         let source_y = ((y as f64 + 0.5) * ratio.1 - 0.5).max(0.0);
-        // Floors of non-negative coordinates inside the picture.
+        // The floor of a non-negative row inside the picture.
         #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
         let top = (source_y as usize).min(height - 1);
         let bottom = (top + 1).min(height - 1);
+        // As above: a row's number.
         #[allow(clippy::cast_precision_loss)]
         let weight_y = source_y - top as f64;
         for (x, pixel) in row.as_chunks_mut::<4>().0.iter_mut().enumerate() {
+            // A column's number, far inside f64's exact range.
             #[allow(clippy::cast_precision_loss)]
             let source_x = ((x as f64 + 0.5) * ratio.0 - 0.5).max(0.0);
+            // The floor of a non-negative column inside the picture.
             #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
             let left = (source_x as usize).min(width - 1);
             let right = (left + 1).min(width - 1);
+            // As above: a column's number.
             #[allow(clippy::cast_precision_loss)]
             let weight_x = source_x - left as f64;
             for channel in 0..4 {

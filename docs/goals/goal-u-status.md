@@ -40,6 +40,7 @@ recommended option:
 | 7 | Paths, files and processes | M1, M5, M7, L7 to L16 fixed (below; L15 and M7 had no package) |
 | 8 | Recording | M15 fixed (below) |
 | 9 | Smoothing and TensorRT | M11, L1, L2, L3 fixed (below) |
+| 10 | Texts, the AUR package, code rules | M10, M14, L26, L27 fixed; the tab arrows' check made strict, the owner's case not reproduced (below) |
 
 ## Package 1: checks that pass without testing
 
@@ -134,8 +135,18 @@ recommended option:
   liblz4-1, libwebp7, libwebpmux3...), libmpv is stripped (60 to 52 MB),
   every file is 0644 or 0755, and check-deb's library and plugin checks
   pass on the AppDir (`rvp` and 181 libraries). The AppDir's functional
-  self-test under Xvfb with `XDG_CURRENT_DESKTOP=GNOME` passed. CI's
-  `package-linux` (built on 22.04, checked on 26.10) is below.
+  self-test under Xvfb with `XDG_CURRENT_DESKTOP=GNOME` passed.
+- **CI (8e5acce, 2026-11-15):** `package-linux` built MVTools, whisper.cpp
+  and the VapourSynth runtime on Ubuntu 22.04 (47 min the first time,
+  cached since) and the Ubuntu 26.10 container check passed:
+  `deb_installed` (0.0.1+git20261115054920.8e5accec2-1, with the new
+  Depends), `libraries_resolve` (rvp and 177 libraries, `ldd -r`),
+  `qt_plugins`, `package_parts`, `selftest_deb`, `selftest_deb_gtk` (the
+  gtk3 theme and the system's GTK 3 under rvp's run path, built on 22.04:
+  H3's case), `selftest_appimage` (92 checks each), `selftest_m11` (41)
+  and `selftest_m16` (27, the menu checks required). Its first run (6b8938e)
+  had failed on code.videolan.org refusing dav1d's clone: `kit_clone` now
+  falls back to VideoLAN's GitHub mirror (1279108).
 
 ## Package 3: OpenGL on Linux
 
@@ -319,8 +330,11 @@ The audit's plan had M7 and L15 in no package; both are here.
 - **L16, `/cd:/dev/sr0`:** a device's path stays as it is; a drive letter
   takes its colon.
 - **Checks:** `cargo xtask ci` (the unit tests above and m11's switches
-  test with libmpv); the desktop's kit steps (m3's second instance through
-  the channel, m11, m14) run with packages 8 and 9 (below).
+  test with libmpv); on the desktop (2026-11-15, with packages 8 and 9)
+  kit steps m3 PASS (`second_instance_adds`: the second RVP handed its file
+  over through `$XDG_RUNTIME_DIR/rvp-kit-m3`, entries 3 to 4; 3 kills, 3
+  resumes), m11 PASS (41) and m14 PASS (50 of 50, the clipboard check too
+  with nobody at the keyboard).
 
 ## Package 8: recording
 
@@ -331,8 +345,9 @@ The audit's plan had M7 and L15 in no package; both are here.
   showed both as "mpv"), and the recording takes the stream by that name
   (`pulse::stream_of`; by order alone it moved to the second device's
   stream once mpv reopened the main one). Tests:
-  `pulse::tests::the_main_stream_is_found_by_its_name`. The desktop's m10
-  (the recording) runs with package 9 (below).
+  `pulse::tests::the_main_stream_is_found_by_its_name`. On the desktop
+  (2026-11-15) kit step m10 PASS (96 checks; the recording's WAV whole:
+  "wav:ok 44 0").
 
 ## Package 9: smoothing and TensorRT
 
@@ -355,3 +370,52 @@ The audit's plan had M7 and L15 in no package; both are here.
   calibration again. The new key differs from the old one, so each
   machine calibrates once more. This reaches Windows (the files' part).
   Test: `calibration::tests::the_key_follows_the_engines_contents_not_their_times`.
+- **Checks:** `cargo xtask ci`; on the desktop (2026-11-15) kit step m18
+  PASS (MVTools' smoothing self-test 20/0, the GPU budget's 16/0, RVP's
+  VapourSynth runtime with the new plugin folder); `nvidia-smi` read the
+  card after each step (61 W, P1 after m18).
+
+## Package 10: texts, the AUR package, code rules
+
+- **M10, Settings on Linux:** the speech and XInput notes say what each
+  system does ("on Linux speech-dispatcher with its voices", "on Linux the
+  kernel's joystick devices"; they said Linux had neither); the voice's
+  default is "The system's default" off Windows; Windows-only controls
+  are hidden elsewhere (the speech's output device, the capture method's
+  GDI and Desktop Duplication, "Clear and Rebuild the Icon Cache",
+  "Default Programs…", which opened `ms-settings:`), with Linux's notes in
+  their place (the X11 capture, the desktop's default applications); and
+  x11grab gets the page's rate and pointer (`demuxer-lavf-o`, they were
+  ignored). Russian texts in `qml_ru.ts`. `tests/coverage.rs` now also
+  fails a line that says a Linux part comes later or is not there yet,
+  which these two notes did.
+- **M14, the AUR package:** every picture of the remote is installed
+  (`mute.png` was missing, and Unified Remote then loads no layout),
+  makedepends have `lld` and `qt6-tools` (`lrelease`), the system's
+  VapourSynth with MVTools is in optdepends (the owner's answer), and
+  `svp::vsscript_candidates` looks at Arch's `/usr/lib` and Fedora's
+  `/usr/lib64` too, for VSScript's `.so.4` and `.so.0`. Test:
+  `svp::tests::rvp_looks_for_its_own_runtime_and_never_svps`.
+- **L26, `#[allow]`s without their reason:** `speech.rs`, `capture.rs`
+  and `smoothing.rs`'s tests have one each now.
+- **L27, stale comments:** `svp.rs`'s header (it said RVP points mpv at
+  SVP's runtime) and `window.rs`'s "(goal S lists them)"; `tts.cpp`'s was
+  rewritten in package 5, and `main.rs`'s "The first one keeps the
+  channel" holds since package 7.
+- **The settings tabs' arrows (the boot run's open item), not
+  reproduced:** M12's `settings_tab_arrows` now opens the settings window
+  at the owner's 848 px and requires both arrows inside the window. With
+  the boot run's code and fresh settings they are (`arrowsEnd` 838 of 848,
+  the Video group's tabs 1182 px in 606), and the owner's settings change
+  no font or scale. A row that did not ask for its tabs' width
+  (`Layout.preferredWidth: 0`) was tried and left out: it widened the tree
+  beside it, and the TabBar's list then kept its current tab in view
+  against the arrows (0 -> 11 -> 11). Likely cause, not shown: the
+  owner's tree with longer open groups needs more width than the window
+  has. Left for the owner: whether the new .deb shows them (package 11).
+- **Checks:** `cargo xtask ci` (`tests/translations.rs`,
+  `tests/coverage.rs` with the wider rule, the unit tests); on the desktop
+  (2026-11-15) kit step m14 PASS (50 of 50: the new texts fit their
+  controls in Russian) and M12's self-test with the settings window at
+  848 px (`settings_tab_arrows`: both arrows inside, the row scrolled by a
+  tab each way).

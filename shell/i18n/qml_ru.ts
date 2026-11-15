@@ -4548,8 +4548,20 @@ in %2 seconds</source>
             <translation>Проверить</translation>
         </message>
         <message>
-            <source>Windows' speech (SAPI) reads; on Linux there are no voices yet.</source>
-            <translation>Читает синтез речи Windows (SAPI); в Linux голосов пока нет.</translation>
+            <source>Windows' speech (SAPI) reads, on Linux speech-dispatcher with its voices.</source>
+            <translation>Читает синтез речи Windows (SAPI), в Linux — speech-dispatcher своими голосами.</translation>
+        </message>
+        <message>
+            <source>Linux captures an X11 session's screen (FFmpeg's x11grab); a Wayland desktop gives its screen only through its portal, which FFmpeg cannot open.</source>
+            <translation>Linux захватывает экран сеанса X11 (x11grab из FFmpeg); рабочий стол Wayland отдаёт экран только через свой портал, который FFmpeg открыть не может.</translation>
+        </message>
+        <message>
+            <source>RVP registers itself for these types and never makes itself their default: the desktop's default applications choose that.</source>
+            <translation>RVP регистрируется для этих типов и никогда не делает себя программой по умолчанию: это выбирают приложения по умолчанию рабочего стола.</translation>
+        </message>
+        <message>
+            <source>The system's default</source>
+            <translation>По умолчанию в системе</translation>
         </message>
         <message>
             <source>UIA (User Interface Automation) setup for screen reader programs</source>
@@ -4624,8 +4636,8 @@ in %2 seconds</source>
             <translation>Правый стик (A — щелчок)</translation>
         </message>
         <message>
-            <source>A plays and pauses, B fullscreen, X mute, Y playback info, the shoulders previous and next, Back closes playback, Start plays and pauses, the pad's up and down the volume and left and right seek. Windows only; Linux's controllers come later.</source>
-            <translation>A — воспроизведение/пауза, B — полный экран, X — без звука, Y — информация, бамперы — предыдущий и следующий, Back закрывает воспроизведение, Start — воспроизведение/пауза, крестовина вверх и вниз — громкость, влево и вправо — перемотка. Только Windows; геймпады в Linux появятся позже.</translation>
+            <source>A plays and pauses, B fullscreen, X mute, Y playback info, the shoulders previous and next, Back closes playback, Start plays and pauses, the pad's up and down the volume and left and right seek. Windows' XInput, on Linux the kernel's joystick devices.</source>
+            <translation>A — воспроизведение/пауза, B — полный экран, X — без звука, Y — информация, бамперы — предыдущий и следующий, Back закрывает воспроизведение, Start — воспроизведение/пауза, крестовина вверх и вниз — громкость, влево и вправо — перемотка. XInput в Windows, в Linux — джойстики ядра.</translation>
         </message>
         <message>
             <source>Remote control</source>

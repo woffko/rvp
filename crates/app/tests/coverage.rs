@@ -569,6 +569,20 @@ fn no_part_waits_for_linux() {
                     pending.push(format!("{}: {words}", path.display()));
                 }
             }
+            // A line that says a Linux part comes later: the Settings
+            // texts "on Linux there are no voices yet" and "Linux's
+            // controllers come later" outlived both parts (the Linux
+            // audit's M10).
+            for line in text.lines() {
+                let lower = line.to_lowercase();
+                if lower.contains("linux")
+                    && (lower.contains(" yet")
+                        || lower.contains("come later")
+                        || lower.contains("comes later"))
+                {
+                    pending.push(format!("{}: {}", path.display(), line.trim()));
+                }
+            }
         }
     }
     assert!(
