@@ -63,9 +63,9 @@ names and keys stay as README lists them.
 - **Quotation marks:** Polish „…” (U+201E, U+201D) for quoted labels and
   option names, «…» inside them; the source's straight and curly
   quotes both become „…”. Help texts quote buttons and options with
-  their Polish label exactly: „Zastosuj”, „Dopasuj okno do nowo
+  their Polish label exactly: „Zastosuj”, „Dopasowuj okno do nowo
   otwartego wideo”. Menu paths stay unquoted, with the Polish labels and
-  the source's ">": Wideo > Margines dolny.
+  the source's ">": Wideo > Dolny margines.
 - **Punctuation:** a comma before every subordinate clause (że, gdy,
   kiedy, jeśli, aby, który, ponieważ, czy) and before an adverbial
   participle (-ąc, -wszy); none before i, oraz, lub in a list. A spaced
@@ -136,7 +136,21 @@ names and keys stay as README lists them.
   (względem pulpitu); the desktop environment (GNOME, KDE) is środowisko
   graficzne. The home folder is folder domowy, the clipboard schowek, an
   optical drive napęd and a drive letter dysk. "&" is i (Add & Edit:
-  Dodaj i edytuj).
+  Dodaj i edytuj). Start as a button or command is Rozpocznij, as a
+  time (a subtitle's start) Początek. The mouse pointer is
+  wskaźnik, never kursor. Select is wybierz (Wybierz akcję), and
+  zaznacz for marking items of a list (Zaznacz wszystko, Odznacz
+  wszystko).
+- **Shared short words:** one message can serve a slider and a list of
+  choices, so it takes a form that reads right as both: Left, Right,
+  Top, Bottom, Center are Z lewej, Z prawej, U góry, U dołu, Środek
+  (margins, mixer levels, alignments, the logo's place); Centre as a
+  paragraph alignment is Na środku. Defaults named after a program or
+  system are Jak w systemie, Jak w systemie Windows, Domyślny mpv,
+  Wybór mpv. A list item or slider label starts with a capital; a
+  placeholder of an empty field (domyślny libmpv, pytaj za każdym
+  razem) and a value inside a sentence stay lowercase, as in the
+  source.
 - **Keys:** inside a combination, keys keep the names RVP's menus show:
   Ctrl+Left, Shift+Right, Alt+Enter, Space, PgUp, X1, X2 (Left / Right
   as a key label stays too). Arrow keys named in a sentence are
@@ -151,7 +165,7 @@ names and keys stay as README lists them.
 | close playback | zakończ odtwarzanie | Stops and unloads the file. Not zatrzymaj (stop) and not Zakończ alone, which is Exit. |
 | previous / next | poprzedni / następny | Agree with the noun: poprzedni element, następna klatka, następny rozdział. |
 | seek | przewijanie | Verb przewiń (both ways). PotPlayer's Time Jump (the arrow keys' steps) is seeking too: przewijanie. Never szukanie (search). |
-| jump | przejście | Verb przejdź do: Przejdź do czasu/klatki..., Przejdź do następnego slajdu. |
+| jump | przejdź | Przejdź do podanego czasu/klatki..., Przejdź do następnego slajdu; the noun: przejście. |
 | frame step | klatka po klatce | Next frame / Previous frame: Następna klatka / Poprzednia klatka. |
 | speed | szybkość | Szybkość odtwarzania; not prędkość. |
 | repeat | powtarzanie | Options use the imperfective imperative: Powtarzaj plik, Powtarzaj listę. |
@@ -187,7 +201,7 @@ names and keys stay as README lists them.
 | album | album |  |
 | entry | element | Not pozycja: that is the position in a file. |
 | sort | sortuj | Sort by: Sortuj według. |
-| add / remove / delete | dodaj / usuń z listy / usuń plik | Polish has one verb, usuń: name what goes where both could be read. Usuń z listy keeps the file; usuń plik or pliki deletes it. To the Recycle Bin: przenieś do Kosza. |
+| add / remove / delete | dodaj / usuń / usuń | Polish has one verb, usuń: name what goes where both could be read. Usuń z listy keeps the file; usuń plik or pliki deletes it. To the Recycle Bin: przenieś do Kosza. |
 | recycle bin / trash | Kosz / kosz | Windows' Recycle Bin is a name: Kosz, do Kosza. Linux's trash: kosz. |
 | import / export | importuj / eksportuj | Nouns import / eksport: Import ustawień. |
 | window / main window | okno / okno główne |  |
@@ -221,7 +235,7 @@ names and keys stay as README lists them.
 | video / picture / image | wideo / obraz / obraz | wideo is not inflected (pliku wideo); never video in Polish text except in names. A still image is obraz as well; a slideshow's photos may be zdjęcia. |
 | frame | klatka | One picture in time. The picture's area (Frame Size, Keep Video Frame, the frame changes) is kadr. |
 | frame rate / fps | liczba klatek na sekundę / fps | fps after a number (60 fps). The video's or display's rate in short labels: częstotliwość (Target rate: Częstotliwość docelowa). |
-| aspect ratio | proporcje obrazu | Short proporcje (plural); AR in menu labels too. |
+| aspect ratio | proporcje | Plural; proporcje obrazu as a title of its own (the menu, the page). AR in menu labels too. |
 | crop | przytnij | Noun przycinanie: Rozszerzanie/przycinanie. |
 | zoom / pan | powiększenie / przesunięcie | Zoom In / Zoom Out: Powiększ / Pomniejsz. |
 | rotate / flip / mirror | obróć / odwróć / odbij lustrzanie | Flip Vertical (upside down): Odwróć w pionie; Flip Horizontal (left-right): Odwróć w poziomie. |
@@ -230,11 +244,11 @@ names and keys stay as README lists them.
 | sharpen / denoise | wyostrzanie / odszumianie | Effect names are nouns: Wyostrzanie (Ctrl+R), Odszumianie 3D. |
 | scaler / upscaling / resize | skaler / powiększanie / zmiana rozmiaru | Upscaler / Downscaler labels: Powiększanie / Pomniejszanie. The Resize page: Zmiana rozmiaru. |
 | pixel shader | shader pikseli | Plural shadery pikseli; pre-/post-resize: przed zmianą rozmiaru / po zmianie rozmiaru. |
-| renderer | renderer | renderer wideo; PotPlayer's Audio Renderer (the list of output devices): wyjście audio. |
+| renderer | renderer | renderer wideo; PotPlayer's Audio Renderer (the list of output devices): renderer audio. The Audio Output group: Wyjście dźwięku. |
 | hardware decoding / decoder | dekodowanie sprzętowe / dekoder | Software decoding: dekodowanie programowe. |
 | HDR | HDR |  |
 | 3D / 360° video / anaglyph / side by side / top and bottom | 3D / wideo 360° / anaglif / obok siebie / góra-dół | SBS and TAB stay; cyan and magenta: cyjan, magenta. |
-| bars / letterbox / margin | czarne pasy / letterbox / margines | letterbox is the videophiles' word and stays; a bar alone is pas. |
+| bars / letterbox / margin | czarne pasy / letterbox / margines | letterbox is the videophiles' word and stays; a bar alone is pas. The skin's bars (its panels over the video) are paski. |
 | frame capture / screenshot | przechwytywanie klatki / zrzut ekranu | Saved frames: zapisane klatki. |
 | motion smoothing | wygładzanie ruchu |  |
 | frame interpolation | interpolacja klatek |  |
@@ -246,7 +260,7 @@ names and keys stay as README lists them.
 | power budget | budżet mocy | Not limit mocy, which is the card's own power limit. |
 | dropped frames | utracone klatki | Not pominięte (skipped); dropping: utrata klatek. |
 | refresh rate | częstotliwość odświeżania |  |
-| audio / sound | audio / dźwięk | Menus and pages: Dźwięk. audio is not inflected after a noun (urządzenie audio, plik audio); an audio track: ścieżka dźwiękowa. |
+| audio / sound | dźwięk / dźwięk | Menus and pages: Dźwięk. audio stays, not inflected, after a noun (urządzenie audio, plik audio, renderer audio); an audio track: ścieżka dźwiękowa. |
 | volume / mute | głośność / wycisz | The state and the toggle: wyciszenie. |
 | master volume | głośność główna | System Master volume: systemowa głośność główna. |
 | equalizer | korektor | Not equalizer; SuperEQ stays. |
@@ -255,14 +269,14 @@ names and keys stay as README lists them.
 | noise reduction | redukcja szumów | Sound only; the picture's denoise is odszumianie. |
 | channel / speaker | kanał / głośnik | Output Speakers: Głośniki. |
 | downmix | downmiks | Polish spelling, inflected (downmiksu); the verb: miksować do stereo. |
-| surround / stereo | dźwięk przestrzenny / stereo | Surround as a speaker group (Front, Center, Surround): tylne (kanały tylne). |
+| surround / stereo | dźwięk przestrzenny / stereo | The mixer's speaker groups Front, Center, Surround: Przód, Środek, Tył; in sentences kanały tylne. |
 | output device | urządzenie wyjściowe |  |
 | sample rate / bitrate | częstotliwość próbkowania / przepływność | przepływność bitowa where przepływność alone could be misread. |
-| audio delay / audio sync | opóźnienie dźwięku / synchronizacja dźwięku |  |
+| audio delay / audio sync | opóźnienie dźwięku / synchronizacja dźwięku | Adjust Audio Sync...: Synchronizuj dźwięk...; Decrease / Increase Sync by %1: Przesuń dźwięk (napisy) wcześniej / później o %1. |
 | pitch / time stretching | wysokość dźwięku / rozciąganie czasu | Pitch shifting: zmiana wysokości dźwięku. |
 | audio recording | nagrywanie dźwięku |  |
 | second audio device | drugie urządzenie audio |  |
-| pass-through | przekazywanie bez dekodowania | Short przekazywanie only where the same label or list already says bez dekodowania. |
+| pass-through | przekazywanie bez dekodowania | Short przekazywanie in compounds (Renderer przekazywania, Przekazywanie po przekodowaniu do AC3). |
 | subtitles / subtitle track | napisy / ścieżka napisów | Plural noun; one subtitle (a line) is napis. |
 | external / embedded subtitles | napisy zewnętrzne / wbudowane |  |
 | font / outline / shadow | czcionka / obrys / cień |  |
@@ -275,7 +289,7 @@ names and keys stay as README lists them.
 | remote control | zdalne sterowanie | The remotes (programs on a phone, Unified Remote's) are piloty. |
 | token | token |  |
 | port / server | port / serwer |  |
-| log | dziennik | The Log page: Dziennik; to log: zapisywać w dzienniku. |
+| log | dziennik | The Log page: Dziennik; to log: zapisywać w dzienniku. The levels Critical, Warning, Info, Debug: Krytyczne, Ostrzeżenia, Informacje, Debugowanie. |
 | crash | awaria | A crash log: raport awarii. |
 | download / install | pobierz / zainstaluj | Not ściągnij. |
 | installer | instalator |  |
@@ -290,3 +304,28 @@ names and keys stay as README lists them.
 | bit depth / 10-bit | głębia bitowa / 10-bitowy | The adjective agrees: 10-bitowe wyjście, 16-bitowy format. |
 | channel layout (5.1, 7.1) | układ kanałów (5.1, 7.1) |  |
 | Auto select (recommended) | Wybór automatyczny (zalecane) |  |
+
+### Further terms
+
+Terms the strings needed beyond README's list, used the same way
+everywhere.
+
+| English | Polish | Note |
+|---------|--------|------|
+| action | akcja | An action bound to keys or run at the end of playback: Wybierz akcję, Akcja po zakończeniu odtwarzania. |
+| script | skrypt | VapourSynth's, mpv's and ASS scripts. |
+| plugin | wtyczka | |
+| pointer | wskaźnik | wskaźnik myszy, as in Windows; never kursor. |
+| luma / chroma | luminancja / chrominancja | |
+| instance | kopia | A running RVP: Wiele kopii programu, Odtwórz w nowej kopii programu. |
+| load / reload | wczytaj / wczytaj ponownie | Not załaduj. |
+| rename | zmień nazwę | |
+| cycle | przełącz | Cycle Aspect Ratio: Przełącz proporcje. |
+| stretch | rozciągnij | Noun rozciągnięcie. |
+| resample | przepróbkowanie | |
+| deband / deblock | usuwanie pasmowania / usuwanie bloków | |
+| fade | zanikanie | |
+| dithering | dithering | z ditheringiem. |
+| tone mapping | mapowanie tonów | |
+| jump list | lista szybkiego dostępu | Windows' word. |
+| AutoPlay | Autoodtwarzanie | Windows' word. |
