@@ -95,8 +95,6 @@ glossary has all 144 rows in order (checked by script, 217 term pairs by
 | `fr` | vous; infinitive commands | U+00A0 before : ; ? ! and inside « », habillage for skin |
 | `de` | Sie; object first, infinitive last | „…“, Ctrl not Strg (RVP's key names), hyphen at long compounds' joints |
 | `it` | tu; imperative commands | « », loanwords file/playlist/skin with their gender |
-| `pl` | 59; 1 (a text too long), fixed | PASS | yes |
-| `uk` | 47; 0 | PASS | yes |
 | `pl` | second person singular imperative; perfective commands, imperfective checkboxes | no noun after a number (three plural forms), „…” |
 | `uk` | ви; perfective infinitives | тека, типовий, ’ (U+2019), Cyrillic units |
 | `tr` | siz only where the source speaks to the user; verb last | "%1 %" becomes "%%1"; nothing attached to %N |
@@ -124,6 +122,11 @@ translated by every language afterwards and reviewed with the fixes.
 | `es` | 37; 1, fixed | PASS | yes |
 | `fr` | 64; 4, fixed | PASS | yes |
 | `it` | 45; 1, fixed, then 1 more in the shortened texts, fixed | PASS | yes |
+| `pl` | 59; 1 (a text too long), fixed | PASS | yes |
+| `uk` | 47; 0, then 1 choice shortened for its box | PASS | yes |
+| `zh_CN` | 36; 0 | PASS | yes |
+| `tr` | 88; 0, then 1 choice shortened for its box | | yes |
+| `zh_TW` | 47; 1, fixed | | |
 
 ## Found on the way
 

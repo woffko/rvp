@@ -61,15 +61,23 @@ wrap, can overflow.
   konumlarını hatırla", "Araç ipuçlarını göster", "Oynatırken ekran
   koruyucuyu engelle"). Enable / Disable as commands are "etkinleştir" /
   "devre dışı bırak"; Use / Do not use "kullan" / "kullanma". A checkbox
-  whose English is a noun phrase may stay one.
+  whose English is a noun phrase may stay one. A checkbox that states how
+  a feature behaves ("Operate only in fullscreen") takes the optative,
+  not an order to the user: "Yalnızca tam ekranda çalışsın"; where the
+  feature applies something, the command fits ("Yalnızca altyazı varsa
+  uygula").
 - **Choices** in lists and menus are noun phrases, adjectives or adverbs:
   "Hiçbir zaman", "Her zaman", "Oynatırken", "Yüksek kalite", "Otomatik
   (önerilen)", "Rastgele". On / Off, and Enable / Disable or Enabled /
   Disabled when they are choices or states, are "Açık" / "Kapalı" as
-  Windows' switches say ("Kapalı (önerilen)"); "Etkin" / "Devre dışı"
+  Windows' switches say ("Kapalı (önerilen)"); the menus' "Disable"
+  radio items (beside "Etkin: …" items) and a settings choice "Disable"
+  are "Kapalı" too; "Etkin" / "Devre dışı"
   only where the source contrasts a feature's state in a sentence. None
   is "Yok", Nothing "Hiçbiri", Auto "Otomatik", Custom "Özel", Default
-  "Varsayılan". "(Recommended)" and PotPlayer's "(Recom'd)" are always
+  "Varsayılan", Not used "Kullanılmıyor" (not "Kullanılmaz", which also
+  reads "unusable"). A negative choice must not read as a noun: "Do not
+  make subtitles" is "Altyazı oluşturulmasın", not "Altyazı oluşturma". "(Recommended)" and PotPlayer's "(Recom'd)" are always
   "(önerilen)", "(Default)" "(varsayılan)".
 - **Titles** of windows, pages, groups, columns and field labels are noun
   phrases, with the verbal noun in -mA where the English is a gerund:
@@ -197,7 +205,7 @@ wrap, can overflow.
     "ile" never as the suffix -la/-le after %1);
   - let a noun after it carry the ending: "%1 tuşu", "“%1” eylemine",
     "“%1” sayfasının seçenekleri", "%1 kartı için", "%1 sürümü",
-    "%1 kalibrasyonu";
+    "%1 adresinden";
   - a number before its noun needs no ending ("%1 dosya", "%2 saniye
     içinde").
   An ending after a fixed letter or unit that follows the placeholder
@@ -210,8 +218,8 @@ wrap, can overflow.
   and the modifier before the modified, so placeholders often move;
   each stays exactly once. "%1 is used by “%2”. Move it to “%3”?" is
   "%1, “%2” eylemine atanmış. “%3” eylemine taşınsın mı?"; "Calibration
-  of %1 at 60 frames a second: %2" "%1 kalibrasyonu (saniyede 60 kare):
-  %2"; "%1 done, at most %2 left" "%1 tamamlandı, en çok %2 kaldı". "X of
+  of %1 at 60 frames a second: %2" (%1 is a date) "Kalibrasyon (%1,
+  saniyede 60 kare): %2"; "%1 done, at most %2 left" "%1 tamamlandı, en çok %2 kaldı". "X of
   Y" amounts are written with a slash: "%2 of %3 GB" "%2/%3 GB", "%1 %2 W
   of %3 W (%4 %)" "%1: %2 W / %3 W (%%4)"; "%1 %2 % of its power" "%1:
   güç kullanımı %%2". Line breaks stay where the source has them ("%1\n%2
@@ -255,8 +263,10 @@ wrap, can overflow.
 - **Words with two meanings.** Each Turkish word has one job in RVP:
   - "kaydet" is both save and record: "Save" is "Kaydet", recording is
     "kayıt" ("Ses kaydını başlat/durdur", "Akışı kaydet..."); "store"
-    and "keep" are "sakla" ("Yakalanan resimleri oynatılan klasörde
-    sakla"); RVP registering itself for file types is "kendini ...
+    and "keep" are "sakla" ("Yakalanan resimleri oynatılan dosyanın
+    klasöründe sakla": PotPlayer's "play folder" is the playing file's
+    folder, "oynatılan dosyanın klasörü", or "aynı klasör" where the
+    file is named already); RVP registering itself for file types is "kendini ...
     için kaydeder".
   - "kapat" is Close, turn off and shut down; Exit is "Çıkış" (in
     phrases "çık": "Oynatma bitince RVP'den çık"); the power action
@@ -277,8 +287,23 @@ wrap, can overflow.
   - "giriş" is input ("Giriş (kaynak)", "Giriş daha küçükse"), output
     "çıkış"; the intro is "açılış".
   - "geçiş" is the slideshow's transition only.
+  - "hız" alone is the playback speed. Any rate of frames is "kare
+    hızı": the target rate "Hedef kare hızı", the video's rate "video
+    kare hızı" ("Video kare hızının iki katı"), a file "keeps its rate"
+    "kare hızını korur", the subtitles' FPS "altyazı kare hızı"; the
+    display's rate is "ekranın yenileme hızı".
+  - Center (one message for the mixer's center slider, the logo's place
+    and the alignment lists) and Centre are "Orta", the center channel
+    "orta kanal"; "merkez" only for the window's own center ("Pencereyi
+    merkeze göre boyutlandır"). "Orta" is also the Medium preset, in
+    other lists.
+  - "kayıt" is a recording only: what the log holds is written into it
+    ("günlüğe yazar", "Günlükte henüz bir şey yok."). whisper's 30 s
+    pieces of audio are "dilim", since "parça" is a track. "Over the
+    whole runtime" is "RVP kapanana dek", never "çıkışa dek" (çıkış is
+    also the output).
   - A file's extension is "uzantı"; extending the picture is
-    "genişlet" ("Genişlet/Kırp"). "Insert" in the subtitle browser (a
+    "genişlet" ("Genişlet/kırp"). "Insert" in the subtitle browser (a
     new line) is "Araya ekle", Add "Ekle".
   - "Frame" is "kare"; a window's or picture's frame "çerçeve". "Track"
     is "parça" ("ses parçası"), "stream" "akış".
@@ -298,7 +323,31 @@ wrap, can overflow.
     "masaüstü", home folder "ev klasörü", state folder "durum klasörü",
     licence "lisans", album art "albüm kapağı", slideshow "slayt
     gösterisi", mixer "karıştırıcı", gain "kazanç", bass / treble "bas" /
-    "tiz", preamp "ön yükseltme".
+    "tiz", preamp "ön yükseltme" (the equalizer's PreAmp slider "Ön
+    yükseltici"), keyboard focus "klavye odağı" ("klavye odağını
+    pencereye ver"), a server that listens "dinliyor" (active: "Sunucu
+    yalnızca bu bilgisayarda dinliyor"), snapping to the screen's edges
+    "yasla", a cubemap "küp haritası", re-encoding before pass-through
+    "AC3 ile yeniden kodlayarak doğrudan aktarım", swap "takas et" ("Stereo kanalları takas et"), voice
+    (to remove or emphasize) "vokal" ("Vokal kaldırma", "Vokal
+    vurgulama"), storage folder "saklama klasörü", an interlaced field
+    "alan" ("Önce üst alan"), deblock "blok giderme", deband "bantlaşma
+    giderme", soften "yumuşatma", PotPlayer's "Temporary denoise"
+    (temporal) "zamansal gürültü giderme", dithering "dither", wet / dry
+    level "ıslak düzey" / "kuru düzey", exclusive mode "özel mod", a named
+    pipe "kanal", Windows' AutoPlay "Otomatik Kullan", the log levels
+    "Kritik", "Uyarı", "Bilgi", "Hata ayıklama".
+  - Explorer's own entries that RVP registers stay English and are
+    quoted in full: “Add to RVP's album”, “Play with RVP”.
+  - PotPlayer's submenus: Seamless Playback "Kesintisiz oynatma", Channel
+    Control (TV channels) "TV kanal denetimi", DVD Control > Move (the
+    disc's titles to go to) "Git", Navigate "Gezin", Input Subtitles
+    "Altyazı yaz...", "Shutdown at ..." "Şu saatte kapat ...", "%1 Sec.
+    before ending" "Bitime %1 sn kala". The smoothing presets Fast /
+    Medium / Quality are "Hızlı" / "Orta" / "Kaliteli" in the menus too;
+    "Start" of subtitles from audio is the command "Başlat", a start time
+    "Başlangıç". A slider's "never" value is "asla" (short), the choice
+    Never "Hiçbir zaman".
 - **Equalizer presets and anaglyph modes.** Genre names take the Turkish
   form where one is usual and stay otherwise ("Klasik", "Pop", "Rock",
   "Kulüp", "Dans", "Tekno", "Ska", "Reggae", "Parti", "Canlı", "Soft
@@ -386,9 +435,9 @@ wrap, can overflow.
 | controller / gamepad | oyun kumandası / oyun kolu | "Xbox oyun kumandası"; mouse emulation is "fare öykünmesi". mpv's on-screen controller is "ekran üstü denetim". |
 | video / picture / image | video / görüntü / resim | The video's picture is "görüntü"; a still image or a picture file "resim" ("Resimler (PNG, JPEG, BMP, GIF)"). |
 | frame | kare | One picture of the video. A window's or picture's frame is "çerçeve". |
-| frame rate / fps | kare hızı / fps | Written out "saniyede kare" ("saniyede 60 kare"). |
+| frame rate / fps | kare hızı / fps | Written out "saniyede kare" ("saniyede 60 kare"). Every rate of frames is "kare hızı" ("Hedef kare hızı"); "hız" alone is the playback speed. |
 | aspect ratio | en boy oranı | Also PotPlayer's "AR" in the menus ("En boy oranını pencereye uydur"). |
-| crop | kırp | The noun "kırpma"; Extend/Crop "Genişlet/Kırp". |
+| crop | kırp | The noun "kırpma"; Extend/Crop "Genişlet/kırp". |
 | zoom / pan | yakınlaştır / kaydır | Zoom In / Out "Yakınlaştır" / "Uzaklaştır", the noun "yakınlaştırma"; pan "Görüntüyü kaydır". |
 | rotate / flip / mirror | döndür / çevir / aynala | Flip Horizontal / Vertical are "Yatay çevir" / "Dikey çevir"; upside down alone is "ters çevir". |
 | deinterlace | geçmeli taramayı gider | Interlaced is "geçmeli"; the noun "geçmeli tarama giderme" ("Geçmeli tarama giderme ayarları..."). The same verb as denoise. |
