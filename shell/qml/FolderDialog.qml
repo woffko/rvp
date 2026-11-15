@@ -20,10 +20,10 @@ Item {
 
     FolderDialog {
         id: folderDialog
-        title: ({ "open": "Open Folder", "add": "Add Folder",
-                  "import": "Import PotPlayer Playlists (Playlist folder)",
-                  "images": "Folder for Saved Frames",
-                  "recordings": "Folder for Audio Recordings" })[holder.purpose]
+        title: ({ "open": qsTr("Open Folder"), "add": qsTr("Add Folder"),
+                  "import": qsTr("Import PotPlayer Playlists (Playlist folder)"),
+                  "images": qsTr("Folder for Saved Frames"),
+                  "recordings": qsTr("Folder for Audio Recordings") })[holder.purpose]
         onAccepted: {
             const path = Tools.local_file(selectedFolder)
             if (holder.purpose === "import")

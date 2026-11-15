@@ -65,13 +65,14 @@ Item {
         case "disc":
             if (data.files) {
                 discFileDialog.nameFilters = data.bluray
-                    ? ["Blu-ray playlists (*.mpls)", "All files (*)"]
-                    : ["DVD files (*.IFO)", "All files (*)"]
-                discFileDialog.title = data.bluray ? "Open Blu-ray files (*.MPLS)" : "Open DVD files (*.IFO)"
+                    ? [qsTr("Blu-ray playlists (%1)").arg("*.mpls"), qsTr("All files (*)")]
+                    : [qsTr("DVD files (%1)").arg("*.IFO"), qsTr("All files (*)")]
+                discFileDialog.title = data.bluray ? qsTr("Open Blu-ray files (%1)").arg("*.MPLS")
+                                                   : qsTr("Open DVD files (%1)").arg("*.IFO")
                 discFileDialog.open()
             } else {
-                discFolderDialog.title = data.bluray ? "Open Blu-ray (the disc's drive or folder)"
-                                                     : "Open DVD (the disc's drive or VIDEO_TS folder)"
+                discFolderDialog.title = data.bluray ? qsTr("Open Blu-ray (the disc's drive or folder)")
+                                                     : qsTr("Open DVD (the disc's drive or VIDEO_TS folder)")
                 discFolderDialog.open()
             }
             break
@@ -311,7 +312,7 @@ Item {
         onAccepted: {
             const parts = timerField.text.trim().split(":").map(Number)
             if (parts.length < 1 || parts.length > 3 || parts.some(isNaN)) {
-                timerError.text = "Write the time as hh:mm"
+                timerError.text = qsTr("Write the time as hh:mm")
                 open()
                 return
             }
@@ -391,8 +392,8 @@ Item {
 
     // The playlist's dialogs.
     readonly property var listTitles: ({
-        "title": "Edit title of selected items", "rename": "Rename filename of selected items",
-        "search": "Search title and filenames", "url": "Add URL", "info": "File information"
+        "title": qsTr("Edit title of selected items"), "rename": qsTr("Rename filename of selected items"),
+        "search": qsTr("Search title and filenames"), "url": qsTr("Add URL"), "info": qsTr("File information")
     })
     function showList() {
         const kind = data.list
@@ -451,7 +452,7 @@ Item {
     Dialogs.FileDialog {
         id: playlistOpenDialog
         title: qsTr("Open a playlist")
-        nameFilters: ["Playlists (*.m3u8 *.m3u *.pls *.dpl)", "All files (*)"]
+        nameFilters: [qsTr("Playlists (%1)").arg("*.m3u8 *.m3u *.pls *.dpl"), qsTr("All files (*)")]
         onAccepted: holder.player.list_dialog_answer("open", Tools.local_file(selectedFile))
     }
     Dialogs.FileDialog {
@@ -482,7 +483,7 @@ Item {
         contentItem: ColumnLayout {
             Label {
                 text: (holder.data.devices || []).length > 0
-                      ? "Devices:" : "The system lists no capture devices. A device's name:"
+                      ? qsTr("Devices:") : qsTr("The system lists no capture devices. A device's name:")
             }
             Repeater {
                 model: holder.data.devices || []
@@ -511,8 +512,8 @@ Item {
     Dialogs.FileDialog {
         id: audioDialog
         title: qsTr("Load External Audio")
-        nameFilters: ["Audio (*.mp3 *.m4a *.aac *.ac3 *.dts *.flac *.mka *.ogg *.opus *.wav *.wma)",
-                      "All files (*)"]
+        nameFilters: [qsTr("Audio (%1)").arg("*.mp3 *.m4a *.aac *.ac3 *.dts *.flac *.mka *.ogg *.opus *.wav *.wma"),
+                      qsTr("All files (*)")]
         onAccepted: holder.player.load_external_audio(Tools.local_file(selectedFile))
     }
 

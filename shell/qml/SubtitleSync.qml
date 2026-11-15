@@ -88,7 +88,7 @@ Item {
                 id: rateBox
                 objectName: "subtitleRateBox"
                 Layout.preferredWidth: 300
-                model: holder.rates.map(r => r === 0 ? "The video's frame rate" : r + " fps")
+                model: holder.rates.map(r => r === 0 ? qsTr("The video's frame rate") : r + " fps")
                 onActivated: (index) => {
                     if (!holder.loading)
                         holder.player.set_subtitle_fps(holder.rates[index])

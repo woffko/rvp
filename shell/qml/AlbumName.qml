@@ -25,7 +25,7 @@ Item {
         // window of its own shows (D4).
         popupType: Tools.native_video ? Popup.Window : Popup.Item
         id: nameDialog
-        title: holder.rename ? "Rename Album" : "Add Album"
+        title: holder.rename ? qsTr("Rename Album") : qsTr("Add Album")
         modal: true
         anchors.centerIn: parent
         standardButtons: Dialog.Ok | Dialog.Cancel

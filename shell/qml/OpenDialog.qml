@@ -15,18 +15,18 @@ Item {
 
     function ask(adding) {
         holder.append = adding
-        fileDialog.title = adding ? "Add File(s)" : "Open File(s)"
+        fileDialog.title = adding ? qsTr("Add File(s)") : qsTr("Open File(s)")
         // Association: "Set File Extensions in File Open Dialog" (M14).
         const extensions = (JSON.parse(holder.player.settings_view(false)).settings.associations["dialog-extensions"] || "")
             .split(/[\s,;]+/).filter(ext => ext !== "").map(ext => "*." + ext.replace(/^[*.]+/, ""))
-        fileDialog.nameFilters = extensions.length > 0 ? ["Media (" + extensions.join(" ") + ")", "All files (*)"]
-                                                       : ["All files (*)"]
+        fileDialog.nameFilters = extensions.length > 0 ? [qsTr("Media (%1)").arg(extensions.join(" ")), qsTr("All files (*)")]
+                                                       : [qsTr("All files (*)")]
         fileDialog.open()
     }
     // `combine`: a second subtitle shown with the first (Combine Subtitle).
     function askSubtitle(combine) {
         subtitleDialog.combine = combine === true
-        subtitleDialog.title = subtitleDialog.combine ? "Combine Subtitle" : "Load Subtitle"
+        subtitleDialog.title = subtitleDialog.combine ? qsTr("Combine Subtitle") : qsTr("Load Subtitle")
         subtitleDialog.open()
     }
     // `family`: the current subtitle font (empty: mpv's default).
@@ -52,7 +52,7 @@ Item {
         id: frameDialog
         title: qsTr("Save Current Frame As")
         fileMode: FileDialog.SaveFile
-        nameFilters: ["Images (*.png *.jpg *.jpeg)", "All files (*)"]
+        nameFilters: [qsTr("Images (%1)").arg("*.png *.jpg *.jpeg"), qsTr("All files (*)")]
         onAccepted: holder.player.save_frame_to(Tools.local_file(selectedFile))
     }
 
@@ -67,7 +67,7 @@ Item {
         id: recordDialog
         title: qsTr("Record Audio")
         fileMode: FileDialog.SaveFile
-        nameFilters: ["WAV audio (*.wav)", "All files (*)"]
+        nameFilters: [qsTr("WAV audio (%1)").arg("*.wav"), qsTr("All files (*)")]
         onAccepted: holder.player.start_recording(Tools.local_file(selectedFile))
     }
 
@@ -75,7 +75,7 @@ Item {
         id: subtitleDialog
         property bool combine: false
         title: qsTr("Load Subtitle")
-        nameFilters: ["Subtitles (*.srt *.ass *.ssa *.sub *.idx *.sup *.vtt *.smi)", "All files (*)"]
+        nameFilters: [qsTr("Subtitles (%1)").arg("*.srt *.ass *.ssa *.sub *.idx *.sup *.vtt *.smi"), qsTr("All files (*)")]
         onAccepted: {
             if (combine)
                 holder.player.combine_subtitle(Tools.local_file(selectedFile))

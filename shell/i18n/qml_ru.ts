@@ -15,6 +15,14 @@
     <context>
         <name>AlbumName</name>
         <message>
+            <source>Rename Album</source>
+            <translation>Переименовать альбом</translation>
+        </message>
+        <message>
+            <source>Add Album</source>
+            <translation>Добавить альбом</translation>
+        </message>
+        <message>
             <source>Album name:</source>
             <translation>Название альбома:</translation>
         </message>
@@ -51,6 +59,10 @@
         <message>
             <source>Quality</source>
             <translation>Качественно</translation>
+        </message>
+        <message>
+            <source>Measuring %1… The first measurement builds TensorRT's engine for this card: a few minutes.</source>
+            <translation>Измерение: %1… Первое измерение собирает движок TensorRT для этой карты: несколько минут.</translation>
         </message>
         <message>
             <source>Measuring %1…</source>
@@ -112,10 +124,6 @@
             <source>Close</source>
             <translation>Закрыть</translation>
         </message>
-        <message>
-            <source>Measuring %1… The first measurement builds TensorRT's engine for this card: a few minutes.</source>
-            <translation>Измерение: %1… Первое измерение собирает движок TensorRT для этой карты: несколько минут.</translation>
-        </message>
     </context>
     <context>
         <name>ColorTheme</name>
@@ -176,6 +184,29 @@
         <message>
             <source>Load as subtitles</source>
             <translation>Загрузить как субтитры</translation>
+        </message>
+    </context>
+    <context>
+        <name>FolderDialog</name>
+        <message>
+            <source>Open Folder</source>
+            <translation>Открыть папку</translation>
+        </message>
+        <message>
+            <source>Add Folder</source>
+            <translation>Добавить папку</translation>
+        </message>
+        <message>
+            <source>Import PotPlayer Playlists (Playlist folder)</source>
+            <translation>Импорт списков PotPlayer (папка Playlist)</translation>
+        </message>
+        <message>
+            <source>Folder for Saved Frames</source>
+            <translation>Папка для сохранённых кадров</translation>
+        </message>
+        <message>
+            <source>Folder for Audio Recordings</source>
+            <translation>Папка для записей звука</translation>
         </message>
     </context>
     <context>
@@ -297,6 +328,30 @@ in %2 seconds</source>
     <context>
         <name>OpenDialog</name>
         <message>
+            <source>Add File(s)</source>
+            <translation>Добавить файл(ы)</translation>
+        </message>
+        <message>
+            <source>Open File(s)</source>
+            <translation>Открыть файл(ы)</translation>
+        </message>
+        <message>
+            <source>Media (%1)</source>
+            <translation>Медиафайлы (%1)</translation>
+        </message>
+        <message>
+            <source>All files (*)</source>
+            <translation>Все файлы (*)</translation>
+        </message>
+        <message>
+            <source>Combine Subtitle</source>
+            <translation>Объединить субтитры</translation>
+        </message>
+        <message>
+            <source>Load Subtitle</source>
+            <translation>Загрузить субтитры</translation>
+        </message>
+        <message>
             <source>Subtitle Font</source>
             <translation>Шрифт субтитров</translation>
         </message>
@@ -305,20 +360,52 @@ in %2 seconds</source>
             <translation>Сохранить кадр как</translation>
         </message>
         <message>
+            <source>Images (%1)</source>
+            <translation>Изображения (%1)</translation>
+        </message>
+        <message>
             <source>Record Audio</source>
             <translation>Запись звука</translation>
         </message>
         <message>
-            <source>Load Subtitle</source>
-            <translation>Загрузить субтитры</translation>
+            <source>WAV audio (%1)</source>
+            <translation>Звук WAV (%1)</translation>
         </message>
         <message>
-            <source>Open File(s)</source>
-            <translation>Открыть файл(ы)</translation>
+            <source>Subtitles (%1)</source>
+            <translation>Субтитры (%1)</translation>
         </message>
     </context>
     <context>
         <name>PlaybackDialogs</name>
+        <message>
+            <source>Blu-ray playlists (%1)</source>
+            <translation>Списки воспроизведения Blu-ray (%1)</translation>
+        </message>
+        <message>
+            <source>All files (*)</source>
+            <translation>Все файлы (*)</translation>
+        </message>
+        <message>
+            <source>DVD files (%1)</source>
+            <translation>Файлы DVD (%1)</translation>
+        </message>
+        <message>
+            <source>Open Blu-ray files (%1)</source>
+            <translation>Открыть файлы Blu-ray (%1)</translation>
+        </message>
+        <message>
+            <source>Open DVD files (%1)</source>
+            <translation>Открыть файлы DVD (%1)</translation>
+        </message>
+        <message>
+            <source>Open Blu-ray (the disc's drive or folder)</source>
+            <translation>Открыть Blu-ray (привод или папка диска)</translation>
+        </message>
+        <message>
+            <source>Open DVD (the disc's drive or VIDEO_TS folder)</source>
+            <translation>Открыть DVD (привод или папка VIDEO_TS)</translation>
+        </message>
         <message>
             <source>Jump to Specified Time/Frame</source>
             <translation>Переход к времени/кадру</translation>
@@ -384,6 +471,10 @@ in %2 seconds</source>
             <translation>Таймер выключения</translation>
         </message>
         <message>
+            <source>Write the time as hh:mm</source>
+            <translation>Введите время в виде чч:мм</translation>
+        </message>
+        <message>
             <source>At (hh:mm)</source>
             <translation>В (чч:мм)</translation>
         </message>
@@ -404,12 +495,36 @@ in %2 seconds</source>
             <translation>Отправить в корзину файлов: %1?</translation>
         </message>
         <message>
+            <source>Edit title of selected items</source>
+            <translation>Изменить название выбранных элементов</translation>
+        </message>
+        <message>
+            <source>Rename filename of selected items</source>
+            <translation>Переименовать файлы выбранных элементов</translation>
+        </message>
+        <message>
+            <source>Search title and filenames</source>
+            <translation>Поиск по названиям и именам файлов</translation>
+        </message>
+        <message>
+            <source>Add URL</source>
+            <translation>Добавить URL</translation>
+        </message>
+        <message>
+            <source>File information</source>
+            <translation>Сведения о файле</translation>
+        </message>
+        <message>
             <source>Addresses, one a line:</source>
             <translation>Адреса, по одному в строке:</translation>
         </message>
         <message>
             <source>Open a playlist</source>
             <translation>Открыть список воспроизведения</translation>
+        </message>
+        <message>
+            <source>Playlists (%1)</source>
+            <translation>Списки воспроизведения (%1)</translation>
         </message>
         <message>
             <source>Save playlist as</source>
@@ -420,8 +535,20 @@ in %2 seconds</source>
             <translation>Открыть веб-камеру/другое устройство</translation>
         </message>
         <message>
+            <source>Devices:</source>
+            <translation>Устройства:</translation>
+        </message>
+        <message>
+            <source>The system lists no capture devices. A device's name:</source>
+            <translation>Система не находит устройств захвата. Имя устройства:</translation>
+        </message>
+        <message>
             <source>Load External Audio</source>
             <translation>Загрузить внешний звук</translation>
+        </message>
+        <message>
+            <source>Audio (%1)</source>
+            <translation>Звук (%1)</translation>
         </message>
         <message>
             <source>Edit Favorites</source>
@@ -671,6 +798,10 @@ in %2 seconds</source>
             <translation>Читается во время воспроизведения.</translation>
         </message>
         <message>
+            <source>Now: %1</source>
+            <translation>Сейчас: %1</translation>
+        </message>
+        <message>
             <source>%1 %2 % of its power</source>
             <translation>%1: %2 % мощности</translation>
         </message>
@@ -681,6 +812,22 @@ in %2 seconds</source>
         <message>
             <source>. Lightened: %1.</source>
             <translation>. Облегчено: %1.</translation>
+        </message>
+        <message>
+            <source>%1 ms</source>
+            <translation>%1 мс</translation>
+        </message>
+        <message>
+            <source>%1 s</source>
+            <translation>%1 с</translation>
+        </message>
+        <message>
+            <source>%1 min</source>
+            <translation>%1 мин</translation>
+        </message>
+        <message>
+            <source>%1 h</source>
+            <translation>%1 ч</translation>
         </message>
         <message>
             <source>Default</source>
@@ -717,6 +864,10 @@ in %2 seconds</source>
         <message>
             <source>Subtitle Colour</source>
             <translation>Цвет субтитров</translation>
+        </message>
+        <message>
+            <source>OSD Font</source>
+            <translation>Шрифт экранных сообщений</translation>
         </message>
         <message>
             <source>Subtitle Font</source>
@@ -1191,6 +1342,10 @@ in %2 seconds</source>
             <translation>Импортировать списки</translation>
         </message>
         <message>
+            <source>Imported (see the message in the player window).</source>
+            <translation>Импортировано (сообщение — в окне проигрывателя).</translation>
+        </message>
+        <message>
             <source>Reads PotPlayer's .dpl files; PotPlayer's files are not changed.</source>
             <translation>Читает файлы .dpl PotPlayer; сами файлы PotPlayer не меняются.</translation>
         </message>
@@ -1213,6 +1368,14 @@ in %2 seconds</source>
         <message>
             <source>View items as</source>
             <translation>Вид элементов</translation>
+        </message>
+        <message>
+            <source>List</source>
+            <translation>Список</translation>
+        </message>
+        <message>
+            <source>Thumbnails (%1 rows) + details</source>
+            <translation>Миниатюры (строк: %1) и подробности</translation>
         </message>
         <message>
             <source>Thumbnail position</source>
@@ -1273,6 +1436,10 @@ in %2 seconds</source>
         <message>
             <source>Show the mouse pointer</source>
             <translation>Показывать указатель мыши</translation>
+        </message>
+        <message>
+            <source>Linux captures an X11 session's screen (FFmpeg's x11grab); a Wayland desktop gives its screen only through its portal, which FFmpeg cannot open.</source>
+            <translation>Linux захватывает экран сеанса X11 (x11grab из FFmpeg); рабочий стол Wayland отдаёт экран только через свой портал, который FFmpeg открыть не может.</translation>
         </message>
         <message>
             <source>Webcam and other devices</source>
@@ -1339,6 +1506,34 @@ in %2 seconds</source>
             <translation>Устройство вывода звука</translation>
         </message>
         <message>
+            <source>Auto select (Recommended)</source>
+            <translation>Выбирать автоматически (рекомендуется)</translation>
+        </message>
+        <message>
+            <source>Pass-through Renderer</source>
+            <translation>Устройство для передачи без обработки</translation>
+        </message>
+        <message>
+            <source>Default Audio Device (Recommended)</source>
+            <translation>Устройство по умолчанию (рекомендуется)</translation>
+        </message>
+        <message>
+            <source>2nd Audio Renderer</source>
+            <translation>Второе устройство вывода звука</translation>
+        </message>
+        <message>
+            <source>Disable (Recommended)</source>
+            <translation>Отключить (рекомендуется)</translation>
+        </message>
+        <message>
+            <source>Speakers</source>
+            <translation>Колонки</translation>
+        </message>
+        <message>
+            <source>Output format</source>
+            <translation>Формат вывода</translation>
+        </message>
+        <message>
             <source>As the output device takes it</source>
             <translation>Как принимает устройство вывода</translation>
         </message>
@@ -1365,6 +1560,14 @@ in %2 seconds</source>
         <message>
             <source>Sample rate</source>
             <translation>Частота дискретизации</translation>
+        </message>
+        <message>
+            <source>Same as input (Recommended)</source>
+            <translation>Как на входе (рекомендуется)</translation>
+        </message>
+        <message>
+            <source>Resample</source>
+            <translation>Передискретизация</translation>
         </message>
         <message>
             <source>High quality</source>
@@ -1463,8 +1666,8 @@ in %2 seconds</source>
             <translation>LFE</translation>
         </message>
         <message>
-            <source>Stereo mixes 5.1 and 7.1 down as PotPlayer does (centre and LFE at -3 dB, </source>
-            <translation>Стерео сводит 5.1 и 7.1 как PotPlayer (центр и LFE на -3 дБ, </translation>
+            <source>Stereo mixes 5.1 and 7.1 down as PotPlayer does (centre and LFE at -3 dB, surround channels at their level) before the equalizer and the normalizer.</source>
+            <translation>Стерео сводит 5.1 и 7.1 как PotPlayer (центр и LFE на -3 дБ, тыловые каналы на своём уровне) до эквалайзера и нормализатора.</translation>
         </message>
         <message>
             <source>Headphone &amp; Dolby Decoder Settings</source>
@@ -1963,6 +2166,10 @@ in %2 seconds</source>
             <translation>Бюджет мощности</translation>
         </message>
         <message>
+            <source>%1 % of the card's rated power</source>
+            <translation>%1 % номинальной мощности карты</translation>
+        </message>
+        <message>
             <source>Above the budget RVP lightens its own work, a step every few seconds: EWA scalers become spline36, then GPU Super Resolution and RTX Video HDR, the pixel shaders and the VapourSynth script go off. Each comes back once the card stays 10 points below the budget for a minute. RVP never changes the card's own settings, and SVP and other programs are not limited. NVIDIA cards are read through NVML; AMD cards through Windows' adapter counter (Windows) and amdgpu (Linux).</source>
             <translation>Сверх бюджета RVP облегчает свою работу на шаг каждые несколько секунд: масштабирование EWA становится spline36, затем отключаются суперразрешение GPU и RTX Video HDR, пиксельные шейдеры и сценарий VapourSynth. Каждый шаг возвращается, когда карта минуту держится на 10 пунктов ниже бюджета. RVP никогда не меняет настройки самой карты, а SVP и другие программы не ограничиваются. Карты NVIDIA читаются через NVML; карты AMD — через счётчик адаптера Windows (Windows) и amdgpu (Linux).</translation>
         </message>
@@ -1995,6 +2202,14 @@ in %2 seconds</source>
             <translation>Яркость SDR-монитора</translation>
         </message>
         <message>
+            <source>mpv's choice</source>
+            <translation>выбор mpv</translation>
+        </message>
+        <message>
+            <source>%1 nits</source>
+            <translation>%1 нит</translation>
+        </message>
+        <message>
             <source>Use limited (16-235) colour range</source>
             <translation>Ограниченный диапазон цветов (16–235)</translation>
         </message>
@@ -2021,10 +2236,6 @@ in %2 seconds</source>
         <message>
             <source>Software deinterlacer</source>
             <translation>Программный деинтерлейсер</translation>
-        </message>
-        <message>
-            <source>mpv's choice</source>
-            <translation>выбор mpv</translation>
         </message>
         <message>
             <source>bwdif (Bob Weaver)</source>
@@ -2739,12 +2950,28 @@ in %2 seconds</source>
             <translation>Папки шейдеров</translation>
         </message>
         <message>
+            <source>PotPlayer's pixel shaders (HLSL, translated when they load): %1</source>
+            <translation>Пиксельные шейдеры PotPlayer (HLSL, переводятся при загрузке): %1</translation>
+        </message>
+        <message>
+            <source>PotPlayer's pixel shader folder was not found.</source>
+            <translation>Папка пиксельных шейдеров PotPlayer не найдена.</translation>
+        </message>
+        <message>
             <source>Add a Folder…</source>
             <translation>Добавить папку…</translation>
         </message>
         <message>
             <source>Add Shader Files…</source>
             <translation>Добавить файлы шейдеров…</translation>
+        </message>
+        <message>
+            <source>Pixel shaders</source>
+            <translation>Пиксельные шейдеры</translation>
+        </message>
+        <message>
+            <source>Shaders (%1)</source>
+            <translation>Шейдеры (%1)</translation>
         </message>
         <message>
             <source>Open Shader Folder</source>
@@ -2779,8 +3006,12 @@ in %2 seconds</source>
             <translation>Состояние: %1</translation>
         </message>
         <message>
-            <source>Endpoint in use: %1</source>
-            <translation>Используемый канал: %1</translation>
+            <source>Endpoint in use: %1. SVP 4 Manager finds a player by this pipe or socket while it plays; a second RVP window uses mpvSockets/&lt;process id&gt; in the temporary folder, which SVP finds too. In SVP mode hardware decoding copies the frames back, so SVP's filter gets them.</source>
+            <translation>Используемый канал: %1. SVP 4 Manager находит проигрыватель по этому каналу или сокету, пока тот играет; второе окно RVP использует mpvSockets/&lt;ID процесса&gt; во временной папке, которую SVP тоже находит. В режиме SVP аппаратное декодирование копирует кадры обратно, чтобы их получил фильтр SVP.</translation>
+        </message>
+        <message>
+            <source>none</source>
+            <translation>нет</translation>
         </message>
         <message>
             <source>VapourSynth</source>
@@ -2795,6 +3026,14 @@ in %2 seconds</source>
             <translation>Добавить сценарий…</translation>
         </message>
         <message>
+            <source>VapourSynth scripts</source>
+            <translation>Сценарии VapourSynth</translation>
+        </message>
+        <message>
+            <source>VapourSynth scripts (%1)</source>
+            <translation>Сценарии VapourSynth (%1)</translation>
+        </message>
+        <message>
             <source>Plugins loaded first (mvtools for PotPlayer's motion interpolation)</source>
             <translation>Плагины, загружаемые первыми (mvtools для интерполяции движения PotPlayer)</translation>
         </message>
@@ -2803,12 +3042,28 @@ in %2 seconds</source>
             <translation>Добавить плагины…</translation>
         </message>
         <message>
+            <source>VapourSynth plugins</source>
+            <translation>Плагины VapourSynth</translation>
+        </message>
+        <message>
+            <source>Plugins (%1)</source>
+            <translation>Плагины (%1)</translation>
+        </message>
+        <message>
             <source>AviSynth plugins loaded first (VapourSynth's avs.LoadPlugin, with AviSynth+ installed)</source>
             <translation>Плагины AviSynth, загружаемые первыми (avs.LoadPlugin VapourSynth, при установленном AviSynth+)</translation>
         </message>
         <message>
             <source>Add AviSynth Plugins…</source>
             <translation>Добавить плагины AviSynth…</translation>
+        </message>
+        <message>
+            <source>AviSynth plugins</source>
+            <translation>Плагины AviSynth</translation>
+        </message>
+        <message>
+            <source>AviSynth plugins (%1)</source>
+            <translation>Плагины AviSynth (%1)</translation>
         </message>
         <message>
             <source>Buffered frames</source>
@@ -2823,8 +3078,12 @@ in %2 seconds</source>
             <translation>среда RVP</translation>
         </message>
         <message>
-            <source>In use: %1</source>
-            <translation>Используется: %1</translation>
+            <source>In use: %1. A new library takes effect at the next start. PotPlayer's .vpy scripts run unchanged: RVP wraps them for today's VapourSynth (get_core) and loads the plugins first.</source>
+            <translation>Используется: %1. Новая библиотека начнёт работать со следующего запуска. Сценарии .vpy из PotPlayer работают без изменений: RVP оборачивает их для нынешнего VapourSynth (get_core) и сначала загружает плагины.</translation>
+        </message>
+        <message>
+            <source>none found</source>
+            <translation>не найдено</translation>
         </message>
         <message>
             <source>Smooth motion (Ctrl+Shift+I)</source>
@@ -2847,8 +3106,80 @@ in %2 seconds</source>
             <translation>RIFE: оптический поток на GPU (Vulkan)</translation>
         </message>
         <message>
+            <source>RIFE (TensorRT): optical flow on NVIDIA's cards, with NVIDIA's TensorRT</source>
+            <translation>RIFE (TensorRT): оптический поток на картах NVIDIA через NVIDIA TensorRT</translation>
+        </message>
+        <message>
             <source>NVIDIA Optical Flow: RTX 30 and later</source>
             <translation>NVIDIA Optical Flow: RTX 30 и новее</translation>
+        </message>
+        <message>
+            <source>checking</source>
+            <translation>проверка</translation>
+        </message>
+        <message>
+            <source>unpacking</source>
+            <translation>распаковка</translation>
+        </message>
+        <message>
+            <source>downloading</source>
+            <translation>загрузка</translation>
+        </message>
+        <message>
+            <source>RIFE (TensorRT): %1, %2 of %3 GB</source>
+            <translation>RIFE (TensorRT): %1, %2 из %3 ГБ</translation>
+        </message>
+        <message>
+            <source>RIFE (TensorRT): NVIDIA's TensorRT %1 is installed for %2 and its engine is built.</source>
+            <translation>RIFE (TensorRT): NVIDIA TensorRT %1 установлен для %2, движок собран.</translation>
+        </message>
+        <message>
+            <source>RIFE (TensorRT): NVIDIA's TensorRT %1 is installed for %2; the calibration builds its engine (a few minutes) when nothing plays.</source>
+            <translation>RIFE (TensorRT): NVIDIA TensorRT %1 установлен для %2; калибровка соберёт движок (несколько минут), когда ничего не играет.</translation>
+        </message>
+        <message>
+            <source>RIFE (TensorRT): NVIDIA's TensorRT %1 is installed for %2, and this card needs %3: download it again.</source>
+            <translation>RIFE (TensorRT): NVIDIA TensorRT %1 установлен для %2, а этой карте нужен %3: скачайте его заново.</translation>
+        </message>
+        <message>
+            <source>RIFE (TensorRT): NVIDIA's TensorRT %1 is installed for %2, and this computer has no NVIDIA card it runs on.</source>
+            <translation>RIFE (TensorRT): NVIDIA TensorRT %1 установлен для %2, но в этом компьютере нет карты NVIDIA, на которой он работает.</translation>
+        </message>
+        <message>
+            <source>RIFE (TensorRT): %1</source>
+            <translation>RIFE (TensorRT): %1</translation>
+        </message>
+        <message>
+            <source>RIFE (TensorRT) needs NVIDIA's TensorRT: a %1 GB download from NVIDIA, of which about %2 GB stay.</source>
+            <translation>Для RIFE (TensorRT) нужен NVIDIA TensorRT: загрузка %1 ГБ с серверов NVIDIA, из них остаётся около %2 ГБ.</translation>
+        </message>
+        <message>
+            <source>Download…</source>
+            <translation>Загрузить…</translation>
+        </message>
+        <message>
+            <source>Cancel</source>
+            <translation>Отмена</translation>
+        </message>
+        <message>
+            <source>Download NVIDIA's TensorRT</source>
+            <translation>Загрузка NVIDIA TensorRT</translation>
+        </message>
+        <message>
+            <source>RVP downloads NVIDIA TensorRT %1 and CUDA's runtime from NVIDIA's servers (%2 GB) and keeps the files this card needs in RVP's state folder. They are NVIDIA's software under NVIDIA's terms, not RVP's: by downloading them you accept the NVIDIA TensorRT Software License Agreement and the CUDA End User License Agreement.</source>
+            <translation>RVP загружает NVIDIA TensorRT %1 и среду выполнения CUDA с серверов NVIDIA (%2 ГБ) и оставляет файлы, нужные этой карте, в папке состояния RVP. Это программы NVIDIA на условиях NVIDIA, а не RVP: загружая их, вы принимаете лицензионное соглашение NVIDIA TensorRT и лицензионное соглашение CUDA.</translation>
+        </message>
+        <message>
+            <source>TensorRT's licence</source>
+            <translation>Лицензия TensorRT</translation>
+        </message>
+        <message>
+            <source>CUDA's EULA</source>
+            <translation>Лицензия CUDA (EULA)</translation>
+        </message>
+        <message>
+            <source>Accept and Download</source>
+            <translation>Принять и загрузить</translation>
         </message>
         <message>
             <source>Fast</source>
@@ -2879,12 +3210,32 @@ in %2 seconds</source>
             <translation>Компенсация движения до</translation>
         </message>
         <message>
+            <source>%1p (Blend above)</source>
+            <translation>%1p (выше — Blend)</translation>
+        </message>
+        <message>
             <source>Show the original first for</source>
             <translation>Сначала показывать оригинал</translation>
         </message>
         <message>
             <source>Also for RIFE (TensorRT) (about 60 frames drop at the switch)</source>
             <translation>И для RIFE (TensorRT) (при смене теряется около 60 кадров)</translation>
+        </message>
+        <message>
+            <source>At a scene change</source>
+            <translation>На смене сцены</translation>
+        </message>
+        <message>
+            <source>Interpolate across it (one scene morphs into the next)</source>
+            <translation>Интерполировать (одна сцена перетекает в другую)</translation>
+        </message>
+        <message>
+            <source>Repeat the scene's last frame</source>
+            <translation>Повторять последний кадр сцены</translation>
+        </message>
+        <message>
+            <source>Repeat the scene's last frame (more sensitive: alike scenes too, now and then a fast pan)</source>
+            <translation>Повторять последний кадр сцены (чувствительнее: и похожие сцены, иногда быстрая панорама)</translation>
         </message>
         <message>
             <source>Step down after dropped frames over</source>
@@ -2895,20 +3246,16 @@ in %2 seconds</source>
             <translation>никогда</translation>
         </message>
         <message>
-            <source>%1 s</source>
-            <translation>%1 с</translation>
+            <source>Here: MVTools %1, RIFE %2, NVIDIA Optical Flow %3 (in RVP's VapourSynth runtime and libmpv).</source>
+            <translation>Здесь: MVTools %1, RIFE %2, NVIDIA Optical Flow %3 (в среде VapourSynth из RVP и в libmpv).</translation>
         </message>
         <message>
-            <source>Now: %1</source>
-            <translation>Сейчас: %1</translation>
+            <source>found</source>
+            <translation>найден</translation>
         </message>
         <message>
-            <source>Here: MVTools %1</source>
-            <translation>Здесь: MVTools %1</translation>
-        </message>
-        <message>
-            <source>Smoothing stays off while SVP is attached, while RVP's own VapourSynth script runs and when the video plays at the target rate already; while SVP 4 Manager runs, it waits 8 s for SVP after a file starts. An engine that cannot run here gives way: RIFE and NVIDIA Optical Flow to MVTools, MVTools to Blend; one whose output drops more than 5 % of its frames over the time above, or more than half of them over 5 s, steps down (a lighter preset, then MVTools, then Blend; RIFE gives way to MVTools at once) until the file ends. Above the GPU power budget, smoothing is lightened first. After a start or a seek the original shows for the time above while MVTools or RIFE get ready, as SVP does; RIFE (TensorRT) starts with its own frames. The Log page's Info level records each step and the seconds that dropped frames.</source>
-            <translation>Сглаживание выключено, пока подключён SVP, пока работает собственный сценарий VapourSynth RVP и когда видео уже идёт с целевой частотой; пока работает SVP 4 Manager, после старта файла оно ждёт SVP 8 с. Движок, который здесь не может работать, уступает место: RIFE и NVIDIA Optical Flow — MVTools, MVTools — Blend; движок, на выходе которого теряется больше 5 % кадров за время выше или больше половины за 5 с, переходит на ступень ниже (более лёгкая предустановка, затем MVTools, затем Blend; RIFE сразу уступает MVTools) до конца файла. Сверх бюджета мощности GPU сглаживание облегчается первым. После старта или перемотки на время выше показывается оригинал, пока MVTools или RIFE готовятся, как у SVP; RIFE (TensorRT) сразу начинает со своих кадров. Уровень «Сведения» на странице «Журнал» записывает каждую ступень и секунды с потерянными кадрами.</translation>
+            <source>missing</source>
+            <translation>нет</translation>
         </message>
         <message>
             <source>%1 %2 up to %3p</source>
@@ -2923,18 +3270,6 @@ in %2 seconds</source>
             <translation>%1 здесь не работает</translation>
         </message>
         <message>
-            <source>Recalibrate…</source>
-            <translation>Перекалибровать…</translation>
-        </message>
-        <message>
-            <source>Calibrate…</source>
-            <translation>Калибровать…</translation>
-        </message>
-        <message>
-            <source>Calibration: cancelled; it starts again with Start in its window.</source>
-            <translation>Калибровка отменена; она начнётся снова по кнопке «Начать» в её окне.</translation>
-        </message>
-        <message>
             <source>Calibration: measuring while nothing plays (%1 done, at most %2 left)</source>
             <translation>Калибровка: измерение, пока ничего не играет (готово %1, осталось не больше %2)</translation>
         </message>
@@ -2947,10 +3282,25 @@ in %2 seconds</source>
             <translation>Калибровка: здесь нечего измерять.</translation>
         </message>
         <message>
+            <source>Calibration: cancelled; it starts again with Start in its window.</source>
+            <translation>Калибровка отменена; она начнётся снова по кнопке «Начать» в её окне.</translation>
+        </message>
+        <message>
             <source>Calibration: not measured yet; it runs when smoothing is on and nothing plays for a few seconds.</source>
             <translation>Калибровка ещё не проведена: она начнётся, когда сглаживание включено и несколько секунд ничего не играет.</translation>
         </message>
-
+        <message>
+            <source>Recalibrate…</source>
+            <translation>Перекалибровать…</translation>
+        </message>
+        <message>
+            <source>Calibrate…</source>
+            <translation>Калибровать…</translation>
+        </message>
+        <message>
+            <source>Smoothing stays off while SVP is attached, while RVP's own VapourSynth script runs and when the video plays at the target rate already; while SVP 4 Manager runs, it waits 8 s for SVP after a file starts. An engine that cannot run here gives way: RIFE and NVIDIA Optical Flow to MVTools, MVTools to Blend; one whose output drops more than 5 % of its frames over the time above, or more than half of them over 5 s, steps down (a lighter preset, then MVTools, then Blend; RIFE gives way to MVTools at once) until the file ends. Above the GPU power budget, smoothing is lightened first. After a start or a seek the original shows for the time above while MVTools or RIFE get ready, as SVP does; RIFE (TensorRT) starts with its own frames. The Log page's Info level records each step and the seconds that dropped frames.</source>
+            <translation>Сглаживание выключено, пока подключён SVP, пока работает собственный сценарий VapourSynth RVP и когда видео уже идёт с целевой частотой; пока работает SVP 4 Manager, после старта файла оно ждёт SVP 8 с. Движок, который здесь не может работать, уступает место: RIFE и NVIDIA Optical Flow — MVTools, MVTools — Blend; движок, на выходе которого теряется больше 5 % кадров за время выше или больше половины за 5 с, переходит на ступень ниже (более лёгкая предустановка, затем MVTools, затем Blend; RIFE сразу уступает MVTools) до конца файла. Сверх бюджета мощности GPU сглаживание облегчается первым. После старта или перемотки на время выше показывается оригинал, пока MVTools или RIFE готовятся, как у SVP; RIFE (TensorRT) сразу начинает со своих кадров. Уровень «Сведения» на странице «Журнал» записывает каждую ступень и секунды с потерянными кадрами.</translation>
+        </message>
         <message>
             <source>The calibration measures once how many frames a second MVTools and RIFE make here at each preset from 480p to 2160p, as SVP does, and again when the processors, graphics cards, their drivers or the engines change; each file then starts at the best preset that keeps its rate with a fifth to spare, at most the preset above. NVIDIA Optical Flow is not measured. Steps down taken while other programs loaded the processors come back at the next seek once that load is gone.</source>
             <translation>Калибровка один раз измеряет, сколько кадров в секунду дают здесь MVTools и RIFE на каждой предустановке от 480p до 2160p, как у SVP, и повторяется при смене процессоров, видеокарт, их драйверов или движков; затем каждый файл начинается с лучшей предустановки, которая держит его частоту с запасом в пятую часть, но не выше выбранной выше. NVIDIA Optical Flow не измеряется. Ступени вниз, сделанные, пока другие программы нагружали процессоры, возвращаются при следующей перемотке, когда эта нагрузка уходит.</translation>
@@ -3188,8 +3538,8 @@ in %2 seconds</source>
             <translation>Появление и 3D</translation>
         </message>
         <message>
-            <source>mpv fades only the events of ASS scripts that ask for it (<byte value="xc" />ad); other subtitles cannot fade. mpv draws subtitles once over the finished picture, not once for each eye, so there is no stereo 3D subtitle mode (docs/spikes/m12-studies.md).</source>
-            <translation>mpv плавно показывает только события сценариев ASS, где это задано (</translation>
+            <source>mpv fades only the events of ASS scripts that ask for it (%1); other subtitles cannot fade. mpv draws subtitles once over the finished picture, not once for each eye, so there is no stereo 3D subtitle mode (docs/spikes/m12-studies.md).</source>
+            <translation>mpv плавно показывает и скрывает только события сценариев ASS, где это задано (%1); остальные субтитры так не умеют. mpv рисует субтитры один раз поверх готовой картинки, а не для каждого глаза, поэтому стереорежима 3D для субтитров нет (docs/spikes/m12-studies.md).</translation>
         </message>
         <message>
             <source>Language</source>
@@ -3322,6 +3672,10 @@ in %2 seconds</source>
         <message>
             <source>Make subtitles when the file has none</source>
             <translation>Создавать, если у файла нет субтитров</translation>
+        </message>
+        <message>
+            <source>Make subtitles now</source>
+            <translation>Создать субтитры сейчас</translation>
         </message>
         <message>
             <source>Real time</source>
@@ -3518,10 +3872,6 @@ in %2 seconds</source>
         <message>
             <source>The controller draws over the video and takes the pointer there; in fullscreen it takes the place of the skin's bars. Scripts such as uosc or ModernZ go into the scripts folder of RVP's mpv folder (%1), their fonts into fonts and their options into script-opts, as in mpv's own folder. Scripts found: %2. A new choice takes effect when RVP starts again.</source>
             <translation>Панель рисуется поверх видео и забирает там указатель; в полноэкранном режиме она заменяет полосы скина. Скрипты вроде uosc или ModernZ кладутся в папку scripts папки mpv RVP (%1), их шрифты — в fonts, настройки — в script-opts, как в папке самого mpv. Найдено скриптов: %2. Новый выбор действует после перезапуска RVP.</translation>
-        </message>
-        <message>
-            <source>none</source>
-            <translation>нет</translation>
         </message>
         <message>
             <source>Context menu</source>
@@ -3762,6 +4112,18 @@ in %2 seconds</source>
         <message>
             <source>Info font size</source>
             <translation>Размер шрифта информации</translation>
+        </message>
+        <message>
+            <source>Shadow</source>
+            <translation>Тень</translation>
+        </message>
+        <message>
+            <source>Info box</source>
+            <translation>Подложка инфо</translation>
+        </message>
+        <message>
+            <source>The notices and the info texts (Tab, Scroll Lock) take these colours; in the picture mpv draws the notices with them.</source>
+            <translation>Эти цвета берут сообщения и инфо-тексты (Tab, Scroll Lock); в картинке сообщения с ними рисует mpv.</translation>
         </message>
         <message>
             <source>Content of Misc Info (Scroll Lock)</source>
@@ -4188,6 +4550,10 @@ in %2 seconds</source>
             <translation>Потоков декодера</translation>
         </message>
         <message>
+            <source>automatic</source>
+            <translation>автоматически</translation>
+        </message>
+        <message>
             <source>PotPlayer's DirectShow filters, splitters and their priorities have no place in RVP: libmpv decodes and splits with FFmpeg.</source>
             <translation>Фильтрам, сплиттерам DirectShow PotPlayer и их приоритетам нет места в RVP: libmpv декодирует и разделяет потоки с помощью FFmpeg.</translation>
         </message>
@@ -4344,6 +4710,10 @@ in %2 seconds</source>
             <translation>Диалоговые окна</translation>
         </message>
         <message>
+            <source>Qt's</source>
+            <translation>как в Qt</translation>
+        </message>
+        <message>
             <source>Always keep modeless dialog boxes on top</source>
             <translation>Немодальные окна всегда поверх</translation>
         </message>
@@ -4420,6 +4790,18 @@ in %2 seconds</source>
             <translation>Автозапуск</translation>
         </message>
         <message>
+            <source>Video files</source>
+            <translation>Видеофайлы</translation>
+        </message>
+        <message>
+            <source>Audio files</source>
+            <translation>Аудиофайлы</translation>
+        </message>
+        <message>
+            <source>Audio CD</source>
+            <translation>Аудио-CD</translation>
+        </message>
+        <message>
             <source>Apply to System</source>
             <translation>Применить в системе</translation>
         </message>
@@ -4434,6 +4816,10 @@ in %2 seconds</source>
         <message>
             <source>RVP registers itself for these types and never makes itself their default: Windows' Default apps chooses that. RVP's files show RVP's icon.</source>
             <translation>RVP регистрируется для этих типов и никогда не делает себя программой по умолчанию: это выбирается в «Приложениях по умолчанию» Windows. Файлы RVP показывают значок RVP.</translation>
+        </message>
+        <message>
+            <source>RVP registers itself for these types and never makes itself their default: the desktop's default applications choose that.</source>
+            <translation>RVP регистрируется для этих типов и никогда не делает себя программой по умолчанию: это выбирают приложения по умолчанию рабочего стола.</translation>
         </message>
         <message>
             <source>Screen saver</source>
@@ -4544,6 +4930,10 @@ in %2 seconds</source>
             <translation>Движок синтеза (голос)</translation>
         </message>
         <message>
+            <source>The system's default</source>
+            <translation>По умолчанию в системе</translation>
+        </message>
+        <message>
             <source>Volume</source>
             <translation>Громкость</translation>
         </message>
@@ -4558,18 +4948,6 @@ in %2 seconds</source>
         <message>
             <source>Windows' speech (SAPI) reads, on Linux speech-dispatcher with its voices.</source>
             <translation>Читает синтез речи Windows (SAPI), в Linux — speech-dispatcher своими голосами.</translation>
-        </message>
-        <message>
-            <source>Linux captures an X11 session's screen (FFmpeg's x11grab); a Wayland desktop gives its screen only through its portal, which FFmpeg cannot open.</source>
-            <translation>Linux захватывает экран сеанса X11 (x11grab из FFmpeg); рабочий стол Wayland отдаёт экран только через свой портал, который FFmpeg открыть не может.</translation>
-        </message>
-        <message>
-            <source>RVP registers itself for these types and never makes itself their default: the desktop's default applications choose that.</source>
-            <translation>RVP регистрируется для этих типов и никогда не делает себя программой по умолчанию: это выбирают приложения по умолчанию рабочего стола.</translation>
-        </message>
-        <message>
-            <source>The system's default</source>
-            <translation>По умолчанию в системе</translation>
         </message>
         <message>
             <source>UIA (User Interface Automation) setup for screen reader programs</source>
@@ -4712,6 +5090,38 @@ in %2 seconds</source>
             <translation>Добавить в Unified Remote</translation>
         </message>
         <message>
+            <source>Critical: errors</source>
+            <translation>Критический: ошибки</translation>
+        </message>
+        <message>
+            <source>Warning: errors and problems worked around</source>
+            <translation>Предупреждения: ошибки и обойдённые проблемы</translation>
+        </message>
+        <message>
+            <source>Info: also files, settings, smoothing, dropped frames</source>
+            <translation>Сведения: также файлы, настройки, сглаживание, потери кадров</translation>
+        </message>
+        <message>
+            <source>Debug: also each second of playback, mpv's details</source>
+            <translation>Отладка: также каждая секунда воспроизведения, подробности mpv</translation>
+        </message>
+        <message>
+            <source>File: %1</source>
+            <translation>Файл: %1</translation>
+        </message>
+        <message>
+            <source>The log keeps what RVP and mpv report, with the time. An empty folder is RVP's state folder; a new one takes effect at once. At 16 MB the file moves to rvp.old.log beside it. Debug adds a line for each second of playback: the frame rates, dropped and late frames, the frames drawn and the processors' load.</source>
+            <translation>Журнал хранит сообщения RVP и mpv со временем. Пустая папка — папка состояния RVP; новая действует сразу. При 16 МБ файл переносится рядом в rvp.old.log. Отладка добавляет строку на каждую секунду воспроизведения: частоты кадров, потерянные и запоздавшие кадры, отрисованные кадры и загрузку процессоров.</translation>
+        </message>
+        <message>
+            <source>Last lines, newest first</source>
+            <translation>Последние строки, новые сверху</translation>
+        </message>
+        <message>
+            <source>Nothing logged yet.</source>
+            <translation>Пока ничего не записано.</translation>
+        </message>
+        <message>
             <source>Restart RVP to apply it.</source>
             <translation>Перезапустите RVP, чтобы применить.</translation>
         </message>
@@ -4750,142 +5160,6 @@ in %2 seconds</source>
         <message>
             <source>Close</source>
             <translation>Закрыть</translation>
-        </message>
-        <message>
-            <source>Critical: errors</source>
-            <translation>Критический: ошибки</translation>
-        </message>
-        <message>
-            <source>Warning: errors and problems worked around</source>
-            <translation>Предупреждения: ошибки и обойдённые проблемы</translation>
-        </message>
-        <message>
-            <source>Info: also files, settings, smoothing, dropped frames</source>
-            <translation>Сведения: также файлы, настройки, сглаживание, потери кадров</translation>
-        </message>
-        <message>
-            <source>Debug: also each second of playback, mpv's details</source>
-            <translation>Отладка: также каждая секунда воспроизведения, подробности mpv</translation>
-        </message>
-        <message>
-            <source>File: %1</source>
-            <translation>Файл: %1</translation>
-        </message>
-        <message>
-            <source>The log keeps what RVP and mpv report, with the time. An empty folder is RVP's state folder; a new one takes effect at once. At 16 MB the file moves to rvp.old.log beside it. Debug adds a line for each second of playback: the frame rates, dropped and late frames, the frames drawn and the processors' load.</source>
-            <translation>Журнал хранит сообщения RVP и mpv со временем. Пустая папка — папка состояния RVP; новая действует сразу. При 16 МБ файл переносится рядом в rvp.old.log. Отладка добавляет строку на каждую секунду воспроизведения: частоты кадров, потерянные и запоздавшие кадры, отрисованные кадры и загрузку процессоров.</translation>
-        </message>
-        <message>
-            <source>Last lines, newest first</source>
-            <translation>Последние строки, новые сверху</translation>
-        </message>
-        <message>
-            <source>Nothing logged yet.</source>
-            <translation>Пока ничего не записано.</translation>
-        </message>
-        <message>
-            <source>RIFE (TensorRT): optical flow on NVIDIA's cards, with NVIDIA's TensorRT</source>
-            <translation>RIFE (TensorRT): оптический поток на картах NVIDIA через NVIDIA TensorRT</translation>
-        </message>
-        <message>
-            <source>checking</source>
-            <translation>проверка</translation>
-        </message>
-        <message>
-            <source>unpacking</source>
-            <translation>распаковка</translation>
-        </message>
-        <message>
-            <source>downloading</source>
-            <translation>загрузка</translation>
-        </message>
-        <message>
-            <source>RIFE (TensorRT): %1, %2 of %3 GB</source>
-            <translation>RIFE (TensorRT): %1, %2 из %3 ГБ</translation>
-        </message>
-        <message>
-            <source>RIFE (TensorRT): NVIDIA's TensorRT %1 is installed for %2 and its engine is built.</source>
-            <translation>RIFE (TensorRT): NVIDIA TensorRT %1 установлен для %2, движок собран.</translation>
-        </message>
-        <message>
-            <source>RIFE (TensorRT): NVIDIA's TensorRT %1 is installed for %2; the calibration builds its engine (a few minutes) when nothing plays.</source>
-            <translation>RIFE (TensorRT): NVIDIA TensorRT %1 установлен для %2; калибровка соберёт движок (несколько минут), когда ничего не играет.</translation>
-        </message>
-        <message>
-            <source>RIFE (TensorRT): NVIDIA's TensorRT %1 is installed for %2, and this card needs %3: download it again.</source>
-            <translation>RIFE (TensorRT): NVIDIA TensorRT %1 установлен для %2, а этой карте нужен %3: скачайте его заново.</translation>
-        </message>
-        <message>
-            <source>RIFE (TensorRT): NVIDIA's TensorRT %1 is installed for %2, and this computer has no NVIDIA card it runs on.</source>
-            <translation>RIFE (TensorRT): NVIDIA TensorRT %1 установлен для %2, но в этом компьютере нет карты NVIDIA, на которой он работает.</translation>
-        </message>
-        <message>
-            <source>RIFE (TensorRT): %1</source>
-            <translation>RIFE (TensorRT): %1</translation>
-        </message>
-        <message>
-            <source>RIFE (TensorRT) needs NVIDIA's TensorRT: a %1 GB download from NVIDIA, of which about %2 GB stay.</source>
-            <translation>Для RIFE (TensorRT) нужен NVIDIA TensorRT: загрузка %1 ГБ с серверов NVIDIA, из них остаётся около %2 ГБ.</translation>
-        </message>
-        <message>
-            <source>Download…</source>
-            <translation>Загрузить…</translation>
-        </message>
-        <message>
-            <source>Cancel</source>
-            <translation>Отмена</translation>
-        </message>
-        <message>
-            <source>Download NVIDIA's TensorRT</source>
-            <translation>Загрузка NVIDIA TensorRT</translation>
-        </message>
-        <message>
-            <source>RVP downloads NVIDIA TensorRT %1 and CUDA's runtime from NVIDIA's servers (%2 GB) and keeps the files this card needs in RVP's state folder. They are NVIDIA's software under NVIDIA's terms, not RVP's: by downloading them you accept the NVIDIA TensorRT Software License Agreement and the CUDA End User License Agreement.</source>
-            <translation>RVP загружает NVIDIA TensorRT %1 и среду выполнения CUDA с серверов NVIDIA (%2 ГБ) и оставляет файлы, нужные этой карте, в папке состояния RVP. Это программы NVIDIA на условиях NVIDIA, а не RVP: загружая их, вы принимаете лицензионное соглашение NVIDIA TensorRT и лицензионное соглашение CUDA.</translation>
-        </message>
-        <message>
-            <source>TensorRT's licence</source>
-            <translation>Лицензия TensorRT</translation>
-        </message>
-        <message>
-            <source>CUDA's EULA</source>
-            <translation>Лицензия CUDA (EULA)</translation>
-        </message>
-        <message>
-            <source>Accept and Download</source>
-            <translation>Принять и загрузить</translation>
-        </message>
-        <message>
-            <source>Shadow</source>
-            <translation>Тень</translation>
-        </message>
-        <message>
-            <source>Info box</source>
-            <translation>Подложка инфо</translation>
-        </message>
-        <message>
-            <source>OSD Font</source>
-            <translation>Шрифт экранных сообщений</translation>
-        </message>
-        <message>
-            <source>The notices and the info texts (Tab, Scroll Lock) take these colours; in the picture mpv draws the notices with them.</source>
-            <translation>Эти цвета берут сообщения и инфо-тексты (Tab, Scroll Lock); в картинке сообщения с ними рисует mpv.</translation>
-        </message>
-        <message>
-            <source>At a scene change</source>
-            <translation>На смене сцены</translation>
-        </message>
-        <message>
-            <source>Interpolate across it (one scene morphs into the next)</source>
-            <translation>Интерполировать (одна сцена перетекает в другую)</translation>
-        </message>
-        <message>
-            <source>Repeat the scene's last frame</source>
-            <translation>Повторять последний кадр сцены</translation>
-        </message>
-        <message>
-            <source>Repeat the scene's last frame (more sensitive: alike scenes too, now and then a fast pan)</source>
-            <translation>Повторять последний кадр сцены (чувствительнее: и похожие сцены, иногда быстрая панорама)</translation>
         </message>
     </context>
     <context>
@@ -4996,6 +5270,10 @@ in %2 seconds</source>
         <message>
             <source>The subtitles were made for (their timing follows the video's rate):</source>
             <translation>Субтитры сделаны для (их время следует за частотой видео):</translation>
+        </message>
+        <message>
+            <source>The video's frame rate</source>
+            <translation>Частота кадров видео</translation>
         </message>
     </context>
     <context>

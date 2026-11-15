@@ -401,12 +401,12 @@ ApplicationWindow {
     // Seconds as the seek and sync steps show them.
     function seconds(v) {
         if (v < 1)
-            return Math.round(v * 1000) + " ms"
+            return qsTr("%1 ms").arg(Math.round(v * 1000))
         if (v < 60)
-            return Math.round(v * 100) / 100 + " s"
+            return qsTr("%1 s").arg(Math.round(v * 100) / 100)
         if (v < 3600)
-            return Math.round(v / 6) / 10 + " min"
-        return Math.round(v / 360) / 10 + " h"
+            return qsTr("%1 min").arg(Math.round(v / 6) / 10)
+        return qsTr("%1 h").arg(Math.round(v / 360) / 10)
     }
     // A number set with a slider (the owner prefers sliders to typed
     // numbers, 2026-10-16), its value beside it. The slider runs from `from`
@@ -1199,7 +1199,7 @@ ApplicationWindow {
                                 text: qsTr("Import Playlists Now")
                                 onClicked: {
                                     win.player.run_action("import-playlists")
-                                    win.notice = "Imported (see the message in the player window)."
+                                    win.notice = qsTr("Imported (see the message in the player window).")
                                 }
                             }
                             Note { text: qsTr("Reads PotPlayer's .dpl files; PotPlayer's files are not changed.") }
@@ -1267,9 +1267,12 @@ ApplicationWindow {
                             label: qsTr("View items as")
                             path: "playlist.thumbnail-rows"
                             values: [0, 2, 3, 4, 5, 6, 7]
-                            texts: ({ 0: "List", 2: "Thumbnails (2 rows) + details", 3: "Thumbnails (3 rows) + details",
-                                      4: "Thumbnails (4 rows) + details", 5: "Thumbnails (5 rows) + details",
-                                      6: "Thumbnails (6 rows) + details", 7: "Thumbnails (7 rows) + details" })
+                            texts: (() => {
+                                const texts = { 0: qsTr("List") }
+                                for (const rows of [2, 3, 4, 5, 6, 7])
+                                    texts[rows] = qsTr("Thumbnails (%1 rows) + details").arg(rows)
+                                return texts
+                            })()
                         }
                         Amount { label: qsTr("Thumbnail position"); path: "playlist.thumbnail-position"; from: 0; to: 95; step: 5; unit: "%" }
                         Check { path: "playlist.wide-thumbnails"; text: qsTr("Use a 16:9 thumbnail ratio") }
@@ -1317,26 +1320,26 @@ ApplicationWindow {
                             path: "audio-device"
                             values: win.withCurrent((win.view.choices["audio-device"] || []).map(d => d.name),
                                                     win.s["audio-device"])
-                            texts: win.deviceTexts("Auto select (Recommended)")
+                            texts: win.deviceTexts(qsTr("Auto select (Recommended)"))
                         }
                         Choice {
-                            label: "Pass-through Renderer"
+                            label: qsTr("Pass-through Renderer")
                             path: "audio.passthrough-device"
                             values: win.withCurrent([""].concat((win.view.choices["audio-device"] || [])
                                                     .map(d => d.name).filter(n => n !== "auto")),
                                                     win.value("audio.passthrough-device"))
-                            texts: win.deviceTexts("Default Audio Device (Recommended)")
+                            texts: win.deviceTexts(qsTr("Default Audio Device (Recommended)"))
                         }
                         Choice {
-                            label: "2nd Audio Renderer"
+                            label: qsTr("2nd Audio Renderer")
                             path: "audio.second-device"
                             values: win.withCurrent([""].concat((win.view.choices["audio-device"] || [])
                                                     .map(d => d.name).filter(n => n !== "auto")),
                                                     win.value("audio.second-device"))
-                            texts: win.deviceTexts("Disable (Recommended)")
+                            texts: win.deviceTexts(qsTr("Disable (Recommended)"))
                         }
                         Choice {
-                            label: "Speakers"
+                            label: qsTr("Speakers")
                             path: "output-speakers"
                             values: (win.view.choices["output-speakers"] || []).map(c => c.value)
                             texts: {
@@ -1347,7 +1350,7 @@ ApplicationWindow {
                             }
                         }
                         Choice {
-                            label: "Output format"
+                            label: qsTr("Output format")
                             path: "audio.sample-format"
                             values: ["same", "s16", "s24", "s32", "float", "s16-dither"]
                             texts: ({ "same": qsTr("As the output device takes it"), "s16": qsTr("16-bit"),
@@ -1361,12 +1364,12 @@ ApplicationWindow {
                             texts: {
                                 const texts = {}
                                 for (const rate of win.view.choices["sample-rate"] || [0])
-                                    texts[rate] = rate === 0 ? "Same as input (Recommended)" : rate + " Hz"
+                                    texts[rate] = rate === 0 ? qsTr("Same as input (Recommended)") : rate + " Hz"
                                 return texts
                             }
                         }
                         Choice {
-                            label: "Resample"
+                            label: qsTr("Resample")
                             path: "audio.resample-quality"
                             values: ["high", "normal", "low"]
                             texts: ({ "high": qsTr("High quality"), "normal": qsTr("Normal quality (Recommended)"),
@@ -1407,8 +1410,7 @@ ApplicationWindow {
                         Amount { label: qsTr("Surround"); path: "audio.mixer.surround"; unit: "dB"; from: -30; to: 12; step: 0.5 }
                         Amount { label: qsTr("LFE"); path: "audio.mixer.lfe"; unit: "dB"; from: -30; to: 12; step: 0.5 }
                         Note {
-                            text: qsTr("Stereo mixes 5.1 and 7.1 down as PotPlayer does (centre and LFE at -3 dB, ")
-                                  + "surround channels at their level) before the equalizer and the normalizer."
+                            text: qsTr("Stereo mixes 5.1 and 7.1 down as PotPlayer does (centre and LFE at -3 dB, surround channels at their level) before the equalizer and the normalizer.")
                         }
                         Heading { text: qsTr("Headphone & Dolby Decoder Settings") }
                         Amount { label: qsTr("Distance (virtual speakers' room)"); path: "audio.virtualizer.distance"; from: 0; to: 100 }
@@ -1659,7 +1661,7 @@ ApplicationWindow {
                             from: 50
                             to: 100
                             step: 5
-                            format: v => v >= 100 ? "Off" : v + " % of the card's rated power"
+                            format: v => v >= 100 ? qsTr("Off") : qsTr("%1 % of the card's rated power").arg(v)
                         }
                         Note { text: win.gpuPowerText() }
                         Note {
@@ -1675,7 +1677,7 @@ ApplicationWindow {
                         }
                         Check { path: "render.hdr-metadata"; text: qsTr("Use the file's mastering metadata (SMPTE ST 2086) instead of measured peaks") }
                         Check { path: "render.icc"; text: qsTr("Use the display's ICC profile (colour gamut correction)") }
-                        Amount { label: qsTr("SDR monitor luminance"); path: "render.target-peak"; values: [0, 100, 120, 160, 200, 203, 250, 300, 400, 500, 600, 800, 1000]; format: v => v === 0 ? "mpv's choice" : v + " nits" }
+                        Amount { label: qsTr("SDR monitor luminance"); path: "render.target-peak"; values: [0, 100, 120, 160, 200, 203, 250, 300, 400, 500, 600, 800, 1000]; format: v => v === 0 ? qsTr("mpv's choice") : qsTr("%1 nits").arg(v) }
                         Check { path: "render.limited-range"; text: qsTr("Use limited (16-235) colour range") }
                         Choice {
                             label: qsTr("YCbCr to RGB matrix")
@@ -1866,7 +1868,7 @@ ApplicationWindow {
                                 enabled: !!win.s.picture && win.s.picture.presets.length < 20
                                 onClicked: {
                                     const list = win.s.picture.presets.slice()
-                                    list.push({ name: "Preset " + (list.length + 1), width: 100, height: 100 })
+                                    list.push({ name: qsTr("Preset %1").arg(list.length + 1), width: 100, height: 100 })
                                     win.set("picture.presets", list)
                                 }
                             }
@@ -1960,8 +1962,8 @@ ApplicationWindow {
                         Heading { text: qsTr("Shader folders") }
                         Note {
                             text: win.view.choices["potplayer-shaders"]
-                                  ? "PotPlayer's pixel shaders (HLSL, translated when they load): " + win.view.choices["potplayer-shaders"]
-                                  : "PotPlayer's pixel shader folder was not found."
+                                  ? qsTr("PotPlayer's pixel shaders (HLSL, translated when they load): %1").arg(win.view.choices["potplayer-shaders"])
+                                  : qsTr("PotPlayer's pixel shader folder was not found.")
                         }
                         FileList { path: "shaders.folders" }
                         RowLayout {
@@ -1974,8 +1976,8 @@ ApplicationWindow {
                             }
                             Button {
                                 text: qsTr("Add Shader Files…")
-                                onClicked: win.chooseFiles("shaders.files", "Pixel shaders",
-                                                           ["Shaders (*.glsl *.hook *.hlsl *.txt *.fx)", "All files (*)"])
+                                onClicked: win.chooseFiles("shaders.files", qsTr("Pixel shaders"),
+                                                           [qsTr("Shaders (%1)").arg("*.glsl *.hook *.hlsl *.txt *.fx"), qsTr("All files (*)")])
                             }
                             Button {
                                 text: qsTr("Open Shader Folder")
@@ -2008,23 +2010,23 @@ ApplicationWindow {
                             Layout.fillWidth: true
                         }
                         Note {
-                            text: qsTr("Endpoint in use: %1").arg((win.view.svp_endpoint || "none"))
-                                  + ". SVP 4 Manager finds a player by this pipe or socket while it plays; a second RVP window uses mpvSockets/<process id> in the temporary folder, which SVP finds too. In SVP mode hardware decoding copies the frames back, so SVP's filter gets them."
+                            text: qsTr("Endpoint in use: %1. SVP 4 Manager finds a player by this pipe or socket while it plays; a second RVP window uses mpvSockets/<process id> in the temporary folder, which SVP finds too. In SVP mode hardware decoding copies the frames back, so SVP's filter gets them.")
+                                  .arg(win.view.svp_endpoint || qsTr("none"))
                         }
                         Heading { text: qsTr("VapourSynth") }
                         Check { path: "vapoursynth.enabled"; text: qsTr("Run the selected script (before SVP's filter)") }
                         FileList { path: "vapoursynth.slots"; selectPath: "vapoursynth.script" }
                         Button {
                             text: qsTr("Add Script…")
-                            onClicked: win.chooseFiles("vapoursynth.slots", "VapourSynth scripts",
-                                                       ["VapourSynth scripts (*.vpy)", "All files (*)"])
+                            onClicked: win.chooseFiles("vapoursynth.slots", qsTr("VapourSynth scripts"),
+                                                       [qsTr("VapourSynth scripts (%1)").arg("*.vpy"), qsTr("All files (*)")])
                         }
                         Label { text: qsTr("Plugins loaded first (mvtools for PotPlayer's motion interpolation)") }
                         FileList { path: "vapoursynth.plugins" }
                         Button {
                             text: qsTr("Add Plugins…")
-                            onClicked: win.chooseFiles("vapoursynth.plugins", "VapourSynth plugins",
-                                                       [win.view.windows ? "Plugins (*.dll)" : "Plugins (*.so)", "All files (*)"])
+                            onClicked: win.chooseFiles("vapoursynth.plugins", qsTr("VapourSynth plugins"),
+                                                       [qsTr("Plugins (%1)").arg(win.view.windows ? "*.dll" : "*.so"), qsTr("All files (*)")])
                         }
                         Label {
                             visible: win.view.windows === true
@@ -2034,8 +2036,8 @@ ApplicationWindow {
                         Button {
                             visible: win.view.windows === true
                             text: qsTr("Add AviSynth Plugins…")
-                            onClicked: win.chooseFiles("vapoursynth.avs-plugins", "AviSynth plugins",
-                                                       ["AviSynth plugins (*.dll)", "All files (*)"])
+                            onClicked: win.chooseFiles("vapoursynth.avs-plugins", qsTr("AviSynth plugins"),
+                                                       [qsTr("AviSynth plugins (%1)").arg("*.dll"), qsTr("All files (*)")])
                         }
                         Amount { label: qsTr("Buffered frames"); path: "vapoursynth.buffered-frames"; from: 1; to: 64 }
                         Field {
@@ -2045,14 +2047,14 @@ ApplicationWindow {
                             placeholder: qsTr("RVP's runtime")
                             Button {
                                 text: qsTr("Browse…")
-                                onClicked: win.chooseFile("vapoursynth.library", "VSScript library",
+                                onClicked: win.chooseFile("vapoursynth.library", qsTr("VSScript library"),
                                                           [win.view.windows ? "VSScript (VSScript.dll)" : "VSScript (libvapoursynth-script.so*)",
-                                                           "All files (*)"])
+                                                           qsTr("All files (*)")])
                             }
                         }
                         Note {
-                            text: qsTr("In use: %1").arg((win.view.vapoursynth_runtime || "none found"))
-                                  + ". A new library takes effect at the next start. PotPlayer's .vpy scripts run unchanged: RVP wraps them for today's VapourSynth (get_core) and loads the plugins first."
+                            text: qsTr("In use: %1. A new library takes effect at the next start. PotPlayer's .vpy scripts run unchanged: RVP wraps them for today's VapourSynth (get_core) and loads the plugins first.")
+                                  .arg(win.view.vapoursynth_runtime || qsTr("none found"))
                         }
                     }
 
@@ -2181,7 +2183,7 @@ ApplicationWindow {
                             label: qsTr("Motion compensation up to")
                             path: "smoothing.max-height"
                             values: win.view.choices["smoothing-max-height"] || [1080]
-                            format: v => v + "p (Blend above)"
+                            format: v => qsTr("%1p (Blend above)").arg(v)
                         }
                         Amount {
                             label: qsTr("Show the original first for")
@@ -2209,10 +2211,11 @@ ApplicationWindow {
                         }
                         Note { text: qsTr("Now: %1").arg((win.view.smoothing || "")) }
                         Note {
-                            text: qsTr("Here: MVTools %1").arg((win.view.smoothing_engines && win.view.smoothing_engines.mvtools ? "found" : "missing"))
-                                  + ", RIFE " + (win.view.smoothing_engines && win.view.smoothing_engines.rife ? "found" : "missing")
-                                  + ", NVIDIA Optical Flow " + (win.view.smoothing_engines && win.view.smoothing_engines.fruc ? "found" : "missing")
-                                  + " (in RVP's VapourSynth runtime and libmpv)."
+                            readonly property var engines: win.view.smoothing_engines || ({})
+                            text: qsTr("Here: MVTools %1, RIFE %2, NVIDIA Optical Flow %3 (in RVP's VapourSynth runtime and libmpv).")
+                                  .arg(engines.mvtools ? qsTr("found") : qsTr("missing"))
+                                  .arg(engines.rife ? qsTr("found") : qsTr("missing"))
+                                  .arg(engines.fruc ? qsTr("found") : qsTr("missing"))
                         }
                         Item {
                             id: calibration
@@ -2375,7 +2378,8 @@ ApplicationWindow {
                             texts: ({ "auto": qsTr("Guess (Automatic)") })
                         }
                         Heading { text: qsTr("Fade and 3D") }
-                        Note { text: qsTr("mpv fades only the events of ASS scripts that ask for it (\\fad); other subtitles cannot fade. mpv draws subtitles once over the finished picture, not once for each eye, so there is no stereo 3D subtitle mode (docs/spikes/m12-studies.md).") }
+                        // ASS's fade tag stands aside: lupdate read "\\f" as a form feed.
+                        Note { text: qsTr("mpv fades only the events of ASS scripts that ask for it (%1); other subtitles cannot fade. mpv draws subtitles once over the finished picture, not once for each eye, so there is no stereo 3D subtitle mode (docs/spikes/m12-studies.md).").arg("\\fad") }
                     }
 
                     Page {
@@ -2443,7 +2447,7 @@ ApplicationWindow {
                         }
                         RowLayout {
                             Button {
-                                text: (win.view.speech || {}).running ? "Stop" : "Make subtitles now"
+                                text: (win.view.speech || {}).running ? qsTr("Stop") : qsTr("Make subtitles now")
                                 onClicked: { win.player.run_action("speech-start"); win.reload(false) }
                             }
                         }
@@ -2767,7 +2771,7 @@ ApplicationWindow {
                                       "custom": qsTr("The custom size"), "desktop": qsTr("The Alt+1 size") })
                         }
                         Amount { label: qsTr("Video size times"); path: "window.open-scale"; values: [0.25, 0.5, 0.75, 1, 1.25, 1.5, 2, 3, 4]; format: v => v + "x" }
-                        Amount { label: qsTr("Twice the size below a width of"); path: "window.double-below"; from: 0; to: 1920; step: 32; unit: "px"; format: v => v === 0 ? "never" : v + " px" }
+                        Amount { label: qsTr("Twice the size below a width of"); path: "window.double-below"; from: 0; to: 1920; step: 32; unit: "px"; format: v => v === 0 ? qsTr("never") : v + " px" }
                         Check { path: "window.open-first-only"; text: qsTr("Operate only with the first playback at a run") }
                         Note { text: qsTr("These apply when \"Fit the window to a newly opened video\" is on (Playback).") }
                         Heading { text: qsTr("Custom size and steps") }
@@ -2885,7 +2889,7 @@ ApplicationWindow {
                         Amount { label: qsTr("Width"); path: "visual.size.0"; from: 320; to: 3840; step: 160; unit: "px" }
                         Amount { label: qsTr("Height"); path: "visual.size.1"; from: 180; to: 2160; step: 90; unit: "px" }
                         Amount { label: qsTr("Frames a second"); path: "visual.rate"; from: 5; to: 60; step: 5 }
-                        Amount { label: qsTr("Change visualization every"); path: "visual.change-every"; values: [0, 10, 15, 20, 30, 60, 120, 300, 600]; format: v => v === 0 ? "never" : win.seconds(v) }
+                        Amount { label: qsTr("Change visualization every"); path: "visual.change-every"; values: [0, 10, 15, 20, 30, 60, 120, 300, 600]; format: v => v === 0 ? qsTr("never") : win.seconds(v) }
                         Heading { text: qsTr("Slideshow") }
                         Note { text: qsTr("Without folders, the slideshow shows the pictures of the playing file's folder.") }
                         FileList { path: "visual.folders"; ordered: true }
@@ -2932,7 +2936,7 @@ ApplicationWindow {
                             values: ["dav1d", "ffmpeg"]
                             texts: ({ "dav1d": qsTr("dav1d (faster)"), "ffmpeg": qsTr("FFmpeg's own") })
                         }
-                        Amount { label: qsTr("Decoder threads"); path: "decoders.threads"; from: 0; to: 32; format: v => v === 0 ? "automatic" : String(v) }
+                        Amount { label: qsTr("Decoder threads"); path: "decoders.threads"; from: 0; to: 32; format: v => v === 0 ? qsTr("automatic") : String(v) }
                         Note { text: qsTr("PotPlayer's DirectShow filters, splitters and their priorities have no place in RVP: libmpv decodes and splits with FFmpeg.") }
                     }
 
@@ -3022,7 +3026,7 @@ ApplicationWindow {
                     Page {
                         Heading { text: qsTr("Dialog boxes") }
                         Field { label: qsTr("Font"); path: "general.dialog.font"; placeholder: qsTr("Qt's font") }
-                        Amount { label: qsTr("Font size"); path: "general.dialog.font-size"; from: 0; to: 72; unit: "pt"; format: v => v === 0 ? "Qt's" : v + " pt" }
+                        Amount { label: qsTr("Font size"); path: "general.dialog.font-size"; from: 0; to: 72; unit: "pt"; format: v => v === 0 ? qsTr("Qt's") : v + " pt" }
                         Check { path: "general.dialog.on-top"; text: qsTr("Always keep modeless dialog boxes on top") }
                         Check { path: "general.dialog.dpi-aware"; text: qsTr("Use DPI awareness (Qt scales the windows with the display; at the next start)") }
                     }
@@ -3134,7 +3138,7 @@ ApplicationWindow {
                         }
                         Heading { text: qsTr("AutoPlay") }
                         Repeater {
-                            model: [["video", "Video files"], ["audio", "Audio files"], ["cd", "Audio CD"], ["vcd", "VCD"],
+                            model: [["video", qsTr("Video files")], ["audio", qsTr("Audio files")], ["cd", qsTr("Audio CD")], ["vcd", "VCD"],
                                     ["svcd", "SVCD"], ["dvd", "DVD"], ["bluray", "Blu-ray"]]
                             delegate: CheckBox {
                                 required property var modelData
@@ -3249,7 +3253,7 @@ ApplicationWindow {
                                     const copy = presetPage.copyList()
                                     let name = presetName.text.trim()
                                     if (name === "" || copy.some(p => p.name === name))
-                                        name = "Preset " + (copy.length + 1)
+                                        name = qsTr("Preset %1").arg(copy.length + 1)
                                     copy.push({ name: name, conditions: {}, values: null })
                                     presetPage.store(copy)
                                     presetPage.selected = copy.length
