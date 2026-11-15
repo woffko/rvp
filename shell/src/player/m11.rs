@@ -13,6 +13,7 @@ use std::path::PathBuf;
 use std::pin::Pin;
 use std::time::Instant;
 
+use cxx_qt::Threading;
 use cxx_qt_lib::{QRectF, QString};
 use rvp_app::thumbs::ThumbEvent;
 use rvp_app::{PowerTimer, UiRequest};
@@ -257,12 +258,32 @@ impl qobject::Player {
     /// Shuts down, sleeps or hibernates now (or with the dry-run hook only
     /// writes it down).
     fn power_now(mut self: Pin<&mut Self>, action: rvp_app::PowerAction) {
+        let thread = self.qt_thread();
         let Some(core) = self.as_mut().core_mut() else {
             return;
         };
         let result = match &core.power_dry_run {
             Some(file) => rvp_app::power::write_dry_run(file, action).map_err(|e| e.to_string()),
-            None => crate::power::perform(action),
+            // logind's answer can wait for polkit, which may ask for a
+            // password: Linux asks on a thread of its own (the Linux
+            // audit's L5).
+            #[cfg(target_os = "linux")]
+            None => {
+                std::thread::spawn(move || {
+                    if let Err(error) = crate::power::perform(action) {
+                        let text =
+                            format!("cannot {}: {error}", rvp_app::power::action_text(action));
+                        // Fails only once the window is gone.
+                        let _ = thread.queue(move |player| player.show_message(&text));
+                    }
+                });
+                return;
+            }
+            #[cfg(not(target_os = "linux"))]
+            None => {
+                drop(thread);
+                crate::power::perform(action)
+            }
         };
         if let Err(error) = result {
             self.show_message(&format!(

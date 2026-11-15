@@ -201,8 +201,6 @@ impl qobject::Player {
     /// Linux: copies RVP's remote into Unified Remote Server's custom
     /// remotes and asks the server to read them again (the Remote Control
     /// page's button; Windows' installer does this). Returns what to show.
-    // A QML invokable, so a method even though it touches files only.
-    #[allow(clippy::unused_self)]
     pub(crate) fn add_unified_remote(&self) -> QString {
         use rvp_app::control::unified;
         let Some(source) = std::env::current_exe()
@@ -215,13 +213,27 @@ impl qobject::Player {
             return QString::from("The home folder is unknown.");
         };
         let text = match unified::install(&source, &std::path::Path::new(&home).join(".urserver")) {
-            Ok(target) if unified::reload() => {
-                format!("RVP's remote is in Unified Remote ({}).", target.display())
+            Ok(target) => {
+                // The server's answer can take seconds: asked on a thread,
+                // and the OSD says how it went (the Linux audit's L6).
+                let thread = self.qt_thread();
+                let folder = target.display().to_string();
+                std::thread::spawn(move || {
+                    let text = if unified::reload() {
+                        format!("RVP's remote is in Unified Remote ({folder}).")
+                    } else {
+                        format!(
+                            "RVP's remote is in {folder}; Unified Remote Server shows it when it starts again."
+                        )
+                    };
+                    // Fails only once the window is gone.
+                    let _ = thread.queue(move |player| player.set_osd(QString::from(&text)));
+                });
+                format!(
+                    "RVP's remote is in {}; Unified Remote Server is asked to read it.",
+                    target.display()
+                )
             }
-            Ok(target) => format!(
-                "RVP's remote is in {}; Unified Remote Server shows it when it starts again.",
-                target.display()
-            ),
             Err(error) => error,
         };
         QString::from(&text)

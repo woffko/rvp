@@ -3349,9 +3349,23 @@ ApplicationWindow {
                         id: ttsPage
                         property var voices: []
                         property var outputs: []
-                        onVisibleChanged: if (visible) {
+                        function readVoices() {
                             voices = JSON.parse(win.player.tts_voices_json())
                             outputs = JSON.parse(win.player.tts_outputs_json())
+                        }
+                        onVisibleChanged: if (visible) readVoices()
+                        // Linux lists the voices once speech-dispatcher's
+                        // thread has connected (it may start the server).
+                        Timer {
+                            interval: 500
+                            repeat: true
+                            running: ttsPage.visible && win.player.tts_state() === "loading"
+                            onTriggered: {
+                                if (win.player.tts_state() !== "loading") {
+                                    stop()
+                                    ttsPage.readVoices()
+                                }
+                            }
                         }
                         Heading { text: qsTr("TTS (Text to Speech) setup") }
                         Check { path: "accessibility.tts.messages"; text: qsTr("Read the messages displayed on the screen") }

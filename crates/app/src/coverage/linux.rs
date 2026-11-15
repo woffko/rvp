@@ -279,7 +279,7 @@ pub const ITEMS: &[Item] = &[
             "accessibility.volume",
         ]),
         Linux::Same(
-            "speech-dispatcher's `spd-say`, with its voices, rate and volume; a new text cancels the one being read",
+            "speech-dispatcher through its client library, with its voices, rate and volume; a new text cancels RVP's own one being read",
         ),
     ),
     item(

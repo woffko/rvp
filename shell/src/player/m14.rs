@@ -999,9 +999,16 @@ impl qobject::Player {
         QString::from(&crate::ffi::bridge::rvp_tts_voices())
     }
 
+    // A QML invokable, as above.
     #[allow(clippy::unused_self)]
     pub(crate) fn tts_outputs_json(&self) -> QString {
         QString::from(&crate::ffi::bridge::rvp_tts_outputs())
+    }
+
+    // A QML invokable, as above.
+    #[allow(clippy::unused_self)]
+    pub(crate) fn tts_state(&self) -> QString {
+        QString::from(&crate::ffi::bridge::rvp_tts_state())
     }
 
     pub(crate) fn touch_swipe(mut self: Pin<&mut Self>, dx: f64, dy: f64) {

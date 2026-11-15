@@ -168,6 +168,9 @@ bool rvp_registry_has_key(rust::Str key);
 void rvp_associations_changed();
 rust::String rvp_tts_voices();
 rust::String rvp_tts_outputs();
+// Linux: "loading" until speech-dispatcher's thread connected, then
+// "ready" or "none"; elsewhere "ready".
+rust::String rvp_tts_state();
 bool rvp_tts_speak(rust::Str text, rust::Str voiceName, rust::Str output, std::int32_t rate,
                    std::int32_t volume);
 void rvp_xinput_start(bool enabled, bool focus_only, std::int32_t stick);

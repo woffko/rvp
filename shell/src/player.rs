@@ -2468,8 +2468,13 @@ impl qobject::Player {
         };
         match request {
             UiRequest::SystemVolume(change) => {
-                let text = crate::system_volume::change(change).unwrap_or_else(|error| error);
-                self.set_osd(QString::from(&text));
+                #[cfg(target_os = "linux")]
+                crate::system_volume::change_later(self.qt_thread(), change);
+                #[cfg(not(target_os = "linux"))]
+                {
+                    let text = crate::system_volume::change(change).unwrap_or_else(|error| error);
+                    self.set_osd(QString::from(&text));
+                }
             }
             UiRequest::AudioSyncDialog(seconds) => {
                 // Syncs are within ±10 s.

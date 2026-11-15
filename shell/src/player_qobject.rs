@@ -418,15 +418,20 @@ pub mod qobject {
         fn rebuild_icon_cache(self: &Self) -> bool;
 
         /// Reads `text` aloud with the Accessibility page's voice (Windows'
-        /// speech; nothing elsewhere).
+        /// speech, speech-dispatcher on Linux).
         #[qinvokable]
         fn speak(self: &Self, text: &QString);
 
-        /// The voices and outputs Windows' speech offers (JSON lists).
+        /// The voices and outputs the speech offers (JSON lists; Linux
+        /// has voices only, listed once its thread has connected).
         #[qinvokable]
         fn tts_voices_json(self: &Self) -> QString;
         #[qinvokable]
         fn tts_outputs_json(self: &Self) -> QString;
+        /// "loading" while Linux's speech thread connects, then "ready" or
+        /// "none" (no speech-dispatcher); always "ready" on Windows.
+        #[qinvokable]
+        fn tts_state(self: &Self) -> QString;
 
         /// A finger swiped over the video by `dx`, `dy` (shares of its
         /// width and height): seeks or changes the volume (M14's touch).

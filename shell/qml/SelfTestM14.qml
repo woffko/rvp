@@ -234,9 +234,9 @@ Item {
             t.next()
             break
         case 18: {
-            const copied = Tools.clipboard_text()
-            t.check("m14_copy_elapsed_time", /^\d+:\d\d$/.test(copied), copied)
-            t.next()
+            // Wayland's clipboard answers a moment later than the copy.
+            t.waitFor("m14_copy_elapsed_time", () => /^\d+:\d\d$/.test(Tools.clipboard_text()), 2000,
+                      () => "clipboard " + JSON.stringify(Tools.clipboard_text()))
             break
         }
         case 19: {
@@ -353,8 +353,11 @@ Item {
             break
         case 28: {
             // Accessibility: notices as the window's title, a swipe that
-            // seeks, the voices (none outside Windows) and the skin's
-            // touch layout.
+            // seeks, the voices and the skin's touch layout. Linux's
+            // voices come from speech-dispatcher's thread: its answer
+            // first (it may start the server).
+            if (player.tts_state() === "loading" && Date.now() - t.stepStarted < 15000)
+                break
             setSetting("accessibility.title.messages", true)
             player.run_action("theme-none")
             t.check("m14_messages_as_title", host.title.indexOf("Color theme") >= 0, host.title)
@@ -363,8 +366,13 @@ Item {
             player.touch_swipe(0.25, 0.01)
             t.check("m14_swipe_seeks", player.osd === "+30 s", player.osd)
             setSetting("accessibility.touch", false)
+            // Where speech-dispatcher answers, it lists voices (the check
+            // passed on any list, the empty one too; the Linux audit's M4).
             const voices = JSON.parse(player.tts_voices_json())
-            t.check("m14_voices_list", Array.isArray(voices), JSON.stringify(voices))
+            const speech = player.tts_state()
+            t.check("m14_voices_list", Array.isArray(voices)
+                        && (Qt.platform.os === "windows" || speech !== "ready" || voices.length > 0),
+                    speech + ", " + voices.length + " voices: " + JSON.stringify(voices.slice(0, 4)))
             baseId = s.skin_id
             setSetting("accessibility.touch-skin", true)
             t.next()

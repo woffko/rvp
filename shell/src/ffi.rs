@@ -87,6 +87,7 @@ pub mod bridge {
         /// to 10, `volume` 0 to 100); false when it cannot.
         fn rvp_tts_voices() -> String;
         fn rvp_tts_outputs() -> String;
+        fn rvp_tts_state() -> String;
         fn rvp_tts_speak(text: &str, voice: &str, output: &str, rate: i32, volume: i32) -> bool;
         /// The Xbox controller (`cpp/xinput.cpp`): polled while `enabled`,
         /// only with RVP active when `focus_only`, the pointer moved by

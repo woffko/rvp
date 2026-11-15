@@ -35,6 +35,7 @@ recommended option:
 | 2 | Packages and CI | H1, H3, M8, M16, L4, L22, L23, L24 fixed (below) |
 | 3 | OpenGL on Linux | H2 fixed and checked; M12 and L21 fixed (below) |
 | 4 | Desktop integration | M2, M6, L17, L19 fixed; L18's tray click fixed, its activation token left (below) |
+| 5 | The window thread | M3, M4 (all of it, package 6's part too), L5, L6 fixed (below) |
 
 ## Package 1: checks that pass without testing
 
@@ -196,3 +197,46 @@ none either), and L25 to package 11.
 - **L19, a skin with windows chosen on Wayland:** the switch says on the
   OSD that the skin's windows need X11 and RVP starts through XWayland for
   it from the next start (`prefer_x11` reads the skin at start).
+
+## Package 5: the window thread
+
+- **M3, the master volume:** on Linux `pactl` runs on a thread of its own
+  (`system_volume::change_later`); changes asked meanwhile wait together
+  (steps add up, two mutes cancel) and the OSD shows the last one's text
+  through the player's queue. Windows keeps its in-process Core Audio
+  call. Test: `system_volume::tests::waiting_changes_add_up`.
+- **M4, text to speech, all of it:** Linux's speech goes through
+  speech-dispatcher's client library (`libspeechd.so.2`, loaded at run
+  time) on a thread of its own with one connection: the voices are its
+  exact names (`spd_list_synthesis_voices`; `spd-say -L`'s table had cut
+  "Bishnupriya Manipuri+Adam" and "English (America)" at the first space),
+  a new text cancels only RVP's own (`spd_cancel` on its connection;
+  `spd-say -C` cancelled every client's, a screen reader's too), rate and
+  volume are clamped, and nothing waits on the window's thread (the list
+  was `waitForFinished(3000)` with an O(n^2) de-duplication of about 14,800
+  lines). The Settings page reads the voices once the thread has connected
+  (`Player.tts_state`), and M14's self-test waits for it and fails an empty
+  list where speech-dispatcher answers (it passed on any list).
+  `docs/coverage/linux.md` says so. Package 6 keeps only the joystick.
+- **Found on the way, an exit that waited for good:** the speech thread
+  waits on a condition variable for the whole run, and the `Speaker`
+  holding it was a function's static: at exit its destructor (glibc's
+  `pthread_cond_destroy`) waited for that waiter. M14's and M10's
+  self-tests (both open the TTS page) finished their checks and never
+  ended; the `Speaker` is never destroyed now. The kit's runs got a time
+  limit for such a case (package 11).
+- **Found on the way, the clipboard check:** M14's `m14_copy_elapsed_time`
+  read the clipboard on the next tick; Wayland's answers a moment later
+  (it failed once on this boot). It waits up to 2 s now.
+- **L5, logind's power actions:** asked on a thread on Linux; polkit's
+  password dialog no longer holds the window.
+- **L6, "Add to Unified Remote":** the files are copied at once, the
+  server's reload is asked on a thread and the OSD says how it went.
+- **Checks (2026-11-15, this boot):** `cargo xtask ci`; kit steps m10 PASS
+  (96 checks, `master_volume_answers` through the thread: "Master volume:
+  100 %"), m15 PASS, and m14's self-test 49 of 50: `m14_voices_list` "ready,
+  14805 voices" with their whole names, and `m14_copy_elapsed_time` failed
+  twice with an empty clipboard. Wayland lets a window set the clipboard
+  only with a recent input event of its own, and the owner was using the
+  desktop meanwhile; the boot run's hands-off m14 passed it. Package 11
+  runs m14 again with nobody at the keyboard.
