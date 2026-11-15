@@ -21,6 +21,7 @@
 #include <QtCore/QMutex>
 #include <QtCore/QPointer>
 #include <QtCore/QProcess>
+#include <QtCore/QProcessEnvironment>
 #include <QtCore/QTimer>
 #include <QtGui/QClipboard>
 #include <QtGui/QDesktopServices>
@@ -530,7 +531,7 @@ bool Tools::show_file(const QString &path) const
     explorer.setNativeArguments(QStringLiteral("/select,\"%1\"").arg(QDir::toNativeSeparators(path)));
     return explorer.startDetached();
 #else
-    return QDesktopServices::openUrl(QUrl::fromLocalFile(QFileInfo(path).absolutePath()));
+    return open_url(QUrl::fromLocalFile(QFileInfo(path).absolutePath()).toString());
 #endif
 }
 
@@ -604,9 +605,12 @@ bool rvp_instance_listen(rust::Str name)
     server->setSocketOptions(QLocalServer::UserAccessOption);
     const QString channel = fromStr(name);
     bool listening = server->listen(channel);
-    if (!listening && server->serverError() == QAbstractSocket::AddressInUseError) {
-        // Nobody answered on the channel just before: a socket file left
-        // by a process that died (Unix).
+    // A socket file nobody accepts on: left by a process that died (Unix).
+    // One that accepts belongs to a running RVP that did not answer in
+    // time (its window thread was busy): it keeps its channel, and this
+    // one runs on its own (the Linux audit's M5).
+    if (!listening && server->serverError() == QAbstractSocket::AddressInUseError
+        && !rvp_instance_running(name)) {
         QLocalServer::removeServer(channel);
         listening = server->listen(channel);
     }
@@ -703,10 +707,40 @@ void rvp_crash_test()
     *nowhere = 1;
 }
 
+// The variables RVP set for itself before Qt started (its platform, its
+// scaling, VapourSynth's runtime...): programs it opens for the user do
+// not get them (the Linux audit's L8: xdg-open handed QT_QPA_PLATFORM=xcb
+// to a Qt file manager).
+QStringList &ownVariables()
+{
+    static QStringList names;
+    return names;
+}
+
 void rvp_set_env(rust::Str name, rust::Str value)
 {
     const std::string key(name.data(), name.size());
     qputenv(key.c_str(), QString::fromUtf8(value.data(), qsizetype(value.size())).toLocal8Bit());
+    ownVariables().append(QString::fromStdString(key));
+}
+
+bool Tools::open_url(const QString &url) const
+{
+#ifdef Q_OS_LINUX
+    if (!ownVariables().isEmpty()) {
+        QProcessEnvironment environment = QProcessEnvironment::systemEnvironment();
+        for (const QString &name : ownVariables())
+            environment.remove(name);
+        QProcess opener;
+        opener.setProgram(QStringLiteral("xdg-open"));
+        opener.setArguments({url});
+        opener.setProcessEnvironment(environment);
+        opener.setStandardInputFile(QProcess::nullDevice());
+        if (opener.startDetached())
+            return true;
+    }
+#endif
+    return QDesktopServices::openUrl(QUrl(url));
 }
 
 std::size_t rvp_gl_get_proc_address(rust::Str name)

@@ -430,9 +430,12 @@ fn glob_types(globs: &str, extension: &str) -> Vec<String> {
 }
 
 /// A program path as a desktop entry's `Exec` takes it: quoted when it
-/// holds a reserved character, with `"`, `` ` `` and `$` escaped, and a
-/// backslash as four (the string's escape comes before the quoting's).
-fn desktop_exec(exe: &str) -> String {
+/// holds a reserved character. The string's escape comes before the
+/// quoting's (the Desktop Entry specification), so a quoted `"`, `` ` ``
+/// or `$` takes two backslashes and a backslash four; a `%` is doubled, or
+/// it would start a field code (the Linux audit's L10).
+#[must_use]
+pub fn desktop_exec(exe: &str) -> String {
     if exe
         .chars()
         .all(|c| c.is_ascii_alphanumeric() || "/-_.+".contains(c))
@@ -442,8 +445,9 @@ fn desktop_exec(exe: &str) -> String {
     let mut quoted = String::from("\"");
     for c in exe.chars() {
         match c {
-            '"' | '`' | '$' => quoted.push('\\'),
+            '"' | '`' | '$' => quoted.push_str(r"\\"),
             '\\' => quoted.push_str(r"\\\"),
+            '%' => quoted.push('%'),
             _ => {}
         }
         quoted.push(c);
@@ -491,7 +495,12 @@ mod tests {
                 .iter()
                 .any(|name| name.starts_with("x-content/video-") && name != "x-content/video-dvd")
         );
-        assert_eq!(desktop_exec(r"/a/b$c\d"), r#""/a/b\$c\\\\d""#);
+        assert_eq!(desktop_exec(r"/a/b$c\d"), r#""/a/b\\$c\\\\d""#);
+        assert_eq!(
+            desktop_exec(r#"/opt/RVP%20Player/a "b"`c`"#),
+            r#""/opt/RVP%%20Player/a \\"b\\"\\`c\\`""#
+        );
+        assert_eq!(desktop_exec("/usr/bin/rvp"), "/usr/bin/rvp");
     }
 
     #[test]

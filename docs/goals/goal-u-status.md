@@ -36,6 +36,8 @@ recommended option:
 | 3 | OpenGL on Linux | H2 fixed and checked; M12 and L21 fixed (below) |
 | 4 | Desktop integration | M2, M6, L17, L19 fixed; L18's tray click fixed, its activation token left (below) |
 | 5 | The window thread | M3, M4 (all of it, package 6's part too), L5, L6 fixed (below) |
+| 6 | Speech and the joystick | M4 in package 5; L20 fixed, not tried with a controller (below) |
+| 7 | Paths, files and processes | M1, M5, M7, L7 to L16 fixed (below; L15 and M7 had no package) |
 
 ## Package 1: checks that pass without testing
 
@@ -240,3 +242,80 @@ none either), and L25 to package 11.
   only with a recent input event of its own, and the owner was using the
   desktop meanwhile; the boot run's hands-off m14 passed it. Package 11
   runs m14 again with nobody at the keyboard.
+
+## Package 6: the joystick
+
+- **L20, Linux's joystick (`shell/cpp/xinput.cpp`):** with "act only when
+  RVP has the focus" A no longer clicks in RVP's window while another
+  program has the focus (its release still goes, so no press stays held),
+  as on Windows; a pad moved straight from one side to the other is a
+  press (the driver may send no centre between them); and only a device
+  with at least four buttons (`JSIOCGBUTTONS`) is taken, so a laptop's
+  accelerometer (`lis3lv02d`, axes alone) no longer holds the slot. Built
+  and checked by `cargo xtask ci`; no controller was at hand on this boot
+  to try it.
+
+## Package 7: paths, files and processes
+
+The audit's plan had M7 and L15 in no package; both are here.
+
+- **M1, path lists split at `:`:** the command line's `/same` streams,
+  `/sub` and `/aud` reach mpv's loadfile one entry each through the
+  options' `-append` forms, and the external audio's folders through
+  `change-list audio-file-paths append` once the core runs
+  (`App::engine_started`) and on each change (libmpv's start options take
+  no `-append`). Test: `crates/app/tests/m11.rs`'s
+  `command_line_switches_set_the_first_file` with a stream and a subtitle
+  whose names hold the separator (`:` on Linux, `;` on Windows).
+- **M5, the instance channel:** on Unix in `$XDG_RUNTIME_DIR`
+  (`rvp-<user>` there; the shared `/tmp` only without one); a channel's
+  socket is removed only when nothing accepts on it, so a running RVP that
+  answered late keeps its channel and main.rs's "The first one keeps the
+  channel" holds; the state folder used when the settings cannot be read is
+  in `$XDG_RUNTIME_DIR` or the process's own, never the shared
+  `/tmp/rvp-state`. Tests: `instance::tests::channels_keep_the_self_test_apart`.
+- **M7, peripheral batteries:** supplies of scope `Device` (a wireless
+  mouse's, a gamepad's) are no system battery, and a USB-C charger online
+  counts as power. Tests: `osd::tests`.
+- **L7, new windows' zombies:** each `/new` child is waited for on a
+  thread of its own.
+- **L8, Qt's variables reaching other programs:** the variables RVP sets
+  for itself before Qt starts (`rvp_set_env`: the platform, the scaling,
+  VapourSynth's runtime) are left out of the programs it opens for the
+  user: `Tools.open_url` (in QML's place of `Qt.openUrlExternally`, which
+  passes them on) and `Tools.show_file` run `xdg-open` without them.
+- **L9, relative XDG folders:** `XDG_CONFIG_HOME` (the autostart entry)
+  and `XDG_DATA_HOME` (the desktop entries) are taken only when absolute,
+  as the specification asks and the rest of RVP did.
+- **L10, `Exec` escaping:** `registration::desktop_exec` doubles `%` and
+  escapes a quoted `"`, `` ` `` and `$` with two backslashes (the string's
+  escape comes first); the autostart entry uses it too. Tests:
+  `registration::tests`.
+- **L11, `recently-used.xbel`:** one update at a time in a process; a list
+  RVP cannot read is left as it is (it was replaced by an empty one,
+  dropping other programs' entries); a self-closing `<bookmark/>` is taken
+  out alone; URIs are escaped as GLib's (`(` stays `(`: this boot's list
+  had Nautilus's and RVP's entries for one file). Tests: `recent::tests`.
+- **L12, another user's trash folder:** a trash folder that is a link or
+  another user's is refused (and `.Trash/$uid` falls back to
+  `.Trash-$uid`), as the specification and gio do. Tests: `trash::tests`
+  (the tests take the process's own uid, not 1000: CI's runner is 1001).
+- **L13, SVP's socket:** an endpoint is free only when nothing is there or
+  it is a stale socket of the user's own ("permission denied", another
+  user's socket in the sticky `/tmp`, counts as taken), and
+  `/tmp/mpvSockets` is made sticky and open to every user. Test:
+  `svp::tests::a_users_own_stale_socket_is_free`.
+- **L14, `file://` URLs:** the shell's `file_url` escapes the path
+  (`media::file_url`), and a backslash is a separator on Windows only
+  (MPRIS's `xesam:url` too; on Linux `/C:/films` is a folder). Tests:
+  `media::tests`.
+- **L15, the user folders:** saved frames, recordings and audio recordings
+  go to `user-dirs.dirs`'s folders (this boot's `~/Изображения/RVP`,
+  `~/Видео/RVP`, `~/Музыка/RVP`), else `~/Pictures/RVP` and the others as
+  before (the owner's answer); Windows keeps `%USERPROFILE%`. Tests:
+  `storage::tests::user_folders_come_from_user_dirs`.
+- **L16, `/cd:/dev/sr0`:** a device's path stays as it is; a drive letter
+  takes its colon.
+- **Checks:** `cargo xtask ci` (the unit tests above and m11's switches
+  test with libmpv); the desktop's kit steps (m3's second instance through
+  the channel, m11, m14) run with packages 8 and 9 (below).

@@ -125,7 +125,10 @@ smoothing for users without SVP, after a study of the engines.
   end of a file. Undoable changes go through `Library::edit`, the rest
   (selection, scrolling, playback marks) through `Library::update`.
 - A running `rvp` takes the files of the next one (`rvp_app::instance`, a
-  `QLocalServer` channel `rvp-<user>`). The self-test neither forwards nor
+  `QLocalServer` channel `rvp-<user>`; on Unix in `$XDG_RUNTIME_DIR`, the
+  user's own folder, never the shared `/tmp`, the Linux audit's M5). A
+  channel's socket is removed only when nothing accepts on it: a running
+  RVP that answered late keeps it. The self-test neither forwards nor
   listens unless `--instance=NAME` names a separate channel, so test runs
   never reach the owner's player.
 - The Windows test VM's checks are `tools/windows-vm/m3-all.ps1`,

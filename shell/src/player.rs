@@ -890,7 +890,15 @@ fn load_app() -> Result<(App, bool, Option<String>), String> {
     let (mut app, portable, message) = match loaded {
         Ok((app, portable)) => (app, portable, None),
         Err(message) => {
-            let fallback = std::env::temp_dir().join("rvp-state");
+            // The user's runtime folder (their own; a shared /tmp/rvp-state
+            // could be another user's), else one of this process's.
+            let fallback = std::env::var_os("XDG_RUNTIME_DIR")
+                .map(PathBuf::from)
+                .filter(|dir| cfg!(unix) && dir.is_absolute() && dir.is_dir())
+                .map_or_else(
+                    || std::env::temp_dir().join(format!("rvp-state-{}", std::process::id())),
+                    |dir| dir.join("rvp-state"),
+                );
             let app = App::new(Settings::default(), &fallback).map_err(|e| e.to_string())?;
             (app, false, Some(message))
         }
@@ -910,14 +918,11 @@ fn qt_text_width(font: &rvp_skin::paint::FontSpec, text: &str) -> i32 {
     crate::ffi::bridge::rvp_text_width(text, &font.family, pixel_size, font.bold)
 }
 
-/// A `file:` URL for a local path, for `Qt.openUrlExternally`.
+/// A `file:` URL for a local path, for QML (`Qt.openUrlExternally`, the
+/// dialogs' folders): escaped, so `#`, `?` and `%` in a name stay part of
+/// it (the Linux audit's L14).
 fn file_url(path: &Path) -> String {
-    let text = path.to_string_lossy().replace('\\', "/");
-    if text.starts_with('/') {
-        format!("file://{text}")
-    } else {
-        format!("file:///{text}")
-    }
+    rvp_app::media::file_url(&path.to_string_lossy())
 }
 
 /// `{"notes": [...], "restart": bool, "error": "..."}` for the settings
@@ -1205,6 +1210,7 @@ impl qobject::Player {
                 let _ = thread.queue(qobject::Player::drain);
             }
         });
+        app.engine_started(&engine);
         m16::start(app, &engine);
         ENGINE.set(engine).ok()?;
         Some(drain_queued)

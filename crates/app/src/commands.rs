@@ -789,9 +789,7 @@ impl App {
     #[must_use]
     pub fn image_folder(&self) -> PathBuf {
         self.settings.image_folder.clone().unwrap_or_else(|| {
-            let home = std::env::var_os(if cfg!(windows) { "USERPROFILE" } else { "HOME" })
-                .map_or_else(std::env::temp_dir, PathBuf::from);
-            home.join("Pictures").join("RVP")
+            crate::storage::user_folder("XDG_PICTURES_DIR", "Pictures").join("RVP")
         })
     }
 

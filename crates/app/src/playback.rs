@@ -330,18 +330,24 @@ impl Playback {
 /// Windows' process priorities mpv takes (`priority`).
 pub const PRIORITIES: &[&str] = &["idle", "belownormal", "normal", "abovenormal", "high"];
 
-/// mpv's path list for `audio-file-paths` (the system's separator).
-fn path_list(folders: &[std::path::PathBuf]) -> String {
-    let separator = if cfg!(windows) { ";" } else { ":" };
-    folders
-        .iter()
-        .map(|folder| folder.to_string_lossy().into_owned())
-        .collect::<Vec<_>>()
-        .join(separator)
+/// Sets mpv's `audio-file-paths` to `folders`, one entry at a time: a path
+/// list joined with the system's separator splits a folder whose name
+/// holds it (`:` on Linux, the Linux audit's M1), and libmpv's options at
+/// start take no `-append` forms, so the list is set once the core runs
+/// (`App::engine_started`) and on each change.
+pub(crate) fn apply_audio_folders(engine: &Engine, folders: &[std::path::PathBuf]) {
+    drop(engine.command("change-list", &["audio-file-paths", "clr", ""]));
+    for folder in folders {
+        drop(engine.command(
+            "change-list",
+            &["audio-file-paths", "append", &folder.to_string_lossy()],
+        ));
+    }
 }
 
-/// The mpv options the playback settings set: external audio files and
-/// their folders, rotation metadata and (on Windows) the priority.
+/// The mpv options the playback settings set: external audio files,
+/// rotation metadata and (on Windows) the priority; the external audio's
+/// folders follow at start ([`apply_audio_folders`]).
 pub(crate) fn engine_options(playback: &Playback) -> Vec<(String, String)> {
     let auto = if playback.external_audio {
         "fuzzy"
@@ -349,12 +355,6 @@ pub(crate) fn engine_options(playback: &Playback) -> Vec<(String, String)> {
         "no"
     };
     let mut options = vec![("audio-file-auto".to_owned(), auto.to_owned())];
-    if !playback.audio_folders.is_empty() {
-        options.push((
-            "audio-file-paths".to_owned(),
-            path_list(&playback.audio_folders),
-        ));
-    }
     if !playback.auto_rotate {
         options.push(("video-rotate".to_owned(), "no".to_owned()));
     }
@@ -1256,7 +1256,7 @@ impl App {
             drop(engine.set_text("video-rotate", value));
         }
         if new.audio_folders != old.audio_folders {
-            drop(engine.set_text("audio-file-paths", &path_list(&new.audio_folders)));
+            apply_audio_folders(engine, &new.audio_folders);
         }
         if new.ab.loops != old.ab.loops {
             self.apply_loop_count(engine);

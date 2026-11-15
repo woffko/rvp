@@ -1361,6 +1361,7 @@ fn on_battery() -> Option<bool> {
 fn linux_desktop_entries() -> Vec<std::path::PathBuf> {
     let home = std::env::var_os("XDG_DATA_HOME")
         .map(std::path::PathBuf::from)
+        .filter(|path| path.is_absolute())
         .or_else(|| {
             std::env::var_os("HOME").map(|home| std::path::Path::new(&home).join(".local/share"))
         });

@@ -2129,7 +2129,7 @@ ApplicationWindow {
                                 text: qsTr("RVP downloads NVIDIA TensorRT %1 and CUDA's runtime from NVIDIA's servers (%2 GB) and keeps the files this card needs in RVP's state folder. They are NVIDIA's software under NVIDIA's terms, not RVP's: by downloading them you accept the NVIDIA TensorRT Software License Agreement and the CUDA End User License Agreement.").arg(tensorrt.status.version || "").arg(tensorrt.gb(tensorrt.status.download || 0))
                                       + "<br><br><a href=\"https://docs.nvidia.com/deeplearning/tensorrt/latest/reference/sla.html\">" + qsTr("TensorRT's licence") + "</a> · "
                                       + "<a href=\"https://docs.nvidia.com/cuda/eula/index.html\">" + qsTr("CUDA's EULA") + "</a>"
-                                onLinkActivated: link => Qt.openUrlExternally(link)
+                                onLinkActivated: link => Tools.open_url(link)
                             }
                             footer: DialogButtonBox {
                                 Button {
@@ -2512,7 +2512,7 @@ ApplicationWindow {
                             Button { text: qsTr("Rescan Skin Files"); onClicked: win.reload(false) }
                             Button {
                                 text: qsTr("Open Skin Folder")
-                                onClicked: Qt.openUrlExternally(win.player.settings_folder_url("skins"))
+                                onClicked: Tools.open_url(win.player.settings_folder_url("skins"))
                             }
                         }
                         Heading { text: qsTr("Skin modes") }
@@ -2536,7 +2536,7 @@ ApplicationWindow {
                         RowLayout {
                             Button {
                                 text: qsTr("Open mpv Folder")
-                                onClicked: Qt.openUrlExternally(win.player.settings_folder_url("mpv"))
+                                onClicked: Tools.open_url(win.player.settings_folder_url("mpv"))
                             }
                             Button { text: qsTr("Rescan Scripts"); onClicked: win.reload(false) }
                         }
@@ -2551,7 +2551,7 @@ ApplicationWindow {
                         RowLayout {
                             Button {
                                 text: qsTr("Open Menu Folder")
-                                onClicked: Qt.openUrlExternally(win.player.settings_folder_url("menus"))
+                                onClicked: Tools.open_url(win.player.settings_folder_url("menus"))
                             }
                             Button { text: qsTr("Context Menu Items…"); onClicked: menuItems.begin() }
                         }
@@ -2602,7 +2602,7 @@ ApplicationWindow {
                         RowLayout {
                             Button {
                                 text: qsTr("Open Logo Folder")
-                                onClicked: Qt.openUrlExternally(win.player.settings_folder_url("logos"))
+                                onClicked: Tools.open_url(win.player.settings_folder_url("logos"))
                             }
                             Button { text: qsTr("Rescan Logo Files"); onClicked: win.reload(false) }
                         }
@@ -3579,7 +3579,7 @@ ApplicationWindow {
                             }
                             Button {
                                 text: qsTr("Open Folder")
-                                onClicked: Qt.openUrlExternally(win.player.settings_folder_url("log"))
+                                onClicked: Tools.open_url(win.player.settings_folder_url("log"))
                             }
                         }
                         Note {

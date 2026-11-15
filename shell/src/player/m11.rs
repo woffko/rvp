@@ -224,18 +224,7 @@ impl qobject::Player {
             UiRequest::ListDialog { kind, text } => self.open_dialog(&json!({
                 "kind": "list", "list": kind, "text": text
             })),
-            UiRequest::NewInstance(files) => {
-                let mut arguments = vec!["/new".to_owned(), "--".to_owned()];
-                arguments.extend(files);
-                if let Err(error) = std::process::Command::new(
-                    std::env::current_exe().unwrap_or_else(|_| PathBuf::from("rvp")),
-                )
-                .args(&arguments)
-                .spawn()
-                {
-                    self.show_message(&format!("cannot start RVP: {error}"));
-                }
-            }
+            UiRequest::NewInstance(files) => self.new_instance(files),
             UiRequest::ShowFile(path) => {
                 self.as_mut()
                     .set_dialog(QString::from(&path.to_string_lossy().into_owned()));
@@ -252,6 +241,27 @@ impl qobject::Player {
                 self.relayout();
             }
             other => self.m12_request(other),
+        }
+    }
+
+    /// Another RVP with `files`, on its own (`/new`).
+    fn new_instance(self: Pin<&mut Self>, files: Vec<String>) {
+        let mut arguments = vec!["/new".to_owned(), "--".to_owned()];
+        arguments.extend(files);
+        match std::process::Command::new(
+            std::env::current_exe().unwrap_or_else(|_| PathBuf::from("rvp")),
+        )
+        .args(&arguments)
+        .spawn()
+        {
+            // Waited for, or each closed window stays a zombie until this
+            // RVP exits (the Linux audit's L7).
+            Ok(mut child) => drop(
+                std::thread::Builder::new()
+                    .name("rvp-new-window".to_owned())
+                    .spawn(move || drop(child.wait())),
+            ),
+            Err(error) => self.show_message(&format!("cannot start RVP: {error}")),
         }
     }
 

@@ -181,13 +181,19 @@ fn plain(byte: u8) -> bool {
     byte.is_ascii_alphanumeric() || b"-._~/:".contains(&byte)
 }
 
-/// A path as a `file://` URL; a URL stays as it is.
+/// A path as a `file://` URL; a URL stays as it is. A backslash is
+/// Windows' separator only: on Linux it is a character of a name (the
+/// Linux audit's L14).
 #[must_use]
 pub fn file_url(path: &str) -> String {
     if path.contains("://") {
         return path.to_owned();
     }
-    let path = path.replace('\\', "/");
+    let path = if cfg!(windows) {
+        path.replace('\\', "/")
+    } else {
+        path.to_owned()
+    };
     let mut url = String::from(if path.starts_with('/') {
         "file://"
     } else {
@@ -233,9 +239,12 @@ pub fn file_path(uri: &str) -> String {
         }
     }
     let path = String::from_utf8_lossy(&path).into_owned();
-    // A drive letter after the root slash: `/C:/films` is `C:/films`.
+    // A drive letter after the root slash: `/C:/films` is `C:/films` on
+    // Windows (on Linux it is a folder of that name).
     match path.as_bytes() {
-        [b'/', drive, b':', ..] if drive.is_ascii_alphabetic() => path[1..].to_owned(),
+        [b'/', drive, b':', ..] if cfg!(windows) && drive.is_ascii_alphabetic() => {
+            path[1..].to_owned()
+        }
         _ => path,
     }
 }
@@ -250,7 +259,14 @@ mod tests {
             file_url("~/My Films/фильм #1.mkv"),
             "file://~/My%20Films/%D1%84%D0%B8%D0%BB%D1%8C%D0%BC%20%231.mkv"
         );
-        assert_eq!(file_url("C:\\Films\\a b.mkv"), "file:///C:/Films/a%20b.mkv");
+        if cfg!(windows) {
+            assert_eq!(file_url("C:\\Films\\a b.mkv"), "file:///C:/Films/a%20b.mkv");
+            assert_eq!(file_path("file:///C:/Films/a%20b.mkv"), "C:/Films/a b.mkv");
+        } else {
+            // A backslash in a Linux name, and a folder named `C:`.
+            assert_eq!(file_url("/films/a\\b.mkv"), "file:///films/a%5Cb.mkv");
+            assert_eq!(file_path("file:///C:/Films/a%20b.mkv"), "/C:/Films/a b.mkv");
+        }
         assert_eq!(
             file_url("https://example.org/a.m3u8"),
             "https://example.org/a.m3u8"
@@ -258,7 +274,6 @@ mod tests {
         for path in ["~/My Films/фильм #1.mkv", "/tmp/100%.mkv"] {
             assert_eq!(file_path(&file_url(path)), path);
         }
-        assert_eq!(file_path("file:///C:/Films/a%20b.mkv"), "C:/Films/a b.mkv");
         assert_eq!(file_path("file://localhost/tmp/a.mkv"), "/tmp/a.mkv");
         assert_eq!(file_path("https://example.org/a"), "https://example.org/a");
     }

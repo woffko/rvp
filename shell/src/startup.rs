@@ -17,8 +17,12 @@ pub fn apply(on: bool) -> Result<(), String> {
             Err("cannot change the Run key".to_owned())
         };
     }
+    // A relative or empty XDG_CONFIG_HOME is to be ignored (the base
+    // directory specification): `./autostart` was written (the Linux
+    // audit's L9).
     let folder = std::env::var_os("XDG_CONFIG_HOME")
         .map(std::path::PathBuf::from)
+        .filter(|path| path.is_absolute())
         .or_else(|| {
             std::env::var_os("HOME").map(|home| std::path::Path::new(&home).join(".config"))
         })
@@ -35,8 +39,8 @@ pub fn apply(on: bool) -> Result<(), String> {
     }
     std::fs::create_dir_all(&folder).map_err(|error| error.to_string())?;
     let text = format!(
-        "[Desktop Entry]\nType=Application\nName=RVP\nExec=\"{}\"\nIcon=rvp\nX-GNOME-Autostart-enabled=true\n",
-        exe.display()
+        "[Desktop Entry]\nType=Application\nName=RVP\nExec={}\nIcon=rvp\nX-GNOME-Autostart-enabled=true\n",
+        rvp_app::registration::desktop_exec(&exe.to_string_lossy())
     );
     std::fs::write(&entry, text)
         .map_err(|error| format!("cannot write {}: {error}", entry.display()))

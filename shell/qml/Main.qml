@@ -442,7 +442,7 @@ Window {
             dialogLoader.item.askSubtitle(argument === 1)
             break
         case requestOpenExternal:
-            Qt.openUrlExternally(player.external_url)
+            Tools.open_url(player.external_url)
             break
         case requestAbout:
             aboutLoader.active = true

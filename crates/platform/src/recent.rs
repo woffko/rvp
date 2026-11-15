@@ -31,10 +31,24 @@ pub fn user_file() -> Result<PathBuf, String> {
 /// # Errors
 /// Fails when the list cannot be read or written.
 pub fn add(list: &Path, file: &Path, now: SystemTime) -> Result<(), String> {
+    // One update at a time: each started file's thread reads, changes and
+    // renames the whole list, and two at once lost one's entry or renamed
+    // the same temporary file (the Linux audit's L11).
+    static ONE: std::sync::Mutex<()> = std::sync::Mutex::new(());
+    let _one = ONE
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
     let error = |e: std::io::Error| format!("recent files: {}: {e}", list.display());
     let text = match std::fs::read_to_string(list) {
         Ok(text) if text.contains("</xbel>") => text,
-        Ok(_) => EMPTY.to_owned(),
+        Ok(text) if text.trim().is_empty() => EMPTY.to_owned(),
+        // Other programs' entries are not RVP's to drop.
+        Ok(_) => {
+            return Err(format!(
+                "recent files: {}: not a bookmark list, left as it is",
+                list.display()
+            ));
+        }
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => EMPTY.to_owned(),
         Err(e) => return Err(error(e)),
     };
@@ -57,9 +71,9 @@ fn with_entry(text: &str, file: &Path, stamp: &str) -> String {
     let opening = format!("<bookmark href=\"{}\"", escape(&uri));
     let mut text = text.to_owned();
     if let Some(start) = text.find(&opening)
-        && let Some(length) = text[start..].find("</bookmark>")
+        && let Some(length) = entry_length(&text[start..])
     {
-        let mut end = start + length + "</bookmark>".len();
+        let mut end = start + length;
         // The line's indent before and its end after go too.
         let line_start = text[..start].rfind('\n').map_or(start, |n| n + 1);
         if text[line_start..start].trim().is_empty() {
@@ -83,6 +97,18 @@ fn with_entry(text: &str, file: &Path, stamp: &str) -> String {
     text
 }
 
+/// The length of the bookmark at the start of `text`: up to its
+/// `</bookmark>`, or its opening tag alone when that ends in `/>` (the
+/// next one's end would take the bookmarks between).
+fn entry_length(text: &str) -> Option<usize> {
+    let tag = text.find('>')? + 1;
+    if text[..tag].ends_with("/>") {
+        return Some(tag);
+    }
+    text.find("</bookmark>")
+        .map(|length| length + "</bookmark>".len())
+}
+
 /// The file's MIME type by its extension (RVP's registered types), else
 /// `application/octet-stream`.
 fn mime_type(file: &Path) -> &'static str {
@@ -97,12 +123,14 @@ fn mime_type(file: &Path) -> &'static str {
         .unwrap_or("application/octet-stream")
 }
 
-/// A `file://` URI, its path escaped as RFC 3986 asks.
+/// A `file://` URI escaped as `GLib`'s `g_filename_to_uri` does (RFC 3986's
+/// characters of a path kept), so GTK's entry and RVP's for one file are
+/// the same entry (RVP's `%28` beside GTK's `(` made two).
 fn file_uri(file: &Path) -> String {
     use std::os::unix::ffi::OsStrExt as _;
     let mut uri = String::from("file://");
     for &byte in file.as_os_str().as_bytes() {
-        if byte.is_ascii_alphanumeric() || b"/-_.~".contains(&byte) {
+        if byte.is_ascii_alphanumeric() || b"!$&'()*+,-./:=@_~".contains(&byte) {
             uri.push(char::from(byte));
         } else {
             let _ = write!(uri, "%{byte:02X}");
@@ -169,12 +197,42 @@ mod tests {
         add(&list, film, UNIX_EPOCH + Duration::from_secs(20)).expect("renewed");
         let text = std::fs::read_to_string(&list).expect("read");
         assert!(text.contains("href=\"file:///home/u/notes.txt\""));
-        let href = "href=\"file:///home/u/%D0%92%D0%B8%D0%B4%D0%B5%D0%BE/a%20%26%20b.mkv\"";
+        let href = "href=\"file:///home/u/%D0%92%D0%B8%D0%B4%D0%B5%D0%BE/a%20&amp;%20b.mkv\"";
         assert_eq!(text.matches(href).count(), 1, "{text}");
         assert!(text.contains("visited=\"1970-01-01T00:00:20.000000Z\""));
         assert!(!text.contains("00:00:10"));
         assert!(text.contains("<mime:mime-type type=\"video/x-matroska\"/>"));
         assert!(text.trim_end().ends_with("</xbel>"));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn uris_are_glibs_and_other_entries_stay() {
+        assert_eq!(
+            file_uri(Path::new("/f/Film (2020) [cut]; #1 100%.mkv")),
+            "file:///f/Film%20(2020)%20%5Bcut%5D%3B%20%231%20100%25.mkv"
+        );
+        let dir = std::env::temp_dir().join(format!("rvp-recent-kept-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).expect("dir");
+        let list = dir.join("recently-used.xbel");
+        // A self-closing entry of the film, then another program's.
+        let text = EMPTY.replace(
+            "</xbel>",
+            "  <bookmark href=\"file:///f/a.mkv\" added=\"x\"/>\n  <bookmark href=\"file:///f/notes.txt\">\n    <info/>\n  </bookmark>\n</xbel>",
+        );
+        std::fs::write(&list, &text).expect("list");
+        add(&list, Path::new("/f/a.mkv"), UNIX_EPOCH).expect("renewed");
+        let renewed = std::fs::read_to_string(&list).expect("read");
+        assert!(renewed.contains("file:///f/notes.txt"), "{renewed}");
+        assert_eq!(renewed.matches("file:///f/a.mkv").count(), 1, "{renewed}");
+        // A list RVP cannot read is left as it is.
+        std::fs::write(&list, "<xbel version=\"1.0\">truncated").expect("broken");
+        assert!(add(&list, Path::new("/f/b.mkv"), UNIX_EPOCH).is_err());
+        assert_eq!(
+            std::fs::read_to_string(&list).expect("read"),
+            "<xbel version=\"1.0\">truncated"
+        );
         let _ = std::fs::remove_dir_all(&dir);
     }
 

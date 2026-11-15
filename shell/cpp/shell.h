@@ -108,6 +108,10 @@ public:
     // Shows a file in the system's file manager: selected in Explorer on
     // Windows, its folder elsewhere.
     Q_INVOKABLE bool show_file(const QString &path) const;
+    // Opens a URL (a folder, a web page) in the program the desktop names
+    // for it, without the variables RVP set for itself (Linux; QML's
+    // Qt.openUrlExternally passes them on).
+    Q_INVOKABLE bool open_url(const QString &url) const;
     // RVP's windows' font (M14's Dialog Box page): `family` (empty: Qt's)
     // at `points` (0: Qt's size).
     Q_INVOKABLE void set_app_font(const QString &family, int points) const;

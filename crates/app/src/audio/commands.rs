@@ -1056,12 +1056,9 @@ pub(crate) fn change_wave(engine: &Engine, delta: f64) -> Option<UiRequest> {
         .map(|()| UiRequest::Osd(format!("Wave volume: {volume:.0} %")))
 }
 
-/// The user's music folder.
+/// The user's music folder (Linux: `user-dirs.dirs`'s).
 fn dirs_music() -> PathBuf {
-    let home = std::env::var_os("USERPROFILE")
-        .or_else(|| std::env::var_os("HOME"))
-        .map_or_else(std::env::temp_dir, PathBuf::from);
-    home.join("Music")
+    crate::storage::user_folder("XDG_MUSIC_DIR", "Music")
 }
 
 #[cfg(test)]

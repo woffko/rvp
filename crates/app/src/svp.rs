@@ -100,14 +100,34 @@ pub fn choose_endpoint(
     }
 }
 
-/// Whether a process serves `endpoint` now. On Windows it is a named pipe
+/// Whether `endpoint` is taken: a process serves it now, or (Unix) mpv
+/// could not take its place. On Windows it is a named pipe
 /// (`\\.\pipe\<name>`, as mpv names it); a pipe that exists but is busy
 /// counts as taken.
 #[must_use]
 pub fn endpoint_in_use(endpoint: &str) -> bool {
     #[cfg(unix)]
     {
-        std::os::unix::net::UnixStream::connect(endpoint).is_ok()
+        use std::io::ErrorKind;
+        use std::os::unix::fs::MetadataExt as _;
+        let Err(error) = std::os::unix::net::UnixStream::connect(endpoint) else {
+            return true;
+        };
+        match error.kind() {
+            ErrorKind::NotFound => false,
+            // A socket nobody accepts on: mpv replaces it only when it is
+            // the user's own (the sticky /tmp keeps another user's; the
+            // Linux audit's L13).
+            ErrorKind::ConnectionRefused => {
+                let own = std::fs::metadata("/proc/self").map(|meta| meta.uid()).ok();
+                std::fs::symlink_metadata(endpoint)
+                    .map(|meta| meta.uid())
+                    .ok()
+                    != own
+            }
+            // "Permission denied" (another user's socket) and the rest.
+            _ => true,
+        }
     }
     #[cfg(windows)]
     {
@@ -133,13 +153,24 @@ pub fn endpoint_in_use(endpoint: &str) -> bool {
     }
 }
 
-/// Creates the folder of an `mpvSockets` socket (mpv does not).
+/// Creates the folder of an `mpvSockets` socket (mpv does not), sticky and
+/// open to every user as `/tmp` is: another user's RVP makes its own
+/// socket there too (one made 0755 kept them out).
 pub fn prepare_endpoint(endpoint: &str) {
     if cfg!(unix)
         && let Some(parent) = Path::new(endpoint).parent()
         && endpoint.contains("/mpvSockets/")
+        && !parent.exists()
+        && std::fs::create_dir_all(parent).is_ok()
     {
-        drop(std::fs::create_dir_all(parent));
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt as _;
+            drop(std::fs::set_permissions(
+                parent,
+                std::fs::Permissions::from_mode(0o1777),
+            ));
+        }
     }
 }
 
@@ -539,6 +570,24 @@ impl App {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[cfg(unix)]
+    #[test]
+    fn a_users_own_stale_socket_is_free() {
+        let dir = std::env::temp_dir().join(format!("rvp-svp-socket-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).expect("dir");
+        let socket = dir.join("mpvsocket");
+        let path = socket.to_string_lossy().into_owned();
+        assert!(!endpoint_in_use(&path), "nothing there");
+        let listener = std::os::unix::net::UnixListener::bind(&socket).expect("bind");
+        assert!(endpoint_in_use(&path), "served");
+        // Its file stays when it ends: the user's own, mpv replaces it.
+        drop(listener);
+        assert!(socket.exists());
+        assert!(!endpoint_in_use(&path), "stale and the user's");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
 
     #[test]
     fn svp_mode_needs_svp_support_and_an_endpoint() {

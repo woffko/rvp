@@ -961,9 +961,15 @@ impl App {
     }
 }
 
-/// mpv's list separator for path options (`sub-files`, `audio-files`).
-fn path_separator() -> &'static str {
-    if cfg!(windows) { ";" } else { ":" }
+/// The CD drive `/cd:` names: Windows' letter takes its colon (`D:`), a
+/// device's path stays as it is (Linux's `/dev/sr0`, which became
+/// `/dev/sr0:`; the Linux audit's L16).
+fn cd_device(drive: &str) -> String {
+    if drive.len() == 1 && drive.as_bytes()[0].is_ascii_alphabetic() {
+        format!("{drive}:")
+    } else {
+        drive.to_owned()
+    }
 }
 
 impl App {
@@ -986,10 +992,16 @@ impl App {
                 request.files.swap(i, usize::try_from(j).unwrap_or(0));
             }
         }
+        // mpv's path lists (`external-files`, `sub-files`, `audio-files`)
+        // get one entry each through their `-append` forms, which loadfile's
+        // options take: joined with the system's separator, a name or a
+        // URL holding it (`:` on Linux, `https:`) split in two (the Linux
+        // audit's M1).
         let mut options = Vec::new();
         if switches.same && request.files.len() > 1 {
-            let streams = request.files.split_off(1);
-            options.push(("external-files".to_owned(), streams.join(path_separator())));
+            for stream in request.files.split_off(1) {
+                options.push(("external-files-append".to_owned(), stream));
+            }
         }
         let mut start_given = false;
         if let Some((seconds, None)) = switches
@@ -1001,8 +1013,8 @@ impl App {
             start_given = true;
         }
         for (switch, option) in [
-            (&switches.sub, "sub-files"),
-            (&switches.aud, "audio-files"),
+            (&switches.sub, "sub-files-append"),
+            (&switches.aud, "audio-files-append"),
             (&switches.title, "force-media-title"),
             (&switches.user_agent, "user-agent"),
             (&switches.referer, "referrer"),
@@ -1042,7 +1054,7 @@ impl App {
             "dvd" => self.open_source(engine, Source::Dvd),
             "cd" => {
                 if let Some(drive) = &request.switches.drive {
-                    self.settings.devices.cd = format!("{drive}:");
+                    self.settings.devices.cd = cd_device(drive);
                 }
                 self.open_source(engine, Source::AudioCd)
             }
@@ -1245,5 +1257,7 @@ mod tests {
         );
         assert!(linux_screen_address(Some("wayland"), Some(":0")).is_err());
         assert!(linux_screen_address(None, None).is_err());
+        assert_eq!(cd_device("D"), "D:");
+        assert_eq!(cd_device("/dev/sr0"), "/dev/sr0");
     }
 }

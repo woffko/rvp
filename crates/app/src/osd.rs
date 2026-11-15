@@ -568,9 +568,7 @@ pub fn battery_from_sysfs(root: &std::path::Path) -> Option<String> {
             .ok()
             .map(|text| text.trim().to_owned())
     };
-    let battery = supplies
-        .iter()
-        .find(|path| read(path, "type").as_deref() == Some("Battery"))?;
+    let battery = supplies.iter().find(|path| system_battery(path))?;
     let capacity = read(battery, "capacity")?;
     let charging = read(battery, "status").is_some_and(|status| status == "Charging");
     Some(format!(
@@ -580,25 +578,36 @@ pub fn battery_from_sysfs(root: &std::path::Path) -> Option<String> {
 }
 
 /// Whether the system runs on its battery, from Linux's power supplies:
-/// `None` without a battery.
+/// `None` without a battery of the system's. A charger is `Mains` or a
+/// USB-C one (`USB`), any of them online.
 #[must_use]
 pub fn on_battery_from_sysfs(root: &std::path::Path) -> Option<bool> {
     let entries = std::fs::read_dir(root).ok()?;
-    let read = |path: &std::path::Path, name: &str| {
-        std::fs::read_to_string(path.join(name))
-            .ok()
-            .map(|text| text.trim().to_owned())
-    };
     let mut battery = false;
-    let mut mains_online = false;
+    let mut charger_online = false;
     for path in entries.flatten().map(|entry| entry.path()) {
-        match read(&path, "type").as_deref() {
-            Some("Battery") => battery = true,
-            Some("Mains") => mains_online |= read(&path, "online").as_deref() == Some("1"),
-            _ => {}
+        if system_battery(&path) {
+            battery = true;
+        } else if matches!(sysfs_value(&path, "type").as_deref(), Some("Mains" | "USB")) {
+            charger_online |= sysfs_value(&path, "online").as_deref() == Some("1");
         }
     }
-    battery.then_some(!mains_online)
+    battery.then_some(!charger_online)
+}
+
+/// One of a power supply's values, trimmed.
+fn sysfs_value(path: &std::path::Path, name: &str) -> Option<String> {
+    std::fs::read_to_string(path.join(name))
+        .ok()
+        .map(|text| text.trim().to_owned())
+}
+
+/// Whether a power supply is a battery of the system's: a wireless mouse's,
+/// keyboard's or gamepad's battery is one too, of scope `Device` (a desktop
+/// with one ran its battery presets on mains power; the Linux audit's M7).
+fn system_battery(path: &std::path::Path) -> bool {
+    sysfs_value(path, "type").as_deref() == Some("Battery")
+        && sysfs_value(path, "scope").as_deref() != Some("Device")
 }
 
 #[cfg(test)]
@@ -713,6 +722,28 @@ mod tests {
         assert_eq!(on_battery_from_sysfs(&root), Some(true));
         std::fs::write(mains.join("online"), "1\n").unwrap();
         assert_eq!(on_battery_from_sysfs(&root), Some(false));
+        // A USB-C charger online, the other one not.
+        let usb = root.join("ucsi-source-psy-USBC000:001");
+        std::fs::create_dir_all(&usb).unwrap();
+        std::fs::write(usb.join("type"), "USB\n").unwrap();
+        std::fs::write(usb.join("online"), "1\n").unwrap();
+        std::fs::write(mains.join("online"), "0\n").unwrap();
+        assert_eq!(on_battery_from_sysfs(&root), Some(false));
+        std::fs::remove_dir_all(&root).unwrap();
+    }
+
+    #[test]
+    fn a_wireless_mouse_is_no_system_battery() {
+        let root = std::env::temp_dir().join(format!("rvp-power-mouse-{}", std::process::id()));
+        // A desktop: no charger, a mouse's battery that discharges.
+        let mouse = root.join("hidpp_battery_0");
+        std::fs::create_dir_all(&mouse).unwrap();
+        std::fs::write(mouse.join("type"), "Battery\n").unwrap();
+        std::fs::write(mouse.join("scope"), "Device\n").unwrap();
+        std::fs::write(mouse.join("capacity"), "40\n").unwrap();
+        std::fs::write(mouse.join("status"), "Discharging\n").unwrap();
+        assert_eq!(on_battery_from_sysfs(&root), None);
+        assert_eq!(battery_from_sysfs(&root), None);
         std::fs::remove_dir_all(&root).unwrap();
     }
 }

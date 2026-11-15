@@ -596,6 +596,15 @@ impl App {
         &mut self.marks
     }
 
+    /// Once the player's core runs: what libmpv's options at start cannot
+    /// say (the external audio's folders, one entry each:
+    /// `playback::apply_audio_folders`).
+    pub fn engine_started(&self, engine: &Engine) {
+        if !self.settings.playback.audio_folders.is_empty() {
+            crate::playback::apply_audio_folders(engine, &self.settings.playback.audio_folders);
+        }
+    }
+
     /// The engine options these settings ask for.
     #[must_use]
     pub fn engine_options(&self) -> EngineOptions {

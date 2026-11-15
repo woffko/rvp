@@ -191,9 +191,24 @@ fn absolute(file: &str, cwd: &Path) -> String {
 
 /// The channel name: `rvp-<user>`, or `rvp-<NAME>` with `--instance=NAME`.
 /// `None` when this process neither forwards nor listens: the self-test
-/// without `--instance`.
+/// without `--instance`. On Unix it lies in the user's runtime folder
+/// (`$XDG_RUNTIME_DIR`, the user's alone): Qt puts a bare name in the
+/// shared `/tmp`, where another user could make it first, take the files
+/// handed over or keep RVP from listening (the Linux audit's M5).
 #[must_use]
 pub fn channel(cli: &Cli) -> Option<String> {
+    let runtime = if cfg!(unix) {
+        std::env::var_os("XDG_RUNTIME_DIR")
+            .map(std::path::PathBuf::from)
+            .filter(|dir| dir.is_absolute() && dir.is_dir())
+    } else {
+        None
+    };
+    channel_in(cli, runtime.as_deref())
+}
+
+/// [`channel`] in `runtime`, a folder of the user's own, when given.
+fn channel_in(cli: &Cli, runtime: Option<&Path>) -> Option<String> {
     let suffix = match cli.value("instance") {
         Some(name) => name.to_owned(),
         None if cli.flag("selftest") => return None,
@@ -205,7 +220,8 @@ pub fn channel(cli: &Cli) -> Option<String> {
         .chars()
         .map(|c| if c.is_ascii_alphanumeric() { c } else { '_' })
         .collect();
-    Some(format!("rvp-{clean}"))
+    let name = format!("rvp-{clean}");
+    Some(runtime.map_or(name.clone(), |dir| dir.join(&name).display().to_string()))
 }
 
 /// Whether this process hands its files to a running instance: not with
@@ -305,10 +321,19 @@ mod tests {
         assert_eq!(channel(&cli(&["--selftest"])), None);
         assert!(!forwards(&cli(&["--selftest", "a.mkv"])));
         assert_eq!(
-            channel(&cli(&["--selftest", "--instance=t 1"])).as_deref(),
+            channel_in(&cli(&["--selftest", "--instance=t 1"]), None).as_deref(),
             Some("rvp-t_1")
         );
-        assert!(channel(&cli(&["a.mkv"])).is_some_and(|name| name.starts_with("rvp-")));
+        // In the user's runtime folder where there is one.
+        assert_eq!(
+            channel_in(&cli(&["--instance=t 1"]), Some(Path::new("/run/user/1000"))).as_deref(),
+            Some("/run/user/1000/rvp-t_1")
+        );
+        assert!(channel(&cli(&["a.mkv"])).is_some_and(|name| {
+            Path::new(&name)
+                .file_name()
+                .is_some_and(|file| file.to_string_lossy().starts_with("rvp-"))
+        }));
         assert!(!forwards(&cli(&["/new", "a.mkv"])));
         assert!(forwards(&cli(&["a.mkv"])));
     }

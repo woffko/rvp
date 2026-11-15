@@ -82,6 +82,11 @@ impl Trash {
                 .mode(0o700)
                 .create(folder)
                 .map_err(error)?;
+            // A folder another user made, or a link, would hand them the
+            // file: the user's own folders only, as the specification asks
+            // and gio checks (the Linux audit's L12).
+            self.owned(folder)
+                .map_err(|why| format!("the trash: {}: {why}", folder.display()))?;
         }
         let name = file
             .file_name()
@@ -140,11 +145,25 @@ impl Trash {
             && meta.permissions().mode() & STICKY != 0
         {
             let own = shared.join(self.uid.to_string());
-            if DirBuilder::new().mode(0o700).create(&own).is_ok() || own.is_dir() {
+            if (DirBuilder::new().mode(0o700).create(&own).is_ok() || own.is_dir())
+                && self.owned(&own).is_ok()
+            {
                 return own;
             }
         }
         top.join(format!(".Trash-{}", self.uid))
+    }
+
+    /// Whether `folder` is a folder of the user's own, not a link.
+    fn owned(&self, folder: &Path) -> Result<(), &'static str> {
+        let meta = fs::symlink_metadata(folder).map_err(|_| "cannot be read")?;
+        if meta.file_type().is_symlink() || !meta.is_dir() {
+            Err("not a folder (a link?)")
+        } else if meta.uid() != self.uid {
+            Err("another user's folder")
+        } else {
+            Ok(())
+        }
     }
 }
 
@@ -223,6 +242,35 @@ fn encode_path(path: &Path) -> String {
 mod tests {
     use super::*;
 
+    /// The test's own user: the trash takes only its folders.
+    fn uid() -> u32 {
+        fs::metadata("/proc/self").expect("/proc/self").uid()
+    }
+
+    #[test]
+    fn only_the_users_own_folders_are_taken() {
+        let dir = scratch("owned");
+        let trash = Trash::new(dir.join("Trash"), uid());
+        let folder = dir.join("folder");
+        fs::create_dir_all(&folder).expect("folder");
+        assert_eq!(trash.owned(&folder), Ok(()));
+        let link = dir.join("link");
+        std::os::unix::fs::symlink(&folder, &link).expect("link");
+        assert_eq!(trash.owned(&link), Err("not a folder (a link?)"));
+        let other = Trash::new(dir.join("Trash"), uid() + 1);
+        assert_eq!(other.owned(&folder), Err("another user's folder"));
+        // A file sent through a linked trash fails rather than leaving.
+        let file = dir.join("film.mkv");
+        fs::write(&file, b"video").expect("file");
+        let target = dir.join("elsewhere");
+        fs::create_dir_all(&target).expect("elsewhere");
+        std::os::unix::fs::symlink(&target, dir.join("Linked")).expect("trash link");
+        let linked = Trash::new(dir.join("Linked"), uid());
+        assert!(linked.send(&file, "2026-11-15T08:00:00").is_err());
+        assert!(file.exists(), "the file stays");
+        let _ = fs::remove_dir_all(&dir);
+    }
+
     fn scratch(name: &str) -> PathBuf {
         let dir = std::env::temp_dir().join(format!("rvp-trash-{name}-{}", std::process::id()));
         let _ = fs::remove_dir_all(&dir);
@@ -233,7 +281,7 @@ mod tests {
     #[test]
     fn a_file_goes_to_the_home_trash_with_its_info() {
         let dir = scratch("home");
-        let trash = Trash::new(dir.join("data/Trash"), 1000);
+        let trash = Trash::new(dir.join("data/Trash"), uid());
         let file = dir.join("a film #1.mkv");
         fs::write(&file, b"video").expect("file");
         let target = trash.send(&file, "2026-11-01T10:20:30").expect("trashed");
@@ -262,7 +310,7 @@ mod tests {
     #[test]
     fn a_second_file_of_the_same_name_gets_a_new_one() {
         let dir = scratch("names");
-        let trash = Trash::new(dir.join("Trash"), 1000);
+        let trash = Trash::new(dir.join("Trash"), uid());
         for round in 0..3 {
             let folder = dir.join(format!("folder{round}"));
             fs::create_dir_all(&folder).expect("folder");
@@ -288,7 +336,7 @@ mod tests {
     #[test]
     fn a_missing_file_fails_and_leaves_no_info() {
         let dir = scratch("missing");
-        let trash = Trash::new(dir.join("Trash"), 1000);
+        let trash = Trash::new(dir.join("Trash"), uid());
         assert!(
             trash
                 .send(&dir.join("gone.mkv"), "2026-11-01T10:20:30")

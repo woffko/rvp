@@ -52,11 +52,9 @@ pub(crate) struct RecordState {
     pub(crate) video: Option<(PathBuf, f64)>,
 }
 
-/// The home folder's Videos/RVP.
+/// The user's videos folder's RVP (Linux: `user-dirs.dirs`'s).
 fn default_folder() -> PathBuf {
-    let home = std::env::var_os(if cfg!(windows) { "USERPROFILE" } else { "HOME" })
-        .map_or_else(std::env::temp_dir, PathBuf::from);
-    home.join("Videos").join("RVP")
+    crate::storage::user_folder("XDG_VIDEOS_DIR", "Videos").join("RVP")
 }
 
 impl App {

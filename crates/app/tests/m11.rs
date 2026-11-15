@@ -427,12 +427,26 @@ fn power_actions_count_down_and_the_timer_can_be_cancelled() {
 #[test]
 fn command_line_switches_set_the_first_file() {
     let mut h = Harness::new("switches", |_| {});
+    // The stream and the subtitle have mpv's path-list separator in their
+    // names (`:` on Linux, `;` on Windows): joined into one list value,
+    // each split in two and did not load (the Linux audit's M1).
+    let separator = if cfg!(windows) { ";" } else { ":" };
+    let folder = std::env::temp_dir().join(format!("rvp-m11-switches-{}", std::process::id()));
+    std::fs::create_dir_all(&folder).expect("folder");
+    let stream = folder.join(format!("same{separator} stream.mkv"));
+    let subtitle = folder.join(format!("sub{separator} title.srt"));
+    std::fs::copy(media("fixture-3s.mkv"), &stream).expect("stream");
+    std::fs::copy(media("fixture-chapters.srt"), &subtitle).expect("subtitle");
     let mut request = Request {
         mode: rvp_app::instance::Mode::Play,
-        files: vec![media("fixture-chapters.mkv"), media("fixture-3s.mkv")],
+        files: vec![
+            media("fixture-chapters.mkv"),
+            stream.to_string_lossy().into_owned(),
+        ],
         switches: Switches {
             seek: Some("0:00:08".to_owned()),
             title: Some("Switched".to_owned()),
+            sub: Some(subtitle.to_string_lossy().into_owned()),
             same: true,
             ..Switches::default()
         },
@@ -457,7 +471,21 @@ fn command_line_switches_set_the_first_file() {
         .filter(|track| track.kind == rvp_engine::TrackKind::Audio)
         .count();
     assert_eq!(audio, 2, "the second file's audio joined");
+    // The /sub file itself (mpv may also load the fixture's own .srt).
+    let tracks = h.engine.tracks();
+    assert!(
+        tracks
+            .iter()
+            .any(|track| track.kind == rvp_engine::TrackKind::Subtitle
+                && track.external
+                && track
+                    .title
+                    .as_deref()
+                    .is_some_and(|title| title.contains("title.srt"))),
+        "the /sub file loaded: {tracks:?}"
+    );
     assert_eq!(h.app.library().shown().entries.len(), 1);
+    drop(std::fs::remove_dir_all(&folder));
 }
 
 #[test]

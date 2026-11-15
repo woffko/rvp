@@ -263,9 +263,66 @@ impl std::fmt::Debug for Writer {
     }
 }
 
+/// A user folder of the desktop's for RVP's own files: on Linux the one
+/// `user-dirs.dirs` names (`key`, such as `XDG_PICTURES_DIR`: the user's
+/// language's, `~/Изображения`), else `~/<english>` (Windows:
+/// `%USERPROFILE%\\<english>`). The owner's answer to the Linux audit's
+/// L15 (2026-11-14).
+#[must_use]
+pub fn user_folder(key: &str, english: &str) -> PathBuf {
+    let home = std::env::var_os(if cfg!(windows) { "USERPROFILE" } else { "HOME" })
+        .map_or_else(std::env::temp_dir, PathBuf::from);
+    if cfg!(unix) {
+        let config = std::env::var_os("XDG_CONFIG_HOME")
+            .map(PathBuf::from)
+            .filter(|path| path.is_absolute())
+            .unwrap_or_else(|| home.join(".config"));
+        if let Ok(text) = fs::read_to_string(config.join("user-dirs.dirs"))
+            && let Some(folder) = user_dirs_entry(&text, key, &home)
+        {
+            return folder;
+        }
+    }
+    home.join(english)
+}
+
+/// `key`'s folder in a `user-dirs.dirs` text (`XDG_VIDEOS_DIR="$HOME/Видео"`);
+/// `None` when it is missing, relative, or the home folder itself (which
+/// xdg-user-dirs writes for "none").
+fn user_dirs_entry(text: &str, key: &str, home: &Path) -> Option<PathBuf> {
+    let value = text.lines().find_map(|line| {
+        line.trim()
+            .strip_prefix(key)
+            .and_then(|rest| rest.strip_prefix('='))
+    })?;
+    let value = value.trim().strip_prefix('"')?.strip_suffix('"')?;
+    let path = match value.strip_prefix("$HOME") {
+        Some(rest) => home.join(rest.trim_start_matches('/')),
+        None => PathBuf::from(value),
+    };
+    (path.is_absolute() && path != home).then_some(path)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn user_folders_come_from_user_dirs() {
+        let text = "# written by xdg-user-dirs-update\nXDG_DESKTOP_DIR=\"$HOME/Рабочий стол\"\nXDG_VIDEOS_DIR=\"$HOME/Видео\"\nXDG_MUSIC_DIR=\"$HOME/\"\nXDG_PICTURES_DIR=\"/data/Фото\"\n";
+        let home = Path::new("/home/u");
+        assert_eq!(
+            user_dirs_entry(text, "XDG_VIDEOS_DIR", home),
+            Some(PathBuf::from("/home/u/Видео"))
+        );
+        assert_eq!(
+            user_dirs_entry(text, "XDG_PICTURES_DIR", home),
+            Some(PathBuf::from("/data/Фото"))
+        );
+        // The home folder itself means none; a missing key too.
+        assert_eq!(user_dirs_entry(text, "XDG_MUSIC_DIR", home), None);
+        assert_eq!(user_dirs_entry(text, "XDG_TEMPLATES_DIR", home), None);
+    }
 
     fn scratch(name: &str) -> PathBuf {
         let dir = std::env::temp_dir().join(format!("rvp-storage-{name}-{}", std::process::id()));
