@@ -529,6 +529,10 @@ smoothing for users without SVP, after a study of the engines.
 
 ## Preferences, skins and the interface (M14)
 
+- No interface language but English, the source text and the
+  fallback, is written into the code (the owner, 2026-11-15): a language
+  is its translation files, which RVP finds; goal V (M19, D20) removes
+  the places that still name Russian and adds twelve languages.
 - Interface languages are English (the source text) and Russian,
   written for RVP (`shell/i18n/qml_ru.ts` from lupdate, `menu_ru.ts`
   for the "Menu" context); `shell/build.rs` compiles them with Qt's

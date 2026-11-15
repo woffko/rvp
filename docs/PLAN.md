@@ -232,6 +232,7 @@ playback state between the two systems possible (open question 2).
 | D17 | A GPU power budget: RVP keeps the graphics card below a share of its rated power (Video settings, 50 to 100 %, 90 % by default, 100 % off) by lightening its own work step by step: EWA scalers become spline36, then GPU Super Resolution and RTX Video HDR, the pixel shaders and the VapourSynth script go off (M18's smoothing joins these steps). It never changes the card's own settings. NVIDIA's cards are read through NVML (Windows and Linux), AMD's through Windows' adapter counter (D3DKMT's adapter performance data, a share of the card's power: the licence of AMD's ADLX SDK forbids its use in software under a free licence) and amdgpu's hwmon files (Linux), only while a file plays and, on Linux, never while the system has put the card to sleep. GPU test runs on the host go at a real power limit, 90 % of the card's default, which `tools/windows-vm/gpu-limit.ps1` sets through one UAC prompt and puts back when the run ends. | On 2026-10-18 RIFE at 2160p in RVP hung the host's RTX 30-series card beyond recovery (a reboot was needed). The owner asked for a power slider in the player and the tests, 90 % by default, for NVIDIA and AMD, and chose RVP's own budget for the player and the real limit for the host's test runs. | Owner, 2026-10-19 |
 | D18 | M18's engines and defaults: Blend (mpv's interpolation), MVTools (CPU) and RIFE (GPU, up to 1080p) in VapourSynth through a runtime RVP ships (never SVP's), and fruc_vulkan (NVIDIA's optical flow, RTX 30 and later) through a libmpv RVP builds with FFmpeg's master. Smoothing is off by default; turned on it is MVTools medium up to 1080p and Blend above, at the display's rate. | M18's study (`docs/spikes/m18-smoothing.md`): MVTools keeps up at 1080p on the CPU and is the most exact; RIFE is the sharpest on films; fruc_vulkan is the fastest on RTX cards but missing from the libmpv RVP ships. The owner chose all three and accepted building libmpv. | Owner, 2026-10-19 |
 | D19 | Windows and Linux everywhere: from goal S on, every change (a goal's parts and the fixes between goals) is built and checked on both systems before it counts as done: Windows on the test VM (the host only with permission), Linux in WSL under Xvfb and on the Ubuntu VM; what only real hardware or a desktop session can check goes to the host's sessions and the owner's Ubuntu boot. It ends D14's "Windows first". | The owner, after goal K: "both Windows and Linux are needed everywhere". | Owner, 2026-11-01 |
+| D20 | Interface languages: English (the source), Russian and twelve more, chosen by how reliably Claude translates them, since the owner cannot check them: Spanish, Portuguese (Brazil), French, German, Italian, Polish, Ukrainian, Turkish, Chinese (Simplified and Traditional), Japanese and Korean. The translations are RVP's own (never PotPlayer's or another program's strings), made by agents and checked by an independent back-translation, scripts and the fit checks; native speakers' corrections are welcome later. No language but English, the source and fallback, is written into the code: the languages are the translation files RVP finds. Right-to-left languages (Arabic, Hebrew, Persian) and scripts that need their own line breaking (Thai, the Indic scripts) wait for a study of the layout; other languages with reliable translation (Dutch, Czech, Swedish, Hungarian, Vietnamese, Indonesian) can follow the same way. | The owner: "the world's main languages", only those Claude supports well. | Owner, 2026-11-15 |
 
 ## 4. Usability requirements
 
@@ -1238,6 +1239,88 @@ be a substantial part of it. It runs after M12 (goal T), Windows first.
 Exit: on Windows, video plays smoothed at the target rate without SVP in
 the modes the owner picked, within the limits the study measured.
 
+### M19. Interface languages (M)
+
+Added on 2026-11-15 at the owner's request (D20): RVP's interface in the
+world's main languages. RVP has English (the source text) and Russian:
+about 2,070 strings (1,261 of its windows in `qml_ru.ts`, 810 menu and
+action labels in `menu_ru.ts`, about 8,500 English words). M19 adds
+twelve: `es`, `pt_BR`, `fr`, `de`, `it`, `pl`, `uk`, `tr`, `zh_CN`,
+`zh_TW`, `ja`, `ko`, each shown by its own name (Español, Português
+(Brasil), Français, Deutsch, Italiano, Polski, Українська, Türkçe,
+简体中文, 繁體中文, 日本語, 한국어).
+
+- **No language in the code** (the owner, 2026-11-15). English is the
+  source text and the fallback, and the only language the code knows;
+  every other language is its translation files, and adding one is
+  adding its files. Today Russian is written in eight places
+  (`shell/build.rs`, `Main.qml`'s `applyLanguage`, the General page's
+  list, `general::LANGUAGES`, `tests/translations.rs`, `SelfTestM14.qml`,
+  `packaging/windows/rvp.nsi`, the `.desktop` file); M19 removes them:
+  - `build.rs` compiles every `i18n/qml_<code>.ts` it finds, with the
+    `menu_<code>.ts` beside it, into `qml_<code>.qm`, and lists the
+    codes for the program; nothing names a language.
+  - Each language's own name ("Deutsch", "日本語") is a string of its
+    own translation (the English source "English"), so the General
+    page's list is built from the files.
+  - The system's language is matched by Qt's own rules (the system's UI
+    languages against the files' codes: `zh_TW` and `zh_HK` find the
+    Traditional file, `pt_PT` the Brazilian one when it is the only
+    Portuguese), else English.
+  - `tests/translations.rs` checks every `.ts` file it finds,
+    `--selftest=m14 --language=CODE` checks any language, and the
+    packaging scripts write the installer's languages and the
+    `.desktop` file's translated fields from the translation files (the
+    installer's and the desktop entry's strings are contexts of the
+    `.ts` files; the code to NSIS name table is the only table, and only
+    of NSIS's names).
+- **Rules for each language** (`docs/i18n/<code>.md`, with the process
+  in `docs/i18n/README.md`): the form of address, quotation marks,
+  ellipsis and punctuation, how labels are phrased (menus, buttons,
+  checkboxes), and a glossary of about 150 terms (playlist, album,
+  subtitles, skin, aspect ratio, deinterlacing, normalizer, seek,
+  bookmark, motion smoothing...) chosen as the platform's own words
+  (the desktops' and Windows' usage). Names stay as they are: RVP,
+  PotPlayer, SVP, mpv, FFmpeg, VapourSynth, MVTools, RIFE, TensorRT,
+  NVIDIA, Unified Remote, whisper.cpp, DVD, Blu-ray. Only terms are
+  taken from common usage; no other program's translated strings.
+- **Translation.** One agent per language translates from the English
+  source, with the Russian translation beside it for meaning, context by
+  context, following its rules file. Short labels stay about as long as
+  the English (texts that must fit their controls); long help texts may
+  grow.
+- **Independent review.** Another agent, which did not translate,
+  translates every string back into English without seeing the source;
+  `tools/i18n/review.py` lines up source, translation and back-translation
+  and lists the strings whose meaning drifted, the glossary terms not
+  used, and the translator fixes them; a second look covers the fixed
+  strings only. Scripts check every language: every string translated,
+  the same `%1`...`%9` placeholders and `&` mnemonics, no English left
+  but the names, the glossary's terms, length against the English.
+- **Fit and look.** M14's check that the settings window's texts fit
+  their controls runs for each language (`--selftest=m14
+  --language=CODE`), under Xvfb and on the Windows VM; the screenshot
+  tour (`RVP_TOUR_LANGUAGE`) for each language is looked through for
+  cut, overlapping or missing glyphs. Chinese, Japanese and Korean use
+  the system's fonts (Noto CJK on Linux, a Recommends of the .deb;
+  Windows' own), and the check makes sure their glyphs show in the
+  settings window and the menus.
+- **Around the interface.** The Windows installer's languages (NSIS's
+  own translations and RVP's `LangString`s), the `.desktop` file's
+  `GenericName` and `Comment`, the README's list, and the coverage
+  report's reason for PotPlayer's Interface Language items. RVP's
+  notices formatted in Rust (OSD texts, errors) stay English, as with
+  Russian; skins draw their own labels.
+
+Goal V does M19 on the Ubuntu boot, with Linux's checks under Xvfb, and
+lists what reaches Windows; goal V-W checks that on the Windows VM from
+WSL.
+
+Exit: the twelve languages are complete and reviewed, every language's
+texts fit (Linux under Xvfb and the Windows VM), the installer and the
+desktop file carry them, and the system's language is chosen at the
+first start.
+
 ## 7. Testing strategy
 
 - Unit tests for the tokenizer and preprocessor, using the BlackSpace quirks
@@ -1360,6 +1443,8 @@ Windows.
 | 9 | S | M17 Linux completion (and M9's and M18's Linux side) | WSL, Ubuntu VM | Afterwards one Ubuntu boot session for M6 to M18 |
 | 10 | U | The Linux audit's fixes (`docs/audits/linux.md`, added 2026-11-14 after the Ubuntu boot run) | Ubuntu 26.10 boot | Answers the audit's questions; installs the packages and the .deb; present for desktop and GPU steps |
 | 10 | U-W | Goal U's Windows part (D19) | WSL, Windows VM | Permission only if a check needs the host |
+| 11 | V | M19 interface languages (D20, added 2026-11-15) | Ubuntu 26.10 boot (Xvfb) | Allows one translating and one reviewing agent per language |
+| 11 | V-W | Goal V's Windows part (D19) | WSL, Windows VM | Permission only if a check needs the host |
 
 A `/goal` condition holds at most 4000 characters; keep each goal's text
 below that (goal H's first text was 4382 and was refused).
@@ -1517,4 +1602,16 @@ card are; the Windows VM is not reachable there):
 Goal U-W (after goal U; its Windows part, D19):
 ```
 /goal Execute goal U-W of docs/PLAN.md (goal U's Windows part, D19) in ~/rvp from WSL, only if docs/goals/goal-u-status.md records goal U as done; otherwise stop and report. Follow AGENTS.md (test environments; the Windows test VM is shared: before each run ask every session that uses it through ListAgents and wait for their answers). Build the Windows bundle as goal U left it and run on the Windows test VM the checks goal-u-status.md's "For goal U-W" section lists, at least m10-all.ps1, m11-all.ps1, M12's self-test, m14-all.ps1, m18-all.ps1 and m8-all.ps1 (the installer's version), and the headless Windows tests the changed crates have (cargo xwin test --no-run beside the bundle's libmpv). Runs on the Windows host need the owner's permission each time; ask only if a check cannot run on the VM. A regression: find the cause, fix it when it is clear and small, re-run the Linux headless tests and Xvfb self-tests in WSL for the fix, run `cargo xtask ci`; otherwise record it as an open item. Record each result in goal-u-status.md's "Windows" section, commit with `git -c user.name=woffko -c user.email=2505149+woffko@users.noreply.github.com commit` and push. Done when every listed check has passed or is recorded with its cause, the status file is committed and pushed, and CI is green. Do not: change PotPlayer, SVP or system settings on the host, commit third-party files, make the repository public, tag or release. Stop on blockers or when an owner decision is needed.
+```
+
+Goal V (added 2026-11-15, milestone M19, D20; on the owner's Ubuntu
+boot, where the owner works now; the Windows VM is not reachable there):
+```
+/goal Execute goal V of docs/PLAN.md (milestone M19, interface languages, D20) in ~/rvp on the owner's Ubuntu 26.10 boot (GNOME Wayland). Follow AGENTS.md (no interface language but English in the code), the rules the goal status files carry and D19. Steps, each recorded in docs/goals/goal-v-status.md: (1) remove Russian from the code (build.rs, Main.qml, the General page, general::LANGUAGES, tests/translations.rs, SelfTestM14.qml with --language=CODE, rvp.nsi, the .desktop file): languages are the i18n/*.ts files found, each naming itself in its own translation, the system's language matched by Qt's rules, the installer's and desktop entry's strings written from the .ts files; Russian still passes every check. (2) docs/i18n/README.md (the process) and docs/i18n/<code>.md for es, pt_BR, fr, de, it, pl, uk, tr, zh_CN, zh_TW, ja, ko (form of address, punctuation, label style, a glossary of about 150 terms, names kept). (3) Translate qml_<code>.ts and menu_<code>.ts from the English source with the Russian beside it for meaning: one translating agent per language (the owner allows this fan-out, with the Agent tool or a workflow, at most six languages at a time). (4) Review each language with a different agent that translates every string back into English without seeing the source; tools/i18n/review.py lists meaning drift, glossary misses, placeholders, mnemonics, English left and length; fix, then look again at the fixed strings. (5) For each language M14's fit check and the screenshot tour (tools/screenshots/tour.sh, RVP_TOUR_LANGUAGE) under Xvfb; look through the tour's pictures for cut, overlapping or missing glyphs. (6) fonts-noto-cjk as a Recommends of the .deb, the README's language list, the coverage report's Interface Language reason (RVP_BLESS=1), AGENTS.md's M14 section. Never copy PotPlayer's or another program's translated strings (terms only); RVP's notices formatted in Rust stay English. Windows keeps its behaviour but for the languages; list every change that reaches Windows (the build, the installer's languages, the settings page, the self-tests) in goal-v-status.md's "For goal V-W" section with the VM check it needs (the VM is not reachable from this boot). Checks here: the headless tests and Xvfb self-tests (silent); before anything opens a window on the desktop or plays sound, tell the owner what runs and for how long. Never use sudo. Run `cargo xtask ci` before every commit; commit step 1, step 2 and each language on its own with `git -c user.name=woffko -c user.email=2505149+woffko@users.noreply.github.com commit`, push in batches (CI's artifact storage is small), and after step 1 check CI's package-linux job and its Ubuntu 26.10 container check. Done when the twelve languages are complete and reviewed, every language fits under Xvfb, the system's language is chosen at the first start, goal-v-status.md with its "For goal V-W" section is committed and pushed, and CI is green. Do not change system or SVP settings, commit PotPlayer's, SVP's or other programs' files or translations, make the repository public, tag or release. Stop on blockers or when an owner decision is needed.
+```
+
+Goal V-W (after goal V; its Windows part, D19; from WSL, after goal U-W
+or in the same session):
+```
+/goal Execute goal V-W of docs/PLAN.md (goal V's Windows part, D19) in ~/rvp from WSL, only if docs/goals/goal-v-status.md records goal V as done; otherwise stop and report. Follow AGENTS.md (test environments; the Windows test VM is shared: before each run ask every session that uses it through ListAgents and wait for their answers). Build the Windows bundle and the installer as goal V left them and run on the Windows test VM the checks goal-v-status.md's "For goal V-W" section lists, at least: m14-all.ps1 with M14's fit check for every language (--selftest=m14 --language=CODE); the settings window and the menus in each language, their grabs looked through for cut, overlapping or missing glyphs (Chinese, Japanese and Korean in Windows' own fonts); m8-all.ps1 with the installer in each of its languages (its texts and RVP's components, install and uninstall); and tests/translations.rs built with cargo xwin test --no-run beside the bundle. Runs on the Windows host need the owner's permission each time; ask only if a check cannot run on the VM. A regression: find the cause, fix it when it is clear and small, re-run the Linux headless tests and Xvfb self-tests in WSL for the fix, run `cargo xtask ci`; otherwise record it as an open item. Record each result in goal-v-status.md's "Windows" section, commit with `git -c user.name=woffko -c user.email=2505149+woffko@users.noreply.github.com commit` and push. Done when every listed check has passed or is recorded with its cause, the status file is committed and pushed, and CI is green. Do not: change PotPlayer, SVP or system settings on the host, commit third-party files, make the repository public, tag or release. Stop on blockers or when an owner decision is needed.
 ```

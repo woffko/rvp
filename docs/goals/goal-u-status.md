@@ -546,7 +546,7 @@ Windows bundle at goal U's last commit and runs the VM's checks below.
 | m6svp's second window and `--svp-second` | 11 | `Main.qml`'s svp self-test option | the host's SVP check, with permission |
 | The calibration core waits for its shutdown | 11 | `crates/engine/src/calibrate.rs` (RVP's calibration, `render_vf`'s users) | `m18-all.ps1` with `--calibrate`, and RIFE (TensorRT) on the host with permission |
 | M10's self-test waits a second before Audio Stretching | 11 | `Main.qml` | `m10-all.ps1` |
-| The media controls send an unchanged state again every 2 s | 11 | `shell/src/media_controls.rs` (Windows only) | `m8-smtc.ps1` and `m8-all.ps1` on the VM, a few times |
+| The media controls send an unchanged state again every 2 s | 11 | `shell/src/media_controls.rs` (Windows only) | `m8-smtc.ps1` and `m8-all.ps1` on the VM, a few times. CI's run at b678257 failed it again ("Opened" for 30 s, then right after a pause): equal values set again change nothing; find a real change once the session appears |
 | The README's screenshot tour (`--selftest=tour`) | after U | `SelfTestTour.qml` in the bundle (run on Linux only, `tools/screenshots/tour.sh`) | none (the bundle builds) |
 | A closed file's last frame no longer stays under the logo: `EngineEvent::VideoReconfig` draws the video item again; `--selftest=upright` checks it (`picture_black_after_close`) | after U | the OpenGL renderer (Direct3D 11's window already hides) | `m6-all.ps1` (session 0: SKIPPED), and the OpenGL renderer on the host with permission |
 | The Remote Control page says custom remotes need Unified Remote's Full app | after U | `Settings.qml`, `qml_ru.ts` | `m14-all.ps1` (the texts fit) |
