@@ -53,6 +53,11 @@ Item {
         return name.split("-").map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(" ")
     }
     function scopeText(scope) { return scope === "playlist" ? qsTr("Playlist") : qsTr("Window") }
+    // The rows' scope column takes its longer word's width in the language
+    // shown (Japanese's "Window" did not fit 60 px).
+    Label { id: windowWord; visible: false; text: qsTr("Window") }
+    Label { id: playlistWord; visible: false; text: qsTr("Playlist") }
+    readonly property real scopeWidth: Math.max(60, windowWord.implicitWidth, playlistWord.implicitWidth)
 
     function visibleRows() {
         return rows.filter(r => (scopeFilter === "" || r.scope === scopeFilter)
@@ -182,7 +187,7 @@ Item {
                     Label {
                         text: editor.scopeText(rowItem.modelData.scope)
                         opacity: 0.6
-                        Layout.preferredWidth: 60
+                        Layout.preferredWidth: editor.scopeWidth
                     }
                     Label {
                         text: Tools.tr_menu(rowItem.modelData.label)
