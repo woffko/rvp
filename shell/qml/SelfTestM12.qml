@@ -522,10 +522,14 @@ Item {
                 const left = loader.tabScroll().x
                 // The arrows show, inside the window (the owner saw none:
                 // the row reached past the window's edge).
+                // The tabs drawn inside their row only (they showed over the
+                // search field and under the arrows); a picture for a look.
                 t.check("settings_tab_arrows", start === 0 && right > start && left < right
-                            && shown.arrows && shown.arrowsEnd <= shown.window + 1,
+                            && shown.arrows && shown.arrowsEnd <= shown.window + 1 && shown.clip,
                         "x " + shown.x + ", " + start + " -> " + right + " -> " + left
                         + " " + JSON.stringify(shown))
+                loader.scrollTabs(1)
+                Tools.grab(t.outDir, "settings-tabs")
             } else {
                 t.check("settings_tab_arrows", true, "the tabs fit: no arrows")
             }

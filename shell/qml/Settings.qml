@@ -171,7 +171,7 @@ ApplicationWindow {
         const right = tabsRight.mapToItem(win.contentItem, tabsRight.width, 0)
         const column = pageColumn.mapToItem(win.contentItem, 0, 0)
         return { overflows: tabs.overflows, x: tabs.view ? tabs.view.contentX : 0,
-                 arrows: tabsLeft.visible && tabsRight.visible, arrowsEnd: right.x,
+                 arrows: tabsLeft.visible && tabsRight.visible, arrowsEnd: right.x, clip: tabs.clip,
                  window: win.contentItem.width, column: [column.x, pageColumn.width],
                  tabs: [tabs.width, tabs.contentWidth], columnMinimum: pageColumn.Layout.minimumWidth,
                  implicit: pageColumn.implicitWidth }
@@ -977,6 +977,11 @@ ApplicationWindow {
                         id: tabs
                         objectName: "pageTabs"
                         Layout.fillWidth: true
+                        // Its tabs stay inside it: scrolled, they were
+                        // drawn over the search field on the left and
+                        // under the arrows on the right, which then
+                        // showed only on hover (the owner, 2026-11-15).
+                        clip: true
                         readonly property var view: contentItem
                         readonly property bool overflows: contentWidth > width + 1
                         Repeater {
