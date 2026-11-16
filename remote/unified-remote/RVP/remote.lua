@@ -142,8 +142,10 @@ update = function ()
 		{ id = "title", text = title },
 		{ id = "position", progress = math.floor(now.position or 0), progressmax = length,
 		  text = span(now.position) .. " / " .. span(now.duration) },
-		-- Unified Remote shows the slider's value under its text itself.
-		{ id = "volume", progress = volume, progressmax = math.floor(now.volume_max or 100) },
+		-- Unified Remote writes "progress / progressmax" in percent beside the
+		-- text, so the slider spans RVP's 0 to 100 % (as RVP's skins' volume
+		-- sliders do; above 100 % it stays full and the percent goes on).
+		{ id = "volume", progress = volume, progressmax = 100 },
 		{ id = "play", icon = icon },
 		{ id = "speed", text = string.format("%.2fx", now.speed or 1) },
 		{ id = "normalizer", checked = now.normalizer == true },

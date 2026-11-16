@@ -12,7 +12,7 @@
 				<slider id="position" text="Position" ondone="seek" />
 			</row>
 			<row weight="wrap">
-				<slider id="volume" text="Volume" onchange="volume" />
+				<slider id="volume" text="Volume" progressmax="100" onchange="volume" />
 			</row>
 			<row weight="wrap">
 				<button image="mute.png" scale="native" ontap="mute" />
