@@ -142,8 +142,8 @@ update = function ()
 		{ id = "title", text = title },
 		{ id = "position", progress = math.floor(now.position or 0), progressmax = length,
 		  text = span(now.position) .. " / " .. span(now.duration) },
-		{ id = "volume", progress = volume, progressmax = math.floor(now.volume_max or 100),
-		  text = "Volume " .. volume .. " %" },
+		-- Unified Remote shows the slider's value under its text itself.
+		{ id = "volume", progress = volume, progressmax = math.floor(now.volume_max or 100) },
 		{ id = "play", icon = icon },
 		{ id = "speed", text = string.format("%.2fx", now.speed or 1) },
 		{ id = "normalizer", checked = now.normalizer == true },
@@ -236,14 +236,14 @@ actions.next = function ()
 	act("next")
 end
 
---@help Jump back (RVP's medium step)
+--@help Jump back (RVP's short step, 5 s unless changed)
 actions.back = function ()
-	act("seek-backward-medium")
+	act("seek-backward-short")
 end
 
---@help Jump forward (RVP's medium step)
+--@help Jump forward (RVP's short step, 5 s unless changed)
 actions.forward = function ()
-	act("seek-forward-medium")
+	act("seek-forward-short")
 end
 
 --@help Volume up
