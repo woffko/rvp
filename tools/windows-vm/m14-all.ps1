@@ -13,6 +13,9 @@
 # spectrum.exe (the skins' spectrum on Windows' FFmpeg) and synthetic.exe. synthetic.exe reads its geometry snapshot where the
 # build had it: copy crates/skin/tests/snapshots/synthetic-100x60.txt to
 # C:\home\<user>\rvp\crates\skin\tests\snapshots after a change to it.
+# translations.exe reads the translations the same way: copy shell/i18n/*.ts
+# to C:\home\<user>\rvp\shell\i18n and packaging/linux/rvp.desktop to
+# C:\home\<user>\rvp\packaging\linux after a change to them.
 #
 # 1. The M14 self-test (`--selftest=m14 --registry-check`,
 #    shell/qml/SelfTestM14.qml) with RVP Default and with BlackSpace: skin
@@ -23,7 +26,8 @@
 #    the playlist's thumbnail images, and on Windows the Run key and the
 #    file types in the current user's registry (each put back).
 # 2. The registry after the runs: no Run value, and the RVP.* types the
-#    VM had before (an installed copy's) and no more.
+#    VM had before (an installed copy's) and no more; without an installed
+#    copy, RVP's application registration the self-test left goes too.
 # 3. The headless tests: settings and presets, the translations, the menus
 #    and the synthetic skin.
 param(
@@ -65,6 +69,15 @@ $runValue = Get-ItemProperty -Path 'HKCU:\Software\Microsoft\Windows\CurrentVers
 Write-Host "check run_key_left_clean=$(if ($null -eq $runValue) { 'PASS' } else { 'FAIL' })"
 $typesAfter = Get-RvpTypes
 Write-Host "check types_left_clean=$(if ($typesAfter -eq $typesBefore) { 'PASS' } else { 'FAIL' }) before $typesBefore after $typesAfter"
+# With every type off, Apply to System keeps RVP registered as an
+# application ("Open with"). Without an installed copy before, that came
+# from the self-test: it goes, or m8-all.ps1 takes it for the VM's own and
+# misses it after the uninstaller.
+if ($typesBefore -eq 0 -and -not (Test-Path 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\RVP')) {
+    Remove-Item -Recurse -Force 'HKCU:\Software\RVP', 'HKCU:\Software\Classes\Applications\rvp.exe' `
+        -ErrorAction SilentlyContinue
+    Remove-ItemProperty -Path 'HKCU:\Software\RegisteredApplications' -Name RVP -ErrorAction SilentlyContinue
+}
 
 $env:RVP_TEST_SKIN = $Skin
 foreach ($test in @('settings', 'translations', 'menus', 'spectrum', 'synthetic')) {

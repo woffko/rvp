@@ -9,6 +9,9 @@
 // `hold` milliseconds while the script captures the screen. Input goes
 // through Player's handlers, as in the functional check.
 //
+// `--tour-grab` also saves each view's windows as `OUT/NAME-N.png`
+// (`Tools.grab`).
+//
 // Files: two videos; the second has subtitles (an `.srt` of the same
 // name beside it). `--tour-at=FIRST,SECOND` are the seconds each file is
 // shown at (default: 40 % of each).
@@ -40,6 +43,10 @@ Item {
     }
     function shot(name) {
         Tools.log("tour_shot=" + name + " " + host.width + "x" + host.height)
+        // Where no screen can be captured (the Windows test VM's session
+        // 0), each window of the view is grabbed instead (--tour-grab).
+        if (player.has_option("tour-grab"))
+            Tools.grab(t.outDir, name)
         after(hold)
     }
     // "h:mm:ss.s" for Player.jump_to.

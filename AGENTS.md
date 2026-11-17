@@ -561,7 +561,13 @@ smoothing for users without SVP, after a study of the engines.
   `--selftest=language --language=CODE` fails a settings text that does
   not fit. The Windows installer's languages are made by
   `tools/packaging/package.py` from the same files, each found among
-  NSIS's language files by its LANGID.
+  NSIS's language files by its LANGID; `/LANG=LANGID` chooses one over
+  Windows' (the VM is English), and the uninstaller speaks the language
+  the installer kept (`InstallerLanguage` in RVP's key). The Windows VM's
+  check is `tools/windows-vm/m19-all.ps1` (each language's fit check and
+  its screenshot tour with `--tour-grab`, which saves each view's
+  windows where no screen can be captured), and `m8-all.ps1` installs
+  and uninstalls in each language.
 - New or changed strings in a language follow `docs/i18n/README.md`'s
   process: `tools/i18n/work.py` prepares the translator's chunks, the
   blind back-translation and the side-by-side comparison in a work

@@ -82,6 +82,8 @@ Section "RVP" SecMain
     CreateShortcut "$SMPROGRAMS\RVP.lnk" "$INSTDIR\rvp.exe"
 
     WriteRegStr HKCU "${APP_KEY}" "InstallDir" "$INSTDIR"
+    ; The uninstaller speaks the installer's language (un.onInit).
+    WriteRegStr HKCU "${APP_KEY}" "InstallerLanguage" "$LANGUAGE"
     WriteRegStr HKCU "${UNINSTALL_KEY}" "DisplayName" "RVP"
     WriteRegStr HKCU "${UNINSTALL_KEY}" "DisplayVersion" "${VERSION}"
     WriteRegStr HKCU "${UNINSTALL_KEY}" "Publisher" "RVP"
@@ -126,6 +128,12 @@ Section "$(REMOTE_SECTION)" SecRemote
 SectionEnd
 
 Function .onInit
+    ; Windows' language, or one the command line names by its LANGID
+    ; (`/LANG=1041`: the test VM runs the installer in each language).
+    ${GetParameters} $1
+    ${GetOptions} $1 "/LANG=" $2
+    StrCmp $2 "" +2
+        StrCpy $LANGUAGE $2
     ReadEnvStr $0 PROGRAMDATA
     StrCpy $RemoteDir "$0\Unified Remote\Remotes\Custom"
     IfFileExists "$0\Unified Remote\Remotes\*.*" remote_found
@@ -139,6 +147,12 @@ Function SkipComponents
     SectionGetText ${SecRemote} $0
     StrCmp $0 "" 0 +2
         Abort
+FunctionEnd
+
+Function un.onInit
+    ReadRegStr $0 HKCU "${APP_KEY}" "InstallerLanguage"
+    StrCmp $0 "" +2
+        StrCpy $LANGUAGE $0
 FunctionEnd
 
 Section "Uninstall"

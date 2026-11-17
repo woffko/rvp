@@ -26,18 +26,23 @@ type Shown = (Status, String, bool, bool);
 pub(crate) struct Controls {
     smtc: SystemMediaTransportControls,
     shown: Option<Shown>,
-    /// When the state was last sent: the same state goes again every
-    /// [`RESEND`]. What was sent before Windows' session manager had taken
-    /// the window's controls in was lost, and an unchanged state was never
-    /// sent again (CI's `m8-smtc.ps1`: the title showed, the status stayed
-    /// "Opened" and the buttons off until a Pause; resent for the first 10
-    /// seconds only, Next stayed off on a slow runner).
+    /// When the controls started and when the state was last sent. What
+    /// was sent before Windows' session manager had taken the window's
+    /// controls in was lost (CI's `m8-smtc.ps1`: the title showed, the
+    /// status stayed "Opened" and the buttons off until a Pause), and the
+    /// same values sent again change nothing, so tell nobody (goal U-W):
+    /// in the first [`SETTLE`], every [`RESEND`] the status passes through
+    /// "Changing" and Next and Previous through their other state, which
+    /// the session manager is told of, before the state goes again.
+    started: Instant,
     sent: Option<Instant>,
 }
 
-/// How often an unchanged state goes again (it is shown while the state
-/// changes: during playback, at every drain).
+/// How often an unchanged state goes again while the controls settle (it
+/// is shown while the state changes: during playback, at every drain).
 const RESEND: Duration = Duration::from_secs(2);
+/// How long after the start the state is nudged ([`Controls::started`]).
+const SETTLE: Duration = Duration::from_secs(30);
 
 fn error(error: &windows::core::Error) -> String {
     format!("media controls: {error}")
@@ -91,6 +96,7 @@ impl Controls {
         Ok(Self {
             smtc: controls,
             shown: None,
+            started: Instant::now(),
             sent: None,
         })
     }
@@ -103,14 +109,27 @@ impl Controls {
             state.can_next,
             state.can_previous,
         );
-        let again = self.sent.is_none_or(|sent| sent.elapsed() >= RESEND);
-        if self.shown.as_ref() == Some(&shown) && !again {
+        let settling = self.started.elapsed() < SETTLE;
+        let again = settling && self.sent.is_none_or(|sent| sent.elapsed() >= RESEND);
+        let unchanged = self.shown.as_ref() == Some(&shown);
+        if unchanged && !again {
             return;
         }
         // The flyout shows what it can; a failed update is not retried.
+        if unchanged {
+            drop(self.nudge(state));
+        }
         drop(self.update(state));
         self.shown = Some(shown);
         self.sent = Some(Instant::now());
+    }
+
+    /// A real change for the session manager before the same state goes
+    /// again ([`Controls::started`]).
+    fn nudge(&self, state: &MediaState) -> windows::core::Result<()> {
+        self.smtc.SetPlaybackStatus(MediaPlaybackStatus::Changing)?;
+        self.smtc.SetIsNextEnabled(!state.can_next)?;
+        self.smtc.SetIsPreviousEnabled(!state.can_previous)
     }
 
     fn update(&self, state: &MediaState) -> windows::core::Result<()> {

@@ -8,8 +8,9 @@
 # then BlackSpace) and writes crash logs (a panic, and a native crash with a
 # minidump). The uninstaller then removes all of it:
 # every registry key the installer touched reads as it did before, and the
-# folder is gone. Last, the portable ZIP runs its self-test with its
-# settings next to rvp.exe.
+# folder is gone. Then the installer installs and uninstalls in each of
+# its languages (`/LANG=LANGID`, kept for the uninstaller). Last, the
+# portable ZIP runs its self-test with its settings next to rvp.exe.
 #
 # Layout: this file, m7-all.ps1 and run.ps1 in C:\rvp-test; RVP-*-setup.exe,
 # RVP-*-portable.zip and associations.tsv in C:\rvp-test\m8; the fixtures
@@ -159,6 +160,29 @@ Check 'defaults_still_unchanged' ((Defaults) -eq $defaults)
 Check 'other_programs_kept' ((Test-Path 'HKCU:\Software\Classes\.m4b') -and
     ((Get-Item 'HKCU:\Software\Classes\.mka\OpenWithProgids').Property -contains 'OtherPlayer.mka'))
 Remove-Item -Recurse -Force 'HKCU:\Software\Classes\.m4b', 'HKCU:\Software\Classes\.mka' -ErrorAction SilentlyContinue
+
+# The installer in each of its languages (M19): Windows' language here is
+# English, so the LANGID comes from the command line; the installer keeps
+# it for the uninstaller, which removes it with RVP's key.
+$baseline = Snapshot
+$languages = [ordered]@{
+    'ru' = 1049; 'pt_BR' = 1046; 'de' = 1031; 'es' = 1034; 'fr' = 1036; 'it' = 1040; 'pl' = 1045
+    'uk' = 1058; 'tr' = 1055; 'zh_CN' = 2052; 'zh_TW' = 1028; 'ja' = 1041; 'ko' = 1042
+}
+foreach ($code in $languages.Keys) {
+    $id = $languages[$code]
+    Write-Host "== the installer in $code ($id)"
+    Remove-Item -Recurse -Force $dir -ErrorAction SilentlyContinue
+    Start-Process -Wait -FilePath $setup.FullName -ArgumentList @('/S', "/LANG=$id")
+    $kept = (Get-ItemProperty 'HKCU:\Software\RVP' -ErrorAction SilentlyContinue).InstallerLanguage
+    Check "installer_$code" ((Test-Path "$dir\rvp.exe") -and (Test-Path "$dir\uninstall.exe") -and $kept -eq "$id") `
+        "language $kept"
+    Start-Process -Wait -FilePath "$dir\uninstall.exe" -ArgumentList '/S'
+    $deadline = (Get-Date).AddSeconds(120)
+    while ((Test-Path $dir) -and (Get-Date) -lt $deadline) { Start-Sleep -Milliseconds 500 }
+    Check "uninstaller_$code" ((-not (Test-Path $dir)) -and (-not (Test-Path 'HKCU:\Software\RVP')) -and
+        ((Snapshot) -eq $baseline)) $dir
+}
 
 Write-Host "== portable $($zip.Name)"
 $portable = "$m8\portable"
