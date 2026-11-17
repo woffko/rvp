@@ -550,3 +550,52 @@ Windows bundle at goal U's last commit and runs the VM's checks below.
 | The README's screenshot tour (`--selftest=tour`) | after U | `SelfTestTour.qml` in the bundle (run on Linux only, `tools/screenshots/tour.sh`) | none (the bundle builds) |
 | A closed file's last frame no longer stays under the logo: `EngineEvent::VideoReconfig` draws the video item again; `--selftest=upright` checks it (`picture_black_after_close`) | after U | the OpenGL renderer (Direct3D 11's window already hides) | `m6-all.ps1` (session 0: SKIPPED), and the OpenGL renderer on the host with permission |
 | The Remote Control page says custom remotes need Unified Remote's Full app | after U | `Settings.qml`, `qml_ru.ts` | `m14-all.ps1` (the texts fit) |
+
+## Windows (goal U-W)
+
+Goal U-W ran on 2026-11-17 from WSL on the Windows test VM (Windows 10
+in English, session 0 over SSH, software OpenGL, two processors, a
+1024x768 screen). The bundle, the installer and the portable ZIP were
+built with `tools/packaging/package.py windows` from cf01bc0 with
+goal U-W's own changes (RVP's libmpv, VapourSynth runtime with vs-mlrt,
+whisper.cpp and the disc libraries), and every test binary of the
+workspace with `cargo xwin test --no-run --release`, copied beside the
+bundle under the names the scripts call.
+
+| Check | Result |
+|-------|--------|
+| `m10-all.ps1` | PASS: 101 checks, no failure (the second device, the recording, Audio Stretching after its second, the level tests with `audio-client-name`) |
+| `m11-all.ps1` | PASS: 47 checks (`tests/m11.rs` with `;` in the names, the path lists, `/new`'s child, the thumbnails) |
+| `m12-all.ps1` | PASS: M12's self-test, the shaders and the Direct3D 11 renderer; the headless `m12.exe` failed once in the run (`video_filters_wait_at_the_end_of_a_file` waited 15 s for the last second of a 12 s clip) and passed alone three times and whole twice (14 of 14): a timing of the busy VM, recorded |
+| `m13-all.ps1` | PASS: 23 checks (the folder dialogs' URLs, whisper.cpp on the speech clip) |
+| `m14-all.ps1` | PASS: 109 checks (the tray, a second instance, the speech page's state, the clipboard wait, the texts fit); `translations.exe` failed only because it reads `shell/i18n` at the build's path, which the VM lacked: with the files copied to `C:\home\<user>\rvp\shell\i18n` (now in the script's header) it passes 6 of 6. Run again with the fixes below: both self-tests, the registry left clean and every headless test PASS |
+| `m16-all.ps1` | PASS: 33 checks (the disc tests with their libraries beside the bundle) |
+| `m18-all.ps1` | PASS: 37 checks (the smoothing and GPU budget self-tests, the headless smoothing tests with the calibration core); the engine's `calibrate.exe` (the calibration core waits for its shutdown) 3 of 3 |
+| `m8-all.ps1` | the installer (its version `0.0.1+git.<commit time>.<commit>`), the installed copy's self-test, `m7-all.ps1` on it and the crash logs PASS; `registry_as_before` FAILED, see below; the portable ZIP's self-test failed `setting_applies_at_once` once (the volume step waited longer than the VM gave it; the same check passed three times in the run). Run again with the fixes: `registry_as_before` and the installer in every language PASS; on the slower VM of that hour `m7-all.ps1` on the installed copy and once more on the bundle timed out in different checks each run (Audio Stretching, the equalizer, Freeverb, the window's aspect, the wheel), and in the BlackSpace runs the 60 s clip had reached its 55th second before M6's steps, so SVP's diagnostic, which waits for playback, never came; the menus' checks passed in all of them but once in the portable copy (`menu_closing_press_no_pause`), recorded as the VM's timing |
+| Windows' media controls | CI's `package-windows` at 29f9529: `m8-smtc.ps1` passes all ten checks, "Playing" with the title at once |
+
+Found and fixed:
+
+- **The media controls' "Opened"** (open since goal U): the same values
+  sent again told the session manager nothing. In their first 30 s a
+  resend now passes the status through "Changing" and Next and Previous
+  through their other state first, real changes (29f9529).
+- **`registry_as_before`**: `m14-all.ps1` ran before `m8-all.ps1`, and
+  its self-test's Apply to System, with every type off at the end, left
+  RVP registered as an application (`Software\RVP\Capabilities`,
+  `Applications\rvp.exe`, `RegisteredApplications`). `m8-all.ps1` took
+  that for the VM's own state, and its uninstaller then removed it.
+  `m14-all.ps1` now removes that registration when no installed copy was
+  there before (29f9529).
+- **Menus taller than the screen** (found in goal V-W's grabs): on the
+  VM's 768-pixel screen the context menu's window grew to 868 pixels and
+  its last items (About, Exit) lay below its frame, out of reach. A menu
+  is now at most its screen's height and scrolls (`Menus.qml`, Qt's
+  Menu takes the capped implicit height for its window); checked under
+  Xvfb at 1024x600.
+
+Left for the host, which needs the owner's permission each time: RIFE
+(TensorRT)'s lighter step and the calibration on the RTX 50-series card, SVP's
+check with the second window (`--svp-second`), and the OpenGL renderer's
+black picture after a closed file (`picture_black_after_close`; session
+0 shows no video).

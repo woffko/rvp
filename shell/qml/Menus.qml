@@ -33,6 +33,9 @@ Item {
               selectedBack: "#3a5f96", dimText: "#7c7c84", line: "#46464c" }
           : null
     readonly property real basePoint: Qt.application.font.pointSize > 0 ? Qt.application.font.pointSize : 9
+    // The height a menu may take: its screen's, less the taskbar's where
+    // the desktop says so.
+    readonly property real screenRoom: Math.max(200, Math.min(Screen.height, Screen.desktopAvailableHeight))
 
     // Whether a press now belongs to a menu: one is open (or fading out),
     // or one began to close a moment ago. Qt closes a menu on a press
@@ -126,6 +129,14 @@ Item {
                 }
                 return Math.max(implicitBackgroundWidth, widest + leftPadding + rightPadding)
             }
+            // A menu taller than the screen scrolls (Qt's Menu does once it
+            // is shorter than its items): on the Windows VM's 768-pixel
+            // screen the context menu's window grew past it and cut off its
+            // last items. The window takes the implicit height (Qt's own
+            // formula, capped), not `height`.
+            implicitHeight: Math.min(Math.max(implicitBackgroundHeight + topInset + bottomInset,
+                                              contentHeight + topPadding + bottomPadding),
+                                     holder.screenRoom)
             // The items still to add (JSON), the first time it opens.
             property var pending: []
             onAboutToShow: holder.fillPending(submenu)
@@ -155,6 +166,9 @@ Item {
                 border.color: holder.colors.border
             }
             delegate: StyledSubEntry {}
+            implicitHeight: Math.min(Math.max(implicitBackgroundHeight + topInset + bottomInset,
+                                              contentHeight + topPadding + bottomPadding),
+                                     holder.screenRoom)
             property var pending: []
             onAboutToShow: holder.fillPending(styledMenu)
             onAboutToHide: holder.closedAt = Date.now()

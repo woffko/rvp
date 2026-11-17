@@ -307,3 +307,36 @@ Windows:
 | The Keys and Mouse page's scope column takes its words' width; the key names keep their column (minimum widths); M14's fit check fails a `Flow`'s item past its edge | 5 | `KeysAndMouse.qml`, `SelfTestM14.qml` | `m14-all.ps1` in Japanese and Russian, and the Keys and Mouse page looked at |
 | Han characters' shapes follow the system's language on Windows (Qt's fallback fonts); `FC_LANG` is Linux's | 5 | none: `player::font_language` is Linux's | Japanese and Simplified Chinese on the English VM: whether 、 and 。 sit low (Yu Gothic, Microsoft YaHei) or take another language's shapes; record which |
 | Filled menu labels: the audio sync step in ms, ratios as `W:H` or the number, the timer's "In" label as `h:mm`, their forms in every menu file | 5 | `app.rs`, `picture.rs`, `PlaybackDialogs.qml`, the menu files | `tests/translations.rs` built with `cargo xwin test --no-run`; the timer dialog's "In" with "90" shows "1:30" |
+
+## Windows (goal V-W)
+
+Goal V-W ran on 2026-11-17 from WSL on the Windows test VM (Windows 10 in
+English, session 0, a 1024x768 screen), with the bundle and installer
+goal U-W built (`docs/goals/goal-u-status.md`, "Windows"). The new
+`tools/windows-vm/m19-all.ps1` runs each language's fit check and its
+screenshot tour; the tour's `--tour-grab` saves each view's windows,
+since session 0 has no screen to capture.
+
+| Check | Result |
+|-------|--------|
+| The language at the first start | PASS in all thirteen runs: Windows' English (`--expect-system-language=en`) |
+| `--selftest=language --language=CODE` for ru, pt_BR, de, es, fr, it, pl, uk, tr, zh_CN, zh_TW, ja and ko | PASS: each loads by its own name (Русский, Português (Brasil), Deutsch, Español, Français, Italiano, Polski, Українська, Türkçe, 简体中文, 繁體中文, 日本語, 한국어) and every settings text fits |
+| `m14-all.ps1` | PASS (the General page's list, Misc > Interface Language, M14's language steps) |
+| The settings window, its Keys and Mouse page and the context menu in each language, grabbed by the tour | looked through: no cut, overlapping or missing glyphs; long labels wrap, the tree's long names end in "...", the tabs scroll behind their arrows; the Keys page keeps its key names in their column in Japanese and Russian |
+| The installer in each language (`m8-all.ps1`, `/LANG=LANGID`) | PASS for all thirteen: installed, the language kept for the uninstaller, uninstalled with the registry as before |
+| `tests/translations.rs` (`translations.exe`) | PASS: 6 of 6, with the timer's "In" of 90 minutes as "1:30" |
+
+Han characters on the English VM (the "For goal V-W" question):
+Japanese takes Yu Gothic UI throughout, its 、 and 。 low and to the
+left as in Japan. Simplified and Traditional Chinese mix two fonts: the
+characters Japanese shares come from Yu Gothic UI (Japanese shapes and
+weight), the others from Microsoft YaHei UI or JhengHei UI, so words
+such as 调整大小 and 运动平滑 show two weights. Korean's Hangul is Malgun
+Gothic and even. Putting the language's own UI font first for Chinese,
+Japanese and Korean on Windows (as `FC_LANG` does on Linux) would even
+them out; left for the owner to decide.
+
+Found on the way and fixed: the context menu was taller than the VM's
+768-pixel screen in every language (its last items below its frame);
+menus now take at most their screen's height and scroll (goal U-W's
+"Windows" section).

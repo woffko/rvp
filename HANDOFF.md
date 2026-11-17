@@ -1,24 +1,22 @@
 # Handoff: what comes next
 
-State on 2026-11-15: every goal of `docs/PLAN.md` up to goal U is done.
-The Ubuntu boot run (M6 to M18 on the owner's Ubuntu 26.10 boot, GNOME
+State on 2026-11-17: every goal of `docs/PLAN.md` is done, goals U-W
+and V-W (the Windows parts of U and V) last. Before them, on 2026-11-15:
+the Ubuntu boot run (M6 to M18 on the owner's Ubuntu 26.10 boot, GNOME
 Wayland, RTX 50-series card) is in `docs/test-runs/2026-11-15-ubuntu-boot.md`
 and `docs/goals/goal-s-status.md`; the Linux audit that followed is
 `docs/audits/linux.md`, and goal U fixed it (`docs/goals/goal-u-status.md`).
 After goal U, on the same boot: the README for readers with screenshots
 (`tools/screenshots/tour.sh`), a closed file's last frame no longer left
-under the logo (3da5d59), and the Unified Remote notes below.
+under the logo (3da5d59), the Unified Remote notes below, and goal V's
+twelve interface languages.
 
 ## The next goals
 
-Their `/goal` texts are in PLAN.md section 10 (PLAN.md wins over any
-copy).
-
-| Goal | What | Where |
-|------|------|-------|
-| U-W | Goal U's Windows part: the VM checks listed in goal-u-status.md's "For goal U-W" | WSL, the Windows test VM |
-| V | M19, interface languages (D20): no language but English in the code, then twelve languages translated by agents and reviewed by back-translation | the Ubuntu boot (Xvfb) |
-| V-W | Goal V's Windows part: the fit checks and the installer's languages on the VM | WSL, after goal V (with U-W or after it) |
+Goals U-W and V-W, the Windows parts of U and V, ran on 2026-11-17 from
+WSL on the Windows test VM (`docs/goals/goal-u-status.md` and
+`goal-v-status.md`, "Windows"); no goal is planned after them. The
+`/goal` texts of every goal are in PLAN.md section 10.
 
 ## Starting on the Ubuntu boot
 
@@ -42,12 +40,24 @@ time.
 
 ## Open items
 
-- **Windows' media controls in CI** (`package-windows`, `m8-smtc.ps1`):
-  now and then the session shows "Opened" instead of "Playing" for its
-  first 30 s, until the next real change (a pause). Setting the same
-  values again every 2 s (4504b38) did not help at b678257: equal values
-  change nothing, so goal U-W looks for a real change once the session
-  appears.
+- **Windows' media controls in CI**: the "Opened" for the first 30 s was
+  intermittent; since 29f9529 the state passes through a real change in
+  the controls' first 30 s, and CI's `m8-smtc.ps1` passed at once there.
+  Watch the next CI runs.
+- **Han characters on Windows** (goal V-W): with Windows in English,
+  Chinese mixes Yu Gothic UI's Japanese shapes with Microsoft YaHei or
+  JhengHei UI; Japanese and Korean are even. The fix would put the
+  language's own UI font first on Windows (as `FC_LANG` on Linux): the
+  owner decides.
+- **Menus on a real Windows desktop**: menus now take at most their
+  screen's height and scroll (goal U-W). The VM's session-0 grabs still
+  draw a menu's last rows under its frame, as before the change (its
+  enter animation does not run in a window that is never exposed); look
+  at a long menu on the host's screen once.
+- **Host checks of goal U-W**, each with the owner's permission: RIFE
+  (TensorRT)'s lighter step and the calibration on the RTX 50-series card, SVP's
+  second window (`--svp-second`), and the OpenGL renderer's black picture
+  after a closed file.
 - Wayland: a second `rvp` cannot hand the window its activation token
   (needs Qt's private Wayland API); GNOME may say "RVP is ready" instead
   of raising it.
