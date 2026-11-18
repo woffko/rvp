@@ -203,8 +203,8 @@ AVISYNTH_COMMIT=21fdc997f9724b994896ba5520ddf64d677976b3
 # with the kit's shaderc; 5 the encoders of Record Video and the
 # captures (x264, x265, vpx, aom, opus, lame, vorbis, webp); 6 the
 # licence files of what the kit builds into it (share/licenses, for the
-# packages' THIRD-PARTY.txt).
-MPV_BUILD=6
+# packages' THIRD-PARTY.txt); 7 the SDK's too.
+MPV_BUILD=7
 VS_TAG=R73
 # The version in the Windows bundle (spikes/tools/windows-deps.sh).
 MVTOOLS_TAG=v24
@@ -387,7 +387,7 @@ EOF
 # per set of versions. Prints the folder.
 kit_sdk() {
     local sdk=$KIT_DIR/sdk src=$KIT_DIR/sdk-src dep revision
-    local stamp="$VULKAN_HEADERS_TAG $GLSLANG_TAG $SHADERC_COMMIT $DAV1D_TAG $AVISYNTH_COMMIT"
+    local stamp="$VULKAN_HEADERS_TAG $GLSLANG_TAG $SHADERC_COMMIT $DAV1D_TAG $AVISYNTH_COMMIT licences"
     if [ "$(cat "$sdk/.kit-sdk" 2> /dev/null)" != "$stamp" ]; then
         rm -rf "$sdk" "$src"
         mkdir -p "$src" "$sdk/lib/pkgconfig" "$sdk/include" "$sdk/bin"
@@ -442,6 +442,9 @@ kit_sdk() {
                 ninja -C "$src/avisynth/build" VersionGen &&
                 ninja -C "$src/avisynth/build" install
         } >&2 || return 1
+        # The sources go, their licence files stay (mpv_licences).
+        licence_files "$sdk/share/licenses" "$src/vulkan" "$src/glslang" "$src/shaderc" \
+            "$src"/shaderc/third_party/* "$src/dav1d" "$src/avisynth"
         echo "$stamp" > "$sdk/.kit-sdk"
         rm -rf "$src"
     fi
@@ -467,15 +470,12 @@ mpv_lacks() {
     echo "${missing# }"
 }
 
-# The licence files of what the kit built into libmpv (mpv-build's
-# FFmpeg, libass, libplacebo and mpv; the SDK's Vulkan headers, glslang,
-# shaderc and its SPIR-V parts, dav1d and AviSynth+'s headers), one folder
-# per component, for `package.py linux --licences`.
-mpv_licences() {
-    local build=$1 out=$2 src=$KIT_DIR/sdk-src dir name file
-    rm -rf "$out"
-    for dir in "$build/ffmpeg" "$build/libass" "$build/libplacebo" "$build/mpv" "$src/vulkan" \
-        "$src/glslang" "$src/shaderc" "$src"/shaderc/third_party/* "$src/dav1d" "$src/avisynth"; do
+# Copies the licence files at the top of each source tree DIR into
+# OUT/<name>, one folder per component.
+licence_files() {
+    local out=$1 dir name file
+    shift
+    for dir in "$@"; do
         [ -d "$dir" ] || continue
         name=$(basename "$dir")
         case "$name" in
@@ -492,6 +492,19 @@ mpv_licences() {
             esac
         done
     done
+}
+
+# The licence files of what the kit built into libmpv (mpv-build's
+# FFmpeg, libass, libplacebo and mpv; the SDK's Vulkan headers, glslang,
+# shaderc and its SPIR-V parts, dav1d and AviSynth+'s headers, kept in
+# the SDK by kit_sdk), for `package.py linux --licences`.
+mpv_licences() {
+    local build=$1 out=$2
+    rm -rf "$out"
+    licence_files "$out" "$build/ffmpeg" "$build/libass" "$build/libplacebo" "$build/mpv"
+    if [ -d "$KIT_DIR/sdk/share/licenses" ]; then
+        cp -r "$KIT_DIR/sdk/share/licenses/." "$out/"
+    fi
 }
 
 step_mpv() {
