@@ -104,7 +104,8 @@ What appears on screen:
 
 ## 4. After the run
 
-- [ ] `docs/test-runs/<date>-<host>.md` holds the system summary, the step
+- [ ] `docs/test-runs/<date>-<label>.md` (`RVP_KIT_LABEL`: `ubuntu-boot`
+      or `ubuntu-vm`) holds the system summary, the step
       results and the tail of each log. Raw logs stay in
       `~/.cache/rvp-kit/logs`.
 - [ ] Check that the report contains nothing private (paths with personal

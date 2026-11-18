@@ -18,10 +18,10 @@
 # are listed (`new_value=`) to be removed by hand. RVP keeps its settings,
 # state and log in -Out.
 param(
-    [string]$Bundle = 'C:\Users\<user>\rvp-test\rvp-s',
-    [string]$Video = 'C:\Users\<user>\rvp-test\clips\video-1080p\video-1080p23976-h264.mkv',
-    [string]$Tools = 'C:\Users\<user>\rvp-test\skins-host',
-    [string]$Out = 'C:\Users\<user>\rvp-test\skins-host\out',
+    [string]$Bundle = "$env:USERPROFILE\rvp-test\rvp-s",
+    [string]$Video = "$env:USERPROFILE\rvp-test\clips\video-1080p\video-1080p23976-h264.mkv",
+    [string]$Tools = "$env:USERPROFILE\rvp-test\skins-host",
+    [string]$Out = "$env:USERPROFILE\rvp-test\skins-host\out",
     [string]$PotPlayer = 'C:\Program Files\DAUM\PotPlayer\PotPlayerMini64.exe',
     [string]$Skins = 'C:\Program Files\DAUM\PotPlayer\Skins',
     [string]$Players = 'potplayer,rvp',

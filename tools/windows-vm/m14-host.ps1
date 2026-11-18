@@ -20,9 +20,9 @@
 # during the session are listed (`new_value=`) to be removed by hand. RVP
 # keeps its settings and state in -Out, not in the bundle.
 param(
-    [string]$Bundle = 'C:\Users\<user>\rvp-test\rvp-p',
-    [string]$Data = 'C:\Users\<user>\rvp-test\m14-host\data',
-    [string]$Out = 'C:\Users\<user>\rvp-test\m14-host\out',
+    [string]$Bundle = "$env:USERPROFILE\rvp-test\rvp-p",
+    [string]$Data = "$env:USERPROFILE\rvp-test\m14-host\data",
+    [string]$Out = "$env:USERPROFILE\rvp-test\m14-host\out",
     [string]$PotPlayer = 'C:\Program Files\DAUM\PotPlayer\PotPlayerMini64.exe',
     [string]$Skin = 'C:\Program Files\DAUM\PotPlayer\Skins\BlackSpace_en.dsf',
     [switch]$RvpOnly,

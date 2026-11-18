@@ -13,7 +13,8 @@ use rvp_skin::compare::{flatten, mean_abs_diff, resize_box};
 use rvp_skin::{DataModel, Fonts, Image, Rect, Skin, UiState, demo, layout, render_area};
 
 const DEFAULT_SKIN: &str = "/mnt/c/Program Files/DAUM/PotPlayer/Skins/BlackSpace_en.dsf";
-const DEFAULT_REFERENCE_DIR: &str = "~/rvp-reference";
+/// In the home folder unless `RVP_REFERENCE_DIR` names another.
+const DEFAULT_REFERENCE_DIR: &str = "rvp-reference";
 const SIZES: [(i32, i32); 3] = [(1280, 720), (1920, 1080), (2560, 1080)];
 
 /// Window size and screenshot alignment found by `compare_reference` for
@@ -36,8 +37,10 @@ fn skin() -> Option<Skin> {
 }
 
 fn reference_dir() -> PathBuf {
-    std::env::var_os("RVP_REFERENCE_DIR")
-        .map_or_else(|| PathBuf::from(DEFAULT_REFERENCE_DIR), PathBuf::from)
+    std::env::var_os("RVP_REFERENCE_DIR").map_or_else(
+        || PathBuf::from(std::env::var_os("HOME").unwrap_or_default()).join(DEFAULT_REFERENCE_DIR),
+        PathBuf::from,
+    )
 }
 
 fn write_png(path: &Path, image: &Image) {

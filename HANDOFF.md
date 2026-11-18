@@ -49,15 +49,17 @@ time.
   Windows; fixed on 2026-11-18 (the language's own UI font first). Look
   at Chinese once on Windows 11, where the controls' font is Segoe UI
   Variable.
-- **Menus on a real Windows desktop**: menus now take at most their
-  screen's height and scroll (goal U-W). The VM's session-0 grabs still
-  draw a menu's last rows under its frame, as before the change (its
-  enter animation does not run in a window that is never exposed); look
-  at a long menu on the host's screen once.
-- **Host checks of goal U-W**, each with the owner's permission: RIFE
-  (TensorRT)'s lighter step and the calibration on the RTX 50-series card, SVP's
-  second window (`--svp-second`), and the OpenGL renderer's black picture
-  after a closed file.
+- **The context menu's last item on Windows**: in the tour's grab on the
+  host (2026-11-18, a 1440-pixel screen) About lies under the menu's
+  frame, as in the VM's grabs before menus were capped to the screen: a
+  flaw of the menu in Qt's FluentWinUI3 style, not of the cap. Look at
+  it on the screen and find where the frame's height comes from.
+- **SVP and a second window** (2026-11-18): SVP attached to the first
+  window only after the second (`--svp-second`) had closed, 174 s later.
+- The repository is public since 2026-11-18 with its history rewritten
+  (D21): every commit has a new hash. Clones made before (the owner's
+  Ubuntu boot, the kit's copies) must be cloned again; the private
+  original is `woffko/rvp-private`.
 - Wayland: a second `rvp` cannot hand the window its activation token
   (needs Qt's private Wayland API); GNOME may say "RVP is ready" instead
   of raising it.

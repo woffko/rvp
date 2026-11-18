@@ -42,8 +42,8 @@ Build RVP, a desktop media player for Linux and Windows written in Rust, that:
    RVP can be controlled from a phone through Unified Remote (M15). Windows
    comes first, Linux follows (M17). Owner request, 2026-10-16 (D14).
 
-Project facts: name RVP, license GPL-3.0-or-later, private GitHub repository
-for now.
+Project facts: name RVP, license GPL-3.0-or-later, a public GitHub
+repository since 2026-11-18 (private before; D21).
 
 Non-goals (revised on 2026-10-16, when the owner asked for everything of
 PotPlayer's that RVP can do):
@@ -191,7 +191,7 @@ From `SVP 4/script/generate.js` and the shipped binaries:
 Consequences of the dual boot:
 
 - While the PC runs Ubuntu, Windows and WSL are down. Linux GPU work happens in
-  separate sessions. The private GitHub repository is the bridge: each Linux
+  separate sessions. The GitHub repository is the bridge: each Linux
   session clones or pulls it, runs a prepared test kit (build script, checklist,
   result log), and commits the results to `docs/spikes/` or `docs/test-runs/`.
   The owner can run the kit by hand or start a Claude Code session on Ubuntu.
@@ -233,7 +233,7 @@ playback state between the two systems possible (open question 2).
 | D18 | M18's engines and defaults: Blend (mpv's interpolation), MVTools (CPU) and RIFE (GPU, up to 1080p) in VapourSynth through a runtime RVP ships (never SVP's), and fruc_vulkan (NVIDIA's optical flow, RTX 30 and later) through a libmpv RVP builds with FFmpeg's master. Smoothing is off by default; turned on it is MVTools medium up to 1080p and Blend above, at the display's rate. | M18's study (`docs/spikes/m18-smoothing.md`): MVTools keeps up at 1080p on the CPU and is the most exact; RIFE is the sharpest on films; fruc_vulkan is the fastest on RTX cards but missing from the libmpv RVP ships. The owner chose all three and accepted building libmpv. | Owner, 2026-10-19 |
 | D19 | Windows and Linux everywhere: from goal S on, every change (a goal's parts and the fixes between goals) is built and checked on both systems before it counts as done: Windows on the test VM (the host only with permission), Linux in WSL under Xvfb and on the Ubuntu VM; what only real hardware or a desktop session can check goes to the host's sessions and the owner's Ubuntu boot. It ends D14's "Windows first". | The owner, after goal K: "both Windows and Linux are needed everywhere". | Owner, 2026-11-01 |
 | D20 | Interface languages: English (the source), Russian and twelve more, chosen by how reliably Claude translates them, since the owner cannot check them: Spanish, Portuguese (Brazil), French, German, Italian, Polish, Ukrainian, Turkish, Chinese (Simplified and Traditional), Japanese and Korean. The translations are RVP's own (never PotPlayer's or another program's strings), made by agents and checked by an independent back-translation, scripts and the fit checks; native speakers' corrections are welcome later. No language but English, the source and fallback, is written into the code: the languages are the translation files RVP finds. Right-to-left languages (Arabic, Hebrew, Persian) and scripts that need their own line breaking (Thai, the Indic scripts) wait for a study of the layout; other languages with reliable translation (Dutch, Czech, Swedish, Hungarian, Vietnamese, Indonesian) can follow the same way. | The owner: "the world's main languages", only those Claude supports well. | Owner, 2026-11-15 |
-| D21 | Releases: pre-releases on the private repository's GitHub page when the owner asks, each a tag `vX.Y.Z-alpha.N` at a commit whose CI is green, carrying the packages CI built there (the Windows installer and portable ZIP, the Linux AppImage and .deb). The version is the workspace's (`0.1.0-alpha.1` for the first); the packages add the commit's time and hash, Windows' version numbers take the part before the pre-release, and the .deb writes it with `~`, so the release sorts after its alphas. Nothing else is published (no AUR upload, no stores), and the repository stays private unless the owner decides otherwise. | The owner, after goals U-W and V-W: "make the first alpha release with an installer on GitHub, Windows and Linux versions". | Owner, 2026-11-18 |
+| D21 | Releases and a public repository: pre-releases on the repository's GitHub page when the owner asks, each a tag `vX.Y.Z-alpha.N` at a commit whose CI is green, with the Windows installer and portable ZIP (built in WSL with RVP's libmpv, whisper.cpp and the disc libraries, which CI's Windows package lacks) and the Linux AppImage and .deb CI built there; every package carries THIRD-PARTY.txt and the licence files of what it bundles. The version is the workspace's (`0.1.0-alpha.1` for the first); the packages add the commit's time and hash, Windows' version numbers take the part before the pre-release, and the .deb writes it with `~`, so the release sorts after its alphas. The repository went public on 2026-11-18 with its history rewritten once: commits under GitHub's no-reply address, the owner's machines, accounts, folders and hardware replaced by placeholders (`<windows-vm>`, `<ubuntu-vm>`, `<user>`, `~`; the values in the untracked `AGENTS.local.md`), and every commit hash the texts cite translated to the rewritten commit. The private original is `woffko/rvp-private`. Nothing else is published (no AUR upload, no stores). | The owner, after goals U-W and V-W: "make the first alpha release with an installer on GitHub, Windows and Linux versions", then "public, but check that nothing leaked". | Owner, 2026-11-18 |
 
 ## 4. Usability requirements
 
@@ -503,7 +503,7 @@ default skin on both systems without PotPlayer installed.
 - Windows: media transport controls, file associations, installer and portable
   ZIP, crash logs.
 - The packages carry the default skin and RVP's icons from M7.
-- Continuous integration builds for both systems in the private repository.
+- Continuous integration builds for both systems in the repository.
 
 ### M9. Other players' skins (M-L)
 
@@ -1013,7 +1013,7 @@ differences are listed.
   - PotPlayer's AngelScript extensions; RVP has yt-dlp.
   - The built-in Korean interface.
   - Daum's services and broadcasting.
-  - The update service and the website; the repository is private.
+  - The update service and the website: RVP has neither.
 - **Tests.**
   - The preferences coverage report.
   - Profiles round trip.
@@ -1407,7 +1407,7 @@ Deferred items (owner decisions, picked up when they become relevant):
 
 The milestones are grouped into twenty goals, A to T. Each goal is one
 `/goal` run, writes `docs/goals/goal-<letter>-status.md` and ends with a
-commit pushed to the private `origin`. Goals run in the order of the table
+commit pushed to `origin`. Goals run in the order of the table
 below; C and D can swap. Goal I follows H so that the default skin can
 include M6's control panel. Goals I to K were added on 2026-10-13 at the
 owner's request, and packaging became M8 and goal J. Goals L to S were
@@ -1460,9 +1460,10 @@ Rules shared by all goals, also written into the project `AGENTS.md` by goal A:
   is fine.
 - Anything that starts a program or captures the screen on the Windows host
   desktop needs advance notice and the owner's explicit permission, every time.
-- The repository stays private. Releases are pre-releases on its GitHub
-  page, made only when the owner asks (D21); nothing else is published, and
-  the repository is never made public without the owner.
+- The repository is public (D21, 2026-11-18). Releases are pre-releases on
+  its GitHub page, made only when the owner asks; nothing else is
+  published. The owner's machines, accounts, folders and hardware stay out
+  of it (`AGENTS.local.md`), and commits use GitHub's no-reply address.
 
 Goal A:
 ```

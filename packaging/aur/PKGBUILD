@@ -1,5 +1,5 @@
 # RVP for Arch Linux, built from source with Arch's Qt 6 and libmpv (M8).
-# Not published: the repository is private. Make the source archive from a
+# Not published to the AUR. Make the source archive from a
 # checkout with
 #   git archive --prefix=rvp-$pkgver/ -o rvp-$pkgver.tar.gz HEAD
 # next to this file, with RVP_COMMIT set to that commit for `makepkg`.

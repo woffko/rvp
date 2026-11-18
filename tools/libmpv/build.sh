@@ -81,6 +81,9 @@ rm -rf "$BUILD"/x86_64-w64-mingw32/lib/libdvdcss.* "$BUILD"/x86_64-w64-mingw32/l
     "$BUILD"/x86_64-w64-mingw32/include/dvdcss
 ninja -C "$BUILD" mpv
 ninja -C "$BUILD" mpv-packaging
+# The licence files of what went into libmpv-2.dll, for the packages'
+# THIRD-PARTY.txt (tools/packaging/package.py windows --licences).
+"$(dirname "$0")/licences.sh" "$WORK" "$WORK/licences"
 ls -l "$BUILD"/mpv-dev-*.7z
 DLL=$(ls -t "$BUILD"/mpv-dev-*/libmpv-2.dll | head -1)
 if strings "$DLL" | grep -q 'DVDCSS_'; then

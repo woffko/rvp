@@ -256,8 +256,8 @@ mod tests {
     #[test]
     fn paths_and_urls_round_trip() {
         assert_eq!(
-            file_url("~/My Films/фильм #1.mkv"),
-            "file://~/My%20Films/%D1%84%D0%B8%D0%BB%D1%8C%D0%BC%20%231.mkv"
+            file_url("/home/user/My Films/фильм #1.mkv"),
+            "file:///home/user/My%20Films/%D1%84%D0%B8%D0%BB%D1%8C%D0%BC%20%231.mkv"
         );
         if cfg!(windows) {
             assert_eq!(file_url("C:\\Films\\a b.mkv"), "file:///C:/Films/a%20b.mkv");
@@ -271,7 +271,7 @@ mod tests {
             file_url("https://example.org/a.m3u8"),
             "https://example.org/a.m3u8"
         );
-        for path in ["~/My Films/фильм #1.mkv", "/tmp/100%.mkv"] {
+        for path in ["/home/user/My Films/фильм #1.mkv", "/tmp/100%.mkv"] {
             assert_eq!(file_path(&file_url(path)), path);
         }
         assert_eq!(file_path("file://localhost/tmp/a.mkv"), "/tmp/a.mkv");

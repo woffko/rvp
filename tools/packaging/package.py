@@ -37,6 +37,7 @@ usage:
 import argparse
 import time
 import hashlib
+import json
 import os
 import re
 import shutil
@@ -231,7 +232,140 @@ def windows_bundle(args, bundle: Path) -> None:
     shutil.copy2(Path(args.look) / "icons" / "rvp.ico", bundle / "rvp.ico")
     remote_folder(Path(args.look), bundle)
     shutil.copy2(ROOT / "LICENSE", bundle / "LICENSE.txt")
+    third_party(args, bundle, "licenses", "LICENSE.txt", "x86_64-pc-windows-msvc")
     print(f"bundle: {len(copied)} Qt libraries in {bundle}")
+
+
+# Third-party notices (the first public alpha, 2026-11-18): every package
+# carries THIRD-PARTY.txt and a licences folder with the licence files of
+# what it bundles. A source tree's licence files are the files at its top
+# whose names say so.
+LICENCE_NAME = re.compile(r"^(licen[cs]es?|copying|copyright|notice|unlicense|patents)([._-].*)?$", re.I)
+# The system's standard licence texts (Debian and Ubuntu), by the names
+# THIRD-PARTY.txt gives them.
+COMMON_LICENCES = Path("/usr/share/common-licenses")
+COMMON_NAMES = {
+    "GPL-2": "GPL-2.0",
+    "GPL-3": "GPL-3.0",
+    "LGPL-2.1": "LGPL-2.1",
+    "LGPL-3": "LGPL-3.0",
+    "Apache-2.0": "Apache-2.0",
+    "MPL-2.0": "MPL-2.0",
+}
+NOTICE_HEAD = """Third-party software in RVP {version}
+
+RVP is free software under the GNU General Public License 3.0 or later
+({licence}). It includes the programs and libraries below, each under its
+own licence; their licence files are in {folder}/<name>/.{common}
+The VapourSynth runtime, whisper.cpp and the disc libraries carry their
+own licence files beside them. Each component's source is its project's
+own, at the versions RVP's build scripts pin in
+https://github.com/woffko/rvp (tools/libmpv/build.sh, tools/linux-kit/kit.sh,
+tools/packaging/vapoursynth.py, tools/whisper/, tools/discs/, Cargo.lock).
+"""
+
+
+def licence_files(folder: Path) -> list[Path]:
+    """The licence files at the top of a source tree."""
+    if not folder.is_dir():
+        return []
+    return sorted(p for p in folder.iterdir() if p.is_file() and LICENCE_NAME.match(p.name))
+
+
+def rust_crates(target: str) -> list[dict]:
+    """The crates rvp is built from: rvp-shell's normal dependencies on
+    TARGET, the workspace's own left out (`cargo metadata`)."""
+    output = subprocess.run(
+        ["cargo", "metadata", "--format-version", "1", "--locked", "--filter-platform", target],
+        cwd=ROOT, capture_output=True, text=True, check=True,
+    ).stdout
+    data = json.loads(output)
+    packages = {p["id"]: p for p in data["packages"]}
+    nodes = {n["id"]: n for n in data["resolve"]["nodes"]}
+    workspace = set(data["workspace_members"])
+    start = next(i for i in workspace if packages[i]["name"] == "rvp-shell")
+    seen: set[str] = set()
+    pending = [start]
+    while pending:
+        for dep in nodes[pending.pop()]["deps"]:
+            normal = any(kind["kind"] is None for kind in dep["dep_kinds"])
+            if normal and dep["pkg"] not in seen:
+                seen.add(dep["pkg"])
+                pending.append(dep["pkg"])
+    return sorted((packages[i] for i in seen if i not in workspace), key=lambda p: (p["name"], p["version"]))
+
+
+def debian_copyrights(libraries: dict[str, Path]) -> dict[str, Path]:
+    """The Debian packages the bundled system libraries come from, each
+    with its copyright file."""
+    found: dict[str, Path] = {}
+    for library in sorted(libraries.values()):
+        result = subprocess.run(["dpkg", "-S", str(library.resolve())], capture_output=True, text=True)
+        if result.returncode != 0:
+            result = subprocess.run(["dpkg", "-S", str(library)], capture_output=True, text=True)
+        if result.returncode != 0:
+            raise SystemExit(f"no Debian package owns {library}")
+        package = result.stdout.split(":", 1)[0].strip()
+        copyright_file = Path("/usr/share/doc") / package / "copyright"
+        if not copyright_file.is_file():
+            raise SystemExit(f"{package} has no copyright file")
+        found[package] = copyright_file
+    return found
+
+
+def third_party(args, root: Path, folder: str, licence: str, target: str,
+                debian: dict[str, Path] | None = None) -> None:
+    """THIRD-PARTY.txt in ROOT and the licence files in ROOT/FOLDER: Qt,
+    the components in --licences (a folder of <name>/<licence files>, from
+    tools/libmpv/licences.sh or the kit's libmpv), the Debian packages of
+    the bundled system libraries (Linux) and the Rust crates. The
+    VapourSynth runtime, whisper.cpp and the disc libraries carry their
+    own licence files."""
+    licences = root / folder
+    if licences.exists():
+        shutil.rmtree(licences)
+    common = f"\nThe standard licence texts are in {folder}/common/." if COMMON_LICENCES.is_dir() else ""
+    lines = [NOTICE_HEAD.format(version=version(), licence=licence, folder=folder, common=common)]
+    if COMMON_LICENCES.is_dir():
+        (licences / "common").mkdir(parents=True)
+        for source, name in COMMON_NAMES.items():
+            shutil.copy2(COMMON_LICENCES / source, licences / "common" / name)
+    qt = Path(args.qt)
+    lines.append(f"Qt {qt.parent.name} (its libraries, plugins and QML modules)")
+    lines.append(f"    LGPL-3.0 (a few modules GPL-3.0): {folder}/common/LGPL-3.0 and GPL-3.0")
+    lines.append("    https://download.qt.io/official_releases/qt/")
+    if args.licences and not Path(args.licences).is_dir():
+        raise SystemExit(f"no licence folder {args.licences}")
+    if args.licences:
+        for component in sorted(Path(args.licences).iterdir()):
+            if not component.is_dir() or any(word in component.name for word in ("dvdcss", "aacs")):
+                continue
+            files = sorted(p for p in component.iterdir() if p.is_file())
+            if not files:
+                continue
+            (licences / component.name).mkdir(parents=True)
+            for file in files:
+                shutil.copy2(file, licences / component.name / file.name)
+            lines.append(component.name)
+            lines.append(f"    {', '.join(f'{folder}/{component.name}/{f.name}' for f in files)}")
+    for package, copyright_file in sorted((debian or {}).items()):
+        (licences / "debian" / package).mkdir(parents=True)
+        shutil.copy2(copyright_file, licences / "debian" / package / "copyright")
+        lines.append(f"{package} (Ubuntu's package)")
+        lines.append(f"    {folder}/debian/{package}/copyright")
+    lines.append("")
+    lines.append("Rust crates, built into rvp:")
+    for crate in rust_crates(target):
+        name = f"{crate['name']}-{crate['version']}"
+        files = licence_files(Path(crate["manifest_path"]).parent)
+        if files:
+            (licences / "rust" / name).mkdir(parents=True)
+            for file in files:
+                shutil.copy2(file, licences / "rust" / name / file.name)
+        where = f"{folder}/rust/{name}/" if files else "the standard text in common/"
+        lines.append(f"{crate['name']} {crate['version']}: {crate.get('license') or crate.get('license_file')} ({where})")
+    (root / "THIRD-PARTY.txt").write_text("\n".join(lines) + "\n", encoding="utf-8")
+    print(f"third-party notices: {len(lines)} lines in {root / 'THIRD-PARTY.txt'}")
 
 
 REMOTE = Path("remote") / "unified-remote" / "RVP"
@@ -566,6 +700,7 @@ def linux_appdir(args, appdir: Path) -> set[str]:
     system = system_libraries()
     relied: set[str] = set()
     bundled: set[str] = set()
+    from_system: dict[str, Path] = {}
     missing: dict[str, set[str]] = {}
     pending = [usr / "bin" / "rvp", *(usr / "plugins").rglob("*.so"), *(usr / "qml").rglob("*.so")]
     while pending:
@@ -579,7 +714,9 @@ def linux_appdir(args, appdir: Path) -> set[str]:
             if GTK.match(name):
                 continue
             source = next((place / name for place in places if (place / name).exists()), None)
-            source = source or system.get(name)
+            if source is None and name in system:
+                source = system[name]
+                from_system[name] = source
             if source is None:
                 missing.setdefault(name, set()).add(str(current.relative_to(appdir)))
                 continue
@@ -610,6 +747,8 @@ def linux_appdir(args, appdir: Path) -> set[str]:
     shutil.copy2(icons / "rvp.svg", scalable / "rvp.svg")
     (share / "doc" / "rvp").mkdir(parents=True)
     shutil.copy2(ROOT / "LICENSE", share / "doc" / "rvp" / "copyright")
+    third_party(args, share / "doc" / "rvp", "licenses", "copyright", "x86_64-unknown-linux-gnu",
+                debian_copyrights({name: path for name, path in from_system.items() if name in bundled}))
     # M15's Unified Remote remote, which the Remote Control page copies into
     # the server's custom remotes (rvp_app::control::unified).
     remote_folder(Path(args.look), share / "rvp")
@@ -729,6 +868,7 @@ def main() -> int:
     win.add_argument("--whisper", help="whisper.cpp's CPU and Vulkan engine (tools/whisper/build.sh)")
     win.add_argument("--discs", help="libdvdnav and libbluray for the disc menus (tools/discs/build.sh)")
     win.add_argument("--look", required=True)
+    win.add_argument("--licences", help="libmpv's components' licence files (tools/libmpv/licences.sh)")
     win.add_argument("--out", required=True)
     win.add_argument("--makensis")
     win.add_argument("--nsisdir")
@@ -743,6 +883,7 @@ def main() -> int:
     lin.add_argument("--whisper", help="whisper.cpp's CPU and Vulkan engine (tools/whisper/build-linux.sh)")
     lin.add_argument("--vapoursynth", help="RVP's VapourSynth runtime (tools/vapoursynth/build-linux.sh)")
     lin.add_argument("--mksquashfs", default="mksquashfs")
+    lin.add_argument("--licences", help="libmpv's components' licence files (the kit's libmpv)")
     kinds.add_parser("version")
     kinds.add_parser("mime-types", help="the desktop entry's MimeType value")
     args = parser.parse_args()

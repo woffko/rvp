@@ -13,7 +13,8 @@ use rvp_app::{Action, Bindings};
 use rvp_skin::{DataModel, Fonts, Rect, Skin, SliderValue, rasterize};
 
 const DEFAULT_SKIN: &str = "/mnt/c/Program Files/DAUM/PotPlayer/Skins/BlackSpace_en.dsf";
-const DEFAULT_REFERENCE_DIR: &str = "~/rvp-reference";
+/// In the home folder unless `RVP_REFERENCE_DIR` names another.
+const DEFAULT_REFERENCE_DIR: &str = "rvp-reference";
 
 fn skin() -> Option<&'static Skin> {
     let path = std::env::var_os("RVP_TEST_SKIN")
@@ -119,7 +120,13 @@ fn blackspace_control_panel() {
     renders.extend(other_pages(&mut chrome, &mut pointer, ctx));
 
     let dir = std::env::var_os("RVP_REFERENCE_DIR")
-        .map_or_else(|| PathBuf::from(DEFAULT_REFERENCE_DIR), PathBuf::from)
+        .map_or_else(
+            || {
+                PathBuf::from(std::env::var_os("HOME").unwrap_or_default())
+                    .join(DEFAULT_REFERENCE_DIR)
+            },
+            PathBuf::from,
+        )
         .join("renders");
     if std::fs::create_dir_all(&dir).is_ok() {
         for (page, image) in renders.iter().enumerate() {

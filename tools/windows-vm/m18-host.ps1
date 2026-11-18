@@ -42,9 +42,9 @@
 # and no swapchain in its session 0: `-Runs mvtools-opengl-1080p`); on the
 # host the guard always runs.
 param(
-    [string]$Bundle = 'C:\Users\<user>\rvp-test\rvp-t',
-    [string]$Clips = 'C:\Users\<user>\rvp-test\m18-study\clips',
-    [string]$Out = 'C:\Users\<user>\rvp-test\m18-host',
+    [string]$Bundle = "$env:USERPROFILE\rvp-test\rvp-t",
+    [string]$Clips = "$env:USERPROFILE\rvp-test\m18-study\clips",
+    [string]$Out = "$env:USERPROFILE\rvp-test\m18-host",
     [string[]]$Runs = @(),
     # The clips are 20 s long: a run plays less than that.
     [int]$Seconds = 15,

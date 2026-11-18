@@ -594,8 +594,17 @@ Found and fixed:
   Menu takes the capped implicit height for its window); checked under
   Xvfb at 1024x600.
 
-Left for the host, which needs the owner's permission each time: RIFE
-(TensorRT)'s lighter step and the calibration on the RTX 50-series card, SVP's
-check with the second window (`--svp-second`), and the OpenGL renderer's
-black picture after a closed file (`picture_black_after_close`; session
-0 shows no video).
+The host's part ran on 2026-11-18 with the owner's permission, on the
+first alpha's Windows bundle (0.1.0-alpha.1, built in WSL), each with
+settings and state of its own and mpv's sound off:
+
+| Check | Result |
+|-------|--------|
+| `--selftest=upright` with the OpenGL renderer | PASS, 0 failures: the picture upright in the window, with the pointer and in fullscreen; after the file closed, black under the logo (`picture_black_after_close`) |
+| `--selftest=tour --tour-grab` in English and Simplified Chinese | PASS, 0 failures, 11 grabs each: on Windows 11 Chinese is all Microsoft YaHei UI. The context menu's grab, on a 1440-pixel screen, still draws its last item (About) under the menu's frame, as the VM's did before the menu change: an older flaw of the menu in Windows' style (Qt's FluentWinUI3), not of the height cap; open |
+| SVP: `--selftest=svp` in one window, `/new --selftest=svp --svp-second` in a second | PASS, 0 failures in both: the second showed RVP's diagnostic at once ("another player holds mpvpipe"); SVP 4 attached to the first, 23.976 to 61 frames a second, seeks in sync, RVP's filters before `@svp` and SVP's entry untouched. SVP attached only after 174 s, once the second window had closed |
+| RIFE (TensorRT) without RVP's window (`rife_trt`, the calibration's core) at 90 % of the card's power limit | PASS: TensorRT 10.15.1 for `sm120` installed from the local mirror (13 files renamed into place), the engine built in 77 s, then medium at 231, 107 and 72.6 frames a second at 720p, 1080p and 1440p; `nvidia-smi` before and after, the limit back at its default |
+
+RIFE (TensorRT)'s lighter step on a real card (it needs dropped frames,
+which only a size the card cannot keep provokes) stays with the headless
+tests of `m18-all.ps1`.

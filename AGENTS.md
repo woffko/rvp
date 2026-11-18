@@ -45,12 +45,16 @@ smoothing for users without SVP, after a study of the engines.
   desktop needs advance notice and the owner's explicit permission, every
   time. Say what will run, which windows will appear and for how long, then
   wait for a yes.
-- The repository stays private. Releases are pre-releases on its GitHub
-  page, made only when the owner asks (D21; the first alpha,
-  v0.1.0-alpha.1, 2026-11-18): the packages CI built at the tagged
-  commit, the workspace's version in `Cargo.toml`. Nothing else is
-  published (no AUR upload, no stores), and the repository is never made
-  public without the owner.
+- The repository is public (D21, 2026-11-18). Releases are pre-releases
+  on its GitHub page, made only when the owner asks (the first alpha,
+  v0.1.0-alpha.1): the Windows packages built in WSL and the Linux
+  packages CI built at the tagged commit, the workspace's version in
+  `Cargo.toml`. Nothing else is published (no AUR upload, no stores).
+- Nothing about the owner's machines goes into the repository: their
+  addresses, accounts, folders and hardware are in `AGENTS.local.md`
+  (see "Test environments"), and commits use GitHub's no-reply address
+  (`AGENTS.local.md` has the identity). The Linux kit names its reports
+  by `RVP_KIT_LABEL`, never the hostname.
 
 ## Code rules
 
@@ -430,7 +434,10 @@ smoothing for users without SVP, after a study of the engines.
   and the C++ runtime is `~/rvp-deps/win/msvc-runtime`. CI builds both as
   artifacts and keeps only the newest run's (`prune-artifacts`: the
   account's artifact storage is small, so push commits in batches);
-  a release (D21) attaches a green run's packages to a pre-release.
+  a release (D21) attaches packages to a pre-release, each with
+  THIRD-PARTY.txt and the licence files of what it bundles
+  (`package.py --licences`: `tools/libmpv/licences.sh`'s folder on
+  Windows, the kit's libmpv `share/licenses` on Linux).
 - The registered types are `packaging/associations.tsv` (the installer,
   the `.desktop` file, MPRIS). RVP only registers itself as a handler and
   never makes itself the default (owner, 2026-10-16). The installer is per
@@ -912,14 +919,18 @@ smoothing for users without SVP, after a study of the engines.
 
 ## Test environments
 
+- The machines' addresses, accounts, folders and hardware are in
+  `AGENTS.local.md` beside this file, which stays out of the repository
+  (`.gitignore`; the owner keeps it). `<windows-vm>`, `<ubuntu-vm>` and
+  `<user>` in this file and in `docs` stand for them, `~` for the
+  owner's home folder.
 - WSL (this machine): builds, unit and headless tests. GUI programs
   started here open on the owner's Windows desktop through WSLg, with
   sound: they count as host runs (advance notice and permission every
   time). Silent tests (no window, no sound) need no permission (owner,
   2026-10-11).
-- Ubuntu 22.04 VM shared with another project (`<ubuntu-vm>`, see
-  the other project's notes): Linux builds and GNOME Wayland
-  behaviour. It has no real GPU.
+- Ubuntu 22.04 VM (`<ubuntu-vm>`), shared with another project: Linux
+  builds and GNOME Wayland behaviour. It has no real GPU.
 - On the owner's Ubuntu boot the owner's own RVP may be playing: test
   launches of RVP get their own `XDG_RUNTIME_DIR` and session bus
   (`dbus-run-session`, as `tools/screenshots/tour.sh` does) besides their
@@ -927,13 +938,14 @@ smoothing for users without SVP, after a study of the engines.
   launches whose arguments came after `--` were no self-tests and handed
   25 bogus "files" to the owner's playlist through the second instance's
   channel. Never touch the installed RVP or its state without asking.
-- The owner's Ubuntu 26.10 boot of the same PC (GNOME Wayland; an RTX 50-series card, `sm120`, since 2026-11-07, an RTX 30-series card before; measurements
-  before that date are the RTX 30-series card's):
+- The owner's Ubuntu 26.10 boot of the same PC (GNOME Wayland; an RTX
+  50-series card, `sm120`, since 2026-11-07, an RTX 30-series card
+  before; measurements before that date are the RTX 30-series card's):
   GPU, SVP and performance checks, run in separate sessions through this
   repository.
 - Windows test VM `<windows-vm>`: Windows builds and functional tests.
-  Other projects' sessions use it too (one project's timed
-  acceptance runs on a desktop of its own, and others): before a run, ask
+  Other projects' sessions use it too (one project's timed acceptance
+  runs on a desktop of its own): before a run, ask
   every session that uses it (`ListAgents`) and wait for their answer;
   RVP's self-test loads both CPUs and spoils their timings.
 - Windows host: SVP on Windows and PotPlayer reference captures, only with

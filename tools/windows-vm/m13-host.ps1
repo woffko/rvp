@@ -30,9 +30,9 @@
 # of this script on the Windows test VM (no GPU: Vulkan falls back to the
 # CPU there); on the host the guard always runs.
 param(
-    [string]$Bundle = 'C:\Users\<user>\rvp-test\rvp-o',
-    [string]$Data = 'C:\Users\<user>\rvp-test\m13-host\data',
-    [string]$Out = 'C:\Users\<user>\rvp-test\m13-host\out',
+    [string]$Bundle = "$env:USERPROFILE\rvp-test\rvp-o",
+    [string]$Data = "$env:USERPROFILE\rvp-test\m13-host\data",
+    [string]$Out = "$env:USERPROFILE\rvp-test\m13-host\out",
     [string[]]$Models = @('base', 'small'),
     [int]$PowerLimit = 90,
     [switch]$Vm
