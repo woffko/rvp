@@ -59,7 +59,13 @@ time.
 - The repository is public since 2026-11-18 with its history rewritten
   (D21): every commit has a new hash. Clones made before (the owner's
   Ubuntu boot, the kit's copies) must be cloned again; the private
-  original is `woffko/rvp-private`.
+  original is `woffko/rvp-private`. Kit runs set `RVP_KIT_LABEL`
+  (`ubuntu-boot`, `ubuntu-vm`) for their reports' names.
+- The first alpha, v0.1.0-alpha.1 (792c29f), is a pre-release on the
+  repository's Releases page: the Windows installer and portable ZIP
+  built in WSL, the Linux AppImage and .deb from CI, and SHA256SUMS.txt.
+  The AviSynth+ headers' licence file is missing from the Linux
+  packages' notices (no licence file at the top of their repository).
 - Wayland: a second `rvp` cannot hand the window its activation token
   (needs Qt's private Wayland API); GNOME may say "RVP is ready" instead
   of raising it.
