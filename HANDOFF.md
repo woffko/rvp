@@ -44,11 +44,11 @@ time.
   intermittent; since 29f9529 the state passes through a real change in
   the controls' first 30 s, and CI's `m8-smtc.ps1` passed at once there.
   Watch the next CI runs.
-- **Han characters on Windows** (goal V-W): with Windows in English,
-  Chinese mixes Yu Gothic UI's Japanese shapes with Microsoft YaHei or
-  JhengHei UI; Japanese and Korean are even. The fix would put the
-  language's own UI font first on Windows (as `FC_LANG` on Linux): the
-  owner decides.
+- **Han characters on Windows** (goal V-W): Chinese mixed Yu Gothic
+  UI's Japanese shapes with Microsoft YaHei or JhengHei UI on an English
+  Windows; fixed on 2026-11-18 (the language's own UI font first). Look
+  at Chinese once on Windows 11, where the controls' font is Segoe UI
+  Variable.
 - **Menus on a real Windows desktop**: menus now take at most their
   screen's height and scroll (goal U-W). The VM's session-0 grabs still
   draw a menu's last rows under its frame, as before the change (its

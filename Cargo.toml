@@ -6,7 +6,7 @@ members = ["crates/skin", "crates/look", "crates/engine", "crates/app", "crates/
 exclude = ["spikes", "vendor"]
 
 [workspace.package]
-version = "0.0.1"
+version = "0.1.0-alpha.1"
 edition = "2024"
 rust-version = "1.98"
 license = "GPL-3.0-or-later"
@@ -32,7 +32,7 @@ swash = "=0.2.10"
 # Fills and strokes the paths of RVP's own vector art (crates/look); already
 # in the tree as swash's glyph rasterizer.
 zeno = "=0.3.3"
-zip = { version = "=9.0.3", default-features = false, features = ["deflate-flate2"] }
+zip = { version = "=9.0.5", default-features = false, features = ["deflate-flate2"] }
 # The legacy code pages of subtitle files (CP949, Shift_JIS, GBK, Big5,
 # Windows-125x) for RVP's subtitle reader (M13, crates/subtitle); MIT or
 # Apache-2.0, with BSD-3-Clause for the WHATWG index data.

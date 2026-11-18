@@ -19,9 +19,9 @@ linux: the AppDir, the AppImage and the .deb. Build on the oldest system
     Unified Remote remote in `share/rvp`.
 
 Both read the registered types from packaging/associations.tsv. The
-version is the workspace's plus the commit's time and hash (no tags):
-0.0.1+git.<UTC time>.<hash>, the time first so that versions grow with
-the commits (`RVP_COMMIT` overrides the hash, SOURCE_DATE_EPOCH the time). Outputs are reproducible: sorted
+version is the workspace's plus the commit's time and hash:
+0.1.0-alpha.1+git.<UTC time>.<hash>, the time first so that versions grow
+with the commits (`RVP_COMMIT` overrides the hash, SOURCE_DATE_EPOCH the time). Outputs are reproducible: sorted
 entries and the commit's time as every file's time.
 
 usage:
@@ -93,11 +93,25 @@ def workspace_version() -> str:
 
 def version() -> str:
     """The workspace's version, the commit's time (UTC) and its hash:
-    0.0.1+git.20261114105222.c3f58dc13. The time first, so that a later
+    0.1.0-alpha.1+git.20261114105222.c3f58dc13. The time first, so that a later
     commit's package sorts higher (dpkg compares the hash's digits and
     letters, which are random)."""
     stamp = time.strftime("%Y%m%d%H%M%S", time.gmtime(commit_time()))
     return f"{workspace_version()}+git.{stamp}.{commit()}"
+
+
+def numeric_version() -> str:
+    """Windows' four numbers: the workspace's before its pre-release part
+    (0.1.0-alpha.1 is 0.1.0.0)."""
+    core = workspace_version().split("-", 1)[0].split("+", 1)[0]
+    return ".".join((core.split(".") + ["0", "0", "0"])[:3]) + ".0"
+
+
+def debian_version() -> str:
+    """The .deb's version: a pre-release takes `~`, which dpkg sorts before
+    the release (0.1.0~alpha.1 < 0.1.0), and the commit's part loses its
+    first dot."""
+    return version().replace("+git.", "+git").replace("-", "~") + "-1"
 
 
 def associations() -> list[tuple[str, str, list[str]]]:
@@ -393,7 +407,7 @@ def windows(args) -> None:
         includes = out / "nsis"
         windows_includes(bundle, includes)
         nsis_languages(Path(args.nsisdir) if args.nsisdir else Path(args.makensis).resolve().parent, includes)
-        numeric = ".".join((workspace_version().split(".") + ["0", "0", "0"])[:3]) + ".0"
+        numeric = numeric_version()
         env = dict(os.environ)
         if args.nsisdir:
             env["NSISDIR"] = args.nsisdir
@@ -665,7 +679,7 @@ def deb(appdir: Path, relied: set[str], target: Path, epoch: int) -> None:
         control.mkdir()
         (control / "control").write_text(
             "Package: rvp\n"
-            f"Version: {version().replace('+git.', '+git')}-1\n"
+            f"Version: {debian_version()}\n"
             "Architecture: amd64\n"
             "Maintainer: RVP <rvp@localhost>\n"
             f"Installed-Size: {size // 1024}\n"
@@ -698,7 +712,7 @@ def linux(args) -> None:
     appdir = out / "AppDir"
     relied = linux_appdir(args, appdir)
     touch_all(appdir, epoch)
-    deb(appdir, relied, out / f"rvp_{version().replace('+git.', '+git')}-1_amd64.deb", epoch)
+    deb(appdir, relied, out / f"rvp_{debian_version()}_amd64.deb", epoch)
     appimage(args, appdir, out / f"RVP-{version()}-x86_64.AppImage", epoch)
     print(f"linux packages in {out}")
 

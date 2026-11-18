@@ -332,9 +332,13 @@ left as in Japan. Simplified and Traditional Chinese mix two fonts: the
 characters Japanese shares come from Yu Gothic UI (Japanese shapes and
 weight), the others from Microsoft YaHei UI or JhengHei UI, so words
 such as 调整大小 and 运动平滑 show two weights. Korean's Hangul is Malgun
-Gothic and even. Putting the language's own UI font first for Chinese,
-Japanese and Korean on Windows (as `FC_LANG` does on Linux) would even
-them out; left for the owner to decide.
+Gothic and even. The owner chose to fix it (2026-11-18): on Windows a
+Chinese, Japanese or Korean interface puts that language's own UI font
+first among Qt's fallback fonts (`rvp_language_fonts`, from the next
+start, as `FC_LANG` on Linux). The VM's grabs then showed Simplified
+Chinese all in Microsoft YaHei UI and Traditional all in Microsoft
+JhengHei UI; Japanese and Korean unchanged, and the four languages' fit
+checks PASS.
 
 Found on the way and fixed: the context menu was taller than the VM's
 768-pixel screen in every language (its last items below its frame);

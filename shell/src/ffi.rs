@@ -40,6 +40,13 @@ pub mod bridge {
         fn rvp_set_c_numeric_locale();
         /// Gives every window RVP's icon (`QGuiApplication::setWindowIcon`).
         fn rvp_set_window_icon();
+        /// Windows: for a Chinese, Japanese or Korean interface language
+        /// (`general.language`), that language's own UI font comes first
+        /// for Han characters, kana, Bopomofo and Hangul
+        /// (`QFontDatabase::addApplicationFallbackFontFamily`), once the
+        /// application object exists. Nothing elsewhere (Linux:
+        /// `FC_LANG`).
+        fn rvp_language_fonts(code: &str);
         /// The main window's native handle (`QWindow::winId`), 0 before it
         /// exists; Windows' media controls belong to it.
         fn rvp_main_window_id() -> usize;

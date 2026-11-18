@@ -169,12 +169,16 @@ The full plan and the report of each step are in [docs](docs).
 
 ## Getting RVP
 
-There are no public releases yet: the packages are built for testing.
+RVP is in alpha. The first pre-release, 0.1.0-alpha.1, is on the
+[Releases](https://github.com/woffko/rvp/releases) page:
 
-- **Windows:** an installer (for the current user only) and a portable
-  ZIP.
-- **Linux:** a .deb package (Ubuntu 22.04 and newer), an AppImage and an
-  Arch Linux (AUR) recipe.
+- **Windows** (10 and 11, 64-bit): an installer (for the current user
+  only, no administrator rights) and a portable ZIP.
+- **Linux** (64-bit): a .deb package (Ubuntu 22.04 and newer) and an
+  AppImage; the repository also has an Arch Linux (AUR) recipe.
+
+Expect rough edges: report what breaks with the version from the About
+window.
 
 For building from source and the developers' notes, see
 [AGENTS.md](AGENTS.md) and [docs/PLAN.md](docs/PLAN.md).

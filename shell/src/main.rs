@@ -74,6 +74,9 @@ fn main() {
     single_instance(&cli, &settings);
     ffi::bridge::rvp_set_c_numeric_locale();
     ffi::bridge::rvp_set_window_icon();
+    // Windows' counterpart of `FC_LANG` (`player::font_language`): from
+    // the next start too.
+    ffi::bridge::rvp_language_fonts(&settings.general.language);
     ffi::bridge::rvp_register_native_types();
     let mut engine = QQmlApplicationEngine::new();
     metrics::mark("qml_engine_ms");

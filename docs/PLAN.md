@@ -233,6 +233,7 @@ playback state between the two systems possible (open question 2).
 | D18 | M18's engines and defaults: Blend (mpv's interpolation), MVTools (CPU) and RIFE (GPU, up to 1080p) in VapourSynth through a runtime RVP ships (never SVP's), and fruc_vulkan (NVIDIA's optical flow, RTX 30 and later) through a libmpv RVP builds with FFmpeg's master. Smoothing is off by default; turned on it is MVTools medium up to 1080p and Blend above, at the display's rate. | M18's study (`docs/spikes/m18-smoothing.md`): MVTools keeps up at 1080p on the CPU and is the most exact; RIFE is the sharpest on films; fruc_vulkan is the fastest on RTX cards but missing from the libmpv RVP ships. The owner chose all three and accepted building libmpv. | Owner, 2026-10-19 |
 | D19 | Windows and Linux everywhere: from goal S on, every change (a goal's parts and the fixes between goals) is built and checked on both systems before it counts as done: Windows on the test VM (the host only with permission), Linux in WSL under Xvfb and on the Ubuntu VM; what only real hardware or a desktop session can check goes to the host's sessions and the owner's Ubuntu boot. It ends D14's "Windows first". | The owner, after goal K: "both Windows and Linux are needed everywhere". | Owner, 2026-11-01 |
 | D20 | Interface languages: English (the source), Russian and twelve more, chosen by how reliably Claude translates them, since the owner cannot check them: Spanish, Portuguese (Brazil), French, German, Italian, Polish, Ukrainian, Turkish, Chinese (Simplified and Traditional), Japanese and Korean. The translations are RVP's own (never PotPlayer's or another program's strings), made by agents and checked by an independent back-translation, scripts and the fit checks; native speakers' corrections are welcome later. No language but English, the source and fallback, is written into the code: the languages are the translation files RVP finds. Right-to-left languages (Arabic, Hebrew, Persian) and scripts that need their own line breaking (Thai, the Indic scripts) wait for a study of the layout; other languages with reliable translation (Dutch, Czech, Swedish, Hungarian, Vietnamese, Indonesian) can follow the same way. | The owner: "the world's main languages", only those Claude supports well. | Owner, 2026-11-15 |
+| D21 | Releases: pre-releases on the private repository's GitHub page when the owner asks, each a tag `vX.Y.Z-alpha.N` at a commit whose CI is green, carrying the packages CI built there (the Windows installer and portable ZIP, the Linux AppImage and .deb). The version is the workspace's (`0.1.0-alpha.1` for the first); the packages add the commit's time and hash, Windows' version numbers take the part before the pre-release, and the .deb writes it with `~`, so the release sorts after its alphas. Nothing else is published (no AUR upload, no stores), and the repository stays private unless the owner decides otherwise. | The owner, after goals U-W and V-W: "make the first alpha release with an installer on GitHub, Windows and Linux versions". | Owner, 2026-11-18 |
 
 ## 4. Usability requirements
 
@@ -1459,7 +1460,9 @@ Rules shared by all goals, also written into the project `AGENTS.md` by goal A:
   is fine.
 - Anything that starts a program or captures the screen on the Windows host
   desktop needs advance notice and the owner's explicit permission, every time.
-- The repository stays private; no tags, releases or published packages.
+- The repository stays private. Releases are pre-releases on its GitHub
+  page, made only when the owner asks (D21); nothing else is published, and
+  the repository is never made public without the owner.
 
 Goal A:
 ```

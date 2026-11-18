@@ -162,6 +162,7 @@ bool rvp_instance_listen(rust::Str name);
 bool rvp_instance_running(rust::Str name);
 void rvp_set_c_numeric_locale();
 void rvp_set_window_icon();
+void rvp_language_fonts(rust::Str code);
 std::size_t rvp_main_window_id();
 std::size_t rvp_video_window_create();
 void rvp_video_window_close();

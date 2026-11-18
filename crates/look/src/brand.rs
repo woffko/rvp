@@ -223,11 +223,15 @@ fn version_strings(version: &str) -> [(&'static str, String); 9] {
 /// numbers (an application for Windows NT), then [`version_strings`] and
 /// the translation they are in.
 ///
+/// The fixed part takes the numbers before a pre-release or build part
+/// (`0.1.0-alpha.1+git...` is 0.1.0.0); the strings keep the whole text.
+///
 /// # Errors
-/// Fails when `version` is not one to four numbers separated by dots.
+/// Fails when those numbers are not one to four numbers separated by dots.
 pub fn version_info(version: &str) -> Result<Vec<u8>, String> {
     let mut numbers = [0_u16; 4];
-    let parts: Vec<&str> = version.split('.').collect();
+    let core = version.split(['-', '+']).next().unwrap_or(version);
+    let parts: Vec<&str> = core.split('.').collect();
     if parts.len() > numbers.len() {
         return Err(format!("too many parts in version {version}"));
     }
@@ -508,6 +512,12 @@ mod tests {
         // Each child's length stays inside its parent.
         let string_info = fixed + 52;
         assert!(string_info + usize::from(word(string_info)) <= info.len());
+        // A pre-release and the commit stay out of the numbers.
+        let alpha = version_info("0.1.0-alpha.1+git.20261118.abc").expect("pre-release");
+        let alpha_dword =
+            |at: usize| u32::from_le_bytes(alpha[at..at + 4].try_into().expect("dword"));
+        assert_eq!((alpha_dword(fixed + 8), alpha_dword(fixed + 12)), (1, 0));
+        assert!(version_info("1.x-alpha").is_err());
     }
 
     #[test]

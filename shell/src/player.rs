@@ -847,6 +847,8 @@ fn prefer_x11(settings: &Settings, source: &SkinSource) {
 /// `FC_LANG` (its tags are lower case with `-`: `zh-tw`), before Qt or
 /// any thread starts; the user's own `FC_LANG` wins, and "auto" is the
 /// locale's language already. A change takes effect at the next start.
+/// On Windows, `rvp_language_fonts` puts the language's own font first
+/// instead.
 #[cfg(target_os = "linux")]
 fn font_language(settings: &Settings) {
     let code = settings.general.language.as_str();

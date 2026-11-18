@@ -45,7 +45,12 @@ smoothing for users without SVP, after a study of the engines.
   desktop needs advance notice and the owner's explicit permission, every
   time. Say what will run, which windows will appear and for how long, then
   wait for a yes.
-- The repository stays private. No tags, releases or published packages.
+- The repository stays private. Releases are pre-releases on its GitHub
+  page, made only when the owner asks (D21; the first alpha,
+  v0.1.0-alpha.1, 2026-11-18): the packages CI built at the tagged
+  commit, the workspace's version in `Cargo.toml`. Nothing else is
+  published (no AUR upload, no stores), and the repository is never made
+  public without the owner.
 
 ## Code rules
 
@@ -425,7 +430,7 @@ smoothing for users without SVP, after a study of the engines.
   and the C++ runtime is `~/rvp-deps/win/msvc-runtime`. CI builds both as
   artifacts and keeps only the newest run's (`prune-artifacts`: the
   account's artifact storage is small, so push commits in batches);
-  nothing is published.
+  a release (D21) attaches a green run's packages to a pre-release.
 - The registered types are `packaging/associations.tsv` (the installer,
   the `.desktop` file, MPRIS). RVP only registers itself as a handler and
   never makes itself the default (owner, 2026-10-16). The installer is per
@@ -589,7 +594,11 @@ smoothing for users without SVP, after a study of the engines.
   fontconfig takes from `FC_LANG` or the locale: on Linux a language
   chosen in RVP is set as `FC_LANG` before Qt starts
   (`player::font_language`; the user's own wins), so it applies from
-  the next start.
+  the next start. Windows' fallback follows the system's language (on
+  an English Windows Chinese took Yu Gothic UI's Japanese shapes for
+  the characters they share): `rvp_language_fonts` puts the chosen
+  language's own UI font first among Qt's application fallback fonts,
+  also from the next start.
 - The QML engine keeps its last translation when `Qt.uiLanguage` names
   a language without a `.qm` file, and loads the system's at start:
   English is `Qt.uiLanguage = ""` (`Main.qml` `applyLanguage`).

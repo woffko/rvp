@@ -756,6 +756,37 @@ void rvp_set_window_icon()
     QGuiApplication::setWindowIcon(icon);
 }
 
+void rvp_language_fonts(rust::Str code)
+{
+#ifdef Q_OS_WIN
+    // Han characters take their shapes from a language. Windows' own
+    // fallback for them follows the system's language: on an English
+    // Windows Yu Gothic UI came first, so Chinese showed the characters
+    // Japanese shares in Japanese shapes and weight and the others in
+    // Microsoft YaHei UI (goal V-W). A Chinese, Japanese or Korean
+    // interface puts that language's own UI font first; characters it
+    // lacks still go to Windows' fallback.
+    const QString language = QString::fromUtf8(code.data(), static_cast<qsizetype>(code.size()));
+    QString family;
+    if (language == QLatin1String("zh_CN"))
+        family = QStringLiteral("Microsoft YaHei UI");
+    else if (language == QLatin1String("zh_TW"))
+        family = QStringLiteral("Microsoft JhengHei UI");
+    else if (language == QLatin1String("ja"))
+        family = QStringLiteral("Yu Gothic UI");
+    else if (language == QLatin1String("ko"))
+        family = QStringLiteral("Malgun Gothic");
+    if (family.isEmpty() || !QFontDatabase::hasFamily(family))
+        return;
+    for (const QChar::Script script : {QChar::Script_Han, QChar::Script_Hiragana, QChar::Script_Katakana,
+                                       QChar::Script_Bopomofo, QChar::Script_Hangul})
+        QFontDatabase::addApplicationFallbackFontFamily(script, family);
+#else
+    // fontconfig orders the fonts by FC_LANG (player::font_language).
+    static_cast<void>(code);
+#endif
+}
+
 std::size_t rvp_main_window_id()
 {
     for (QWindow *window : QGuiApplication::topLevelWindows())

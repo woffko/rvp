@@ -4,7 +4,8 @@
 #   git archive --prefix=rvp-$pkgver/ -o rvp-$pkgver.tar.gz HEAD
 # next to this file, with RVP_COMMIT set to that commit for `makepkg`.
 pkgname=rvp
-pkgver=0.0.1
+# The workspace's 0.1.0-alpha.1: pacman sorts 0.1.0alpha1 before 0.1.0.
+pkgver=0.1.0alpha1
 pkgrel=1
 pkgdesc='PotPlayer-style media player on libmpv, with .dsf skins and SVP 4 support'
 arch=('x86_64')
