@@ -87,9 +87,10 @@ public:
     Q_INVOKABLE void instance_receiver(QObject *receiver) const;
     // The self-test's look at the instance channel's limits: two clients
     // on the channel this process listens on (false when it does not),
-    // one that sends more than a request may hold without a line and one
-    // that sends nothing; instance_probe() is JSON {flood, idle}: when
-    // the server closed each, in ms from the start, -1 while it is open.
+    // one that sends more than a request may hold without a line, then
+    // one that sends nothing; instance_probe() is JSON {flood, idle}: how
+    // long after its own start the server closed each, in ms, -1 until
+    // then.
     Q_INVOKABLE bool probe_instance() const;
     Q_INVOKABLE QString instance_probe() const;
     // Starts this program again (the self-test's second instance).

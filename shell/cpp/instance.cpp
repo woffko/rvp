@@ -98,9 +98,6 @@ void serve(QLocalSocket *socket)
     });
 }
 
-// The channel this process listens on (Tools::probe_instance).
-QString listenedChannel;
-
 #ifdef Q_OS_WIN
 std::wstring pipePath(const QString &name)
 {
@@ -287,6 +284,9 @@ QLocalServer *localServer = nullptr;
 
 // The self-test's look at the limits (Tools::probe_instance): when the
 // server closed each probe, in ms from the start, -1 while it is open.
+// The channel this process listens on (Tools::probe_instance).
+QString listenedChannel;
+
 struct Probe
 {
     QElapsedTimer clock;
@@ -294,6 +294,28 @@ struct Probe
     qint64 idle = -1;
 };
 Probe probe;
+
+// One connection of the self-test's probe to this process's own channel:
+// `flood` writes more than a request may hold, without a line; the other
+// sends nothing. Each is timed from its own start to its end. The idle
+// one starts when the flood's has ended: this thread is the server's too,
+// and on Windows a second client that finds every pipe instance taken
+// waits for one in a call that keeps this thread from making it.
+void startProbe(bool flood)
+{
+    probe.clock.start();
+    auto *socket = new QLocalSocket(QCoreApplication::instance());
+    QObject::connect(socket, &QLocalSocket::disconnected, socket, [socket, flood] {
+        (flood ? probe.flood : probe.idle) = probe.clock.elapsed();
+        socket->deleteLater();
+        if (flood)
+            startProbe(false);
+    });
+    if (flood)
+        QObject::connect(socket, &QLocalSocket::connected, socket,
+                         [socket] { socket->write(QByteArray(requestMax + 4096, 'x')); });
+    socket->connectToServer(listenedChannel);
+}
 
 } // namespace
 
@@ -310,19 +332,7 @@ bool Tools::probe_instance() const
     if (listenedChannel.isEmpty())
         return false;
     probe = Probe();
-    probe.clock.start();
-    for (const bool flood : {true, false}) {
-        auto *socket = new QLocalSocket(QCoreApplication::instance());
-        QObject::connect(socket, &QLocalSocket::disconnected, socket, [socket, flood] {
-            (flood ? probe.flood : probe.idle) = probe.clock.elapsed();
-            socket->deleteLater();
-        });
-        // More than a request may hold, without a line.
-        if (flood)
-            QObject::connect(socket, &QLocalSocket::connected, socket,
-                             [socket] { socket->write(QByteArray(requestMax + 4096, 'x')); });
-        socket->connectToServer(listenedChannel);
-    }
+    startProbe(true);
     return true;
 }
 
