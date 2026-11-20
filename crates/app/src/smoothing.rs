@@ -28,8 +28,8 @@
 //!   of them over 5 s, takes a lighter step for the rest of the file (the
 //!   owner, 2026-10-20 and 2026-11-06): a lighter preset, then RIFE or
 //!   `fruc_vulkan` give way to MVTools, then Blend; RIFE over half gives
-//!   way at once (its presets change only its GPU threads). On the host (RTX 3080
-//!   Ti at its 315 W test limit) RIFE and `fruc_vulkan` medium reach 720p
+//!   way at once (its presets change only its GPU threads). On the host (an RTX
+//!   30-series card at its test power limit) RIFE and `fruc_vulkan` medium reach 720p
 //!   at 60 fps but not 1080p (RIFE quality at 1080p: 40 to 50 of 60 frames
 //!   a second dropped, the card at 99 %), and a minute's drop window held
 //!   such a step for a minute before the step at once came in.

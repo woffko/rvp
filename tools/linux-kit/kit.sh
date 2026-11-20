@@ -287,12 +287,16 @@ step_check() {
         echo "host=$(kit_label)"
         echo "os=$(. /etc/os-release && echo "$PRETTY_NAME")"
         echo "kernel=$(uname -r)"
-        echo "cpu=$(grep -m1 'model name' /proc/cpuinfo | cut -d: -f2 | sed 's/^ //')"
+        # The class, never the model (D21: nothing of the machine's own
+        # goes into a report).
+        echo "cpu=$(grep -m1 'vendor_id' /proc/cpuinfo | cut -d: -f2 | sed 's/^ //')"
         echo "cpus=$(nproc)"
         echo "gpu_vendor=$(gpu_vendor)"
-        lspci 2>/dev/null | grep -i -E 'vga|3d controller|display' | sed 's/^/gpu=/'
+        lspci -mm 2>/dev/null | awk -F'"' 'tolower($2) ~ /vga|3d controller|display/ { print "gpu=" $2 ": " $4 }'
         if command -v nvidia-smi > /dev/null 2>&1; then
-            nvidia-smi --query-gpu=name,driver_version --format=csv,noheader 2>/dev/null | sed 's/^/nvidia=/'
+            nvidia-smi --query-gpu=name,driver_version --format=csv,noheader 2>/dev/null |
+                sed -E -e 's/^[^,]*RTX ([0-9])[0-9]{3}[^,]*/RTX \10-series card/' -e t -e 's/^[^,]*/NVIDIA card/' |
+                sed 's/^/nvidia=/'
         fi
         echo "session_type=${XDG_SESSION_TYPE:-none}"
         echo "desktop=${XDG_CURRENT_DESKTOP:-none}"
@@ -2416,7 +2420,7 @@ step_m18trt() {
     limit=${power% *}
     default=${power#* }
     : > "$log"
-    before=$(nvidia-smi --query-gpu=name,driver_version,compute_cap,power.draw,power.limit,temperature.gpu \
+    before=$(nvidia-smi --query-gpu=driver_version,compute_cap,power.draw,power.limit,temperature.gpu \
         --format=csv,noheader 2>&1)
     echo "before: $before" >> "$log"
     (
@@ -2430,7 +2434,7 @@ step_m18trt() {
     code=$?
     echo "rife_trt exit $code" >> "$log"
     # A card that no longer answers stops everything (AGENTS.md).
-    if ! after=$(nvidia-smi --query-gpu=name,power.draw,temperature.gpu --format=csv,noheader 2>&1); then
+    if ! after=$(nvidia-smi --query-gpu=power.draw,temperature.gpu --format=csv,noheader 2>&1); then
         echo "after: $after" >> "$log"
         record m18trt FAIL "nvidia-smi no longer answers after the run: stop and tell the owner"
         exit 1
@@ -2449,6 +2453,28 @@ step_m18trt() {
         "${line:-no measurement} fps" || bad=$((bad + 1))
     [ "$code" -eq 0 ] || bad=$((bad + 1))
     kit_result m18trt "$bad" "$summary, power limit $limit W of $default W"
+}
+
+# Keeps the machine out of a report (D21): the home folder becomes `~`,
+# the account's and the host's names placeholders. Fails when the
+# processor's or a card's model is still in the text.
+report_scrub() {
+    KIT_CPU=$(grep -m1 'model name' /proc/cpuinfo | cut -d: -f2 | sed 's/^ //') \
+        KIT_CARDS=$(nvidia-smi --query-gpu=name --format=csv,noheader 2> /dev/null) \
+        KIT_HOST=$(hostname) python3 -I -c '
+import os, re, sys
+text = sys.stdin.read()
+home, user, host = os.environ.get("HOME", ""), os.environ.get("USER", ""), os.environ["KIT_HOST"]
+if home:
+    text = text.replace(home, "~")
+if user:
+    text = re.sub(r"(?<=/)" + re.escape(user) + r"(?=/|\b)", "<user>", text)
+if host:
+    text = re.sub(r"\b" + re.escape(host) + r"\b", "<host>", text)
+sys.stdout.write(text)
+models = [os.environ["KIT_CPU"], *os.environ["KIT_CARDS"].splitlines()]
+sys.exit(3 if any(model and model in text for model in models) else 0)
+'
 }
 
 step_report() {
@@ -2481,7 +2507,10 @@ step_report() {
             grep -v -E '^(windows=|grabbed=|\[libmpv_render\] Loaded extension)' "$LOG_DIR/$step.log" | tail -60
             echo '```'
         done
-    } > "$file"
+    } | report_scrub > "$file" || {
+        record report FAIL "$file names this machine's processor or card: edit it before committing"
+        return 1
+    }
     record report PASS "$file"
 }
 

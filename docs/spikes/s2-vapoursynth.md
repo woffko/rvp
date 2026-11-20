@@ -37,8 +37,8 @@ PotPlayer bundles an older VapourSynth (Python 3.6/3.9 modules in
 
 ## Environment
 
-- Windows test VM `<windows-vm>`: Windows 11 10.0.26340.9616, AMD Ryzen
-  Embedded V1500B (2 vCPU), 8 GB, no GPU (Microsoft Basic Display Adapter).
+- Windows test VM `<windows-vm>`: Windows 11 10.0.26340.9616, 2 vCPU, 8 GB,
+  no GPU (Microsoft Basic Display Adapter).
 - Harness: `spikes/s2-vapoursynth` (libmpv2 6.0.0), cross-built from WSL; bundle
   from `spikes/tools/build-windows.sh`.
 - Input: `av://lavfi:testsrc2=size=1280x720:rate=24000/1001` (generated, no

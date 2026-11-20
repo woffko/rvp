@@ -54,7 +54,9 @@ smoothing for users without SVP, after a study of the engines.
   addresses, accounts, folders and hardware are in `AGENTS.local.md`
   (see "Test environments"), and commits use GitHub's no-reply address
   (`AGENTS.local.md` has the identity). The Linux kit names its reports
-  by `RVP_KIT_LABEL`, never the hostname.
+  by `RVP_KIT_LABEL`, never the hostname, writes the processor and the
+  cards as classes, and its `report` step fails a report that still
+  names a model (`report_scrub`).
 
 ## Code rules
 
