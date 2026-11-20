@@ -63,6 +63,9 @@ fn main() {
     process::restrict_library_search();
     metrics::start();
     let cli = Cli::from_env();
+    for notice in cli.hook_notices() {
+        rvp_app::log::report(rvp_app::log::Level::Warning, &notice);
+    }
     install_crash_logs(&cli);
     let settings = player::preload_skin();
     ffi::bridge::rvp_setup_graphics();
@@ -110,7 +113,8 @@ fn main() {
 
 /// Crash logs in RVP's state folder (M8): panics, then fatal signals or
 /// unhandled exceptions. `--crash-test=panic` or `=native` crashes on
-/// purpose once they are in place, for the package checks.
+/// purpose once they are in place, for the package checks (a test hook:
+/// with `RVP_TEST_HOOKS=1`).
 fn install_crash_logs(cli: &Cli) {
     if let Ok(dirs) = rvp_app::Dirs::from_env() {
         rvp_app::crash::install_panic_hook(&dirs.state);
@@ -127,8 +131,16 @@ fn install_crash_logs(cli: &Cli) {
 /// instance others hand theirs to. With the General page's "Multiple
 /// instances" each start runs on its own (M14).
 fn single_instance(cli: &Cli, settings: &rvp_app::Settings) {
-    let Some(channel) = instance::channel(cli) else {
-        return;
+    let channel = match instance::channel(cli) {
+        Ok(Some(channel)) => channel,
+        Ok(None) => return,
+        Err(reason) => {
+            rvp_app::log::report(
+                rvp_app::log::Level::Warning,
+                &format!("no channel for other instances ({reason}): this RVP runs on its own"),
+            );
+            return;
+        }
     };
     if settings.general.instances == "multiple" && instance::forwards(cli) {
         player::OTHER_INSTANCE.store(
@@ -136,7 +148,9 @@ fn single_instance(cli: &Cli, settings: &rvp_app::Settings) {
             std::sync::atomic::Ordering::Relaxed,
         );
         // The first one keeps the channel; the others run on their own.
-        let _ = ffi::bridge::rvp_instance_listen(&channel);
+        if !ffi::bridge::rvp_instance_listen(&channel) {
+            report_foreign(&channel);
+        }
         return;
     }
     // `/new` runs on its own and leaves the channel to the running one.
@@ -153,12 +167,28 @@ fn single_instance(cli: &Cli, settings: &rvp_app::Settings) {
         }
         std::process::exit(0);
     }
-    if !ffi::bridge::rvp_instance_listen(&channel) {
+    if !ffi::bridge::rvp_instance_listen(&channel) && !report_foreign(&channel) {
         rvp_app::log::report(
             rvp_app::log::Level::Warning,
             &format!("cannot listen for other instances on {channel}"),
         );
     }
+}
+
+/// Says so when another user's program holds the channel's name
+/// (Windows): this RVP neither handed its files to it nor listens.
+fn report_foreign(channel: &str) -> bool {
+    let foreign = ffi::bridge::rvp_instance_foreign(channel);
+    if foreign {
+        rvp_app::log::report(
+            rvp_app::log::Level::Warning,
+            &format!(
+                "another user's program holds the channel {channel}: \
+                 nothing was sent to it, and this RVP runs on its own"
+            ),
+        );
+    }
+    foreign
 }
 
 /// Lets the mpv core shut down after playback stopped.

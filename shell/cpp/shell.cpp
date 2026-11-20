@@ -41,8 +41,6 @@
 #include <QtGui/QPolygon>
 #include <QtGui/QRegion>
 #include <QtGui/QWindow>
-#include <QtNetwork/QLocalServer>
-#include <QtNetwork/QLocalSocket>
 #include <QtOpenGL/QOpenGLFramebufferObject>
 #include <QtQml/QQmlEngine>
 #include <QtQuick/QQuickOpenGLUtils>
@@ -56,8 +54,12 @@
 #define NOMINMAX
 #endif
 #include <windows.h>
+#include <shlobj_core.h>
 // ClipCursor and the monitor calls.
 #pragma comment(lib, "user32.lib")
+// Tools::show_file: the shell's folder view and COM.
+#pragma comment(lib, "shell32.lib")
+#pragma comment(lib, "ole32.lib")
 #endif
 
 namespace {
@@ -84,38 +86,6 @@ QString fromStr(rust::Str text)
 QRect toRect(const std::array<std::int32_t, 4> &r)
 {
     return QRect(r[0], r[1], r[2], r[3]);
-}
-
-// The single-instance channel: requests (one JSON line each) go to the
-// Player once QML attached it; earlier ones wait.
-QLocalServer *instanceServer = nullptr;
-QPointer<QObject> instanceReceiver;
-QStringList instanceQueue;
-
-void deliverRequest(const QString &line)
-{
-    if (instanceReceiver)
-        QMetaObject::invokeMethod(instanceReceiver, "remote_message", Qt::QueuedConnection,
-                                  Q_ARG(QString, line));
-    else
-        instanceQueue.append(line);
-}
-
-void acceptInstances()
-{
-    while (QLocalSocket *socket = instanceServer->nextPendingConnection()) {
-        QObject::connect(socket, &QLocalSocket::disconnected, socket, &QObject::deleteLater);
-        QObject::connect(socket, &QLocalSocket::readyRead, socket, [socket] {
-            while (socket->canReadLine()) {
-                const QString line = QString::fromUtf8(socket->readLine()).trimmed();
-                if (line.isEmpty())
-                    continue;
-                deliverRequest(line);
-                socket->write("ok\n");
-                socket->flush();
-            }
-        });
-    }
 }
 
 // Atlas images by name, shared by every SkinView (render thread).
@@ -405,14 +375,6 @@ QString Tools::windows_json() const
     return QString::fromUtf8(QJsonDocument(windows).toJson(QJsonDocument::Compact));
 }
 
-void Tools::instance_receiver(QObject *receiver) const
-{
-    instanceReceiver = receiver;
-    const QStringList waiting = std::exchange(instanceQueue, {});
-    for (const QString &line : waiting)
-        deliverRequest(line);
-}
-
 bool Tools::run_self(const QStringList &arguments) const
 {
     return QProcess::startDetached(QCoreApplication::applicationFilePath(), arguments);
@@ -602,14 +564,25 @@ QString Tools::screen_json(QWindow *window) const
 bool Tools::show_file(const QString &path) const
 {
 #ifdef Q_OS_WIN
-    // Explorer takes `/select,"path"` as one argument.
-    QProcess explorer;
-    explorer.setProgram(QStringLiteral("explorer.exe"));
-    explorer.setNativeArguments(QStringLiteral("/select,\"%1\"").arg(QDir::toNativeSeparators(path)));
-    return explorer.startDetached();
-#else
-    return open_url(QUrl::fromLocalFile(QFileInfo(path).absolutePath()).toString());
+    // The shell's own call opens the folder with the file selected: no
+    // program is started by name, and the path is never part of a
+    // command line. COM is joined in the apartment Qt chose (balanced
+    // below).
+    const std::wstring native = QDir::toNativeSeparators(QFileInfo(path).absoluteFilePath()).toStdWString();
+    const HRESULT joined = CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
+    bool shown = false;
+    PIDLIST_ABSOLUTE item = nullptr;
+    if (SUCCEEDED(SHParseDisplayName(native.c_str(), nullptr, &item, 0, nullptr))) {
+        shown = SUCCEEDED(SHOpenFolderAndSelectItems(item, 0, nullptr, 0));
+        ILFree(item);
+    }
+    if (SUCCEEDED(joined))
+        CoUninitialize();
+    if (shown)
+        return true;
+    // An item the shell cannot make: its folder, as elsewhere.
 #endif
+    return open_url(QUrl::fromLocalFile(QFileInfo(path).absolutePath()).toString());
 }
 
 QString Tools::tr_menu(const QString &label) const
@@ -645,59 +618,6 @@ void Tools::set_app_font(const QString &family, int points) const
     if (points > 0)
         font.setPointSize(points);
     QGuiApplication::setFont(font);
-}
-
-bool rvp_instance_send(rust::Str name, rust::Str message)
-{
-    QLocalSocket socket;
-    socket.connectToServer(fromStr(name));
-    if (!socket.waitForConnected(1000))
-        return false;
-    QByteArray line(message.data(), static_cast<qsizetype>(message.size()));
-    line.append('\n');
-    socket.write(line);
-    if (!socket.waitForBytesWritten(1000))
-        return false;
-    while (!socket.canReadLine()) {
-        if (!socket.waitForReadyRead(3000))
-            return false;
-    }
-    return socket.readLine().trimmed() == "ok";
-}
-
-bool rvp_instance_running(rust::Str name)
-{
-    QLocalSocket socket;
-    socket.connectToServer(fromStr(name));
-    const bool running = socket.waitForConnected(500);
-    socket.abort();
-    return running;
-}
-
-bool rvp_instance_listen(rust::Str name)
-{
-    if (instanceServer)
-        return true;
-    auto *server = new QLocalServer(QCoreApplication::instance());
-    server->setSocketOptions(QLocalServer::UserAccessOption);
-    const QString channel = fromStr(name);
-    bool listening = server->listen(channel);
-    // A socket file nobody accepts on: left by a process that died (Unix).
-    // One that accepts belongs to a running RVP that did not answer in
-    // time (its window thread was busy): it keeps its channel, and this
-    // one runs on its own (the Linux audit's M5).
-    if (!listening && server->serverError() == QAbstractSocket::AddressInUseError
-        && !rvp_instance_running(name)) {
-        QLocalServer::removeServer(channel);
-        listening = server->listen(channel);
-    }
-    if (!listening) {
-        delete server;
-        return false;
-    }
-    instanceServer = server;
-    QObject::connect(server, &QLocalServer::newConnection, server, acceptInstances);
-    return true;
 }
 
 void rvp_setup_graphics()

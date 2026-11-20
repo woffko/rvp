@@ -110,7 +110,7 @@ fn with_entry(text: &str, file: &Path, stamp: &str) -> String {
     let mut entry = String::new();
     let _ = write!(
         entry,
-        "  <bookmark href=\"{}\" added=\"{stamp}\" modified=\"{stamp}\" visited=\"{stamp}\">\n    <info>\n      <metadata owner=\"http://freedesktop.org\">\n        <mime:mime-type type=\"{mime}\"/>\n        <bookmark:applications>\n          <bookmark:application name=\"RVP\" exec=\"&apos;rvp %u&apos;\" modified=\"{stamp}\" count=\"1\"/>\n        </bookmark:applications>\n      </metadata>\n    </info>\n  </bookmark>\n",
+        "  <bookmark href=\"{}\" added=\"{stamp}\" modified=\"{stamp}\" visited=\"{stamp}\">\n    <info>\n      <metadata owner=\"http://freedesktop.org\">\n        <mime:mime-type type=\"{mime}\"/>\n        <bookmark:applications>\n          <bookmark:application name=\"RVP\" exec=\"&apos;rvp -- %u&apos;\" modified=\"{stamp}\" count=\"1\"/>\n        </bookmark:applications>\n      </metadata>\n    </info>\n  </bookmark>\n",
         escape(&uri)
     );
     let end = text.rfind("</xbel>").unwrap_or(text.len());
@@ -297,6 +297,8 @@ mod tests {
         assert!(text.contains("visited=\"1970-01-01T00:00:20.000000Z\""));
         assert!(!text.contains("00:00:10"));
         assert!(text.contains("<mime:mime-type type=\"video/x-matroska\"/>"));
+        // What the desktop opens it with ends RVP's options first.
+        assert!(text.contains("exec=\"&apos;rvp -- %u&apos;\""), "{text}");
         assert!(text.trim_end().ends_with("</xbel>"));
         let _ = std::fs::remove_dir_all(&dir);
     }

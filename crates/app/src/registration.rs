@@ -160,10 +160,17 @@ fn set(key: impl Into<String>, name: &str, value: impl Into<String>) -> Registry
     }
 }
 
+/// The command of a verb: RVP at `exe`, its `switches` (PotPlayer's), then
+/// `--` and the shell's `placeholder`: what the shell puts there is a
+/// file, never an option.
+fn command(exe: &str, switches: &str, placeholder: &str) -> String {
+    format!("\"{exe}\" {switches}-- \"{placeholder}\"")
+}
+
 /// The changes Apply to System makes for `settings` with RVP at `exe`.
 #[must_use]
 pub fn registration(settings: &AssociationSettings, exe: &str) -> Vec<RegistryChange> {
-    let open = format!("\"{exe}\" \"%1\"");
+    let open = command(exe, "", "%1");
     let icon = format!("{exe},0");
     let mut changes = vec![
         set(CAPABILITIES, "ApplicationName", "RVP"),
@@ -214,7 +221,7 @@ fn type_changes(
     exe: &str,
     changes: &mut Vec<RegistryChange>,
 ) {
-    let open = format!("\"{exe}\" \"%1\"");
+    let open = command(exe, "", "%1");
     let icon = format!("{exe},0");
     let extension = &file_type.extension;
     let progid = format!(r"{CLASSES}\RVP.{extension}");
@@ -259,7 +266,7 @@ fn type_changes(
             set(
                 format!(r"{progid}\shell\add\command"),
                 "",
-                format!("\"{exe}\" /add \"%1\""),
+                command(exe, "/add ", "%1"),
             ),
         ]);
     } else {
@@ -289,7 +296,7 @@ fn autoplay_changes(settings: &AssociationSettings, exe: &str, changes: &mut Vec
         changes.push(set(
             format!(r"{progid}\shell\play\command"),
             "",
-            format!("\"{exe}\" \"%L\""),
+            command(exe, "", "%L"),
         ));
     }
     for (name, event) in AUTOPLAY {
@@ -372,7 +379,10 @@ pub fn desktop_entry(settings: &AssociationSettings, exe: &str, globs: &str) -> 
         format!("{};", mime.join(";"))
     };
     DESKTOP_ENTRY
-        .replace("Exec=rvp %F", &format!("Exec={} %F", desktop_exec(exe)))
+        .replace(
+            "Exec=rvp -- %F",
+            &format!("Exec={} -- %F", desktop_exec(exe)),
+        )
         .replace("@MIME_TYPES@", &types)
 }
 
@@ -469,7 +479,7 @@ mod tests {
         let globs = "# header\n50:video/x-xyz:*.xyz\n50:video/x-matroska:*.mkv\n";
         let entry = desktop_entry(&settings, "/tmp/My Apps/RVP-x86_64.AppImage", globs);
         assert!(
-            entry.contains("Exec=\"/tmp/My Apps/RVP-x86_64.AppImage\" %F\n"),
+            entry.contains("Exec=\"/tmp/My Apps/RVP-x86_64.AppImage\" -- %F\n"),
             "{entry}"
         );
         let types = listed_types(&entry);
@@ -484,7 +494,7 @@ mod tests {
         assert!(!listed(&types, &file("mkv"), globs));
         assert!(!listed(&types, &file("nope"), globs));
         let plain = desktop_entry(&settings, "/opt/rvp/bin/rvp", globs);
-        assert!(plain.contains("\nExec=/opt/rvp/bin/rvp %F\n"));
+        assert!(plain.contains("\nExec=/opt/rvp/bin/rvp -- %F\n"));
         assert!(!listed_types(&plain).contains("x-content/video-dvd"));
         settings.autoplay.insert("dvd".to_owned());
         settings.autoplay.insert("video".to_owned());
@@ -530,13 +540,13 @@ mod tests {
         assert!(has(&set(
             r"Software\Classes\RVP.mp4\shell\open\command",
             "",
-            r#""C:\RVP\rvp.exe" "%1""#
+            r#""C:\RVP\rvp.exe" -- "%1""#
         )));
         assert!(has(&set(r"Software\Classes\RVP.xyz", "", "XYZ video file")));
         assert!(has(&set(
             r"Software\Classes\RVP.mp4\shell\add\command",
             "",
-            r#""C:\RVP\rvp.exe" /add "%1""#
+            r#""C:\RVP\rvp.exe" /add -- "%1""#
         )));
         assert!(has(&set(
             format!(r"{HANDLERS}\EventHandlers\PlayDVDMovieOnArrival"),
@@ -546,6 +556,28 @@ mod tests {
         assert!(has(&RegistryChange::DeleteKey {
             key: format!(r"{HANDLERS}\Handlers\RVPPlayMusicFilesOnArrival")
         }));
+        // Every verb's command ends its options before the shell's file.
+        let commands: Vec<&str> = changes
+            .iter()
+            .filter_map(|change| match change {
+                RegistryChange::Set { key, value, .. } if key.ends_with(r"\command") => {
+                    Some(value.as_str())
+                }
+                _ => None,
+            })
+            .collect();
+        assert!(commands.len() > 60, "{}", commands.len());
+        assert!(
+            commands
+                .iter()
+                .all(|value| value.ends_with(r#" -- "%1""#) || value.ends_with(r#" -- "%L""#)),
+            "{commands:?}"
+        );
+        assert!(has(&set(
+            r"Software\Classes\RVP.AutoPlay\shell\play\command",
+            "",
+            r#""C:\RVP\rvp.exe" -- "%L""#
+        )));
         // Never a type's default: no `.ext` default value is written.
         assert!(!changes.iter().any(|change| matches!(
             change,

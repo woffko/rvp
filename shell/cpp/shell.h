@@ -5,7 +5,7 @@
 // * Tools: helpers for QML (the frame-synced chrome repaint, file URLs,
 //   window grabs for the self-test).
 // * The atlas cache and painting helpers the Rust SkinView draws with.
-// * The single-instance channel (QLocalServer; crates/app/src/instance.rs).
+// * The single-instance channel (cpp/instance.cpp; crates/app/src/instance.rs).
 #pragma once
 
 #include <array>
@@ -82,6 +82,13 @@ public:
     // Hands requests from other instances to `receiver`'s
     // remote_message(QString), the ones that came before it first.
     Q_INVOKABLE void instance_receiver(QObject *receiver) const;
+    // The self-test's look at the instance channel's limits: two clients
+    // on the channel this process listens on (false when it does not),
+    // one that sends more than a request may hold without a line and one
+    // that sends nothing; instance_probe() is JSON {flood, idle}: when
+    // the server closed each, in ms from the start, -1 while it is open.
+    Q_INVOKABLE bool probe_instance() const;
+    Q_INVOKABLE QString instance_probe() const;
     // Starts this program again (the self-test's second instance).
     Q_INVOKABLE bool run_self(const QStringList &arguments) const;
     // The clipboard's text, and putting text on it (M11).
@@ -160,6 +167,7 @@ bool rvp_has_windows();
 bool rvp_instance_send(rust::Str name, rust::Str message);
 bool rvp_instance_listen(rust::Str name);
 bool rvp_instance_running(rust::Str name);
+bool rvp_instance_foreign(rust::Str name);
 void rvp_set_c_numeric_locale();
 void rvp_set_window_icon();
 void rvp_language_fonts(rust::Str code);

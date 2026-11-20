@@ -174,6 +174,7 @@ fn main() {
         ])
         .cpp_file("cpp/shell.h")
         .cpp_file("cpp/shell.cpp")
+        .cpp_file("cpp/instance.cpp")
         .cpp_file("cpp/video_window.cpp")
         .cpp_file("cpp/gpu_power.cpp")
         .cpp_file("cpp/taskbar.cpp")

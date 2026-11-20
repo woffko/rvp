@@ -442,7 +442,7 @@ def windows_includes(bundle: Path, includes: Path) -> None:
         register += [
             f'    WriteRegStr HKCU "{classes}\\{progid}" "" "{nsis_string(name)}"',
             f'    WriteRegStr HKCU "{classes}\\{progid}\\DefaultIcon" "" "$INSTDIR\\rvp.exe,0"',
-            f'    WriteRegStr HKCU "{classes}\\{progid}\\shell\\open\\command" "" \'"$INSTDIR\\rvp.exe" "%1"\'',
+            f'    WriteRegStr HKCU "{classes}\\{progid}\\shell\\open\\command" "" \'"$INSTDIR\\rvp.exe" -- "%1"\'',
             f'    WriteRegStr HKCU "{key}\\OpenWithProgids" "{progid}" ""',
             f'    WriteRegStr HKCU "{classes}\\Applications\\rvp.exe\\SupportedTypes" ".{extension}" ""',
             f'    WriteRegStr HKCU "Software\\RVP\\Capabilities\\FileAssociations" ".{extension}" "{progid}"',

@@ -1485,14 +1485,15 @@ m8_inhibit_without_mpris() {
 }
 
 # The crash logs of `rvp`: a panic and a fatal signal, each in a state
-# folder of its own. Never the user's: on 2026-11-15 an unset
+# folder of its own (`--crash-test` is a test hook: RVP_TEST_HOOKS=1).
+# Never the user's: on 2026-11-15 an unset
 # RVP_STATE_DIR left the installed RVP's crash log in the owner's state
 # folder (and a removal of the variable's folder could have taken it).
 m8_crash() {
     local rvp=$1 kind text state
     for kind in panic native; do
         state=$(mktemp -d)
-        RVP_STATE_DIR=$state RVP_CONFIG_DIR=$state/config "$rvp" "--crash-test=$kind" > /dev/null 2>&1
+        RVP_TEST_HOOKS=1 RVP_STATE_DIR=$state RVP_CONFIG_DIR=$state/config "$rvp" "--crash-test=$kind" > /dev/null 2>&1
         text=$(cat "$state"/crash-*.log 2> /dev/null)
         rm -rf "$state"
         case $kind:$text in
@@ -1717,7 +1718,7 @@ step_m3desktop() {
         echo "Type=Application"
         echo "Name=RVP (kit)"
         echo "Comment=RVP test build from $REPO"
-        echo "Exec=env LD_LIBRARY_PATH=$(mpv_lib_dir):$(qt_dir)/lib ${RVP_SKIN:+RVP_SKIN=$RVP_SKIN} $(rvp_bin) %F"
+        echo "Exec=env LD_LIBRARY_PATH=$(mpv_lib_dir):$(qt_dir)/lib ${RVP_SKIN:+RVP_SKIN=$RVP_SKIN} $(rvp_bin) -- %F"
         echo "Terminal=false"
         echo "Categories=AudioVideo;Video;Player;"
         echo "MimeType=video/x-matroska;video/mp4;video/webm;video/x-msvideo;video/quicktime;video/mpeg;video/mp2t;audio/flac;audio/mpeg;audio/x-wav;"

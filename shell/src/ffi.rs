@@ -27,12 +27,20 @@ pub mod bridge {
         /// True when QML created a window (false when Main.qml failed).
         fn rvp_has_windows() -> bool;
         /// Sends one request line to the instance listening on `name`; true
-        /// when it took the request.
+        /// when it took the request. On Windows only to a pipe the current
+        /// user owns: another's gets nothing (`cpp/instance.cpp`).
         fn rvp_instance_send(name: &str, message: &str) -> bool;
         /// Listens for other instances on `name`; false when that failed.
+        /// On Windows this process makes the pipe's first instance, for
+        /// the current user alone: false when the name is taken.
         fn rvp_instance_listen(name: &str) -> bool;
-        /// Whether an instance listens on `name` (connects and leaves).
+        /// Whether an instance of the current user's listens on `name`
+        /// (connects and leaves).
         fn rvp_instance_running(name: &str) -> bool;
+        /// Whether another user's program holds the name `name` (Windows;
+        /// false elsewhere, where the socket lies in the user's own
+        /// folder).
+        fn rvp_instance_foreign(name: &str) -> bool;
         /// The interface's languages (M19): JSON `[{code, name}]` of the
         /// translations built into RVP, each named in its own language.
         fn rvp_interface_languages() -> String;

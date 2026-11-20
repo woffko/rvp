@@ -3,9 +3,10 @@
 //! notice that counts down and can be cancelled ([`Countdown`]).
 //!
 //! The app only decides; the shell carries out [`UiRequest::Power`] with
-//! its platform code. With the dry-run hook (`--power-dry-run=FILE`, always
-//! on with `--selftest`) the shell appends the action's name to the file
-//! instead ([`write_dry_run`]): tests never power a machine off.
+//! its platform code. With the dry-run hook (`--power-dry-run=FILE`, FILE
+//! only with `RVP_TEST_HOOKS=1`; always on with `--selftest`) the shell
+//! appends the action's name to the file instead ([`write_dry_run`]):
+//! tests never power a machine off.
 //!
 //! The timer takes the seconds until it fires (the window's dialog turns
 //! a time of day into them, as it knows the local time) and a label for

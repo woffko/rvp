@@ -140,13 +140,33 @@ smoothing for users without SVP, after a study of the engines.
   one entry at a time, so never use mpv's playlist for Next, Previous or the
   end of a file. Undoable changes go through `Library::edit`, the rest
   (selection, scrolling, playback marks) through `Library::update`.
-- A running `rvp` takes the files of the next one (`rvp_app::instance`, a
-  `QLocalServer` channel `rvp-<user>`; on Unix in `$XDG_RUNTIME_DIR`, the
-  user's own folder, never the shared `/tmp`, the Linux audit's M5). A
-  channel's socket is removed only when nothing accepts on it: a running
-  RVP that answered late keeps it. The self-test neither forwards nor
-  listens unless `--instance=NAME` names a separate channel, so test runs
-  never reach the owner's player.
+- A running `rvp` takes the files of the next one (`rvp_app::instance`,
+  `shell/cpp/instance.cpp`, a channel `rvp-<user>`). On Unix a
+  `QLocalServer` socket in `$XDG_RUNTIME_DIR` when that is a real
+  directory of the user's with no access for others, else in
+  `<state>/channel` (0700), never the shared `/tmp` (the Linux audit's
+  M5); a path longer than Qt binds (106 bytes, 97 for the folder: Qt
+  binds in a temporary folder beside it first) gives no channel, with a
+  log line. On Windows a named pipe RVP
+  makes itself (Qt's server cannot adopt one): the first instance with
+  `FILE_FLAG_FIRST_PIPE_INSTANCE`, the current user alone in its DACL and
+  as owner, no remote clients; a client opens it with
+  `SECURITY_IDENTIFICATION` and sends only when the pipe's owner is the
+  current user. A name another user holds means no forwarding and no
+  listening, with a log line. A connection's buffer is capped (4 MiB)
+  and it is closed after 5 s. A channel's socket is removed only when
+  nothing accepts on it: a running RVP that answered late keeps it. The
+  self-test neither forwards nor listens unless `--instance=NAME` names a
+  separate channel, so test runs never reach the owner's player.
+- Launchers (`packaging/linux/rvp.desktop`, the registry's verbs in
+  `registration.rs`, the installer, the recent list) put `--` before the
+  file placeholder; `registration::desktop_entry` replaces the entry's
+  `Exec=rvp -- %F` by that text, so both change together.
+- The test hooks `--power-dry-run=FILE`, `--crash-test` and
+  `--install-tensorrt` (`rvp_app::cli::TEST_HOOKS`) take effect only with
+  `RVP_TEST_HOOKS=1` in the environment; without it each is named on the
+  standard error and ignored (`--power-dry-run` stays a dry run, into the
+  state folder). Scripts that use them set the variable.
 - Several RVPs may still run on one folder ("Multiple instances", `rvp
   /new`), and one never writes another's state back: `state.json`,
   `marks.json`, `playlists.json` and `settings.json` go through
@@ -371,7 +391,7 @@ smoothing for users without SVP, after a study of the engines.
   (`smoothing.original-first-tensorrt`, `SmoothingSettings::original_for`),
   so mpv waits for them before its clock runs (with the original
   first, the switch dropped about 60 frames; frames made while the script
-  loads did not help, the host's runs of 2026-11-08). `--install-tensorrt` installs at once (tests);
+  loads did not help, the host's runs of 2026-11-08). `--install-tensorrt` installs at once (tests, with `RVP_TEST_HOOKS=1`);
   `RVP_TENSORRT_MIRROR` (a folder URL, `file://` too) replaces NVIDIA's
   servers; the host's copy of the archives is in
   `~/rvp-reference/trt/nvidia` (Linux's wheels in `nvidia-linux`).
@@ -495,8 +515,9 @@ smoothing for users without SVP, after a study of the engines.
   crash at exit).
 - Crash logs go to RVP's state folder: panics (`rvp_app::crash`), fatal
   signals and unhandled exceptions with a minidump (`shell/src/crash.rs`).
-  `rvp --crash-test=panic` or `=native` crashes on purpose; checks run
-  it with a state folder of their own (it writes the crash log there).
+  `rvp --crash-test=panic` or `=native` (with `RVP_TEST_HOOKS=1`)
+  crashes on purpose; checks run it with a state folder of their own (it
+  writes the crash log there).
 - The Windows VM's M8 check is `tools/windows-vm/m8-all.ps1` (the
   installer, `m7-all.ps1` on the installed copy, registry before and
   after, the portable ZIP). Windows' media session manager runs only for a
@@ -896,9 +917,10 @@ smoothing for users without SVP, after a study of the engines.
   for the restart and reads no properties meanwhile. Previews, scenes and
   list thumbnails are for local files only (a network source could hold
   the core up).
-- Power actions never run in tests: `--power-dry-run=FILE` (always on
-  with `--selftest`: `<state>/power-dry-run.txt`) writes the action
-  instead. Never shut down, sleep or hibernate the host or a VM.
+- Power actions never run in tests: `--power-dry-run=FILE` (FILE with
+  `RVP_TEST_HOOKS=1`; always on with `--selftest`:
+  `<state>/power-dry-run.txt`) writes the action instead. Never shut
+  down, sleep or hibernate the host or a VM.
 - The Recycle Bin (`shell/src/recycle.rs`) gets full paths: the shell
   deletes a relative one for good. Linux's trash is goal S's.
 - mpv numbers DVD titles from 0 (`dvd://0/DEVICE` is the first); RVP

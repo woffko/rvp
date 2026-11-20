@@ -394,7 +394,7 @@ Then try by hand (M8's acceptance on Linux):
       keys; the screen does not blank (wait past the blank-screen delay).
       Paused, it may blank again.
 - [ ] The AppImage (`chmod +x` it, run it) plays a film the same way.
-- [ ] `rvp --crash-test=native` ends at once and leaves
+- [ ] `RVP_TEST_HOOKS=1 rvp --crash-test=native` ends at once and leaves
       `crash-<time>-native.log` in `~/.local/state/rvp`; delete it after.
       On Ubuntu apport also catches the crash (as it does `m8`'s): close
       its report without sending and delete

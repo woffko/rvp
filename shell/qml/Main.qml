@@ -1843,8 +1843,9 @@ Window {
     //                         --expect-tolerance (default 2.5) seconds of
     //                         --expect-time=SECONDS; with --expect-entry=I
     //                         and --expect-entries=N also the album entry
-    //   --instance=NAME       the functional check also starts a second
-    //                         RVP with /add on this channel
+    //   --instance=NAME       the functional check also probes this
+    //                         channel's limits and starts a second RVP
+    //                         with /add on it
     QtObject {
         id: selftest
         // Read in begin(): the command line is parsed by Player.start().
@@ -3407,7 +3408,7 @@ Window {
             break
         default:
             // Back to M3's steps.
-            t.step = 126
+            t.step = 124
             t.stepStarted = Date.now()
             break
         }
@@ -3571,6 +3572,28 @@ Window {
             t.step = 200
             t.stepStarted = Date.now()
             break
+        case 124:
+            // The channel closes a connection that sends more than a
+            // request without a line at once, and an idle one after a
+            // few seconds.
+            if (player.option("instance") === "") {
+                Tools.log("check instance_limits=SKIPPED no --instance")
+                t.step = 126
+                break
+            }
+            if (!Tools.probe_instance()) {
+                t.check("instance_limits", false, "this RVP does not listen")
+                t.step = 126
+                break
+            }
+            t.next()
+            break
+        case 125: {
+            const probe = JSON.parse(Tools.instance_probe())
+            t.waitFor("instance_limits", () => probe.flood >= 0 && probe.flood < 4000 && probe.idle >= 4000,
+                      15000, () => "closed after " + probe.flood + " ms (flood), " + probe.idle + " ms (idle)")
+            break
+        }
         case 126: {
             const name = player.option("instance")
             if (name === "") {
@@ -3579,7 +3602,7 @@ Window {
                 break
             }
             t.before = s
-            Tools.run_self(["--instance=" + name, "/add", String(s.path)])
+            Tools.run_self(["--instance=" + name, "/add", "--", String(s.path)])
             t.next()
             break
         }

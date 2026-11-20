@@ -1312,8 +1312,8 @@ impl qobject::Player {
         // The calibration's key (after the start: libmpv's version).
         core.app.set_hardware(crate::hardware::describe());
         // `--install-tensorrt`: RIFE (TensorRT)'s download at once, NVIDIA's
-        // terms accepted by asking for it (tests and scripts); a failure is
-        // in the log.
+        // terms accepted by asking for it (tests and scripts, a test hook:
+        // only with RVP_TEST_HOOKS=1); a failure is in the log.
         if Cli::from_env().flag("install-tensorrt") {
             drop(core.app.tensorrt_install());
         }

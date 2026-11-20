@@ -103,7 +103,7 @@ Section "RVP" SecMain
     WriteRegStr HKCU "${APP_KEY}\Capabilities" "ApplicationIcon" "$INSTDIR\rvp.exe,0"
     WriteRegStr HKCU "Software\Classes\Applications\rvp.exe" "FriendlyAppName" "RVP"
     WriteRegStr HKCU "Software\Classes\Applications\rvp.exe\DefaultIcon" "" "$INSTDIR\rvp.exe,0"
-    WriteRegStr HKCU "Software\Classes\Applications\rvp.exe\shell\open\command" "" '"$INSTDIR\rvp.exe" "%1"'
+    WriteRegStr HKCU "Software\Classes\Applications\rvp.exe\shell\open\command" "" '"$INSTDIR\rvp.exe" -- "%1"'
     !insertmacro RegisterTypes
     WriteRegStr HKCU "Software\RegisteredApplications" "RVP" "${APP_KEY}\Capabilities"
     !insertmacro NotifyShell

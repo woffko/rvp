@@ -106,7 +106,7 @@ Check 'start_menu_entry' (Test-Path $shortcut) $shortcut
 $progids = (Get-Item 'HKCU:\Software\Classes\.mkv\OpenWithProgids' -ErrorAction SilentlyContinue).Property
 Check 'open_with_mkv' ($progids -contains 'RVP.mkv') ($progids -join ',')
 $command = (Get-ItemProperty 'HKCU:\Software\Classes\RVP.mkv\shell\open\command' -ErrorAction SilentlyContinue).'(default)'
-Check 'command_mkv' ($command -eq "`"$dir\rvp.exe`" `"%1`"") $command
+Check 'command_mkv' ($command -eq "`"$dir\rvp.exe`" -- `"%1`"") $command
 Check 'default_apps_entry' ((Get-ItemProperty 'HKCU:\Software\RegisteredApplications').RVP -eq 'Software\RVP\Capabilities')
 $capability = (Get-ItemProperty 'HKCU:\Software\RVP\Capabilities\FileAssociations' -ErrorAction SilentlyContinue).'.mp3'
 Check 'capabilities_mp3' ($capability -eq 'RVP.mp3') $capability
@@ -129,6 +129,8 @@ Check 'm7_installed' ($m7Results.Count -eq 2 -and $m7Failed.Count -eq 0 -and ($m
     "$(($m7Results | ForEach-Object { $_.Line }) -join ', ')"
 
 Write-Host '== crash logs'
+# --crash-test is a test hook: RVP takes it only with RVP_TEST_HOOKS=1.
+$env:RVP_TEST_HOOKS = '1'
 foreach ($kind in @('panic', 'native')) {
     $crashHome = "$m8\home-crash-$kind"
     Remove-Item -Recurse -Force $crashHome -ErrorAction SilentlyContinue
@@ -143,6 +145,7 @@ foreach ($kind in @('panic', 'native')) {
         Check 'crash_minidump' ($dumps.Count -eq 1 -and $dumps[0].Length -gt 1000) "$($dumps.Name) $($dumps[0].Length) bytes"
     }
 }
+Remove-Item Env:RVP_TEST_HOOKS -ErrorAction SilentlyContinue
 
 Write-Host '== uninstall'
 Start-Process -Wait -FilePath "$dir\uninstall.exe" -ArgumentList '/S'

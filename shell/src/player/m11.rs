@@ -51,8 +51,10 @@ pub(super) fn start_thumbnails(
     .map(|error| format!("thumbnails: {error}"))
 }
 
-/// The dry-run file of the power actions: `--power-dry-run=FILE`, or with
-/// `--selftest` a file in the state folder (a test never powers off).
+/// The dry-run file of the power actions: `--power-dry-run=FILE` (FILE
+/// only with `RVP_TEST_HOOKS=1`, `Cli::from_env`), or with `--selftest`
+/// or a bare `--power-dry-run` a file in the state folder (a test never
+/// powers off).
 pub(super) fn power_dry_run(cli: &rvp_app::Cli, state: &std::path::Path) -> Option<PathBuf> {
     if let Some(file) = cli.value("power-dry-run") {
         return Some(PathBuf::from(file));
