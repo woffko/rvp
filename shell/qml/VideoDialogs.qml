@@ -86,7 +86,7 @@ Item {
         standardButtons: Dialog.Ok | Dialog.Cancel
         onAccepted: holder.answer(inputField.text)
         ColumnLayout {
-            Label { id: inputLabel }
+            Label { id: inputLabel; textFormat: Text.PlainText }
             TextField {
                 id: inputField
                 Layout.preferredWidth: 320

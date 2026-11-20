@@ -63,12 +63,14 @@ Item {
         contentItem: RowLayout {
             spacing: 24
             Label {
+                textFormat: Text.PlainText
                 text: (entry.mark === 1 ? "✓ " : entry.mark === 0 ? "  " : "") + entry.label
                 opacity: entry.enabled ? 1 : 0.5
                 elide: Text.ElideRight
                 Layout.fillWidth: true
             }
             Label {
+                textFormat: Text.PlainText
                 text: entry.shortcut
                 opacity: 0.7
             }
@@ -85,15 +87,30 @@ Item {
         contentItem: RowLayout {
             spacing: 24
             Label {
+                textFormat: Text.PlainText
                 text: (styled.mark === 1 ? "✓ " : styled.mark === 0 ? "  " : "") + styled.label
                 color: !styled.enabled ? styled.c.dimText : styled.highlighted ? styled.c.selectedText : styled.c.text
                 elide: Text.ElideRight
                 Layout.fillWidth: true
             }
             Label {
+                textFormat: Text.PlainText
                 text: styled.shortcut
                 color: styled.highlighted ? styled.c.selectedText : styled.c.dimText
             }
+        }
+    }
+    // A submenu's entry, which shows its title as written: `fill` doubles
+    // a title's "&" for the system's menus and the item's mnemonic, and
+    // Qt's own label would also take markup in a menu file's title.
+    component SubEntry: MenuItem {
+        id: subEntry
+        contentItem: Label {
+            textFormat: Text.PlainText
+            text: subEntry.text.replace(/&&/g, "&")
+            opacity: subEntry.enabled ? 1 : 0.5
+            elide: Text.ElideRight
+            rightPadding: subEntry.arrow ? subEntry.arrow.width + subEntry.spacing : 0
         }
     }
     // A submenu's entry in those colours.
@@ -104,7 +121,8 @@ Item {
             color: sub.highlighted ? sub.c.selectedBack : "transparent"
         }
         contentItem: Label {
-            text: sub.text
+            textFormat: Text.PlainText
+            text: sub.text.replace(/&&/g, "&")
             color: sub.highlighted ? sub.c.selectedText : sub.c.text
             elide: Text.ElideRight
         }
@@ -137,6 +155,7 @@ Item {
             implicitHeight: Math.min(Math.max(implicitBackgroundHeight + topInset + bottomInset,
                                               contentHeight + topPadding + bottomPadding),
                                      holder.screenRoom)
+            delegate: SubEntry {}
             // The items still to add (JSON), the first time it opens.
             property var pending: []
             onAboutToShow: holder.fillPending(submenu)
@@ -221,13 +240,14 @@ Item {
         fill(menu, items)
     }
 
-    // Builds the menu of `kind` ("context", "playlist" or "skin").
-    function build(kind) {
+    // Builds the menu of `kind` ("context", "playlist" or "skin"), in the
+    // look the settings give, or in `look` (the self-test's colours).
+    function build(kind, look) {
         if (holder.current) {
             holder.current.close()
             holder.current.destroy()
         }
-        holder.look = JSON.parse(holder.player.menu_look_json())
+        holder.look = look !== undefined ? look : JSON.parse(holder.player.menu_look_json())
         const styled = holder.colors !== null && !holder.nativeMenus
         const menu = (styled ? styledMenuComponent : menuComponent).createObject(holder)
         fill(menu, JSON.parse(holder.player.menu_json(kind)))

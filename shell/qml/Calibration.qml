@@ -76,6 +76,7 @@ Window {
             Layout.fillWidth: true
             wrapMode: Text.Wrap
             font.bold: true
+            textFormat: Text.PlainText
             text: calibration.stateText()
         }
         ProgressBar {
@@ -88,6 +89,7 @@ Window {
         }
         Label {
             visible: calibration.status.state === "running"
+            textFormat: Text.PlainText
             text: qsTr("%1 done, at most %2 left").arg(calibration.status.done || 0).arg(calibration.status.left || 0)
             opacity: 0.7
         }
@@ -105,6 +107,7 @@ Window {
                     model: calibration.status.rows || []
                     Label {
                         required property var modelData
+                        textFormat: Text.PlainText
                         text: modelData.height > 0
                               ? qsTr("%1 %2: up to %3p").arg(modelData.engine).arg(calibration.presetText(modelData.preset)).arg(modelData.height)
                               : qsTr("%1 %2: below 480p").arg(modelData.engine).arg(calibration.presetText(modelData.preset))
@@ -114,6 +117,7 @@ Window {
                     model: calibration.status.failed || []
                     Label {
                         required property var modelData
+                        textFormat: Text.PlainText
                         text: qsTr("%1: does not run here").arg(modelData)
                     }
                 }

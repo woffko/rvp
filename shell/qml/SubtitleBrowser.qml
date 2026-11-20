@@ -158,6 +158,7 @@ Item {
                     Layout.fillWidth: true
                     visible: text !== ""
                     wrapMode: Text.Wrap
+                    textFormat: Text.PlainText
                     text: holder.data.error !== "" ? holder.data.error : holder.syncText()
                 }
                 ListView {
@@ -183,6 +184,7 @@ Item {
                         contentItem: RowLayout {
                             spacing: 10
                             Label {
+                                textFormat: Text.PlainText
                                 text: holder.timesText(row.modelData)
                                 visible: text !== ""
                                 font.family: "monospace"

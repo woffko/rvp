@@ -1433,6 +1433,7 @@ Window {
         property real dy
         x: label.outline + dx
         y: label.outline + dy
+        textFormat: Text.PlainText
         text: label.text
         font.family: label.family
         font.pixelSize: label.pixelSize
@@ -1565,6 +1566,7 @@ Window {
             horizontalAlignment: Text.AlignHCenter
             color: "#f0f0f0"
             font.pixelSize: 13
+            textFormat: Text.PlainText
             text: player.seek_tip
         }
     }
@@ -1588,6 +1590,7 @@ Window {
             horizontalAlignment: Text.AlignHCenter
             color: "#f0f0f0"
             font.pixelSize: 16
+            textFormat: Text.PlainText
             text: qsTr("%1\nin %2 seconds").arg(player.power_notice).arg(player.power_seconds)
         }
         Rectangle {
@@ -1683,6 +1686,7 @@ Window {
             width: Math.min(implicitWidth, root.width - 64)
             elide: Text.ElideRight
             color: "#e8e8f0"
+            textFormat: Text.PlainText
             text: player.message
         }
         Timer {
@@ -2870,7 +2874,9 @@ Window {
             t.stepStarted = Date.now()
             break
         default:
-            if (t.step >= 300)
+            if (t.step >= 400)
+                plainTextTick()
+            else if (t.step >= 300)
                 m6Tick()
             else if (t.step >= 200)
                 m4Tick()
@@ -3406,6 +3412,119 @@ Window {
                           && String(s.osd).indexOf("Audio Stretching : 100%") >= 0, 3000,
                       () => "af " + s.af + " osd " + s.osd)
             break
+        default:
+            // Text from outside RVP.
+            t.step = 400
+            t.stepStarted = Date.now()
+            break
+        }
+    }
+
+    // Text that comes from outside RVP (a title, a skin's tooltip, a
+    // favorite's name) shows as written: markup in it is neither styled
+    // nor fetched, and "&" stays a character. Pictures of such markup
+    // point at a local listener that must hear nothing, and the texts
+    // must be as wide as the same text shown plain. A Text that asks for
+    // styled text by itself fetches nothing either: QML has no network.
+    function plainTextTick() {
+        const t = selftest
+        switch (t.step) {
+        case 400: {
+            const port = Tools.selftest_listen()
+            const picture = name => "<img src=\"http://127.0.0.1:" + port + "/" + name + ".png\">"
+            const path = String(t.status().path)
+            t.before = {
+                port: port,
+                osd: picture("osd") + " <b>OSD</b> & more",
+                tip: picture("tip") + " <b>Tip</b> & more",
+                favorite: { title: picture("favorite") + " <b>Q&A</b>", path: path, folder: false },
+                favorites: player.favorites_json(),
+                // A Text set to styled text on purpose.
+                styled: Qt.createQmlObject("import QtQuick; Text { opacity: 0; textFormat: Text.StyledText }",
+                                           root, "selftest-styled")
+            }
+            t.before.styled.text = picture("styled") + " <b>styled</b>"
+            player.osd = t.before.osd
+            root.showTip(t.before.tip, 20, 20)
+            player.set_favorites(JSON.stringify([t.before.favorite]))
+            playbackLoader.active = true
+            root.playbackDialogs().show(JSON.stringify({ kind: "favorites" }))
+            t.next()
+            break
+        }
+        case 401: {
+            // While the OSD shows (2 s) and the favorites' rows are laid out.
+            if (Date.now() - t.stepStarted < 500)
+                break
+            const plainWidth = (item, text) => {
+                const probe = Qt.createQmlObject("import QtQuick; Text { visible: false; textFormat: Text.PlainText }",
+                                                 root, "selftest-plain")
+                probe.font = item.font
+                probe.text = text
+                const width = probe.implicitWidth
+                probe.destroy()
+                return width
+            }
+            // A label's text alone, without the room it leaves around it.
+            const textWidth = item => item.implicitWidth - (item.leftPadding || 0) - (item.rightPadding || 0)
+            const same = (a, b) => Math.abs(a - b) <= 1
+            // The OSD: its face is as wide as the plain text (the copies
+            // around it make the outline).
+            const face = osdText.children[osdText.children.length - 1]
+            const osdShown = textWidth(face)
+            const osdPlain = plainWidth(face, t.before.osd)
+            t.check("osd_shows_plain_text", face.text === t.before.osd && same(osdShown, osdPlain),
+                    "width " + osdShown + " plain " + osdPlain)
+            const tip = tipLoader.item.tip
+            const tipShown = textWidth(tip.contentItem)
+            const tipPlain = plainWidth(tip.contentItem, t.before.tip)
+            t.check("tooltip_shows_plain_text", same(tipShown, tipPlain), "width " + tipShown + " plain " + tipPlain)
+            tip.close()
+            const dialog = root.playbackDialogs().current
+            const list = dialog && dialog.contentItem ? dialog.contentItem.children[0] : null
+            const row = list && list.itemAtIndex ? list.itemAtIndex(0) : null
+            const rowText = t.before.favorite.title + "   " + t.before.favorite.path
+            const rowShown = row ? textWidth(row.contentItem) : -1
+            const rowPlain = row ? plainWidth(row.contentItem, rowText) : -2
+            t.check("favorite_shows_plain_text", same(rowShown, rowPlain), "width " + rowShown + " plain " + rowPlain)
+            if (dialog)
+                dialog.reject()
+            player.set_favorites(t.before.favorites)
+            // The playlist menu's "Add & Edit" in the settings' look and in
+            // a skin's colours: RVP's own label shows one "&".
+            menuLoader.active = true
+            const colors = { back: "#262628", border: "#3c3c40", text: "#ececf0", selectedText: "#ffffff",
+                             selectedBack: "#3a5f96", dimText: "#7c7c84", line: "#46464c" }
+            for (const look of [undefined, { colors: colors }]) {
+                // Each build closes and destroys the menu built before.
+                const menu = menuLoader.item.build("playlist", look)
+                let entry = null
+                for (let i = 0; i < menu.count; ++i) {
+                    const item = menu.itemAt(i)
+                    if (item && item.subMenu && item.subMenu.title.indexOf("&") >= 0)
+                        entry = item
+                }
+                const entryText = entry ? entry.contentItem.text : ""
+                t.check((look ? "styled_" : "") + "submenu_keeps_ampersand", entry !== null
+                            && entryText === entry.subMenu.title.replace(/&&/g, "&") && entryText.indexOf("&&") < 0
+                            && same(textWidth(entry.contentItem), plainWidth(entry.contentItem, entryText)),
+                        "entry " + JSON.stringify(entryText))
+            }
+            menuLoader.item.current.destroy()
+            t.next()
+            break
+        }
+        case 402: {
+            // Time for a request to arrive, had one been made.
+            if (Date.now() - t.stepStarted < 2000)
+                break
+            t.before.styled.destroy()
+            const requests = JSON.parse(Tools.selftest_requests())
+            t.check("markup_fetches_nothing", t.before.port > 0 && requests.length === 0,
+                    "port " + t.before.port + " requests " + JSON.stringify(requests))
+            t.next()
+            break
+        }
         default:
             // Back to M3's steps.
             t.step = 124

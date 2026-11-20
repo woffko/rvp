@@ -11,5 +11,14 @@ Item {
         popupType: Popup.Window
         delay: 0
         timeout: 5000
+        // The style's own content item, as plain text: a skin's tooltip,
+        // or a title in it, shows as written.
+        contentItem: Text {
+            text: toolTip.text
+            font: toolTip.font
+            wrapMode: Text.Wrap
+            color: toolTip.palette.toolTipText
+            textFormat: Text.PlainText
+        }
     }
 }

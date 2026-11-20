@@ -41,8 +41,15 @@
 #include <QtGui/QPolygon>
 #include <QtGui/QRegion>
 #include <QtGui/QWindow>
+#include <QtNetwork/QHostAddress>
+#include <QtNetwork/QNetworkAccessManager>
+#include <QtNetwork/QNetworkReply>
+#include <QtNetwork/QNetworkRequest>
+#include <QtNetwork/QTcpServer>
+#include <QtNetwork/QTcpSocket>
 #include <QtOpenGL/QOpenGLFramebufferObject>
 #include <QtQml/QQmlEngine>
+#include <QtQml/QQmlNetworkAccessManagerFactory>
 #include <QtQuick/QQuickOpenGLUtils>
 #include <QtQuick/QQuickWindow>
 
@@ -496,6 +503,35 @@ QString Tools::system_language() const
     return QStringLiteral("en");
 }
 
+int Tools::selftest_listen()
+{
+    if (listener == nullptr) {
+        listener = new QTcpServer(this);
+        if (!listener->listen(QHostAddress::LocalHost, 0))
+            return 0;
+        connect(listener, &QTcpServer::newConnection, this, [this] {
+            while (QTcpSocket *socket = listener->nextPendingConnection()) {
+                const qsizetype index = requests.size();
+                requests.append(QString());
+                connect(socket, &QTcpSocket::disconnected, socket, &QObject::deleteLater);
+                connect(socket, &QTcpSocket::readyRead, this, [this, socket, index] {
+                    if (!socket->canReadLine())
+                        return;
+                    requests[index] = QString::fromUtf8(socket->readLine()).trimmed();
+                    socket->write("HTTP/1.0 404 Not Found\r\nContent-Length: 0\r\n\r\n");
+                    socket->disconnectFromHost();
+                });
+            }
+        });
+    }
+    return listener->serverPort();
+}
+
+QString Tools::selftest_requests() const
+{
+    return QString::fromUtf8(QJsonDocument(QJsonArray::fromStringList(requests)).toJson(QJsonDocument::Compact));
+}
+
 QString Tools::list_files(const QString &folder) const
 {
     const QStringList names = QDir(folder).entryList(QDir::Files, QDir::Name);
@@ -640,11 +676,49 @@ void rvp_setup_graphics()
 
 Tools *Tools::instance = nullptr;
 
+namespace {
+
+// QML's network: RVP's QML loads its own files from the resources and
+// pictures from local files, neither through a network manager, and
+// nothing it shows comes from the network. Its manager answers every
+// request at once with an error (an empty address), so a text that is
+// taken for HTML somewhere (a title's <img>) still loads nothing.
+// Text from outside RVP is shown as plain text in the first place.
+class NoNetworkManager : public QNetworkAccessManager
+{
+public:
+    using QNetworkAccessManager::QNetworkAccessManager;
+
+protected:
+    QNetworkReply *createRequest(Operation operation, const QNetworkRequest &, QIODevice *data) override
+    {
+        return QNetworkAccessManager::createRequest(operation, QNetworkRequest(QUrl()), data);
+    }
+};
+
+class NoNetworkFactory : public QQmlNetworkAccessManagerFactory
+{
+public:
+    // Called on any of the engine's threads; keeps no state.
+    QNetworkAccessManager *create(QObject *parent) override { return new NoNetworkManager(parent); }
+};
+
+NoNetworkFactory noNetwork;
+
+}  // namespace
+
 void rvp_register_native_types()
 {
     qmlRegisterType<MpvItem>("RvpNative", 1, 0, "MpvItem");
     Tools::instance = new Tools();
-    qmlRegisterSingletonInstance("RvpNative", 1, 0, "Tools", Tools::instance);
+    // The engine asks for Tools first while Main.qml loads, before any
+    // QML could have asked the network for anything: it gets the
+    // network guard then.
+    qmlRegisterSingletonType<Tools>("RvpNative", 1, 0, "Tools", [](QQmlEngine *engine, QJSEngine *) -> QObject * {
+        engine->setNetworkAccessManagerFactory(&noNetwork);
+        QJSEngine::setObjectOwnership(Tools::instance, QJSEngine::CppOwnership);
+        return Tools::instance;
+    });
     rvp_taskbar_install();
 }
 

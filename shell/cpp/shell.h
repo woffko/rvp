@@ -3,7 +3,8 @@
 // * MpvItem: a QQuickFramebufferObject whose renderer asks Rust (libmpv's
 //   OpenGL render API) to draw into the item's framebuffer.
 // * Tools: helpers for QML (the frame-synced chrome repaint, file URLs,
-//   window grabs for the self-test).
+//   window grabs for the self-test). Registering it also leaves QML's
+//   engine without a network.
 // * The atlas cache and painting helpers the Rust SkinView draws with.
 // * The single-instance channel (cpp/instance.cpp; crates/app/src/instance.rs).
 #pragma once
@@ -24,6 +25,8 @@
 #include <QtQuick/QQuickFramebufferObject>
 
 #include "rust/cxx.h"
+
+class QTcpServer;
 
 class MpvItem : public QQuickFramebufferObject
 {
@@ -146,6 +149,12 @@ public:
     // rules (zh_TW finds zh_TW, pt_PT a Portuguese of another region when
     // it is the only one); "en" when English comes first or none fits.
     Q_INVOKABLE QString system_language() const;
+    // The self-test's look at the network: listens on a free port of
+    // 127.0.0.1 (from the first call on) and returns it; 0 when it cannot.
+    // `selftest_requests` gives what came to it as JSON, the first line of
+    // each connection ("" when it sent none), each answered with a 404.
+    Q_INVOKABLE int selftest_listen();
+    Q_INVOKABLE QString selftest_requests() const;
 
 signals:
     // A taskbar thumbnail button (M14, cpp/taskbar.cpp): 0 previous, 1
@@ -158,6 +167,10 @@ signals:
     // A media key taken while another window has the keyboard (M14,
     // cpp/taskbar.cpp): 0 play/pause, 1 stop, 2 next, 3 previous.
     void mediaKey(int key);
+
+private:
+    QTcpServer *listener = nullptr;
+    QStringList requests;
 };
 
 // Called from Rust (declared in src/ffi.rs).

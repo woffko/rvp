@@ -167,5 +167,13 @@ Window {
         popupType: Popup.Window
         delay: 0
         timeout: 5000
+        // The style's own content item, as plain text (Tip.qml).
+        contentItem: Text {
+            text: tip.text
+            font: tip.font
+            wrapMode: Text.Wrap
+            color: tip.palette.toolTipText
+            textFormat: Text.PlainText
+        }
     }
 }

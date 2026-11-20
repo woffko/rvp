@@ -361,6 +361,7 @@ ApplicationWindow {
     }
 
     component Heading: Label {
+        textFormat: Text.PlainText
         objectName: "heading"
         font.bold: true
         topPadding: 10
@@ -369,6 +370,7 @@ ApplicationWindow {
         Layout.fillWidth: true
     }
     component Note: Label {
+        textFormat: Text.PlainText
         opacity: 0.7
         wrapMode: Text.Wrap
         Layout.fillWidth: true
@@ -380,6 +382,7 @@ ApplicationWindow {
         // widening it past the window (M19).
         Layout.fillWidth: true
         contentItem: Label {
+            textFormat: Text.PlainText
             text: check.text
             wrapMode: Text.Wrap
             leftPadding: check.indicator.width + check.spacing
@@ -491,6 +494,7 @@ ApplicationWindow {
             commit()
         }
         Label {
+            textFormat: Text.PlainText
             text: amount.label
             // Longer labels (translations) wrap rather than run over.
             wrapMode: Text.WordWrap
@@ -517,6 +521,7 @@ ApplicationWindow {
             }
         }
         Label {
+            textFormat: Text.PlainText
             // The stored value until the slider leaves its stop.
             text: amount.text(slider.pressed || isNaN(amount.shown)
                               || amount.position(amount.shown) !== slider.value
@@ -541,6 +546,7 @@ ApplicationWindow {
             return v === undefined || v === null ? colorChoice.fallback : v
         }
         Label {
+            textFormat: Text.PlainText
             text: colorChoice.label
             // Longer labels (translations) wrap rather than run over.
             wrapMode: Text.WordWrap
@@ -576,6 +582,7 @@ ApplicationWindow {
         // Display texts by value; missing ones show the value.
         property var texts: ({})
         Label {
+            textFormat: Text.PlainText
             text: choice.label
             // Longer labels (translations) wrap rather than run over.
             wrapMode: Text.WordWrap
@@ -602,6 +609,7 @@ ApplicationWindow {
         property bool optional: false
         default property alias extra: tail.data
         Label {
+            textFormat: Text.PlainText
             text: field.label
             // Longer labels (translations) wrap rather than run over.
             wrapMode: Text.WordWrap
@@ -667,6 +675,7 @@ ApplicationWindow {
             model: [[1280, 720], [1920, 1080], [2560, 1440], [3840, 2160]]
             delegate: Button {
                 required property var modelData
+                // RVP's own: the numbers above.
                 text: modelData[0] + "×" + modelData[1]
                 onClicked: {
                     if (Array.isArray(win.value(sizes.target))) {
@@ -700,6 +709,7 @@ ApplicationWindow {
                     onClicked: win.set(fileList.selectPath, row.modelData)
                 }
                 Label {
+                    textFormat: Text.PlainText
                     text: row.modelData
                     elide: Text.ElideMiddle
                     Layout.fillWidth: true
@@ -786,6 +796,7 @@ ApplicationWindow {
             model: menuItems.labels
             delegate: CheckBox {
                 required property string modelData
+                // RVP's own menu's labels.
                 text: modelData.replace(/&/g, "&&")
                 checked: (win.value("skins.menu-hidden") || []).indexOf(modelData) < 0
                 onToggled: {
@@ -930,6 +941,7 @@ ApplicationWindow {
                             spacing: 0
                             Label {
                                 Layout.fillWidth: true
+                                textFormat: Text.PlainText
                                 text: win.pages[modelData.page].title
                                 opacity: 0.6
                                 font.pointSize: Math.max(7, Qt.application.font.pointSize - 1)
@@ -937,6 +949,7 @@ ApplicationWindow {
                             }
                             Label {
                                 Layout.fillWidth: true
+                                textFormat: Text.PlainText
                                 text: modelData.text
                                 font.bold: modelData.heading
                                 wrapMode: Text.WordWrap
@@ -968,6 +981,7 @@ ApplicationWindow {
                         required property var modelData
                         width: pageTree.width
                         leftPadding: 8 + modelData.depth * 18 + 16
+                        // A page's title, RVP's own.
                         text: modelData.title
                         font.bold: modelData.depth === 0
                         highlighted: modelData.depth === 0 ? modelData.own && modelData.key === win.currentKey
@@ -1019,6 +1033,7 @@ ApplicationWindow {
                             model: win.tabKeys
                             delegate: TabButton {
                                 required property string modelData
+                                // A page's title, RVP's own.
                                 text: win.titleOf(modelData)
                                 width: implicitWidth
                                 onClicked: win.showKey(modelData)
@@ -1245,6 +1260,7 @@ ApplicationWindow {
                             delegate: RowLayout {
                                 required property string modelData
                                 Label {
+                                    textFormat: Text.PlainText
                                     text: modelData
                                     Layout.preferredWidth: 60
                                 }
@@ -2033,6 +2049,7 @@ ApplicationWindow {
                             }
                         }
                         Label {
+                            textFormat: Text.PlainText
                             text: qsTr("Status: %1").arg((win.view.svp_status || ""))
                             wrapMode: Text.Wrap
                             Layout.fillWidth: true
@@ -2177,6 +2194,8 @@ ApplicationWindow {
                             title: qsTr("Download NVIDIA's TensorRT")
                             contentItem: Label {
                                 wrapMode: Text.Wrap
+                                // RVP's own text with links to NVIDIA's terms;
+                                // its values are the version and size RVP pins.
                                 textFormat: Text.StyledText
                                 text: qsTr("RVP downloads NVIDIA TensorRT %1 and CUDA's runtime from NVIDIA's servers (%2 GB) and keeps the files this card needs in RVP's state folder. They are NVIDIA's software under NVIDIA's terms, not RVP's: by downloading them you accept the NVIDIA TensorRT Software License Agreement and the CUDA End User License Agreement.").arg(tensorrt.status.version || "").arg(tensorrt.gb(tensorrt.status.download || 0))
                                       + "<br><br><a href=\"https://docs.nvidia.com/deeplearning/tensorrt/latest/reference/sla.html\">" + qsTr("TensorRT's licence") + "</a> · "
@@ -2509,11 +2528,11 @@ ApplicationWindow {
                         Heading { text: qsTr("Engines and models") }
                         Field { label: qsTr("Models folder"); path: "speech.model-folder"; optional: true; placeholder: "whisper-models" }
                         RowLayout {
-                            Label { text: qsTr("Models: %1").arg(((win.view.speech || {}).model_folder || "")); Layout.fillWidth: true; wrapMode: Text.WrapAnywhere }
+                            Label { text: qsTr("Models: %1").arg(((win.view.speech || {}).model_folder || "")); Layout.fillWidth: true; wrapMode: Text.WrapAnywhere; textFormat: Text.PlainText }
                             Button { text: qsTr("Open"); onClicked: win.player.run_action("speech-model-folder") }
                         }
                         RowLayout {
-                            Label { text: qsTr("Engines: %1").arg(((win.view.speech || {}).engine_folder || "")); Layout.fillWidth: true; wrapMode: Text.WrapAnywhere }
+                            Label { text: qsTr("Engines: %1").arg(((win.view.speech || {}).engine_folder || "")); Layout.fillWidth: true; wrapMode: Text.WrapAnywhere; textFormat: Text.PlainText }
                             Button { text: qsTr("Open"); onClicked: win.player.run_action("speech-engine-folder") }
                         }
                         Note { text: qsTr("Models are whisper.cpp's ggml-<model>.bin files from %1 that you download into the models folder; RVP downloads nothing and sends nothing anywhere. RVP's CPU and Vulkan engine comes with it; whisper.cpp's CUDA and BLAS builds (%2) go into the engines folder's cuda and blas folders. Above the GPU power budget, the next pieces and jobs run on the CPU.").arg(((win.view.speech || {}).models_url || "")).arg(((win.view.speech || {}).engines_url || "")) }
@@ -2555,10 +2574,19 @@ ApplicationWindow {
                         Repeater {
                             model: win.view.choices.skin || []
                             delegate: RadioButton {
+                                id: skinChoice
                                 required property string modelData
                                 text: modelData
                                 checked: win.s.skin === modelData
                                 onClicked: win.set("skin", modelData)
+                                // A skin's file name, as written (as Check's).
+                                contentItem: Label {
+                                    textFormat: Text.PlainText
+                                    text: skinChoice.text
+                                    elide: Text.ElideRight
+                                    leftPadding: skinChoice.indicator.width + skinChoice.spacing
+                                    verticalAlignment: Text.AlignVCenter
+                                }
                             }
                         }
                         Note { text: qsTr("Empty: RVP Default, RVP's own skin. RVP also draws PotPlayer's .dsf skins (BlackSpace is the one it is made for), from its skins folder (%1), next to the chosen skin and PotPlayer's. The skin changes at once (also from the Skins menu).").arg((win.view.skins_folder || "")) }
@@ -2947,6 +2975,7 @@ ApplicationWindow {
                             model: win.view.choices["hardware-codecs"] || []
                             delegate: CheckBox {
                                 required property var modelData
+                                // RVP's own list of codecs.
                                 text: modelData.text
                                 checked: (win.s.decoders && win.s.decoders.hardware || []).indexOf(modelData.codec) >= 0
                                 onClicked: {
@@ -3093,11 +3122,13 @@ ApplicationWindow {
                                 width: ListView.view.width
                                 CheckBox {
                                     checked: modelData.on
+                                    // RVP's own list of file types.
                                     text: "." + modelData.extension
                                     Layout.preferredWidth: 110
                                     onToggled: associationPage.select(t => t.extension === modelData.extension, checked)
                                 }
                                 Label {
+                                    textFormat: Text.PlainText
                                     text: modelData.description + (modelData.registered ? "" : "  (not registered)")
                                     opacity: modelData.registered ? 1 : 0.6
                                     Layout.fillWidth: true
@@ -3170,6 +3201,7 @@ ApplicationWindow {
                                     ["svcd", "SVCD"], ["dvd", "DVD"], ["bluray", "Blu-ray"]]
                             delegate: CheckBox {
                                 required property var modelData
+                                // RVP's own words above.
                                 text: modelData[1]
                                 checked: (win.value("associations.autoplay") || []).indexOf(modelData[0]) >= 0
                                 onToggled: {
@@ -3261,12 +3293,27 @@ ApplicationWindow {
                             clip: true
                             model: [""].concat(presetPage.list.map(preset => preset.name))
                             delegate: ItemDelegate {
+                                id: presetRow
                                 required property var modelData
                                 required property int index
                                 width: ListView.view.width
                                 highlighted: index === presetPage.selected
                                 text: (modelData === "" ? "Default" : modelData)
                                       + ((win.value("presets.active") || "") === modelData ? "  (active)" : "")
+                                // The name as written (Qt's own label takes "&"
+                                // for a mnemonic), on a mark of its own as the
+                                // subtitle browser's rows: the styles' own marks
+                                // want text colours a plain label does not know.
+                                background: Rectangle {
+                                    color: presetRow.highlighted ? "#40608cff" : "transparent"
+                                }
+                                contentItem: Label {
+                                    textFormat: Text.PlainText
+                                    text: presetRow.text
+                                    font: presetRow.font
+                                    elide: Text.ElideRight
+                                    verticalAlignment: Text.AlignVCenter
+                                }
                                 onClicked: {
                                     presetPage.selected = index
                                     presetName.text = modelData
@@ -3366,6 +3413,7 @@ ApplicationWindow {
                                 readonly property var current: presetPage.conditions[modelData[0]]
                                 enabled: presetPage.selected > 0
                                 CheckBox {
+                                    // RVP's own words above.
                                     text: conditionRow.modelData[1]
                                     checked: conditionRow.current !== undefined && conditionRow.current !== null
                                     Layout.preferredWidth: 240
@@ -3674,6 +3722,7 @@ ApplicationWindow {
             Layout.fillWidth: true
             Label {
                 Layout.fillWidth: true
+                textFormat: Text.PlainText
                 text: win.notice + (win.restartNeeded ? (win.notice !== "" ? "  " : "") + qsTr("Restart RVP to apply it.") : "")
                 wrapMode: Text.Wrap
             }
@@ -3698,6 +3747,7 @@ ApplicationWindow {
                 Layout.fillWidth: true
                 elide: Text.ElideMiddle
                 opacity: 0.7
+                textFormat: Text.PlainText
                 text: (win.view.portable ? qsTr("Portable: %1") : "%1").arg(win.view.file || "")
             }
             Button {

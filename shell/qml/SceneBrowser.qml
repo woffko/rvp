@@ -60,6 +60,7 @@ Rectangle {
         color: "#e8e8f0"
         font.pixelSize: 15
         font.bold: true
+        textFormat: Text.PlainText
         text: browser.title + " (" + browser.scenes.length + ")"
     }
     Text {
@@ -135,6 +136,7 @@ Rectangle {
                 elide: Text.ElideRight
                 color: "#d8d8e0"
                 font.pixelSize: 12
+                textFormat: Text.PlainText
                 text: cell.modelData.label
             }
             MouseArea {

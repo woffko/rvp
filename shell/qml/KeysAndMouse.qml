@@ -190,12 +190,14 @@ Item {
                     // every item without a minimum, and the keys' column
                     // had shrunk under its own buttons, M19).
                     Label {
+                        textFormat: Text.PlainText
                         text: editor.scopeText(rowItem.modelData.scope)
                         opacity: 0.6
                         Layout.preferredWidth: editor.scopeWidth
                         Layout.minimumWidth: editor.scopeWidth
                     }
                     Label {
+                        textFormat: Text.PlainText
                         text: Tools.tr_menu(rowItem.modelData.label)
                         // Long names (translations) take a second line
                         // rather than lose their end (M19).
@@ -216,6 +218,7 @@ Item {
                                 required property string modelData
                                 // Never past the column: a longer name elides.
                                 width: Math.min(implicitWidth, keysFlow.width)
+                                // A key's name, RVP's own.
                                 text: modelData + "  ×"
                                 flat: true
                                 onClicked: {
@@ -230,6 +233,7 @@ Item {
                             delegate: Button {
                                 required property string modelData
                                 width: Math.min(implicitWidth, keysFlow.width)
+                                // A gesture's name, RVP's own.
                                 text: editor.gestureText(modelData) + "  ×"
                                 flat: true
                                 onClicked: {
@@ -256,6 +260,7 @@ Item {
                                 model: editor.gestures
                                 delegate: MenuItem {
                                     required property string modelData
+                                    // A gesture's name, RVP's own.
                                     text: editor.gestureText(modelData)
                                     onTriggered: editor.chooseGesture(rowItem.modelData, modelData)
                                 }
@@ -279,6 +284,7 @@ Item {
             Layout.fillWidth: true
             Label {
                 Layout.fillWidth: true
+                textFormat: Text.PlainText
                 text: editor.notice
                 wrapMode: Text.Wrap
             }

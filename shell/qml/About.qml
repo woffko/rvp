@@ -40,6 +40,7 @@ Item {
             }
             Label {
                 id: aboutText
+                textFormat: Text.PlainText
                 Layout.preferredWidth: 360
                 wrapMode: Text.Wrap
             }

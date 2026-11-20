@@ -42,9 +42,9 @@ Item {
         property alias from: slider.from
         property alias to: slider.to
         property string label
-        Label { text: parent.label; Layout.preferredWidth: 90 }
+        Label { text: parent.label; Layout.preferredWidth: 90; textFormat: Text.PlainText }
         Slider { id: slider; stepSize: 1; Layout.preferredWidth: 260 }
-        Label { text: Math.round(slider.value); Layout.preferredWidth: 40 }
+        Label { text: Math.round(slider.value); Layout.preferredWidth: 40; textFormat: Text.PlainText }
     }
 
     Dialog {

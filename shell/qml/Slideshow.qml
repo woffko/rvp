@@ -86,6 +86,7 @@ Item {
     }
     Text {
         id: name
+        textFormat: Text.PlainText
         visible: show.data.names === true
         anchors.right: parent.right
         anchors.bottom: parent.bottom

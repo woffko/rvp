@@ -76,6 +76,7 @@ Window {
                         Layout.fillWidth: true
                         spacing: 2
                         Label {
+                            textFormat: Text.PlainText
                             text: modelData.title
                             font.bold: true
                             Layout.topMargin: 6
@@ -86,11 +87,13 @@ Window {
                                 required property var modelData
                                 Layout.fillWidth: true
                                 Label {
+                                    textFormat: Text.PlainText
                                     text: modelData[0]
                                     opacity: 0.7
                                     Layout.preferredWidth: 150
                                 }
                                 Label {
+                                    textFormat: Text.PlainText
                                     text: String(modelData[1])
                                     wrapMode: Text.WrapAnywhere
                                     Layout.fillWidth: true

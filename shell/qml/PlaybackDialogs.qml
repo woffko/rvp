@@ -139,12 +139,14 @@ Item {
                 onAccepted: jumpDialog.accept()
             }
             Label {
+                textFormat: Text.PlainText
                 text: qsTr("Duration: %1").arg(holder.clock(holder.data.duration || 0))
                       + ((holder.data.fps || 0) > 0 ? "  (" + holder.data.fps.toFixed(3) + " fps)" : "")
                 opacity: 0.7
             }
             Label {
                 id: jumpError
+                textFormat: Text.PlainText
                 color: "#c03030"
                 visible: text !== ""
             }
@@ -187,10 +189,20 @@ Item {
             model: markList.items
             highlight: Rectangle { color: "#30608cff" }
             delegate: ItemDelegate {
+                id: markRow
                 required property var modelData
                 required property int index
                 width: ListView.view.width
                 text: markList.label(modelData)
+                // The title as written: Qt's own label would take markup in
+                // it, and "&" for a mnemonic.
+                contentItem: Label {
+                    textFormat: Text.PlainText
+                    text: markRow.text
+                    font: markRow.font
+                    elide: Text.ElideRight
+                    verticalAlignment: Text.AlignVCenter
+                }
                 onClicked: {
                     list.currentIndex = index
                     markTitle.text = modelData.title
@@ -355,6 +367,7 @@ Item {
             }
             Label {
                 id: timerError
+                textFormat: Text.PlainText
                 color: "#c03030"
                 visible: text !== ""
             }
@@ -380,6 +393,7 @@ Item {
         // its implicitWidth with an assigned contentItem here.
         ColumnLayout {
             Label {
+                textFormat: Text.PlainText
                 text: qsTr("Send %1 file(s) to the Recycle Bin?").arg((holder.data.files || []).length)
                 font.bold: true
             }
@@ -387,6 +401,7 @@ Item {
                 model: (holder.data.files || []).slice(0, 12)
                 delegate: Label {
                     required property string modelData
+                    textFormat: Text.PlainText
                     text: modelData
                     elide: Text.ElideMiddle
                     Layout.preferredWidth: 540
@@ -493,10 +508,19 @@ Item {
             Repeater {
                 model: holder.data.devices || []
                 delegate: RadioButton {
+                    id: deviceChoice
                     required property var modelData
                     text: modelData.label ? modelData.label + " (" + modelData.name + ")" : modelData.name
                     checked: deviceField.text === modelData.name
                     onToggled: deviceField.text = modelData.name
+                    // The system's name for the device, as written.
+                    contentItem: Label {
+                        textFormat: Text.PlainText
+                        text: deviceChoice.text
+                        elide: Text.ElideRight
+                        leftPadding: deviceChoice.indicator.width + deviceChoice.spacing
+                        verticalAlignment: Text.AlignVCenter
+                    }
                 }
             }
             TextField {
@@ -541,10 +565,19 @@ Item {
                 model: []
                 highlight: Rectangle { color: "#30608cff" }
                 delegate: ItemDelegate {
+                    id: favoriteRow
                     required property var modelData
                     required property int index
                     width: ListView.view.width
                     text: modelData.title + (modelData.folder ? "  (folder)" : "") + "   " + modelData.path
+                    // The name and path as written (as the marks' rows).
+                    contentItem: Label {
+                        textFormat: Text.PlainText
+                        text: favoriteRow.text
+                        font: favoriteRow.font
+                        elide: Text.ElideRight
+                        verticalAlignment: Text.AlignVCenter
+                    }
                     onClicked: favorites.currentIndex = index
                 }
             }
