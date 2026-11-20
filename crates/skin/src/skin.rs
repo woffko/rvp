@@ -8,7 +8,8 @@ use crate::archive::SkinArchive;
 use crate::error::SkinError;
 use crate::image::Image;
 use crate::lang::StringTable;
-use crate::markup::{Attrs, Element, parse_document};
+use crate::limits;
+use crate::markup::{Attrs, Element, parse_within};
 use crate::preprocess::{Expanded, expand};
 
 /// Skin files tried, in order, when the caller does not name one.
@@ -42,7 +43,8 @@ pub struct ExtraWindow<'a> {
     pub shown: bool,
     /// Its place from the main window's corner (`RvpDock='offset'`).
     pub offset: (i32, i32),
-    /// Its smallest and largest sizes.
+    /// Its smallest and largest sizes (themes write 99999 for a largest
+    /// size of "any": the screen bounds it).
     pub min: (i32, i32),
     pub max: (i32, i32),
     /// Sizes go in these steps (a classic playlist's 25 by 29 pixels).
@@ -101,7 +103,10 @@ impl Skin {
     /// render as transparent.
     ///
     /// # Errors
-    /// Fails when `file` is not in the archive.
+    /// Fails when `file` is not in the archive, and with
+    /// [`SkinError::Limit`] when the skin is over one of [`crate::limits`]:
+    /// its expanded markup, a picture or its pictures together, or a
+    /// window of its own.
     pub fn load(archive: SkinArchive, file: &str) -> Result<Self, SkinError> {
         Self::load_with(archive, file, &[])
     }
@@ -115,6 +120,16 @@ impl Skin {
         file: &str,
         variables: &[(&str, &str)],
     ) -> Result<Self, SkinError> {
+        Self::load_within(archive, file, variables, limits::Pixels::default())
+    }
+
+    /// [`Skin::load_with`], with what the skin's pictures may take.
+    fn load_within(
+        archive: SkinArchive,
+        file: &str,
+        variables: &[(&str, &str)],
+        mut budget: limits::Pixels,
+    ) -> Result<Self, SkinError> {
         if archive.get(file).is_none() {
             return Err(SkinError::MissingFile(file.to_owned()));
         }
@@ -125,8 +140,9 @@ impl Skin {
         for (name, value) in given {
             variables.insert((*name).to_owned(), (*value).to_owned());
         }
-        let expanded = expand(&archive, file, &variables);
-        let mut root = parse_document(&expanded.text);
+        let expanded = expand(&archive, file, &variables)?;
+        let mut root = parse_within(&expanded.text, false)?;
+        check_windows(&root)?;
         add_fullscreen_bars(&mut root);
         let strings = StringTable::collect(&root);
         let mut warnings = expanded.warnings.clone();
@@ -141,10 +157,12 @@ impl Skin {
             let Some(bytes) = archive.get(name) else {
                 continue;
             };
-            match Image::decode(name, bytes) {
+            match Image::decode_within(name, bytes, &mut budget) {
                 Ok(image) => {
                     images.insert(name.to_owned(), image);
                 }
+                // A picture over a limit is not one that is broken.
+                Err(error @ SkinError::Limit(_)) => return Err(error),
                 Err(error) => warnings.push(error.to_string()),
             }
         }
@@ -410,12 +428,17 @@ impl Skin {
     }
 
     /// The logo buttons of every title bar, except those a skin marks
-    /// `RvpLogo='1'` because they already show RVP's logo.
+    /// `RvpLogo='1'` because they already show RVP's logo. RVP draws a
+    /// picture for each, so a button larger than
+    /// [`limits::LOGO_SIDE`] a side is no logo's place, and only the first
+    /// [`limits::LOGO_SLOTS`] count.
     #[must_use]
     pub fn logo_slots(&self) -> Vec<LogoSlot> {
         let mut slots = Vec::new();
         self.root.walk(&mut |element| {
-            if !(element.is("Static") && element.attrs.flag("IsTitleBar")) {
+            if !(element.is("Static") && element.attrs.flag("IsTitleBar"))
+                || slots.len() >= limits::LOGO_SLOTS
+            {
                 return;
             }
             for child in &element.children {
@@ -425,8 +448,9 @@ impl Skin {
                 if child.is("Button")
                     && attrs.get("CmdID") == Some("CMD_POPUPMENU_ETC")
                     && !attrs.flag("RvpLogo")
-                    && width > 0
-                    && height > 0
+                    && (1..=limits::LOGO_SIDE).contains(&width)
+                    && (1..=limits::LOGO_SIDE).contains(&height)
+                    && slots.len() < limits::LOGO_SLOTS
                 {
                     slots.push(LogoSlot {
                         element: child.id,
@@ -459,6 +483,42 @@ impl Skin {
         self.image(atlas)
             .map_or([255, 255, 255, 255], |image| image.pixel(x, y))
     }
+}
+
+/// A skin's own windows (`RvpWindow='1'`, [`Skin::extra_windows`]) are
+/// made and drawn at the sizes the skin gives: they are few, and each of
+/// a window's size at first (the screen bounds what they grow to).
+fn check_windows(root: &Element) -> Result<(), SkinError> {
+    let mut count = 0_usize;
+    let mut over = None;
+    root.walk(&mut |element| {
+        if over.is_some() || !element.attrs.flag("RvpWindow") {
+            return;
+        }
+        count += 1;
+        if count > limits::EXTRA_WINDOWS {
+            over = Some(limits::exceeded(
+                "more windows of the skin's own",
+                limits::EXTRA_WINDOWS,
+            ));
+            return;
+        }
+        let (width, height) = (
+            element.attrs.int_or("Width", 0),
+            element.attrs.int_or("Height", 0),
+        );
+        if !limits::window_fits(width, height) {
+            over = Some(limits::exceeded(
+                &format!("window {} of {width}x{height} pixels", element.name),
+                format_args!(
+                    "{} a side and {} pixels",
+                    limits::WINDOW_SIDE,
+                    limits::WINDOW_PIXELS
+                ),
+            ));
+        }
+    });
+    over.map_or(Ok(()), Err)
 }
 
 /// A skin without `MainSkinAreaOscInside` (fourteen of PotPlayer's 22
@@ -525,4 +585,145 @@ fn insert_after(parent: &mut Element, name: &str, element: Element) -> Option<El
         }
     }
     element
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A skin's archive: `markup` as `VideoSkin.xml`, and its other files.
+    fn archive(markup: &str, files: &[(&str, Vec<u8>)]) -> SkinArchive {
+        let mut members = vec![("VideoSkin.xml".to_owned(), markup.as_bytes().to_vec())];
+        members.extend(
+            files
+                .iter()
+                .map(|(name, bytes)| ((*name).to_owned(), bytes.clone())),
+        );
+        SkinArchive::from_files("test", members)
+    }
+
+    fn limit(result: Result<Skin, SkinError>) -> String {
+        match result {
+            Err(SkinError::Limit(what)) => what,
+            Err(other) => panic!("not a limit: {other}"),
+            Ok(skin) => panic!("loaded with {} pictures", skin.images.len()),
+        }
+    }
+
+    #[test]
+    fn the_pictures_of_a_skin_share_its_budget() {
+        let picture = Image::new(8, 8);
+        let files = [
+            ("a.png", picture.encode_png().unwrap()),
+            ("b.png", picture.encode_png().unwrap()),
+            ("c.bmp", picture.encode_bmp()),
+            // No picture: its header alone, which gives 4 x 4 pixels.
+            (
+                "broken.png",
+                b"\x89PNG\r\n\x1a\n\0\0\0\x0dIHDR\0\0\0\x04\0\0\0\x04\x08\x06\0\0\0".to_vec(),
+            ),
+        ];
+        let load = |pixels: u64| {
+            Skin::load_within(
+                archive("<Skin/>", &files),
+                "VideoSkin.xml",
+                &[],
+                limits::Pixels::with(pixels),
+            )
+        };
+        // Three pictures of 64 pixels; the broken one is a warning and
+        // takes nothing.
+        let skin = load(3 * 64).unwrap();
+        assert_eq!(skin.images.len(), 3);
+        assert_eq!(skin.warnings().len(), 1);
+        assert!(limit(load(3 * 64 - 1)).contains("pixels together"));
+        // One picture over its own limit: a header of a few bytes.
+        let mut huge = files[3].1.clone();
+        huge[16..24].copy_from_slice(&[0, 1, 0, 0, 0, 1, 0, 0]);
+        let skin = Skin::load(archive("<Skin/>", &[("huge.png", huge)]), "VideoSkin.xml");
+        assert!(limit(skin).contains("huge.png"));
+    }
+
+    #[test]
+    fn a_skin_over_a_markup_limit_does_not_load() {
+        let load = |markup: &str| Skin::load(archive(markup, &[]), "VideoSkin.xml");
+        assert!(load("<Skin><MainSkinArea/></Skin>").is_ok());
+        // Its includes without end.
+        let twice = "#include<VideoSkin.xml>\n#include<VideoSkin.xml>";
+        assert!(limit(load(twice)).contains("includes"));
+        // Its elements nested without end.
+        assert!(limit(load(&"<Static>".repeat(1000))).contains("deeper"));
+        // The areas RVP adds to a skin without bars for fullscreen do not
+        // count against the skin.
+        let deepest = "<a>".repeat(limits::MARKUP_DEPTH - 3);
+        let markup =
+            format!("<Skin><MainSkinArea><Control>{deepest}</Control></MainSkinArea></Skin>");
+        assert!(
+            load(&markup)
+                .unwrap()
+                .area("MainSkinAreaOscInside")
+                .is_some()
+        );
+    }
+
+    #[test]
+    fn a_skins_own_windows_are_few_and_of_a_windows_size() {
+        let window = |n: usize, width: i32, height: i32| {
+            format!(
+                "<W{n} RvpWindow='1' Width='{width}' Height='{height}' \
+                 RvpMaxWidth='99999' RvpMaxHeight='99999'><Control/></W{n}>"
+            )
+        };
+        let load = |windows: &str| {
+            Skin::load(
+                archive(&format!("<Skin>{windows}</Skin>"), &[]),
+                "VideoSkin.xml",
+            )
+        };
+        let many = |count: usize| (0..count).map(|n| window(n, 275, 116)).collect::<String>();
+        let skin = load(&many(limits::EXTRA_WINDOWS)).unwrap();
+        let windows = skin.extra_windows();
+        assert_eq!(windows.len(), limits::EXTRA_WINDOWS);
+        // A largest size of "any" is no size the window is made at.
+        assert_eq!(windows[0].max, (99_999, 99_999));
+        assert!(limit(load(&many(limits::EXTRA_WINDOWS + 1))).contains("windows"));
+        // A window is drawn at its first size at once.
+        assert!(load(&window(0, limits::WINDOW_SIDE, 1024)).is_ok());
+        assert!(limit(load(&window(0, 50_000, 50_000))).contains("50000x50000"));
+        assert!(limit(load(&window(0, limits::WINDOW_SIDE + 1, 1))).contains("W0"));
+        assert!(limit(load(&window(0, 3000, 3000))).contains("W0"));
+    }
+
+    #[test]
+    fn logo_buttons_are_of_a_buttons_size_and_few() {
+        let button = |width: i32, height: i32| {
+            format!("<Button CmdID='CMD_POPUPMENU_ETC' Width='{width}' Height='{height}' />")
+        };
+        let load = |buttons: &str| {
+            let markup = format!(
+                "<Skin><MainSkinArea><Control><Static IsTitleBar='1'>{buttons}</Static>\
+                 </Control></MainSkinArea></Skin>"
+            );
+            Skin::load(archive(&markup, &[]), "VideoSkin.xml").unwrap()
+        };
+        // A button of 30,000 pixels a side is no logo's place: RVP would
+        // draw a picture of four times that size for it.
+        let buttons = [
+            button(30, 16),
+            button(30_000, 30_000),
+            button(limits::LOGO_SIDE, limits::LOGO_SIDE),
+            button(limits::LOGO_SIDE + 1, 16),
+            button(16, limits::LOGO_SIDE + 1),
+        ]
+        .concat();
+        let sizes: Vec<(i32, i32)> = load(&buttons)
+            .logo_slots()
+            .iter()
+            .map(|slot| (slot.width, slot.height))
+            .collect();
+        assert_eq!(sizes, [(30, 16), (limits::LOGO_SIDE, limits::LOGO_SIDE)]);
+        // However many buttons a skin has, RVP draws for the first few.
+        let skin = load(&button(30, 16).repeat(1000));
+        assert_eq!(skin.logo_slots().len(), limits::LOGO_SLOTS);
+    }
 }

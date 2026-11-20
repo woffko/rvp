@@ -55,6 +55,10 @@
 //!   (goal P's host capture: PotPlayer's lit lines over the skin's dimmed
 //!   ones); a `PeakHeight` line in `PeakColorX`/`Y` marks each band's
 //!   peak. Bars share the bands evenly, low frequencies on the left.
+//!   Only the bars and lines that show are drawn: the work follows the
+//!   visible part (the element clipped by its parents and the window),
+//!   not the size the skin gives the element. The same holds for an
+//!   `RvpGraph`'s columns and rows.
 //! * An `Image` marked `IsLogo='1'` (the skin's logo in its `<Logo>`
 //!   section, M14) keeps its shape: centred in its place, never larger
 //!   than its picture, smaller when the place is smaller. Other `Image`s
@@ -62,6 +66,7 @@
 
 use crate::geometry::Rect;
 use crate::layout::{Kind, Layout, Node};
+use crate::limits;
 use crate::markup::{Attrs, atoi};
 use crate::playlist;
 use crate::skin::Skin;
@@ -726,22 +731,56 @@ fn fit_logo(place: Rect, width: i32, height: i32) -> Rect {
     )
 }
 
+/// Parts start `pitch` apart, the first at distance 0: the index of the
+/// first that can start in `from..=to`, and one past the last's. A part
+/// too many at the front does no harm, as what does not show is not
+/// drawn.
+fn steps(from: i64, to: i64, pitch: i64) -> (i64, i64) {
+    (from.div_euclid(pitch), to.div_euclid(pitch) + 1)
+}
+
+/// The colour of line `line` of `lines` from the bottom of a bar whose
+/// colours run from `start` at the bottom to `end` at the top.
+fn blend_line(start: [u8; 4], end: [u8; 4], line: i32, lines: i32) -> [u8; 4] {
+    let mix = if lines > 1 {
+        f64::from(line) / f64::from(lines - 1)
+    } else {
+        0.0
+    };
+    let channel = |from: u8, to: u8| {
+        // A blend of two bytes stays a byte.
+        #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+        let value = (f64::from(from) + (f64::from(to) - f64::from(from)) * mix).round() as u8;
+        value
+    };
+    [
+        channel(start[0], end[0]),
+        channel(start[1], end[1]),
+        channel(start[2], end[2]),
+        255,
+    ]
+}
+
 /// A `Visual`: the spectrum's bars, each a column of `LineHeight` lines
 /// `LineDistance` apart, `BarWidth` wide and `BarDistance` apart, lit from
 /// the bottom up to its band's level with colours that run from the atlas
 /// pixel at `BarStartColorX`/`Y` (bottom) to `BarEndColorX`/`Y` (top); a
 /// `PeakHeight` line in `PeakColorX`/`Y` marks each band's peak.
 fn paint_visual(list: &mut DisplayList, skin: &Skin, node: &Node<'_>, data: &DataModel) {
-    if data.visual.is_empty() {
+    if data.visual.is_empty() || node.clip.is_empty() {
         return;
     }
     let attrs = &node.element.attrs;
-    let rect = node.rect;
-    let bar_width = attrs.int_or("BarWidth", 4).max(1);
-    let bar_gap = attrs.int_or("BarDistance", 1).max(0);
-    let line_height = attrs.int_or("LineHeight", 2).max(1);
-    let line_gap = attrs.int_or("LineDistance", 1).max(0);
-    let peak_height = attrs.int_or("PeakHeight", 0).max(0);
+    let (rect, clip) = (node.rect, node.clip);
+    // Sizes of bars and lines: within the largest rectangle.
+    let size = |name: &str, default: i32, least: i32| {
+        attrs.int_or(name, default).clamp(least, limits::COORDINATE)
+    };
+    let bar_width = size("BarWidth", 4, 1);
+    let bar_gap = size("BarDistance", 1, 0);
+    let line_height = size("LineHeight", 2, 1);
+    let line_gap = size("LineDistance", 1, 0);
+    let peak_height = size("PeakHeight", 0, 0);
     let color = |name: &str| {
         let mut color = skin.atlas_color(
             node.atlas,
@@ -759,52 +798,57 @@ fn paint_visual(list: &mut DisplayList, skin: &Skin, node: &Node<'_>, data: &Dat
     }
     let band = |values: &[f32], bar: i32| -> f32 {
         // Bars share the bands evenly, low frequencies on the left.
-        let count = i32::try_from(values.len()).unwrap_or(i32::MAX);
-        let index = usize::try_from(bar * count / bars).unwrap_or(0);
+        let count = i64::try_from(values.len()).unwrap_or(i64::MAX);
+        let index = usize::try_from(i64::from(bar) * count / i64::from(bars)).unwrap_or(0);
         values.get(index).copied().unwrap_or(0.0).clamp(0.0, 1.0)
     };
     let lit_lines = |level: f32| {
-        // At most a few dozen lines: f32 holds them exactly.
+        // A level of 0 to 1 of the lines: rounding to a line is exact
+        // enough.
         #[allow(clippy::cast_precision_loss, clippy::cast_possible_truncation)]
         let count = (level * lines as f32).round() as i32;
         count.clamp(0, lines)
     };
     let line_top = |line: i32| rect.y + rect.h - (line + 1) * line_height - line * line_gap;
-    for bar in 0..bars {
+    // The bars and lines that reach into the visible part: a bar starts
+    // every `bar_pitch` pixels from the left edge and shows when it starts
+    // less than its width before the part; a line ends every `line_pitch`
+    // pixels up from the bottom edge, likewise.
+    let bar_pitch = i64::from(bar_width + bar_gap);
+    let line_pitch = i64::from(line_height + line_gap);
+    let (first_bar, end_bar) = steps(
+        i64::from(clip.x - rect.x) - i64::from(bar_width),
+        i64::from(clip.right() - rect.x),
+        bar_pitch,
+    );
+    let (first_line, end_line) = steps(
+        i64::from(rect.bottom() - clip.bottom()) - i64::from(line_height),
+        i64::from(rect.bottom() - clip.y),
+        line_pitch,
+    );
+    let range = |first: i64, end: i64, count: i32| {
+        let first = i32::try_from(first.clamp(0, i64::from(count))).unwrap_or(0);
+        let end = i32::try_from(end.clamp(0, i64::from(count))).unwrap_or(0);
+        first..end
+    };
+    for bar in range(first_bar, end_bar, bars) {
         let x = rect.x + bar * (bar_width + bar_gap);
-        for line in 0..lit_lines(band(&data.visual, bar)) {
-            let mix = if lines > 1 {
-                f64::from(line) / f64::from(lines - 1)
-            } else {
-                0.0
-            };
-            let channel = |from: u8, to: u8| {
-                // A blend of two bytes stays a byte.
-                #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
-                let value =
-                    (f64::from(from) + (f64::from(to) - f64::from(from)) * mix).round() as u8;
-                value
-            };
+        let level = lit_lines(band(&data.visual, bar));
+        for line in range(first_line, end_line, level) {
             let color = if attrs.has("RvpRowColorsX") {
                 // A colour per line from the bottom (classic skins'
                 // `viscolor.txt`, M9).
                 let mut color = skin.atlas_color(
                     node.atlas,
-                    attrs.int_or("RvpRowColorsX", 0) + line,
+                    attrs.int_or("RvpRowColorsX", 0).saturating_add(line),
                     attrs.int_or("RvpRowColorsY", 0),
                 );
                 color[3] = 255;
                 color
             } else {
-                [
-                    channel(start[0], end[0]),
-                    channel(start[1], end[1]),
-                    channel(start[2], end[2]),
-                    255,
-                ]
+                blend_line(start, end, line, lines)
             };
-            let line_rect =
-                Rect::new(x, line_top(line), bar_width, line_height).intersect(&node.clip);
+            let line_rect = Rect::new(x, line_top(line), bar_width, line_height).intersect(&clip);
             if !line_rect.is_empty() {
                 list.ops.push(Op::Fill {
                     rect: line_rect,
@@ -816,7 +860,7 @@ fn paint_visual(list: &mut DisplayList, skin: &Skin, node: &Node<'_>, data: &Dat
             let top = lit_lines(band(&data.visual_peaks, bar));
             if top > 0 {
                 let y = line_top(top - 1);
-                let peak_rect = Rect::new(x, y, bar_width, peak_height).intersect(&node.clip);
+                let peak_rect = Rect::new(x, y, bar_width, peak_height).intersect(&clip);
                 if !peak_rect.is_empty() {
                     list.ops.push(Op::Fill {
                         rect: peak_rect,
@@ -917,27 +961,34 @@ fn paint_graph(list: &mut DisplayList, skin: &Skin, node: &Node<'_>, data: &Data
         let mut color = skin.atlas_color(
             node.atlas,
             attrs.int_or("ColorsX", 0),
-            attrs.int_or("ColorsY", 0) + row,
+            attrs.int_or("ColorsY", 0).saturating_add(row),
         );
         color[3] = 255;
         color
     };
     let span = f64::from(rect.w - 1);
-    let mut previous: Option<i32> = None;
-    for x in 0..rect.w {
+    let curve = |x: i32| {
         let t = 1.0 + f64::from(x) / span * 9.0;
         // Within the graph's rows.
         #[allow(clippy::cast_possible_truncation)]
         let y = kb_spline(&keys, t).round().clamp(0.0, rows) as i32;
+        y
+    };
+    // The columns and rows that show: the curve is drawn where the graph
+    // is visible, whatever size the skin gives it.
+    let clip = node.clip.intersect(&rect);
+    let columns = (clip.x - rect.x)..(clip.right() - rect.x);
+    let visible_rows = (clip.y - rect.y)..(clip.bottom() - rect.y);
+    // A column joins the one before it, shown or not.
+    let mut previous: Option<i32> = (columns.start > 0).then(|| curve(columns.start - 1));
+    for x in columns {
+        let y = curve(x);
         let (from, to) = previous.map_or((y, y), |p| (p.min(y), p.max(y)));
-        for row in from..=to {
-            let pixel = Rect::new(rect.x + x, rect.y + row, 1, 1).intersect(&node.clip);
-            if !pixel.is_empty() {
-                list.ops.push(Op::Fill {
-                    rect: pixel,
-                    color: color(row),
-                });
-            }
+        for row in from.max(visible_rows.start)..=to.min(visible_rows.end - 1) {
+            list.ops.push(Op::Fill {
+                rect: Rect::new(rect.x + x, rect.y + row, 1, 1),
+                color: color(row),
+            });
         }
         previous = Some(y);
     }

@@ -1025,3 +1025,280 @@ fn auto_sized_labels_and_boxes() {
         .expect("box");
     assert_eq!(boxed.rect.w, 10);
 }
+
+/// A skin of `markup` and the atlas, for the rules below that bound what
+/// a skin's numbers cost.
+fn skin_of(markup: &str) -> Skin {
+    let archive = SkinArchive::from_files(
+        "Bounded",
+        [
+            ("VideoSkin.xml", markup.as_bytes().to_vec()),
+            ("atlas.png", atlas()),
+        ],
+    );
+    Skin::load(archive, "VideoSkin.xml").expect("the skin loads")
+}
+
+/// A playlist whose own part has a playlist slot would hold itself, and
+/// that copy itself again: the slot inside stays empty.
+#[test]
+fn a_playlist_does_not_hold_itself() {
+    // A quarter of the smallest stack RVP's threads have: a layout that
+    // went on without end would end the process here at once.
+    let nodes = std::thread::Builder::new()
+        .stack_size(256 << 10)
+        .spawn(|| {
+            let skin = skin_of(
+                "<Skin><MainSkinArea Image='Atlas.png'><Control>
+                 <Static Align='Right' Width='50' Contain='CMD_PLAYLIST_TOGGLE' />
+                 <Static Align='Client' Contain='CMD_VIDEO_WINDOW' />
+                 </Control></MainSkinArea>
+                 <PlaylistSkinArea Image='Atlas.png'><Control>
+                 <Static Align='Client' Contain='CMD_PLAYLIST_HOLDER'>
+                 <Static Align='Top' Height='10' Contain='CMD_PLAYLIST_TOGGLE' />
+                 <Static Align='Client' Contain='CMD_PLAY_LIST_ALBUM_TAB' />
+                 </Static></Control></PlaylistSkinArea></Skin>",
+            );
+            let state = UiState::default();
+            assert!(state.playlist_attached);
+            let placed = layout(&skin, "MainSkinArea", 200, 100, &state).expect("layout");
+            placed
+                .nodes
+                .iter()
+                .map(|node| (node.slot().unwrap_or("-").to_owned(), node.depth, node.rect))
+                .collect::<Vec<_>>()
+        })
+        .expect("a thread")
+        .join()
+        .expect("the layout ends");
+    let slot = |name: &str, depth: usize, rect: Rect| (name.to_owned(), depth, rect);
+    assert_eq!(
+        nodes,
+        [
+            slot("CMD_PLAYLIST_TOGGLE", 0, Rect::new(150, 0, 50, 100)),
+            // The playlist's part in the slot, with its own parts: the
+            // slot among them, and the list.
+            slot("CMD_PLAYLIST_HOLDER", 1, Rect::new(150, 0, 50, 100)),
+            slot("CMD_PLAYLIST_TOGGLE", 2, Rect::new(150, 0, 50, 10)),
+            slot("CMD_PLAY_LIST_ALBUM_TAB", 2, Rect::new(150, 10, 50, 90)),
+            slot("CMD_VIDEO_WINDOW", 0, Rect::new(0, 0, 150, 100)),
+        ]
+    );
+}
+
+/// A box whose size comes out below zero has none, and its docked parts
+/// take nothing of it.
+#[test]
+fn a_box_of_no_size_holds_docked_parts() {
+    let skin = skin_of(
+        "<Skin><MainSkinArea Image='Atlas.png'><Control>
+         <Static CmdID='ID_BOX' Left='150' Top='80' Width='-100' Height='-60'>
+         <Static CmdID='ID_TOP' Align='Top' Height='5' />
+         <Static CmdID='ID_BOTTOM' Align='Bottom' Height='5' />
+         <Static CmdID='ID_LEFT' Align='Left' Width='5' />
+         <Static CmdID='ID_RIGHT' Align='Right' Width='5' />
+         <Static CmdID='ID_CLIENT' Align='Client' />
+         </Static>
+         <Static CmdID='ID_SHRUNK' Left='0' Top='0' Width='10' Height='10' OffsetWidth='-500' OffsetHeight='-500'>
+         <Static CmdID='ID_INNER' Align='Bottom' Height='5' />
+         </Static>
+         </Control></MainSkinArea></Skin>",
+    );
+    let placed = layout(&skin, "MainSkinArea", 200, 100, &UiState::default()).expect("layout");
+    let rect = |command: &str| placed.find_command(command).expect(command).rect;
+    // 200 - 100 - 150 pixels wide, 100 - 60 - 80 high: none.
+    assert_eq!(rect("ID_BOX"), Rect::new(150, 80, 0, 0));
+    for part in ["ID_TOP", "ID_BOTTOM", "ID_LEFT", "ID_RIGHT", "ID_CLIENT"] {
+        assert_eq!(rect(part), Rect::new(150, 80, 0, 0), "{part}");
+    }
+    assert_eq!(rect("ID_SHRUNK"), Rect::new(0, 0, 0, 0));
+    assert_eq!(rect("ID_INNER"), Rect::new(0, 0, 0, 0));
+}
+
+/// Whatever numbers a skin gives, every rectangle's edges stay within
+/// `limits::COORDINATE` of the window's corner, and adding them up never
+/// leaves the range of the numbers.
+#[test]
+fn rectangles_stay_near_the_window_whatever_the_numbers() {
+    let far = rvp_skin::limits::COORDINATE;
+    let skin = skin_of(
+        "<Skin><MainSkinArea Image='Atlas.png'><Control>
+         <Static CmdID='ID_FAR' Left='2147483647' Top='2147483647' Width='2147483647' Height='2147483647' OffsetLeft='2147483647' OffsetTop='2147483647' OffsetWidth='2147483647' OffsetHeight='2147483647'>
+         <Static CmdID='ID_FAR_CHILD' Left='2147483647' Top='-2147483648' Width='-2147483648' Height='2147483647' />
+         <Button CmdID='ID_FAR_CENTRE' Left='2147483647' Top='2147483647' Width='2147483647' Height='2147483647' HoriCenter='1' VertCenter='1' />
+         </Static>
+         <Static CmdID='ID_BEFORE' Left='-2147483648' Top='-2147483648' Width='2147483647' Height='2147483647' OffsetLeft='-2147483648' OffsetTop='-2147483648' />
+         <Static CmdID='ID_EDGES' RvpLeftFar='-2147483648' RvpRightFar='2147483647' RvpTopFar='2147483647' RvpBottomFar='-2147483648' />
+         <Static CmdID='ID_WIDE' Left='-5' Top='5' Width='2147483647' Height='10' OffsetLeft='-2147483000' />
+         <Static CmdID='ID_FLOW' Left='0' Top='20' Height='5' AutoSize='1'>
+         <Static Width='2147483647' /><Static Width='2147483647' /><Static Width='2147483647' />
+         </Static>
+         <Static CmdID='ID_USUAL' Left='-30' Top='10' Width='20' Height='-10' />
+         </Control></MainSkinArea></Skin>",
+    );
+    let state = UiState::default();
+    for (width, height) in [(200, 100), (i32::MAX, i32::MAX), (-7, -7)] {
+        let placed = layout(&skin, "MainSkinArea", width, height, &state).expect("layout");
+        assert!(placed.nodes.len() >= 10);
+        for node in &placed.nodes {
+            let rect = node.rect;
+            for edge in [rect.x, rect.y, rect.right(), rect.bottom()] {
+                assert!((-far..=far).contains(&edge), "{} {rect}", node.element.name);
+            }
+            assert!(rect.w >= 0 && rect.h >= 0);
+        }
+    }
+    let placed = layout(&skin, "MainSkinArea", 200, 100, &state).expect("layout");
+    let rect = |command: &str| placed.find_command(command).expect(command).rect;
+    // Beyond the bound on one side: at the bound, with no size.
+    assert_eq!(rect("ID_FAR"), Rect::new(far, far, 0, 0));
+    assert_eq!(rect("ID_BEFORE"), Rect::new(-far, -far, 0, 0));
+    // From beyond the bound into the window: its far edge is where the
+    // skin's numbers put it (195 + 2147483647 - 2147483000).
+    let wide = rect("ID_WIDE");
+    assert_eq!((wide.x, wide.y, wide.h), (-far, 5, 10));
+    assert_eq!(wide.right(), 842);
+    assert_eq!(rect("ID_FLOW"), Rect::new(0, 20, far, 5));
+    // Numbers of a usual size are not touched.
+    assert_eq!(rect("ID_USUAL"), Rect::new(170, 10, 20, 80));
+}
+
+/// The fills of `list`, each cut to `clip`; those outside it left out.
+fn fills_within(list: &rvp_skin::DisplayList, clip: Rect) -> Vec<(Rect, [u8; 4])> {
+    list.ops
+        .iter()
+        .filter_map(|op| match op {
+            rvp_skin::paint::Op::Fill { rect, color } => Some((rect.intersect(&clip), *color)),
+            _ => None,
+        })
+        .filter(|(rect, _)| !rect.is_empty())
+        .collect()
+}
+
+/// A spectrum and an equalizer curve draw the part of them that shows:
+/// the same lines and pixels as when all of them show, and no work for
+/// the rest, however large the skin makes them.
+#[test]
+fn a_spectrum_and_a_curve_draw_what_shows_of_them() {
+    let state = UiState::default();
+    let mut data = DataModel {
+        visual: vec![1.0, 0.6, 0.3, 0.9, 0.1, 0.75],
+        visual_peaks: vec![1.0, 0.7, 0.5, 0.95, 0.4, 0.8],
+        ..DataModel::default()
+    };
+    for band in 0..10_u8 {
+        data.sliders.insert(
+            format!("CMD_EQULIZER_{band}"),
+            SliderValue {
+                value: f32::from(band % 4) / 3.0,
+                enabled: true,
+            },
+        );
+    }
+    let parts = "BarWidth='3' BarDistance='2' LineHeight='2' LineDistance='1' PeakHeight='1' \
+                 BarStartColorX='0' BarStartColorY='0' BarEndColorX='26' BarEndColorY='0' \
+                 PeakColorX='4' PeakColorY='0'";
+    // The same spectrum and curve in a box that shows a part of them
+    // (they start 20 pixels left of it and 7 above), and in one that
+    // shows them whole.
+    let markup = |left: i32, top: i32, width: i32, height: i32| {
+        format!(
+            "<Skin><MainSkinArea Image='Atlas.png'><Control>
+             <Static Left='{left}' Top='{top}' Width='{width}' Height='{height}'>
+             <Visual Left='0' Top='0' Width='100' Height='40' OffsetLeft='{}' OffsetTop='{}' {parts} />
+             <RvpGraph Left='0' Top='0' Width='100' Height='40' OffsetLeft='{}' OffsetTop='{}' ColorsX='60' ColorsY='10' />
+             </Static></Control></MainSkinArea></Skin>",
+            30 - left,
+            20 - top,
+            30 - left,
+            20 - top
+        )
+    };
+    let paint_of = |markup: &str| {
+        let skin = skin_of(markup);
+        let placed = layout(&skin, "MainSkinArea", 200, 100, &state).expect("layout");
+        paint(&skin, &placed, &state, &data)
+    };
+    let whole = paint_of(&markup(0, 0, 200, 100));
+    let shown = Rect::new(50, 27, 31, 19);
+    let part = paint_of(&markup(shown.x, shown.y, shown.w, shown.h));
+    let expected = fills_within(&whole, shown);
+    assert!(expected.len() >= 40, "{}", expected.len());
+    assert!(expected.len() < fills_within(&whole, Rect::new(0, 0, 200, 100)).len() / 4);
+    assert_eq!(fills_within(&part, Rect::new(0, 0, 200, 100)), expected);
+    // Nothing is made for what does not show.
+    assert_eq!(part.ops.len(), expected.len());
+
+    // Two thousand million pixels a side, a bar and a line to each pixel:
+    // painted bar by bar and line by line it would never end.
+    let huge = skin_of(
+        "<Skin><MainSkinArea Image='Atlas.png'><Control>
+         <Visual Left='0' Top='0' Width='2000000000' Height='2000000000' OffsetLeft='-1000000000' OffsetTop='-1000000000' BarWidth='1' BarDistance='0' LineHeight='1' LineDistance='0' PeakHeight='1' />
+         <RvpGraph Left='0' Top='0' Width='2000000000' Height='2000000000' OffsetLeft='-1000000000' OffsetTop='-1000000000' ColorsX='60' ColorsY='10' />
+         <Visual Left='0' Top='0' Width='64' Height='48' BarWidth='2147483647' BarDistance='2147483647' LineHeight='2147483647' LineDistance='2147483647' PeakHeight='2147483647' />
+         </Control></MainSkinArea></Skin>",
+    );
+    let placed = layout(&huge, "MainSkinArea", 64, 48, &state).expect("layout");
+    let list = paint(&huge, &placed, &state, &data);
+    let window = Rect::new(0, 0, 64, 48);
+    assert!(!list.ops.is_empty());
+    // At most a fill for each pixel of the window, from each of the two.
+    assert!(list.ops.len() <= 2 * 64 * 48 + 64, "{}", list.ops.len());
+    assert_eq!(fills_within(&list, window).len(), list.ops.len());
+    for (rect, _) in fills_within(&list, window) {
+        assert_eq!(rect.intersect(&window), rect);
+    }
+}
+
+/// The deepest layout a skin can ask for (its elements nested as deep as
+/// the markup may be, the attached playlist's as deep again) is placed,
+/// painted and hit-tested on a small stack.
+#[test]
+fn the_deepest_layout_fits_a_small_stack() {
+    // The main window's boxes lie below the skin, its area and the
+    // area's parts; the playlist's also below the part that is attached.
+    let levels = rvp_skin::limits::MARKUP_DEPTH - 4;
+    let nest = |levels: usize, inner: &str| {
+        format!(
+            "{}{inner}{}",
+            "<Static Align='Client'>".repeat(levels),
+            "</Static>".repeat(levels)
+        )
+    };
+    let markup = format!(
+        "<Skin><MainSkinArea Image='Atlas.png'><Control>{}</Control></MainSkinArea>
+         <PlaylistSkinArea Image='Atlas.png'><Control>
+         <Static Align='Client' Contain='CMD_PLAYLIST_HOLDER'>{}</Static>
+         </Control></PlaylistSkinArea></Skin>",
+        nest(
+            levels,
+            "<Static Align='Client' Contain='CMD_PLAYLIST_TOGGLE' />"
+        ),
+        nest(
+            levels - 1,
+            "<Button CmdID='ID_DEEPEST' Align='Client' ImageLeft='0' ImageTop='10' />"
+        ),
+    );
+    let (deepest, hit) = std::thread::Builder::new()
+        .stack_size(256 << 10)
+        .spawn(move || {
+            let skin = skin_of(&markup);
+            let state = UiState::default();
+            let placed = layout(&skin, "MainSkinArea", 200, 100, &state).expect("layout");
+            let list = paint(&skin, &placed, &state, &DataModel::default());
+            assert!(!list.ops.is_empty());
+            let deepest = placed.nodes.iter().map(|node| node.depth).max();
+            let hit = match hit_test(&placed, 100, 50) {
+                Some(Hit::Control { command, .. }) => command.map(str::to_owned),
+                _ => None,
+            };
+            (deepest, hit)
+        })
+        .expect("a thread")
+        .join()
+        .expect("the layout ends");
+    // The boxes, the slot in them, the playlist's part in it with its
+    // boxes, and the button in those.
+    assert_eq!(deepest, Some(2 * levels + 1));
+    assert_eq!(hit.as_deref(), Some("ID_DEEPEST"));
+}

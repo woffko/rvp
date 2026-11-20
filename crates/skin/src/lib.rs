@@ -6,6 +6,10 @@
 //! blits, fills and texts) → [`render::rasterize`] (an RGBA [`Image`]).
 //! [`hit::hit_test`] maps a point to the control under it.
 //!
+//! A skin is a file from anywhere: what it may ask of memory, stack and
+//! time is bounded by one table, [`limits`], and a skin beyond it does not
+//! load ([`SkinError::Limit`]).
+//!
 //! The crate has no GUI or playback dependency: the shell paints the same
 //! display list with its own painter.
 
@@ -20,6 +24,7 @@ pub mod hit;
 pub mod image;
 pub mod lang;
 pub mod layout;
+pub mod limits;
 pub mod markup;
 pub mod menu;
 pub mod paint;

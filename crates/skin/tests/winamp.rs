@@ -8,7 +8,7 @@ use rvp_skin::winamp::{WinampSkin, fallback};
 
 #[test]
 fn the_synthetic_skin_has_every_bitmap() {
-    let skin = WinampSkin::from_members("synthetic", fallback::synthetic_skin());
+    let skin = WinampSkin::from_members("synthetic", fallback::synthetic_skin()).unwrap();
     assert!(skin.warnings.is_empty(), "{:?}", skin.warnings);
     assert_eq!(skin.missing, vec!["gen"]);
     assert!(skin.has_video);

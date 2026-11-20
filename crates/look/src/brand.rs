@@ -386,8 +386,16 @@ pub fn brand_skin(skin: &mut Skin) -> Result<(), String> {
 /// pixel lower, darker) and disabled (grey, faded).
 ///
 /// # Errors
-/// Fails when the symbol cannot be drawn.
+/// Fails when the symbol cannot be drawn, or the place is larger than a
+/// logo button may be (`rvp_skin::limits::LOGO_SIDE`): the picture is
+/// four times the place, and drawn at once.
 pub fn title_logo(width: i32, height: i32) -> Result<Image, String> {
+    let side = rvp_skin::limits::LOGO_SIDE;
+    if width > side || height > side {
+        return Err(format!(
+            "a logo of {width}x{height} pixels is larger than {side} a side"
+        ));
+    }
     let width = u32::try_from(width.max(1)).unwrap_or(1);
     let height = u32::try_from(height.max(1)).unwrap_or(1);
     let symbol = render(SYMBOL_SVG, width, height.saturating_sub(2).max(1))?;
@@ -532,5 +540,48 @@ mod tests {
         let first_row =
             |state: i32| (0..16).find(|y| (0..30).any(|x| strip.pixel(state * 30 + x, *y)[3] > 0));
         assert_eq!(first_row(2), first_row(0).map(|row| row + 1));
+    }
+
+    #[test]
+    fn the_logo_is_drawn_for_buttons_of_a_buttons_size() {
+        use rvp_skin::limits::{LOGO_SIDE, LOGO_SLOTS};
+        // A skin's title bar with a logo button of a usual size, one of
+        // 30,000 pixels a side (its picture would take gigabytes) and a
+        // thousand more of the usual size.
+        let button = |size: i32| {
+            format!("<Button CmdID='CMD_POPUPMENU_ETC' Width='{size}' Height='{size}' />")
+        };
+        let markup = format!(
+            "<Skin><MainSkinArea><Control><Static IsTitleBar='1'>{}{}{}</Static></Control>\
+             </MainSkinArea></Skin>",
+            button(24),
+            button(30_000),
+            button(24).repeat(1000)
+        );
+        let archive =
+            rvp_skin::SkinArchive::from_files("test", [("VideoSkin.xml", markup.into_bytes())]);
+        let mut skin = rvp_skin::Skin::load(archive, "VideoSkin.xml").expect("the skin loads");
+        super::brand_skin(&mut skin).expect("the logo is drawn");
+        let mut buttons = Vec::new();
+        skin.root().walk(&mut |element| {
+            if element.is("Button") {
+                buttons.push((element.id, element.attrs.int_or("Width", 0)));
+            }
+        });
+        let drawn: Vec<i32> = buttons
+            .iter()
+            .filter(|(id, _)| skin.replaced_sprite(*id).is_some())
+            .map(|(_, width)| *width)
+            .collect();
+        assert_eq!(drawn, vec![24; LOGO_SLOTS]);
+        let first = skin
+            .replaced_sprite(buttons[0].0)
+            .expect("the first button");
+        let strip = skin.image(first).expect("its picture");
+        assert_eq!((strip.width(), strip.height()), (96, 24));
+        // The picture itself has the same bound, whoever asks for it.
+        assert!(title_logo(LOGO_SIDE, 16).is_ok());
+        assert!(title_logo(LOGO_SIDE + 1, 16).is_err());
+        assert!(title_logo(16, 30_000).is_err());
     }
 }

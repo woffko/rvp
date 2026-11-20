@@ -4,6 +4,25 @@
 //! (`a and b or c` is `a and (b or c)`); `not` binds tightest. An
 //! expression with a token VLC does not know is void: a control with such
 //! a `visible` always shows.
+//!
+//! An expression is read and computed by functions that call themselves
+//! for each `not`, parenthesis and operator, so its length is bounded: a
+//! theme's own expressions by `limits::EXPRESSION_TOKENS` (the theme does
+//! not load beyond it), and [`Expr::parse`] takes no more than
+//! [`PARSE_TOKENS`].
+
+use crate::limits;
+
+/// The most tokens [`Expr::parse`] takes: two of a theme's expressions
+/// joined by RVP (a checkbox's `visible` and its `state`), with the
+/// parentheses, `and` and `not` RVP puts around them.
+pub const PARSE_TOKENS: usize = 2 * limits::EXPRESSION_TOKENS + 8;
+
+/// The number of tokens in an expression's text.
+#[must_use]
+pub fn token_count(text: &str) -> usize {
+    tokens(text).len()
+}
 
 /// A parsed expression.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -93,13 +112,15 @@ impl Parser {
 }
 
 impl Expr {
-    /// Parses an expression; `None` for an empty or broken one.
+    /// Parses an expression; `None` for an empty or broken one, and for
+    /// one of more than [`PARSE_TOKENS`] tokens.
     #[must_use]
     pub fn parse(text: &str) -> Option<Self> {
-        let mut parser = Parser {
-            tokens: tokens(text),
-            at: 0,
-        };
+        let tokens = tokens(text);
+        if tokens.len() > PARSE_TOKENS {
+            return None;
+        }
+        let mut parser = Parser { tokens, at: 0 };
         let expr = parser.and()?;
         (parser.at == parser.tokens.len()).then_some(expr)
     }
@@ -162,5 +183,53 @@ mod tests {
         assert_eq!(eval("vlc.isStopped;vlc.isPaused", true, true, true), None);
         assert_eq!(Expr::parse("a and"), None);
         assert_eq!(eval("true", false, false, false), Some(true));
+    }
+
+    #[test]
+    fn long_expressions_are_refused() {
+        // Each of these is read, computed and dropped by functions that
+        // call themselves once per token: 100,000 tokens end the process.
+        let texts = [
+            "not ".repeat(100_000) + "a",
+            "( ".repeat(100_000) + "a" + &" )".repeat(100_000),
+            "a".to_owned() + &" and a".repeat(100_000),
+            "a".to_owned() + &" or a".repeat(100_000),
+        ];
+        let parsed = limits::on_small_stack(move || {
+            texts
+                .iter()
+                .map(|text| (token_count(text), Expr::parse(text).is_some()))
+                .collect::<Vec<_>>()
+        });
+        for (tokens, parsed) in parsed {
+            assert!(tokens > 100_000);
+            assert!(!parsed);
+        }
+        // The longest expressions that are taken, of each kind, on the
+        // same small stack.
+        let longest = limits::on_small_stack(|| {
+            let texts = [
+                "not ".repeat(PARSE_TOKENS - 1) + "true",
+                "( ".repeat((PARSE_TOKENS - 1) / 2) + "true" + &" )".repeat((PARSE_TOKENS - 1) / 2),
+                "true".to_owned() + &" and true".repeat((PARSE_TOKENS - 1) / 2),
+                "true".to_owned() + &" or true".repeat((PARSE_TOKENS - 1) / 2),
+            ];
+            texts
+                .iter()
+                .map(|text| {
+                    let expr = Expr::parse(text).expect("within the limit");
+                    let copy = expr.clone();
+                    (token_count(text), copy.eval(&mut |_| None))
+                })
+                .collect::<Vec<_>>()
+        });
+        for (tokens, value) in longest {
+            assert!(
+                (PARSE_TOKENS - 1..=PARSE_TOKENS).contains(&tokens),
+                "{tokens}"
+            );
+            assert!(value.is_some());
+        }
+        assert!(Expr::parse(&("not ".repeat(PARSE_TOKENS) + "true")).is_none());
     }
 }

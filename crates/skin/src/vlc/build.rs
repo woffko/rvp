@@ -32,15 +32,20 @@
 //!   wizard: libmpv has no stream output) shows and does nothing; one whose
 //!   action VLC does not know is left out, as VLC leaves it out. Of a `;`
 //!   list RVP runs the first action it can.
+//! * The built skin stays within [`crate::limits`] as a skin's file does:
+//!   each picture and the pictures together (a button's three states and
+//!   a slider's frames are pictures of their own), and its files' number
+//!   and bytes. A theme whose built skin would be larger does not load.
 
 use std::collections::BTreeMap;
 
 use super::expr::Expr;
 use super::{Control, Layout, Place, Theme, Window};
 use crate::archive::SkinArchive;
-use crate::compose::{El, crop, join};
+use crate::compose::{El, crop, join, joined_size};
 use crate::error::SkinError;
 use crate::image::Image;
+use crate::limits;
 use crate::skin::Skin;
 
 /// The flag of condition `n` (`RvpConditions`).
@@ -89,34 +94,51 @@ struct Builder<'a> {
     /// Ids of every window and layout (variables `W.isVisible`...).
     windows: Vec<String>,
     layouts: Vec<String>,
+    /// What the built skin's pictures may still take.
+    budget: limits::Pixels,
 }
 
 impl Builder<'_> {
-    /// The file of a theme picture.
-    fn picture(&mut self, id: &str) -> Option<String> {
+    /// The file of a theme picture; `Ok(None)`: the theme has none of
+    /// that id.
+    fn picture(&mut self, id: &str) -> Result<Option<String>, SkinError> {
         if let Some(file) = self.written.get(id) {
-            return Some(file.clone());
+            return Ok(Some(file.clone()));
         }
-        let image = self.theme.images.get(id)?.clone();
+        let Some(image) = self.theme.images.get(id) else {
+            return Ok(None);
+        };
+        self.budget.take(id, image.width(), image.height())?;
         let file = format!("i/{}.png", self.written.len());
-        self.files.push((file.clone(), image));
+        self.files.push((file.clone(), image.clone()));
         self.written.insert(id.to_owned(), file.clone());
-        Some(file)
+        Ok(Some(file))
     }
 
-    /// A strip of pictures side by side, written once per key.
-    fn strip(&mut self, key: String, parts: &[&str]) -> Option<String> {
+    /// A strip of pictures side by side, written once per key;
+    /// `Ok(None)`: the theme lacks one of them.
+    fn strip(&mut self, key: String, parts: &[&str]) -> Result<Option<String>, SkinError> {
         if let Some(file) = self.written.get(&key) {
-            return Some(file.clone());
+            return Ok(Some(file.clone()));
         }
-        let images: Option<Vec<Image>> = parts
-            .iter()
-            .map(|id| self.theme.images.get(*id).cloned())
-            .collect();
+        let images: Option<Vec<&Image>> =
+            parts.iter().map(|id| self.theme.images.get(*id)).collect();
+        let Some(images) = images else {
+            return Ok(None);
+        };
         let file = format!("i/{}.png", self.written.len());
-        self.files.push((file.clone(), join(&images?, false)));
+        let strip = self.joined(&file, &images, false)?;
+        self.files.push((file.clone(), strip));
         self.written.insert(key, file.clone());
-        Some(file)
+        Ok(Some(file))
+    }
+
+    /// [`join`], with the joined picture's size taken from the budget
+    /// before it is made.
+    fn joined(&mut self, name: &str, parts: &[&Image], vertical: bool) -> Result<Image, SkinError> {
+        let (width, height) = joined_size(parts, vertical).unwrap_or((u32::MAX, u32::MAX));
+        self.budget.take(name, width, height)?;
+        Ok(join(parts, vertical))
     }
 
     /// A colour's pixel in `colors.png`.
@@ -426,8 +448,14 @@ fn axis(
     keep: bool,
 ) -> El {
     let [offset, length, far_start, far_end, centred] = names;
+    // The theme's numbers, whatever they are: a sum that is no number an
+    // attribute holds becomes the nearest that is.
+    let held =
+        |sum: i64| i32::try_from(sum.clamp(i64::from(i32::MIN), i64::from(i32::MAX))).unwrap_or(0);
+    let (far, long) = (i64::from(start) - i64::from(whole), i64::from(size));
+    let (from_far, end_from_far) = (held(far), held(far + long));
     if keep {
-        let free = whole - size;
+        let free = held(i64::from(whole) - long);
         let ratio = if free > 0 {
             f64::from(start) / f64::from(free)
         } else {
@@ -435,23 +463,20 @@ fn axis(
         };
         if (0.35..=0.65).contains(&ratio) {
             return el
-                .a(offset, start - free / 2)
+                .a(offset, held(i64::from(start) - i64::from(free / 2)))
                 .a(length, size.max(1))
                 .a(centred, 1);
         }
         return if ratio > 0.5 {
-            el.a(far_start, start - whole)
-                .a(far_end, start + size - whole)
+            el.a(far_start, from_far).a(far_end, end_from_far)
         } else {
             el.a(offset, start).a(length, size.max(1))
         };
     }
     match (start_far, end_far) {
         (false, false) => el.a(offset, start).a(length, size.max(1)),
-        (false, true) => el.a(offset, start).a(far_end, start + size - whole),
-        (true, _) => el
-            .a(far_start, start - whole)
-            .a(far_end, start + size - whole),
+        (false, true) => el.a(offset, start).a(far_end, end_from_far),
+        (true, _) => el.a(far_start, from_far).a(far_end, end_from_far),
     }
 }
 
@@ -464,12 +489,12 @@ fn controls(
     controls: &[Control],
     main: bool,
     area_colors: &mut Vec<(&'static str, i32)>,
-) -> Vec<El> {
+) -> Result<Vec<El>, SkinError> {
     let mut out = Vec::new();
     for control in controls {
         match control {
             Control::Panel { place: p, children } => {
-                let inner = self::controls(builder, children, main, area_colors);
+                let inner = self::controls(builder, children, main, area_colors)?;
                 let mut el = place(El::new("Static"), p).a("RvpNoClip", 1);
                 for child in inner {
                     el = el.child(child);
@@ -484,7 +509,7 @@ fn controls(
                 double,
                 visible,
             } => {
-                let Some(file) = builder.picture(image) else {
+                let Some(file) = builder.picture(image)? else {
                     continue;
                 };
                 let (w, h) = builder.theme.size(image).unwrap_or((0, 0));
@@ -525,7 +550,7 @@ fn controls(
                 let Some(command) = builder.command_of(action) else {
                     continue;
                 };
-                let Some(file) = builder.strip(format!("{up}|{over}|{down}"), &[up, over, down])
+                let Some(file) = builder.strip(format!("{up}|{over}|{down}"), &[up, over, down])?
                 else {
                     continue;
                 };
@@ -561,7 +586,7 @@ fn controls(
                 for (set, on, command) in [(0, false, first), (1, true, second)] {
                     let [up, down, over] = &images[set];
                     let Some(file) =
-                        builder.strip(format!("{up}|{over}|{down}"), &[up, over, down])
+                        builder.strip(format!("{up}|{over}|{down}"), &[up, over, down])?
                     else {
                         continue;
                     };
@@ -655,7 +680,7 @@ fn controls(
                     tooltip,
                     background.as_ref(),
                     visible.as_deref(),
-                ) {
+                )? {
                     out.push(el);
                 }
             }
@@ -668,7 +693,11 @@ fn controls(
                 selection,
                 visible,
             } => {
-                if let Some(file) = background.as_deref().and_then(|id| builder.picture(id)) {
+                let file = match background.as_deref() {
+                    Some(id) => builder.picture(id)?,
+                    None => None,
+                };
+                if let Some(file) = file {
                     let (w, h) = background
                         .as_deref()
                         .and_then(|id| builder.theme.size(id))
@@ -718,7 +747,7 @@ fn controls(
             }
         }
     }
-    out
+    Ok(out)
 }
 
 /// A straight slider: its track from the first to the last point, the
@@ -735,61 +764,73 @@ fn slider(
     tooltip: &str,
     background: Option<&super::SliderBackground>,
     visible: Option<&str>,
-) -> Option<El> {
-    let (tw, th) = builder.theme.size(up)?;
-    let (first, last) = (*points.first()?, *points.last()?);
-    let vertical = (last.1 - first.1).abs() > (last.0 - first.0).abs();
+) -> Result<Option<El>, SkinError> {
+    let (Some((tw, th)), Some(up_image), Some(down_image)) = (
+        builder.theme.size(up),
+        builder.theme.images.get(up),
+        builder.theme.images.get(down),
+    ) else {
+        return Ok(None);
+    };
+    let (Some(first), Some(last)) = (points.first().copied(), points.last().copied()) else {
+        return Ok(None);
+    };
+    // The track's place, from numbers of the theme: a slider whose
+    // numbers do not add up is left out.
+    let span = |a: i32, b: i32| a.checked_sub(b).and_then(i32::checked_abs);
+    let (Some(run_x), Some(run_y)) = (span(last.0, first.0), span(last.1, first.1)) else {
+        return Ok(None);
+    };
+    let vertical = run_y > run_x;
     let track = if vertical {
         (
-            first.0 - tw / 2,
-            first.1.min(last.1) - th / 2,
-            tw,
-            (last.1 - first.1).abs() + th,
+            first.0.checked_sub(tw / 2),
+            first.1.min(last.1).checked_sub(th / 2),
+            Some(tw),
+            run_y.checked_add(th),
         )
     } else {
         (
-            first.0.min(last.0) - tw / 2,
-            first.1 - th / 2,
-            (last.0 - first.0).abs() + tw,
-            th,
+            first.0.min(last.0).checked_sub(tw / 2),
+            first.1.checked_sub(th / 2),
+            run_x.checked_add(tw),
+            Some(th),
         )
     };
-    let thumbs = join(
-        &[
-            builder.theme.images.get(up)?.clone(),
-            builder.theme.images.get(down)?.clone(),
-        ],
-        false,
-    );
-    let mut parts = vec![thumbs];
+    let (Some(left), Some(top), Some(width), Some(height)) = track else {
+        return Ok(None);
+    };
+    let (Some(x), Some(y)) = (p.x.checked_add(left), p.y.checked_add(top)) else {
+        return Ok(None);
+    };
+    let file = format!("i/{}.png", builder.files.len() + builder.written.len());
     let mut frames = None;
-    if let Some(back) = background {
-        let image = builder.theme.images.get(&back.image)?;
-        let (iw, ih) = (
-            i32::try_from(image.width()).ok()?,
-            i32::try_from(image.height()).ok()?,
-        );
-        let (step_x, step_y) = (
-            (iw + back.pad_x) / back.columns,
-            (ih + back.pad_y) / back.rows,
-        );
-        let size = (step_x - back.pad_x, step_y - back.pad_y);
-        let mut pictures = Vec::new();
+    let mut pictures = Vec::new();
+    // The background's pictures lie in its bitmap (`SliderBackground::cell`,
+    // which the reader asked too), so they are no more pixels than it has.
+    if let Some(back) = background
+        && let Some(image) = builder.theme.images.get(&back.image)
+        && let Some(((step_x, step_y), size)) = back.cell(image.width(), image.height())
+    {
         for row in 0..back.rows {
             for column in 0..back.columns {
                 pictures.push(crop(image, column * step_x, row * step_y, size.0, size.1));
             }
         }
-        parts.push(join(&pictures, true));
         frames = Some((back.rows * back.columns, size));
     }
-    let file = format!("i/{}.png", builder.files.len() + builder.written.len());
-    builder.files.push((file.clone(), join(&parts, true)));
-    let (left, top, width, height) = track;
+    // The thumbs side by side, the background's pictures below them.
+    let thumbs = builder.joined(&file, &[up_image, down_image], false)?;
+    let mut parts: Vec<&Image> = vec![&thumbs];
+    parts.extend(pictures.iter());
+    let sheet = builder.joined(&file, &parts, true)?;
+    // Only the sheet stays.
+    builder.budget.give_back(thumbs.width(), thumbs.height());
+    builder.files.push((file.clone(), sheet));
     // The track inside the control, which VLC anchors as a whole.
     let shifted = Place {
-        x: p.x + left,
-        y: p.y + top,
+        x,
+        y,
         w: width,
         h: height,
         ..*p
@@ -815,13 +856,13 @@ fn slider(
             .a("BackImageLeft", 0)
             .a("BackImageTop", th)
             .a("RvpFrames", count)
-            .a("RvpFrameOffsetX", -left)
-            .a("RvpFrameOffsetY", -top);
+            .a("RvpFrameOffsetX", left.saturating_neg())
+            .a("RvpFrameOffsetY", top.saturating_neg());
     }
     if let Some(flag) = builder.condition(visible, None) {
         el = el.a("State", flag);
     }
-    Some(el)
+    Ok(Some(el))
 }
 
 /// The window that is RVP's main one: the one with the video in its last
@@ -847,9 +888,14 @@ fn main_window(theme: &Theme) -> Option<&Window> {
 }
 
 /// An area of a layout.
-fn area(builder: &mut Builder<'_>, name: &'static str, layout: &Layout, main: bool) -> El {
+fn area(
+    builder: &mut Builder<'_>,
+    name: &'static str,
+    layout: &Layout,
+    main: bool,
+) -> Result<El, SkinError> {
     let mut area_colors = Vec::new();
-    let children = controls(builder, &layout.controls, main, &mut area_colors);
+    let children = controls(builder, &layout.controls, main, &mut area_colors)?;
     let mut root = El::new("Static")
         .a("Align", "Client")
         .a("Image", "colors.png");
@@ -869,15 +915,55 @@ fn area(builder: &mut Builder<'_>, name: &'static str, layout: &Layout, main: bo
     for (name, x) in area_colors {
         el = el.a(name, x).a(&name.replace('X', "Y"), 0);
     }
-    el.child(El::new("Control").child(root))
+    Ok(el.child(El::new("Control").child(root)))
+}
+
+/// The built skin's files as they are made, counted as an archive's
+/// members are: their number and their bytes.
+#[derive(Default)]
+struct Built {
+    members: Vec<(String, Vec<u8>)>,
+    bytes: u64,
+}
+
+impl Built {
+    fn push(&mut self, name: String, bytes: Vec<u8>) -> Result<(), SkinError> {
+        self.bytes = self
+            .bytes
+            .saturating_add(u64::try_from(bytes.len()).unwrap_or(u64::MAX));
+        if self.bytes > limits::UNPACKED_BYTES {
+            return Err(limits::exceeded(
+                &format!("a built skin of more bytes, at {name}"),
+                limits::UNPACKED_BYTES,
+            ));
+        }
+        if self.members.len() >= limits::ARCHIVE_ENTRIES {
+            return Err(limits::exceeded(
+                "more files in the built skin",
+                limits::ARCHIVE_ENTRIES,
+            ));
+        }
+        self.members.push((name, bytes));
+        Ok(())
+    }
 }
 
 /// The built skin's files: `VideoSkin.xml` and `main.N.xml`, their
 /// pictures, `colors.png` and the theme's fonts.
 ///
 /// # Errors
-/// Fails without a window, or when a picture cannot be encoded.
+/// Fails without a window, when a picture cannot be encoded, and with
+/// [`SkinError::Limit`] when the built skin is over one of
+/// [`crate::limits`].
 pub fn members(theme: &Theme) -> Result<Vec<(String, Vec<u8>)>, SkinError> {
+    members_within(theme, limits::Pixels::default())
+}
+
+/// [`members`], with what the built skin's pictures may take.
+fn members_within(
+    theme: &Theme,
+    budget: limits::Pixels,
+) -> Result<Vec<(String, Vec<u8>)>, SkinError> {
     let main = main_window(theme).ok_or_else(|| SkinError::MissingArea("Window".to_owned()))?;
     let mut builder = Builder {
         theme,
@@ -899,6 +985,7 @@ pub fn members(theme: &Theme) -> Result<Vec<(String, Vec<u8>)>, SkinError> {
             .iter()
             .flat_map(|w| w.layouts.iter().map(|l| l.id.clone()))
             .collect(),
+        budget,
     };
     // The other windows, the same in every file.
     let mut extras = Vec::new();
@@ -913,7 +1000,7 @@ pub fn members(theme: &Theme) -> Result<Vec<(String, Vec<u8>)>, SkinError> {
         };
         let name: &'static str =
             Box::leak(format!("VlcWindow_{}", sanitize(&window.id)).into_boxed_str());
-        let mut el = area(&mut builder, name, layout, false)
+        let mut el = area(&mut builder, name, layout, false)?
             .a("RvpWindow", 1)
             .a("RvpToggle", format!("RVPWIN:{}", window.id))
             .a("RvpShown", i32::from(window.visible));
@@ -921,8 +1008,8 @@ pub fn members(theme: &Theme) -> Result<Vec<(String, Vec<u8>)>, SkinError> {
             (Some(x), Some(y), Some(mx), Some(my), _) => {
                 el = el
                     .a("RvpDock", "offset")
-                    .a("RvpOffsetX", x - mx)
-                    .a("RvpOffsetY", y - my);
+                    .a("RvpOffsetX", x.saturating_sub(mx))
+                    .a("RvpOffsetY", y.saturating_sub(my));
             }
             (.., Some(layout)) => {
                 el = el
@@ -936,33 +1023,39 @@ pub fn members(theme: &Theme) -> Result<Vec<(String, Vec<u8>)>, SkinError> {
     }
     let mut files = Vec::new();
     for (index, layout) in main.layouts.iter().enumerate() {
-        let video = area(&mut builder, "MainSkinArea", layout, true)
+        let video = area(&mut builder, "MainSkinArea", layout, true)?
             .a("RvpLayout", &layout.id)
             .a("RvpWindowId", &main.id);
         files.push((format!("main.{index}.xml"), video));
     }
-    let mut members = Vec::new();
+    // Every file holds the other windows again: the files are counted as
+    // they are written.
+    let mut built = Built::default();
     let last = files.len().saturating_sub(1);
     for (index, (file, video)) in files.into_iter().enumerate() {
         let markup = file_markup(video, &extras, &builder.conditions, &builder.texts);
         if index == last {
-            members.push(("VideoSkin.xml".to_owned(), markup.clone().into_bytes()));
+            built.push("VideoSkin.xml".to_owned(), markup.clone().into_bytes())?;
         }
-        members.push((file, markup.into_bytes()));
+        built.push(file, markup.into_bytes())?;
     }
-    let mut colors = Image::new(u32::try_from(builder.colors.len()).unwrap_or(1).max(1), 1);
+    let width = u32::try_from(builder.colors.len())
+        .unwrap_or(u32::MAX)
+        .max(1);
+    builder.budget.take("colors.png", width, 1)?;
+    let mut colors = Image::new(width, 1);
     for (index, rgb) in builder.colors.iter().enumerate() {
         colors.data_mut()[index * 4..index * 4 + 4].copy_from_slice(&[rgb[0], rgb[1], rgb[2], 255]);
     }
-    members.push(("colors.png".to_owned(), colors.encode_png()?));
+    built.push("colors.png".to_owned(), colors.encode_png()?)?;
     for (name, image) in &builder.files {
-        members.push((name.clone(), image.encode_png()?));
+        built.push(name.clone(), image.encode_png()?)?;
     }
     for (name, bytes) in &theme.font_files {
         let base = name.rsplit('/').next().unwrap_or(name);
-        members.push((format!("fonts/{base}"), bytes.clone()));
+        built.push(format!("fonts/{base}"), bytes.clone())?;
     }
-    Ok(members)
+    Ok(built.members)
 }
 
 /// One file of the built skin: the main window's layout `video`, the video
@@ -1050,5 +1143,101 @@ mod tests {
             x(40, 20, 100, false, false, true),
             "<S Left='0' Width='20' HoriCenter='1' />\n"
         );
+    }
+
+    use crate::vlc::tests::theme_members;
+
+    fn limit(result: Result<Vec<(String, Vec<u8>)>, SkinError>) -> String {
+        match result {
+            Err(SkinError::Limit(what)) => what,
+            Err(other) => panic!("not a limit: {other}"),
+            Ok(members) => panic!("built {} files", members.len()),
+        }
+    }
+
+    #[test]
+    fn the_built_pictures_share_a_budget() {
+        // Two buttons whose states differ: two strips of three pictures.
+        let xml = "<Bitmap id='a' file='8.png'><SubBitmap id='b' x='0' y='0' width='8' \
+                   height='4'/></Bitmap><Window id='main'><Layout id='l' width='100' height='50'>\
+                   <Button up='a' action='vlc.play()'/>\
+                   <Button up='a' down='b' action='vlc.stop()'/></Layout></Window>";
+        let theme = Theme::from_members("test", theme_members(xml, &["8.png"])).unwrap();
+        // 24 x 8 pixels each, and the pixel of `colors.png`.
+        let pixels = 2 * 24 * 8 + 1;
+        let built = members_within(&theme, limits::Pixels::with(pixels)).unwrap();
+        let names: Vec<&str> = built.iter().map(|(name, _)| name.as_str()).collect();
+        assert_eq!(
+            names,
+            [
+                "VideoSkin.xml",
+                "main.0.xml",
+                "colors.png",
+                "i/0.png",
+                "i/1.png"
+            ]
+        );
+        let over = members_within(&theme, limits::Pixels::with(pixels - 1));
+        assert!(limit(over).contains("pixels together"));
+        // What is built loads as a skin's file does.
+        assert!(skin(&theme, None).unwrap().area("MainSkinArea").is_some());
+    }
+
+    #[test]
+    fn a_strip_is_no_larger_than_a_picture_may_be() {
+        // Its states side by side are as wide as all and as tall as the
+        // tallest: a wide and a tall picture make a strip of their
+        // product, which is refused before it is made.
+        let mut wide = Image::new(4096, 1);
+        wide.fill([1, 2, 3, 255]);
+        let mut tall = Image::new(1, 8192);
+        tall.fill([1, 2, 3, 255]);
+        let xml = "<Bitmap id='wide' file='wide.png'/><Bitmap id='tall' file='tall.png'/>\
+                   <Window id='main'><Layout id='l' width='100' height='50'>\
+                   <Button up='wide' down='tall' action='vlc.play()'/></Layout></Window>";
+        let mut members = theme_members(xml, &[]);
+        members.push(("wide.png".to_owned(), wide.encode_png().unwrap()));
+        members.push(("tall.png".to_owned(), tall.encode_png().unwrap()));
+        let theme = Theme::from_members("test", members).unwrap();
+        assert!(limit(super::members(&theme)).contains("8193x8192"));
+    }
+
+    #[test]
+    fn a_sliders_background_is_built_from_its_grid() {
+        let xml = "<Bitmap id='back' file='64.png'/><Bitmap id='thumb' file='8.png'/>\
+                   <Window id='main'><Layout id='l' width='100' height='50'>\
+                   <Slider up='thumb' points='(0,4),(60,4)' value='volume'>\
+                   <SliderBackground image='back' nbhoriz='64' nbvert='64'/></Slider>\
+                   <Slider up='thumb' points='(0,4),(2147483647,4)' value='time'/>\
+                   </Layout></Window>";
+        let theme = Theme::from_members("test", theme_members(xml, &["64.png", "8.png"])).unwrap();
+        let built = skin(&theme, None).unwrap();
+        // The thumbs side by side, and 4096 pictures of a pixel below.
+        let sheet = built.image("i/0.png").unwrap();
+        assert_eq!((sheet.width(), sheet.height()), (16, 8 + 4096));
+        // The slider whose track's numbers do not add up is left out.
+        let mut sliders = 0;
+        built
+            .root()
+            .walk(&mut |element| sliders += usize::from(element.is("Slider")));
+        assert_eq!(sliders, 1);
+    }
+
+    #[test]
+    fn the_built_files_are_counted_as_an_archives_are() {
+        let mut built = Built::default();
+        for index in 0..limits::ARCHIVE_ENTRIES {
+            built.push(format!("{index}.xml"), Vec::new()).unwrap();
+        }
+        let more = built.push("more.xml".to_owned(), Vec::new());
+        assert!(matches!(more, Err(SkinError::Limit(_))));
+        let mut built = Built::default();
+        let file = usize::try_from(limits::ENTRY_BYTES).unwrap();
+        let files = limits::UNPACKED_BYTES / limits::ENTRY_BYTES;
+        for index in 0..files {
+            built.push(format!("{index}.xml"), vec![0; file]).unwrap();
+        }
+        let more = built.push("more.xml".to_owned(), vec![0]);
+        assert!(matches!(more, Err(SkinError::Limit(_))));
     }
 }

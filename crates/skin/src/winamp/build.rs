@@ -976,7 +976,7 @@ mod tests {
 
     #[test]
     fn the_synthetic_skin_builds() {
-        let classic = WinampSkin::from_members("synthetic", fallback::synthetic_skin());
+        let classic = WinampSkin::from_members("synthetic", fallback::synthetic_skin()).unwrap();
         let built = skin(&classic).expect("builds");
         assert!(built.warnings().is_empty(), "{:?}", built.warnings());
         for area in [

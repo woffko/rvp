@@ -1,8 +1,14 @@
 //! RGBA images: decoding skin atlases (PNG, BMP) and encoding PNG output.
+//!
+//! A picture's size is read from its header and checked against
+//! [`crate::limits`] before anything of that size is allocated: a file of
+//! a few bytes can ask for any size. A skin's pictures are also counted
+//! together ([`Image::decode_within`]).
 
 use std::io::Cursor;
 
 use crate::error::SkinError;
+use crate::limits;
 
 /// An 8-bit RGBA image with straight (not premultiplied) alpha.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -94,15 +100,42 @@ impl Image {
         }
     }
 
+    /// The size a PNG or BMP file gives in its header, read without
+    /// decoding it; `None` for other files.
+    #[must_use]
+    pub fn declared_size(bytes: &[u8]) -> Option<(u32, u32)> {
+        if bytes.starts_with(b"\x89PNG") {
+            let number =
+                |at: usize| Some(u32::from_be_bytes(bytes.get(at..at + 4)?.try_into().ok()?));
+            (bytes.get(12..16)? == b"IHDR").then_some(())?;
+            Some((number(16)?, number(20)?))
+        } else if bytes.starts_with(b"BM") {
+            // Older headers keep their sizes elsewhere, and do not decode.
+            (read_u32(bytes, 14)? >= 40).then_some(())?;
+            Some((
+                read_u32(bytes, 18)?.cast_signed().unsigned_abs(),
+                read_u32(bytes, 22)?.cast_signed().unsigned_abs(),
+            ))
+        } else {
+            None
+        }
+    }
+
     /// Decodes a PNG or BMP image; the format is detected from the bytes.
     ///
     /// # Errors
-    /// Fails for unsupported formats and corrupt data.
+    /// Fails for unsupported formats and corrupt data, and with
+    /// [`SkinError::Limit`] for a picture larger than
+    /// [`crate::limits::PICTURE_SIDE`] or [`crate::limits::PICTURE_PIXELS`],
+    /// which is refused before anything of its size is allocated.
     pub fn decode(name: &str, bytes: &[u8]) -> Result<Self, SkinError> {
         let error = |reason: String| SkinError::Image {
             name: name.to_owned(),
             reason,
         };
+        if let Some((width, height)) = Self::declared_size(bytes) {
+            limits::picture(name, width, height)?;
+        }
         if bytes.starts_with(b"\x89PNG") {
             decode_png(bytes).map_err(error)
         } else if bytes.starts_with(b"BM") {
@@ -110,6 +143,20 @@ impl Image {
         } else {
             Err(error("not a PNG or BMP image".to_owned()))
         }
+    }
+
+    /// [`Image::decode`] for one of a skin's pictures, whose pixels are
+    /// taken from the skin's `budget`.
+    ///
+    /// # Errors
+    /// As [`Image::decode`], and with [`SkinError::Limit`] when the skin's
+    /// pictures together are over [`crate::limits::SKIN_PIXELS`].
+    pub fn decode_within(
+        name: &str,
+        bytes: &[u8],
+        budget: &mut limits::Pixels,
+    ) -> Result<Self, SkinError> {
+        within(name, bytes, budget, || Self::decode(name, bytes))
     }
 
     /// Encodes the image as an uncompressed 24-bit Windows bitmap
@@ -167,10 +214,35 @@ fn pixel_count(width: u32, height: u32) -> usize {
     width as usize * height as usize
 }
 
+/// Decodes one of a skin's pictures with its declared size taken from
+/// `budget` first; a picture that does not decode gives its pixels back.
+fn within(
+    name: &str,
+    bytes: &[u8],
+    budget: &mut limits::Pixels,
+    decode: impl FnOnce() -> Result<Image, SkinError>,
+) -> Result<Image, SkinError> {
+    let declared = Image::declared_size(bytes);
+    if let Some((width, height)) = declared {
+        budget.take(name, width, height)?;
+    }
+    let decoded = decode();
+    if let (Err(_), Some((width, height))) = (&decoded, declared) {
+        budget.give_back(width, height);
+    }
+    decoded
+}
+
 fn decode_png(bytes: &[u8]) -> Result<Image, String> {
     let mut decoder = png::Decoder::new(Cursor::new(bytes));
     decoder.set_transformations(png::Transformations::normalize_to_color8());
     let mut reader = decoder.read_info().map_err(|e| e.to_string())?;
+    // The header's size was checked before the decoder started; its own
+    // reading of it is checked again before the buffers are made.
+    let (width, height) = reader.info().size();
+    if !limits::picture_fits(width, height) {
+        return Err("image too large".to_owned());
+    }
     let size = reader
         .output_buffer_size()
         .ok_or_else(|| "image too large".to_owned())?;
@@ -245,10 +317,26 @@ impl Image {
     /// # Errors
     /// Fails for unsupported or corrupt bitmaps.
     pub fn decode_opaque_bmp(name: &str, bytes: &[u8]) -> Result<Self, SkinError> {
+        if let Some((width, height)) = Self::declared_size(bytes) {
+            limits::picture(name, width, height)?;
+        }
         decode_bitmap(bytes, false).map_err(|reason| SkinError::Image {
             name: name.to_owned(),
             reason,
         })
+    }
+
+    /// [`Image::decode_opaque_bmp`] with the pixels taken from the skin's
+    /// `budget`, as [`Image::decode_within`].
+    ///
+    /// # Errors
+    /// As [`Image::decode_within`].
+    pub fn decode_opaque_bmp_within(
+        name: &str,
+        bytes: &[u8],
+        budget: &mut limits::Pixels,
+    ) -> Result<Self, SkinError> {
+        within(name, bytes, budget, || Self::decode_opaque_bmp(name, bytes))
     }
 }
 
@@ -276,7 +364,10 @@ fn decode_bitmap(bytes: &[u8], color_key: bool) -> Result<Image, String> {
     let bits = read_u16(bytes, 28).ok_or_else(short)?;
     let compression = read_u32(bytes, 30).ok_or_else(short)?;
     let colors_used = read_u32(bytes, 46).ok_or_else(short)? as usize;
-    if width <= 0 || height == 0 || width > 16384 || height.unsigned_abs() > 16384 {
+    if width <= 0
+        || height == 0
+        || !limits::picture_fits(width.unsigned_abs(), height.unsigned_abs())
+    {
         return Err("empty or oversized bitmap".to_owned());
     }
     let bottom_up = height > 0;
@@ -592,5 +683,81 @@ mod tests {
         assert_eq!(image.pixel(0, 0), [9, 9, 9, 255]);
         assert_eq!(image.pixel(0, 1), [1, 2, 3, 255]);
         assert_eq!(image.pixel(1, 1), [255, 0, 255, 0]);
+    }
+
+    /// The start of a PNG file: its signature and a header that gives
+    /// `width` x `height` pixels of one bit each. No pixel follows.
+    fn png_header(width: u32, height: u32) -> Vec<u8> {
+        let mut bytes = b"\x89PNG\r\n\x1a\n\0\0\0\x0dIHDR".to_vec();
+        bytes.extend_from_slice(&width.to_be_bytes());
+        bytes.extend_from_slice(&height.to_be_bytes());
+        bytes.extend_from_slice(&[1, 0, 0, 0, 0]);
+        bytes
+    }
+
+    fn is_limit(result: &Result<Image, crate::SkinError>) -> bool {
+        matches!(result, Err(crate::SkinError::Limit(_)))
+    }
+
+    #[test]
+    fn a_picture_over_the_limit_is_refused_from_its_header() {
+        // A few dozen bytes that ask for the memory of a million pixels a
+        // side: refused before anything is allocated.
+        let huge = png_header(1_000_000, 1_000_000);
+        assert_eq!(Image::declared_size(&huge), Some((1_000_000, 1_000_000)));
+        assert!(is_limit(&Image::decode("huge.png", &huge)));
+        // Within the sides' limit, over the pixels'.
+        assert!(is_limit(&Image::decode(
+            "wide.png",
+            &png_header(8192, 4096)
+        )));
+        assert!(is_limit(&Image::decode(
+            "long.png",
+            &png_header(1, crate::limits::PICTURE_SIDE + 1)
+        )));
+        // The largest picture among the measured skins is one of a size.
+        let strip = Image::decode("strip.png", &png_header(377, 8694));
+        assert!(matches!(strip, Err(crate::SkinError::Image { .. })));
+        // Bitmaps likewise, in either row order and with every decoder.
+        let rle = bitmap(30_000, 30_000, 8, 1, &[], &[0, 1]);
+        assert!(rle.len() < 64);
+        assert!(is_limit(&Image::decode("rle.bmp", &rle)));
+        assert!(is_limit(&Image::decode_opaque_bmp("rle.bmp", &rle)));
+        let top_down = bitmap(5000, -5000, 24, 0, &[], &[]);
+        assert!(is_limit(&Image::decode("down.bmp", &top_down)));
+        // A header of the older kind keeps no size where it is looked for.
+        let mut old = bitmap(1, 1, 24, 0, &[], &[0, 0, 0, 0]);
+        old[14..18].copy_from_slice(&12_u32.to_le_bytes());
+        assert_eq!(Image::declared_size(&old), None);
+        assert!(matches!(
+            Image::decode("old.bmp", &old),
+            Err(crate::SkinError::Image { .. })
+        ));
+    }
+
+    #[test]
+    fn a_skins_pictures_are_taken_from_its_budget() {
+        let mut picture = Image::new(4, 4);
+        picture.fill([1, 2, 3, 255]);
+        let png = picture.encode_png().expect("encode");
+        let mut budget = crate::limits::Pixels::with(40);
+        // Two fit; the third does not.
+        assert!(Image::decode_within("a.png", &png, &mut budget).is_ok());
+        assert!(Image::decode_within("b.png", &png, &mut budget).is_ok());
+        assert!(is_limit(&Image::decode_within("c.png", &png, &mut budget)));
+        // A picture that does not decode takes nothing.
+        let mut budget = crate::limits::Pixels::with(40);
+        for _ in 0..8 {
+            let broken = Image::decode_within("broken.png", &png_header(4, 4), &mut budget);
+            assert!(matches!(broken, Err(crate::SkinError::Image { .. })));
+        }
+        let bmp = picture.encode_bmp();
+        assert!(Image::decode_opaque_bmp_within("a.bmp", &bmp, &mut budget).is_ok());
+        assert!(Image::decode_opaque_bmp_within("b.bmp", &bmp, &mut budget).is_ok());
+        assert!(is_limit(&Image::decode_opaque_bmp_within(
+            "c.bmp",
+            &bmp,
+            &mut budget
+        )));
     }
 }

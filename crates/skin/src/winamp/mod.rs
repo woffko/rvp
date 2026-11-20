@@ -24,16 +24,22 @@
 //!   and the equalizer (`[Normal]`, `[WindowShade]`, `[Equalizer]`,
 //!   `[EqualizerWS]`): `NumPoints` per polygon and their `PointList`,
 //!   used only when the counts match.
+//!
+//! RVP's own rule: the archive and the bitmaps are read within
+//! [`crate::limits`]. A skin with a bitmap, or bitmaps, larger than they
+//! allow does not load; a bitmap that is merely broken falls back to
+//! RVP's own, as a missing one does.
 
 pub mod build;
 pub mod fallback;
 
 use std::collections::BTreeMap;
-use std::io::{Cursor, Read};
 use std::path::Path;
 
+use crate::archive;
 use crate::error::SkinError;
 use crate::image::Image;
+use crate::limits;
 
 /// The bitmaps of a classic skin, by base name without extension.
 pub const BITMAPS: [&str; 17] = [
@@ -117,53 +123,35 @@ impl WinampSkin {
     /// Opens a `.wsz` (or `.zip`) file, or a folder of an unpacked skin.
     ///
     /// # Errors
-    /// Fails when the file cannot be read or is no ZIP archive.
+    /// Fails when the file cannot be read or is no ZIP archive, and with
+    /// [`SkinError::Limit`] when the skin is over one of [`crate::limits`].
     pub fn open(path: &Path) -> Result<Self, SkinError> {
         let name = path
             .file_stem()
             .map_or_else(String::new, |stem| stem.to_string_lossy().into_owned());
-        let io_error = |source| SkinError::Io {
-            path: path.display().to_string(),
-            source,
-        };
-        let mut members = Vec::new();
-        if path.is_dir() {
-            let mut entries: Vec<_> = std::fs::read_dir(path)
-                .map_err(io_error)?
-                .filter_map(Result::ok)
-                .map(|entry| entry.path())
-                .filter(|path| path.is_file())
-                .collect();
-            entries.sort();
-            for entry in entries {
-                let member = entry
-                    .file_name()
-                    .map_or_else(String::new, |name| name.to_string_lossy().into_owned());
-                members.push((member, std::fs::read(&entry).map_err(io_error)?));
-            }
+        let members = if path.is_dir() {
+            archive::folder_members(path)?
         } else {
-            let bytes = std::fs::read(path).map_err(io_error)?;
-            let archive_error =
-                |error: zip::result::ZipError| SkinError::Archive(error.to_string());
-            let mut archive = zip::ZipArchive::new(Cursor::new(bytes)).map_err(archive_error)?;
-            for index in 0..archive.len() {
-                let mut file = archive.by_index(index).map_err(archive_error)?;
-                if file.is_dir() || file.size() > 16 << 20 {
-                    continue;
-                }
-                let member = file.name().map_err(archive_error)?.into_owned();
-                let mut content = Vec::with_capacity(usize::try_from(file.size()).unwrap_or(0));
-                file.read_to_end(&mut content)
-                    .map_err(|error| SkinError::Archive(format!("{member}: {error}")))?;
-                members.push((member, content));
-            }
-        }
-        Ok(Self::from_members(&name, members))
+            archive::zip_members(&archive::read_file(path)?)?
+        };
+        Self::from_members(&name, members)
     }
 
     /// A skin from its archive's members in archive order.
-    #[must_use]
-    pub fn from_members(name: &str, members: Vec<(String, Vec<u8>)>) -> Self {
+    ///
+    /// # Errors
+    /// Fails with [`SkinError::Limit`] when a bitmap, or the bitmaps
+    /// together, are larger than [`crate::limits`] allow.
+    pub fn from_members(name: &str, members: Vec<(String, Vec<u8>)>) -> Result<Self, SkinError> {
+        Self::from_members_within(name, members, limits::Pixels::default())
+    }
+
+    /// [`WinampSkin::from_members`], with what the bitmaps may take.
+    fn from_members_within(
+        name: &str,
+        members: Vec<(String, Vec<u8>)>,
+        mut budget: limits::Pixels,
+    ) -> Result<Self, SkinError> {
         // Base names; the later member wins.
         let mut files: BTreeMap<String, Vec<u8>> = BTreeMap::new();
         for (member, bytes) in members {
@@ -179,16 +167,18 @@ impl WinampSkin {
         let mut bitmaps = BTreeMap::new();
         let mut missing = Vec::new();
         for name in BITMAPS {
-            let decoded =
-                files
-                    .get(&format!("{name}.bmp"))
-                    .and_then(|bytes| match Image::decode_opaque_bmp(name, bytes) {
-                        Ok(image) => Some(image),
-                        Err(error) => {
-                            warnings.push(error.to_string());
-                            None
-                        }
-                    });
+            let decoded = match files.get(&format!("{name}.bmp")) {
+                Some(bytes) => match Image::decode_opaque_bmp_within(name, bytes, &mut budget) {
+                    Ok(image) => Some(image),
+                    // A bitmap over a limit is not one that is broken.
+                    Err(error @ SkinError::Limit(_)) => return Err(error),
+                    Err(error) => {
+                        warnings.push(error.to_string());
+                        None
+                    }
+                },
+                None => None,
+            };
             match decoded {
                 Some(image) => {
                     bitmaps.insert(name, image);
@@ -215,7 +205,7 @@ impl WinampSkin {
         let playlist = text("pledit.txt").map_or_else(PlaylistStyle::default, |t| parse_pledit(&t));
         let vis_colors = parse_viscolor(text("viscolor.txt").as_deref().unwrap_or(""));
         let regions = text("region.txt").map_or_else(BTreeMap::new, |t| parse_regions(&t));
-        Self {
+        Ok(Self {
             name: name.to_owned(),
             bitmaps,
             missing,
@@ -224,7 +214,7 @@ impl WinampSkin {
             vis_colors,
             regions,
             warnings,
-        }
+        })
     }
 
     /// A bitmap by base name (the skin's or RVP's). `numbers` is
@@ -408,7 +398,13 @@ fn parse_regions(text: &str) -> BTreeMap<String, Region> {
     }
     let mut regions = BTreeMap::new();
     for (name, (counts, points)) in sections {
-        let total: i32 = counts.iter().sum();
+        // Counts whose sum is no number match no list of points.
+        let Some(total) = counts
+            .iter()
+            .try_fold(0_i32, |sum, count| sum.checked_add(*count))
+        else {
+            continue;
+        };
         let canonical = match name.as_str() {
             "normal" => "Normal",
             "windowshade" => "WindowShade",
@@ -455,7 +451,8 @@ mod tests {
                 ("main.bmp".to_owned(), other.encode_bmp()),
                 ("readme.png".to_owned(), vec![1]),
             ],
-        );
+        )
+        .unwrap();
         assert_eq!(skin.bitmap("main").pixel(0, 0), [1, 2, 3, 255]);
         assert!(!skin.missing.contains(&"main"));
         assert!(skin.missing.contains(&"cbuttons"));
@@ -469,7 +466,8 @@ mod tests {
         let mut volume = fallback::bitmap("volume");
         volume.fill([9, 9, 9, 255]);
         let skin =
-            WinampSkin::from_members("test", vec![("volume.bmp".to_owned(), volume.encode_bmp())]);
+            WinampSkin::from_members("test", vec![("volume.bmp".to_owned(), volume.encode_bmp())])
+                .unwrap();
         assert_eq!(skin.bitmap("balance").pixel(0, 0), [9, 9, 9, 255]);
         assert!(!skin.missing.contains(&"balance"));
     }
@@ -493,5 +491,40 @@ mod tests {
         assert_eq!(regions["Normal"].len(), 2);
         assert_eq!(regions["Normal"][1], vec![(1, 1), (5, 1), (1, 5)]);
         assert!(!regions.contains_key("Equalizer"));
+        // Counts whose sum is no number an `int` holds match no points.
+        let regions = parse_regions(
+            "[Normal]\nNumPoints=2147483647, 2147483647, 3\nPointList=0,0, 1,0, 1,1\n",
+        );
+        assert!(regions.is_empty());
+    }
+
+    #[test]
+    fn the_bitmaps_are_bounded_and_share_a_budget() {
+        let main = fallback::bitmap("main");
+        let volume = fallback::bitmap("volume");
+        let pixels = |image: &Image| u64::from(image.width()) * u64::from(image.height());
+        let members = || {
+            vec![
+                ("main.bmp".to_owned(), main.encode_bmp()),
+                ("volume.bmp".to_owned(), volume.encode_bmp()),
+            ]
+        };
+        let load = |pixels: u64| {
+            WinampSkin::from_members_within("test", members(), limits::Pixels::with(pixels))
+        };
+        let both = pixels(&main) + pixels(&volume);
+        assert!(load(both).unwrap().warnings.is_empty());
+        assert!(matches!(load(both - 1), Err(SkinError::Limit(_))));
+        // A bitmap whose header gives 30,000 pixels a side is refused; one
+        // that is merely broken is replaced by RVP's own, as before.
+        let mut huge = main.encode_bmp();
+        huge[18..22].copy_from_slice(&30_000_u32.to_le_bytes());
+        huge[22..26].copy_from_slice(&30_000_u32.to_le_bytes());
+        let skin = WinampSkin::from_members("test", vec![("main.bmp".to_owned(), huge)]);
+        assert!(matches!(skin, Err(SkinError::Limit(_))));
+        let broken = main.encode_bmp()[..100].to_vec();
+        let skin = WinampSkin::from_members("test", vec![("main.bmp".to_owned(), broken)]).unwrap();
+        assert_eq!(skin.warnings.len(), 1);
+        assert!(skin.missing.contains(&"main"));
     }
 }

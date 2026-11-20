@@ -19,17 +19,26 @@
 //!   box's corner `lefttop` names, the bottom-right to `rightbottom`'s;
 //!   `xkeepratio`/`ykeepratio` keep the ratio of the free space instead.
 //! * The last `Layout` of a window is the one shown first.
+//!
+//! RVP's own rules: a theme is read within [`crate::limits`] (its
+//! archive, its markup, each picture and all of them, each expression),
+//! and does not load beyond them. Each `Bitmap` and `SubBitmap` is a
+//! picture of its own, however many are made of one file; a font file is
+//! kept once. A slider's background is `nbhoriz` by `nbvert` pictures
+//! that lie in its bitmap ([`SliderBackground::cell`]): one whose pads
+//! put them elsewhere is left out, and the slider shows without it.
 
 pub mod build;
 pub mod expr;
 
 use std::collections::BTreeMap;
-use std::io::{Cursor, Read};
 use std::path::Path;
 
+use crate::archive;
 use crate::error::SkinError;
 use crate::image::Image;
-use crate::markup::{Element, parse_xml};
+use crate::limits;
+use crate::markup::{Element, parse_within};
 
 /// Which corner of its box a corner of a control is tied to.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -261,78 +270,17 @@ pub fn is_vlc(path: &Path) -> bool {
         .is_some_and(|ext| ext.eq_ignore_ascii_case("vlt"))
 }
 
-/// The members of an archive: zip, gzip'd tar or tar; `None` when it is
-/// none of them.
-fn members(bytes: &[u8]) -> Option<Vec<(String, Vec<u8>)>> {
+/// The members of a theme's archive: a zip, a gzip'd tar or a tar.
+///
+/// # Errors
+/// Fails when the bytes are none of them, or the archive is over one of
+/// [`crate::limits`].
+pub fn members(bytes: &[u8]) -> Result<archive::Members, SkinError> {
     if bytes.starts_with(b"PK") {
-        let mut archive = zip::ZipArchive::new(Cursor::new(bytes)).ok()?;
-        let mut out = Vec::new();
-        for index in 0..archive.len() {
-            let mut file = archive.by_index(index).ok()?;
-            if file.is_dir() || file.size() > 32 << 20 {
-                continue;
-            }
-            let name = file.name().ok()?.into_owned();
-            let mut content = Vec::new();
-            file.read_to_end(&mut content).ok()?;
-            out.push((name, content));
-        }
-        return Some(out);
-    }
-    let tar = if bytes.starts_with(&[0x1F, 0x8B]) {
-        let mut out = Vec::new();
-        flate2::read::GzDecoder::new(bytes)
-            .take(256 << 20)
-            .read_to_end(&mut out)
-            .ok()?;
-        out
+        archive::zip_members(bytes)
     } else {
-        bytes.to_vec()
-    };
-    read_tar(&tar)
-}
-
-/// A tar archive's regular files (ustar and GNU long names).
-fn read_tar(bytes: &[u8]) -> Option<Vec<(String, Vec<u8>)>> {
-    let mut out = Vec::new();
-    let mut at = 0;
-    let mut long_name: Option<String> = None;
-    while at + 512 <= bytes.len() {
-        let header = &bytes[at..at + 512];
-        if header.iter().all(|byte| *byte == 0) {
-            break;
-        }
-        let field = |from: usize, to: usize| {
-            let raw = &header[from..to];
-            let end = raw.iter().position(|byte| *byte == 0).unwrap_or(raw.len());
-            String::from_utf8_lossy(&raw[..end]).into_owned()
-        };
-        let size = usize::from_str_radix(field(124, 136).trim(), 8).ok()?;
-        let kind = header[156];
-        let mut name = field(0, 100);
-        if &header[257..262] == b"ustar" {
-            let prefix = field(345, 500);
-            if !prefix.is_empty() {
-                name = format!("{prefix}/{name}");
-            }
-        }
-        let start = at + 512;
-        let end = start.checked_add(size)?;
-        let data = bytes.get(start..end)?;
-        match kind {
-            b'L' => {
-                let raw = data.split(|byte| *byte == 0).next().unwrap_or(data);
-                long_name = Some(String::from_utf8_lossy(raw).into_owned());
-            }
-            b'0' | 0 => {
-                let name = long_name.take().unwrap_or(name);
-                out.push((name, data.to_vec()));
-            }
-            _ => long_name = None,
-        }
-        at = start + size.div_ceil(512) * 512;
+        archive::tar_members(bytes)
     }
-    Some(out)
 }
 
 /// `#RRGGBB`.
@@ -430,11 +378,14 @@ struct Reader<'a> {
     fonts: BTreeMap<String, Font>,
     font_files: Vec<(String, Vec<u8>)>,
     warnings: Vec<String>,
+    /// What the theme's pictures may still take: each `Bitmap` and
+    /// `SubBitmap` is a picture of its own, whatever file it comes from.
+    budget: limits::Pixels,
 }
 
-impl Reader<'_> {
+impl<'a> Reader<'a> {
     /// A file the theme names, relative to its folder.
-    fn file(&self, name: &str) -> Option<&Vec<u8>> {
+    fn file(&self, name: &str) -> Option<&'a Vec<u8>> {
         let name = name.replace('\\', "/");
         let path = if self.base.is_empty() {
             name
@@ -449,21 +400,23 @@ impl Reader<'_> {
         })
     }
 
-    fn bitmap(&mut self, element: &Element) {
+    fn bitmap(&mut self, element: &Element) -> Result<(), SkinError> {
         let attrs = &element.attrs;
         let (Some(id), Some(file)) = (attrs.get("id"), attrs.get("file")) else {
-            return;
+            return Ok(());
         };
         let file = unescape(file);
         let Some(bytes) = self.file(&file) else {
             self.warnings.push(format!("bitmap {id}: no file {file}"));
-            return;
+            return Ok(());
         };
-        let mut image = match Image::decode(&file, bytes) {
+        let mut image = match Image::decode_within(&file, bytes, &mut self.budget) {
             Ok(image) => image,
+            // A picture over a limit is not one that is broken.
+            Err(error @ SkinError::Limit(_)) => return Err(error),
             Err(error) => {
                 self.warnings.push(error.to_string());
-                return;
+                return Ok(());
             }
         };
         let key = color(attrs.get("alphacolor"), [255, 0, 255]);
@@ -472,9 +425,7 @@ impl Reader<'_> {
                 pixel[3] = 0;
             }
         }
-        let frames = attrs.int("nbframes").unwrap_or(1).max(1);
-        let first = first_frame(&image, frames);
-        self.images.insert(id.to_owned(), first);
+        let mut parts = Vec::new();
         for sub in element
             .children
             .iter()
@@ -499,11 +450,21 @@ impl Reader<'_> {
             if !fits {
                 continue;
             }
+            self.budget
+                .take(sub_id, w.unsigned_abs(), h.unsigned_abs())?;
             let crop = crate::compose::crop(&image, x, y, w, h);
             let frames = sub_attrs.int("nbframes").unwrap_or(1).max(1);
-            self.images
-                .insert(sub_id.to_owned(), first_frame(&crop, frames));
+            parts.push((sub_id, first_frame(crop, frames, &mut self.budget)?));
         }
+        // The bitmap itself, then its parts: of two pictures with one id
+        // the later is the one that counts.
+        let frames = attrs.int("nbframes").unwrap_or(1).max(1);
+        let first = first_frame(image, frames, &mut self.budget)?;
+        self.images.insert(id.to_owned(), first);
+        for (sub_id, part) in parts {
+            self.images.insert(sub_id.to_owned(), part);
+        }
+        Ok(())
     }
 
     fn font(&mut self, element: &Element) {
@@ -513,33 +474,40 @@ impl Reader<'_> {
         };
         let size = attrs.int("size").unwrap_or(12);
         let file = unescape(file);
-        let Some(bytes) = self.file(&file).cloned() else {
+        let Some(bytes) = self.file(&file) else {
             self.warnings.push(format!("font {id}: no file {file}"));
             return;
         };
-        let Some(family) = font_family(&bytes) else {
+        let Some(family) = font_family(bytes) else {
             self.warnings
                 .push(format!("font {id}: no family name in {file}"));
             return;
         };
-        self.font_files.push((file, bytes));
+        // One copy of a file, however many fonts are made of it.
+        if !self.font_files.iter().any(|(name, _)| *name == file) {
+            self.font_files.push((file, bytes.clone()));
+        }
         self.fonts.insert(id.to_owned(), Font { family, size });
     }
 }
 
-/// The first of `frames` pictures stacked from the top.
-fn first_frame(image: &Image, frames: i32) -> Image {
+/// The first of `frames` pictures stacked from the top. It takes the
+/// whole picture's place in the theme's `budget`.
+fn first_frame(image: Image, frames: i32, budget: &mut limits::Pixels) -> Result<Image, SkinError> {
     if frames <= 1 {
-        return image.clone();
+        return Ok(image);
     }
-    let height = i32::try_from(image.height()).unwrap_or(0) / frames;
-    crate::compose::crop(
-        image,
+    let height = (i32::try_from(image.height()).unwrap_or(0) / frames).max(1);
+    budget.take("an animation's frame", image.width(), height.unsigned_abs())?;
+    let first = crate::compose::crop(
+        &image,
         0,
         0,
         i32::try_from(image.width()).unwrap_or(0),
-        height.max(1),
-    )
+        height,
+    );
+    budget.give_back(image.width(), image.height());
+    Ok(first)
 }
 
 impl Theme {
@@ -547,25 +515,32 @@ impl Theme {
     ///
     /// # Errors
     /// Fails when the file cannot be read, holds no archive, or has no
-    /// `theme.xml`.
+    /// `theme.xml`, and with [`SkinError::Limit`] when the theme is over
+    /// one of [`crate::limits`].
     pub fn open(path: &Path) -> Result<Self, SkinError> {
         let name = path
             .file_stem()
             .map_or_else(String::new, |stem| stem.to_string_lossy().into_owned());
-        let bytes = std::fs::read(path).map_err(|source| SkinError::Io {
-            path: path.display().to_string(),
-            source,
-        })?;
-        let members = members(&bytes)
-            .ok_or_else(|| SkinError::Archive("neither a zip nor a tar archive".to_owned()))?;
+        let members = members(&archive::read_file(path)?)?;
         Self::from_members(&name, members)
     }
 
     /// A theme from its archive's members.
     ///
     /// # Errors
-    /// Fails without `theme.xml`.
+    /// Fails without `theme.xml`, and with [`SkinError::Limit`] when its
+    /// markup, a picture or its pictures together, an expression or a
+    /// slider's background is over its limit.
     pub fn from_members(name: &str, members: Vec<(String, Vec<u8>)>) -> Result<Self, SkinError> {
+        Self::from_members_within(name, members, limits::Pixels::default())
+    }
+
+    /// [`Theme::from_members`], with what the theme's pictures may take.
+    fn from_members_within(
+        name: &str,
+        members: Vec<(String, Vec<u8>)>,
+        budget: limits::Pixels,
+    ) -> Result<Self, SkinError> {
         let files: BTreeMap<String, Vec<u8>> = members
             .into_iter()
             .map(|(member, bytes)| {
@@ -582,8 +557,11 @@ impl Theme {
         let base = theme_path
             .rsplit_once('/')
             .map_or_else(String::new, |(folder, _)| folder.to_owned());
-        let text = String::from_utf8_lossy(&files[&theme_path]).into_owned();
-        let document = parse_xml(&text);
+        let text = &files[&theme_path];
+        if text.len() > limits::TEXT_BYTES {
+            return Err(limits::exceeded("more bytes of markup", limits::TEXT_BYTES));
+        }
+        let document = parse_within(&String::from_utf8_lossy(text), true)?;
         let theme = document
             .find("Theme")
             .ok_or_else(|| SkinError::MissingArea("Theme".to_owned()))?;
@@ -594,6 +572,7 @@ impl Theme {
             fonts: BTreeMap::new(),
             font_files: Vec::new(),
             warnings: Vec::new(),
+            budget,
         };
         reader.fonts.insert(
             "defaultfont".to_owned(),
@@ -604,7 +583,7 @@ impl Theme {
         );
         for element in &theme.children {
             if element.is("Bitmap") {
-                reader.bitmap(element);
+                reader.bitmap(element)?;
             } else if element.is("Font") {
                 reader.font(element);
             }
@@ -620,7 +599,7 @@ impl Theme {
                 .iter()
                 .filter(|child| child.is("Layout"))
                 .map(|layout| read_layout(layout, &reader))
-                .collect::<Vec<_>>();
+                .collect::<Result<Vec<_>, _>>()?;
             if layouts.is_empty() {
                 continue;
             }
@@ -654,20 +633,87 @@ impl Theme {
     }
 }
 
-fn read_layout(element: &Element, reader: &Reader<'_>) -> Layout {
+fn read_layout(element: &Element, reader: &Reader<'_>) -> Result<Layout, SkinError> {
     let attrs = &element.attrs;
     let width = attrs.int("width").unwrap_or(0).max(1);
     let height = attrs.int("height").unwrap_or(0).max(1);
     // -1 (the default): the size itself, not resizable that way.
     let limit = |name: &str, size: i32| attrs.int(name).filter(|value| *value >= 0).unwrap_or(size);
-    let controls = read_controls(element, reader, (0, 0), (width, height));
-    Layout {
+    let controls = read_controls(element, reader, (0, 0), (width, height))?;
+    Ok(Layout {
         id: attrs.get("id").unwrap_or("").to_owned(),
         width,
         height,
         min: (limit("minwidth", width), limit("minheight", height)),
         max: (limit("maxwidth", width), limit("maxheight", height)),
         controls,
+    })
+}
+
+/// An expression of the theme (`visible`, a checkbox's `state`), which
+/// has at most [`limits::EXPRESSION_TOKENS`] tokens.
+fn expression(text: Option<String>) -> Result<Option<String>, SkinError> {
+    match text {
+        Some(text) if expr::token_count(&text) > limits::EXPRESSION_TOKENS => Err(
+            limits::exceeded("an expression of more tokens", limits::EXPRESSION_TOKENS),
+        ),
+        text => Ok(text),
+    }
+}
+
+/// A slider's background: `nbhoriz` by `nbvert` pictures of its bitmap,
+/// `padhoriz` and `padvert` pixels apart. `Ok(None)`: the theme gives
+/// none, or one whose pictures do not lie in the bitmap.
+fn slider_background(
+    back: &Element,
+    reader: &Reader<'_>,
+) -> Result<Option<SliderBackground>, SkinError> {
+    let Some(image) = back.attrs.get("image").map(unescape) else {
+        return Ok(None);
+    };
+    let Some(bitmap) = reader.images.get(&image) else {
+        return Ok(None);
+    };
+    let background = SliderBackground {
+        image,
+        columns: back.attrs.int_or("nbhoriz", 1).max(1),
+        rows: back.attrs.int_or("nbvert", 1).max(1),
+        pad_x: back.attrs.int_or("padhoriz", 0),
+        pad_y: back.attrs.int_or("padvert", 0),
+    };
+    let cells = i64::from(background.columns) * i64::from(background.rows);
+    if cells > i64::from(limits::SLIDER_CELLS) {
+        return Err(limits::exceeded(
+            &format!("a slider background of {cells} pictures"),
+            limits::SLIDER_CELLS,
+        ));
+    }
+    Ok(background
+        .cell(bitmap.width(), bitmap.height())
+        .map(|_| background))
+}
+
+impl SliderBackground {
+    /// The grid in a bitmap of `width` x `height` pixels: the distance
+    /// from one picture to the next and a picture's size, each across and
+    /// down. `None` when the pictures would not lie in the bitmap (pads
+    /// below zero, or more pictures than pixels).
+    #[must_use]
+    pub fn cell(&self, width: u32, height: u32) -> Option<((i32, i32), (i32, i32))> {
+        let axis = |whole: u32, pad: i32, count: i32| {
+            let whole = i64::from(whole);
+            let (pad, count) = (i64::from(pad), i64::from(count));
+            let step = (whole + pad) / count.max(1);
+            let size = step - pad;
+            let inside = pad >= 0 && size >= 1 && (count - 1) * step + size <= whole;
+            if !inside {
+                return None;
+            }
+            Some((i32::try_from(step).ok()?, i32::try_from(size).ok()?))
+        };
+        let (step_x, width) = axis(width, self.pad_x, self.columns)?;
+        let (step_y, height) = axis(height, self.pad_y, self.rows)?;
+        Some(((step_x, step_y), (width, height)))
     }
 }
 
@@ -680,14 +726,18 @@ fn read_controls(
     reader: &Reader<'_>,
     offset: (i32, i32),
     size: (i32, i32),
-) -> Vec<Control> {
+) -> Result<Vec<Control>, SkinError> {
     let mut out = Vec::new();
     for child in &element.children {
         let attrs = &child.attrs;
         let get = |name: &str| attrs.get(name).map(unescape);
         let place = |w: i32, h: i32| Place {
-            x: offset.0 + dimension(attrs.get("x"), size.0, 0),
-            y: offset.1 + dimension(attrs.get("y"), size.1, 0),
+            x: offset
+                .0
+                .saturating_add(dimension(attrs.get("x"), size.0, 0)),
+            y: offset
+                .1
+                .saturating_add(dimension(attrs.get("y"), size.1, 0)),
             w,
             h,
             lefttop: Corner::read(attrs.get("lefttop")),
@@ -697,7 +747,7 @@ fn read_controls(
             box_w: size.0,
             box_h: size.1,
         };
-        let visible = get("visible");
+        let visible = expression(get("visible"))?;
         let image_size = |id: Option<String>| {
             id.and_then(|id| {
                 reader
@@ -714,14 +764,14 @@ fn read_controls(
                 out.extend(read_controls(
                     child,
                     reader,
-                    (offset.0 + x, offset.1 + y),
+                    (offset.0.saturating_add(x), offset.1.saturating_add(y)),
                     size,
-                ));
+                )?);
             }
             "panel" => {
                 let w = dimension(attrs.get("width"), size.0, 0);
                 let h = dimension(attrs.get("height"), size.1, 0);
-                let children = read_controls(child, reader, (0, 0), (w, h));
+                let children = read_controls(child, reader, (0, 0), (w, h))?;
                 out.push(Control::Panel {
                     place: place(w, h),
                     children,
@@ -775,7 +825,7 @@ fn read_controls(
                     [up, down, over]
                 };
                 let images = [set(1), set(2)];
-                let Some(state) = get("state") else {
+                let Some(state) = expression(get("state"))? else {
                     continue;
                 };
                 if !images.iter().flatten().all(|id| known(id)) {
@@ -804,7 +854,7 @@ fn read_controls(
                 };
                 let w = attrs.int("width").unwrap_or(0);
                 // The font's line height.
-                let h = size_px + size_px / 4 + 1;
+                let h = size_px.saturating_add(size_px / 4).saturating_add(1);
                 out.push(Control::Text {
                     place: place(w, h),
                     font,
@@ -824,18 +874,22 @@ fn read_controls(
                 if points.len() < 2 {
                     continue;
                 }
-                let background = child.child("SliderBackground").and_then(|back| {
-                    let image = back.attrs.get("image").map(unescape)?;
-                    known(&image).then(|| SliderBackground {
-                        image,
-                        columns: back.attrs.int_or("nbhoriz", 1).max(1),
-                        rows: back.attrs.int_or("nbvert", 1).max(1),
-                        pad_x: back.attrs.int_or("padhoriz", 0),
-                        pad_y: back.attrs.int_or("padvert", 0),
-                    })
-                });
-                let max_x = points.iter().map(|p| p.0).max().unwrap_or(0) + 1;
-                let max_y = points.iter().map(|p| p.1).max().unwrap_or(0) + 1;
+                let background = match child.child("SliderBackground") {
+                    Some(back) => slider_background(back, reader)?,
+                    None => None,
+                };
+                let max_x = points
+                    .iter()
+                    .map(|p| p.0)
+                    .max()
+                    .unwrap_or(0)
+                    .saturating_add(1);
+                let max_y = points
+                    .iter()
+                    .map(|p| p.1)
+                    .max()
+                    .unwrap_or(0)
+                    .saturating_add(1);
                 out.push(Control::Slider {
                     place: place(
                         attrs.int("width").filter(|w| *w > 0).unwrap_or(max_x),
@@ -876,7 +930,7 @@ fn read_controls(
             _ => {}
         }
     }
-    out
+    Ok(out)
 }
 
 /// `(x,y),(x,y),...`.
@@ -895,6 +949,8 @@ fn parse_points(text: &str) -> Vec<(i32, i32)> {
 
 #[cfg(test)]
 mod tests {
+    use std::fmt::Write as _;
+
     use super::*;
 
     #[test]
@@ -916,7 +972,192 @@ mod tests {
         tar[156] = b'0';
         tar.extend_from_slice(body);
         tar.resize(tar.len().div_ceil(512) * 512 + 1024, 0);
-        let members = read_tar(&tar).unwrap();
+        let members = members(&tar).unwrap();
         assert_eq!(members, vec![("theme.xml".to_owned(), body.to_vec())]);
+    }
+
+    /// A theme of `xml` (inside `<Theme>`) and its files; every picture
+    /// named `N.png` is one of `N` x `N` pixels.
+    pub(crate) fn theme_members(xml: &str, files: &[&str]) -> Vec<(String, Vec<u8>)> {
+        let mut members = vec![(
+            "theme.xml".to_owned(),
+            format!("<Theme version='2.0'>{xml}</Theme>").into_bytes(),
+        )];
+        for file in files {
+            let side: u32 = file.trim_end_matches(".png").parse().unwrap();
+            let mut picture = Image::new(side, side);
+            picture.fill([10, 20, 30, 255]);
+            members.push(((*file).to_owned(), picture.encode_png().unwrap()));
+        }
+        members
+    }
+
+    fn limit(result: Result<Theme, SkinError>) -> String {
+        match result {
+            Err(SkinError::Limit(what)) => what,
+            Err(other) => panic!("not a limit: {other}"),
+            Ok(theme) => panic!("loaded with {} pictures", theme.images.len()),
+        }
+    }
+
+    /// A window with one slider whose background is `background`.
+    fn slider_theme(background: &str) -> Result<Theme, SkinError> {
+        let xml = format!(
+            "<Bitmap id='back' file='64.png'/><Bitmap id='thumb' file='8.png'/>\
+             <Window id='main'><Layout id='l' width='100' height='50'>\
+             <Slider up='thumb' points='(0,4),(60,4)' value='volume'>\
+             <SliderBackground image='back' {background}/></Slider></Layout></Window>"
+        );
+        Theme::from_members("test", theme_members(&xml, &["64.png", "8.png"]))
+    }
+
+    fn background(theme: &Theme) -> Option<&SliderBackground> {
+        match &theme.windows[0].layouts[0].controls[0] {
+            Control::Slider { background, .. } => background.as_ref(),
+            other => panic!("{other:?}"),
+        }
+    }
+
+    #[test]
+    fn a_slider_background_is_a_grid_within_its_bitmap() {
+        // Ten thousand million pictures to cut, from one line of a theme.
+        let bomb = slider_theme("nbhoriz='100000' nbvert='100000'");
+        assert!(limit(bomb).contains("slider background"));
+        // As many as a background may have: one pixel each.
+        let most = slider_theme("nbhoriz='64' nbvert='64'").unwrap();
+        assert_eq!(
+            background(&most).unwrap().cell(64, 64),
+            Some(((1, 1), (1, 1)))
+        );
+        let over = slider_theme("nbhoriz='65' nbvert='64'");
+        assert!(limit(over).contains("4160"));
+        // Pictures that would not lie in the bitmap: a pad below zero
+        // makes each a million pixels wide; more of them than pixels have
+        // no size. The slider keeps its thumb and has no background.
+        let wide = slider_theme("nbhoriz='2' padhoriz='-1000000'").unwrap();
+        assert!(background(&wide).is_none());
+        let none = slider_theme("nbhoriz='100' nbvert='1'").unwrap();
+        assert!(background(&none).is_none());
+        // VLC's own grids: 31 by 7 pictures, and pads between them.
+        let grid = SliderBackground {
+            image: String::new(),
+            columns: 31,
+            rows: 7,
+            pad_x: 0,
+            pad_y: 0,
+        };
+        assert_eq!(grid.cell(310, 70), Some(((10, 10), (10, 10))));
+        let padded = SliderBackground {
+            columns: 3,
+            rows: 1,
+            pad_x: 2,
+            ..grid
+        };
+        assert_eq!(padded.cell(28, 5), Some(((10, 5), (8, 5))));
+    }
+
+    #[test]
+    fn an_expression_of_a_theme_is_bounded() {
+        let tokens = |count: usize| "true".to_owned() + &" and true".repeat((count - 1) / 2);
+        let image = |visible: &str| {
+            let xml = format!(
+                "<Bitmap id='b' file='8.png'/><Window id='main'>\
+                 <Layout id='l' width='100' height='50'>\
+                 <Image image='b' visible='{visible}'/></Layout></Window>"
+            );
+            Theme::from_members("test", theme_members(&xml, &["8.png"]))
+        };
+        assert_eq!(
+            expr::token_count(&tokens(limits::EXPRESSION_TOKENS + 1)),
+            129
+        );
+        assert!(image(&tokens(limits::EXPRESSION_TOKENS - 1)).is_ok());
+        assert!(limit(image(&tokens(limits::EXPRESSION_TOKENS + 1))).contains("expression"));
+        let checkbox = |state: &str| {
+            let xml = format!(
+                "<Bitmap id='b' file='8.png'/><Window id='main'>\
+                 <Layout id='l' width='100' height='50'>\
+                 <Checkbox up1='b' up2='b' state='{state}'/></Layout></Window>"
+            );
+            Theme::from_members("test", theme_members(&xml, &["8.png"]))
+        };
+        assert!(checkbox("vlc.isMute").is_ok());
+        assert!(limit(checkbox(&"not ".repeat(100_000))).contains("expression"));
+    }
+
+    #[test]
+    fn the_markup_of_a_theme_is_bounded() {
+        let padding = " ".repeat(limits::TEXT_BYTES);
+        let large = Theme::from_members("test", theme_members(&padding, &[]));
+        assert!(limit(large).contains("bytes of markup"));
+        let nested = "<Panel>".repeat(1000);
+        let xml = format!("<Window id='main'><Layout id='l'>{nested}</Layout></Window>");
+        let deep = Theme::from_members("test", theme_members(&xml, &[]));
+        assert!(limit(deep).contains("deeper"));
+    }
+
+    #[test]
+    fn the_pictures_of_a_theme_share_its_budget() {
+        let load = |xml: &str, pixels: u64| {
+            Theme::from_members_within(
+                "test",
+                theme_members(xml, &["8.png"]),
+                limits::Pixels::with(pixels),
+            )
+        };
+        // Every `Bitmap` is a picture of its own, whatever file it names.
+        let three = "<Bitmap id='a' file='8.png'/><Bitmap id='b' file='8.png'/>\
+                     <Bitmap id='c' file='8.png'/>";
+        assert_eq!(load(three, 3 * 64).unwrap().images.len(), 3);
+        assert!(limit(load(three, 3 * 64 - 1)).contains("pixels together"));
+        // So is each part of one.
+        let parts = "<Bitmap id='a' file='8.png'><SubBitmap id='b' x='0' y='0' width='4' \
+                     height='4'/><SubBitmap id='c' x='4' y='4' width='4' height='2'/></Bitmap>";
+        assert_eq!(load(parts, 64 + 16 + 8).unwrap().images.len(), 3);
+        assert!(limit(load(parts, 64 + 16 + 8 - 1)).contains("pixels together"));
+        // An animation keeps its first frame alone.
+        let frames = "<Bitmap id='a' file='8.png' nbframes='2'/><Bitmap id='b' file='8.png'/>";
+        let theme = load(frames, 64 + 32).unwrap();
+        assert_eq!(theme.size("a"), Some((8, 4)));
+        assert_eq!(theme.size("b"), Some((8, 8)));
+        assert!(limit(load(frames, 64 + 32 - 1)).contains("pixels together"));
+    }
+
+    /// The smallest font file that has a family name: a table directory
+    /// with a `name` table of one Windows name.
+    fn font_file(family: &str) -> Vec<u8> {
+        let name: Vec<u8> = family.encode_utf16().flat_map(u16::to_be_bytes).collect();
+        let mut table = vec![0, 0, 0, 1, 0, 18];
+        // Windows, Unicode, US English, the family; the string's length
+        // and offset.
+        table.extend_from_slice(&[0, 3, 0, 1, 4, 9, 0, 1]);
+        table.extend_from_slice(&u16::try_from(name.len()).unwrap().to_be_bytes());
+        table.extend_from_slice(&[0, 0]);
+        table.extend_from_slice(&name);
+        let mut file = vec![0, 1, 0, 0, 0, 1, 0, 16, 0, 0, 0, 0];
+        file.extend_from_slice(b"name");
+        file.extend_from_slice(&[0; 4]);
+        file.extend_from_slice(&28_u32.to_be_bytes());
+        file.extend_from_slice(&u32::try_from(table.len()).unwrap().to_be_bytes());
+        file.extend_from_slice(&table);
+        file
+    }
+
+    #[test]
+    fn a_font_file_is_kept_once_however_many_fonts_name_it() {
+        let mut fonts = String::new();
+        for n in 0..100 {
+            let size = 8 + n % 4;
+            let _ = write!(fonts, "<Font id='f{n}' file='font.ttf' size='{size}'/>");
+        }
+        let mut members = theme_members(&fonts, &[]);
+        members.push(("font.ttf".to_owned(), font_file("Test Sans")));
+        let theme = Theme::from_members("test", members).unwrap();
+        assert!(theme.warnings.is_empty(), "{:?}", theme.warnings);
+        // The default font and the hundred of the theme.
+        assert_eq!(theme.fonts.len(), 101);
+        assert_eq!(theme.fonts["f5"].family, "Test Sans");
+        assert_eq!(theme.fonts["f5"].size, 9);
+        assert_eq!(theme.font_files.len(), 1);
     }
 }

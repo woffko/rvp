@@ -36,11 +36,15 @@
 //!   (goal P's host session: PotPlayer shows neither).
 //! * An attached playlist fills the `Contain='CMD_PLAYLIST_TOGGLE'` slot with
 //!   the `CMD_PLAYLIST_HOLDER` part of `PlaylistSkinArea`; the playlist
-//!   window's own frame is not drawn.
+//!   window's own frame is not drawn. A playlist slot inside that part
+//!   stays empty: the playlist does not hold itself.
 //! * An area's parts lie in its `<Control>`; the `<Logo>` section (M14)
 //!   holds them directly. An element with an `Image` attribute of its own
 //!   draws from that picture, and so do its children (Default.dsf's logo
 //!   parts); the others draw from their area's.
+//! * Every rectangle's edges stay within `limits::COORDINATE` of the
+//!   window's corner, whatever numbers the skin gives: far beyond any
+//!   screen, and small enough that sums of coordinates stay exact.
 
 use std::collections::BTreeMap;
 use std::fmt::Write as _;
@@ -48,6 +52,7 @@ use std::sync::OnceLock;
 
 use crate::error::SkinError;
 use crate::geometry::Rect;
+use crate::limits;
 use crate::markup::{Attrs, Element};
 use crate::paint::FontSpec;
 use crate::skin::Skin;
@@ -271,8 +276,9 @@ pub fn layout<'a>(
         skin,
         state,
         nodes: Vec::new(),
+        attaching: false,
     };
-    let window = Rect::new(0, 0, width, height);
+    let window = bounded(0, 0, i64::from(width), i64::from(height));
     let parts = area.child("Control").unwrap_or(area);
     builder.children(parts, window, window, None, 0, skin.area_atlas(area), area);
     Ok(Layout {
@@ -286,6 +292,9 @@ struct Builder<'a, 's> {
     skin: &'a Skin,
     state: &'s UiState,
     nodes: Vec<Node<'a>>,
+    /// The attached playlist's parts are being placed: a playlist slot
+    /// among them would hold them again, without end.
+    attaching: bool,
 }
 
 impl<'a> Builder<'a, '_> {
@@ -357,8 +366,11 @@ impl<'a> Builder<'a, '_> {
             // shares the slot name.
             if (slot == "CMD_PLAYLIST_TOGGLE" || slot == "CMD_CHAT_PLAYLIST_BROADCAST_TOGGLE")
                 && !child.attrs.flag("IsSplitter")
+                && !self.attaching
             {
+                self.attaching = true;
                 self.attached_playlist(placed, node_clip, index, depth + 1);
+                self.attaching = false;
             }
             // VLC's panels (M9) are boxes for placing, not clips: their
             // children may lie outside them (`RvpNoClip`).
@@ -430,7 +442,7 @@ impl<'a> Builder<'a, '_> {
                     self.auto_width(child, parent)
                         .unwrap_or_else(|| child.attrs.int_or("Width", 0).max(0))
                 })
-                .sum()
+                .fold(0_i32, i32::saturating_add)
         };
         Some(
             match element.attrs.int("MaxAutoSize").filter(|max| *max > 0) {
@@ -490,7 +502,24 @@ struct Fitted {
     left: bool,
 }
 
+/// A coordinate kept within [`limits::COORDINATE`] of the window's corner.
+fn bound(value: i64) -> i32 {
+    let limit = i64::from(limits::COORDINATE);
+    i32::try_from(value.clamp(-limit, limit)).unwrap_or(0)
+}
+
+/// The rectangle at (`x`, `y`) of `w` x `h` pixels, each of its edges
+/// bounded; a negative size is none.
+fn bounded(x: i64, y: i64, w: i64, h: i64) -> Rect {
+    let (left, top) = (bound(x), bound(y));
+    let right = bound(x.saturating_add(w.max(0)));
+    let bottom = bound(y.saturating_add(h.max(0)));
+    Rect::new(left, top, right - left, bottom - top)
+}
+
 /// Computes the rectangle of one element and updates the free space.
+/// The skin's numbers are added as 64-bit values, which hold any few of
+/// them, and the result is bounded once.
 fn place(attrs: &Attrs, parent: Rect, free: &mut Rect, fitted: Fitted) -> Rect {
     let width = fitted.width.unwrap_or_else(|| attrs.int_or("Width", 0));
     let docked_width = fitted
@@ -504,32 +533,40 @@ fn place(attrs: &Attrs, parent: Rect, free: &mut Rect, fitted: Fitted) -> Rect {
         Align::None if fitted.left => Align::Left,
         align => align,
     };
-    let mut rect = match align {
+    let wide = |rect: Rect| {
+        (
+            i64::from(rect.x),
+            i64::from(rect.y),
+            i64::from(rect.w),
+            i64::from(rect.h),
+        )
+    };
+    let (x, y, w, h) = match align {
         Align::Top => {
             let h = docked_height.clamp(0, free.h);
             let rect = Rect::new(free.x, free.y, free.w, h);
             *free = Rect::new(free.x, free.y + h, free.w, free.h - h);
-            rect
+            wide(rect)
         }
         Align::Bottom => {
             let h = docked_height.clamp(0, free.h);
             let rect = Rect::new(free.x, free.bottom() - h, free.w, h);
             *free = Rect::new(free.x, free.y, free.w, free.h - h);
-            rect
+            wide(rect)
         }
         Align::Left => {
             let w = docked_width.clamp(0, free.w);
             let rect = Rect::new(free.x, free.y, w, free.h);
             *free = Rect::new(free.x + w, free.y, free.w - w, free.h);
-            rect
+            wide(rect)
         }
         Align::Right => {
             let w = docked_width.clamp(0, free.w);
             let rect = Rect::new(free.right() - w, free.y, w, free.h);
             *free = Rect::new(free.x, free.y, free.w - w, free.h);
-            rect
+            wide(rect)
         }
-        Align::Client => *free,
+        Align::Client => wide(*free),
         Align::None => {
             let (x, w) = axis(
                 attrs.int_or("Left", 0),
@@ -547,16 +584,22 @@ fn place(attrs: &Attrs, parent: Rect, free: &mut Rect, fitted: Fitted) -> Rect {
             // at a signed distance from it, even outside the parent.
             let (x, w) = far(attrs, "RvpLeftFar", "RvpRightFar", parent.w, x, w);
             let (y, h) = far(attrs, "RvpTopFar", "RvpBottomFar", parent.h, y, h);
-            Rect::new(parent.x + x, parent.y + y, w, h)
+            // A size below zero is none, before the offsets as after.
+            (
+                i64::from(parent.x) + x,
+                i64::from(parent.y) + y,
+                w.max(0),
+                h.max(0),
+            )
         }
     };
-    rect = Rect::new(
-        rect.x + attrs.int_or("OffsetLeft", 0),
-        rect.y + attrs.int_or("OffsetTop", 0),
-        rect.w + attrs.int_or("OffsetWidth", 0),
-        rect.h + attrs.int_or("OffsetHeight", 0),
-    );
-    rect
+    let offset = |name: &str| i64::from(attrs.int_or(name, 0));
+    bounded(
+        x + offset("OffsetLeft"),
+        y + offset("OffsetTop"),
+        w + offset("OffsetWidth"),
+        h + offset("OffsetHeight"),
+    )
 }
 
 /// One axis with VLC's far edges (`RvpLeftFar` and the like): the start
@@ -566,15 +609,16 @@ fn far(
     start: &str,
     end: &str,
     parent: i32,
-    offset: i32,
-    size: i32,
-) -> (i32, i32) {
+    offset: i64,
+    size: i64,
+) -> (i64, i64) {
+    let parent = i64::from(parent);
     let begin = attrs
         .int(start)
-        .map_or(offset, |distance| parent + distance);
+        .map_or(offset, |distance| parent + i64::from(distance));
     let finish = attrs
         .int(end)
-        .map_or(begin + size, |distance| parent + distance);
+        .map_or(begin + size, |distance| parent + i64::from(distance));
     if attrs.has(start) || attrs.has(end) {
         (begin, (finish - begin).max(0))
     } else {
@@ -583,7 +627,8 @@ fn far(
 }
 
 /// Resolves one axis of an undocked element: returns (offset, size).
-fn axis(start: i32, size: i32, parent: i32, centered: bool) -> (i32, i32) {
+fn axis(start: i32, size: i32, parent: i32, centered: bool) -> (i64, i64) {
+    let (start, size, parent) = (i64::from(start), i64::from(size), i64::from(parent));
     let offset = if centered && size > 0 {
         (parent - size) / 2 + start
     } else if start < 0 {

@@ -23,6 +23,18 @@
 //! VLC's themes (M9) are XML that VLC reads with libxml2: [`parse_xml`]
 //! keeps the rules above except that quotes protect `>` and `<`
 //! (`tooltiptext="Show Info >> ..."`).
+//!
+//! RVP's own rule, which PotPlayer does not have: the tree is bounded
+//! ([`crate::limits`]). Elements nest at most `MARKUP_DEPTH` deep, a
+//! document has at most `MARKUP_ELEMENTS` of them and an element at most
+//! `ATTRIBUTES` attributes, so that every walk over the tree is short and
+//! shallow. A skin's files do not load beyond that ([`parse_within`]);
+//! the tolerant readers ([`parse_document`], [`parse_xml`], [`parse_attrs`])
+//! leave out the elements that lie deeper, and the elements and
+//! attributes that are too many.
+
+use crate::error::SkinError;
+use crate::limits;
 
 /// The attributes of one element, in document order.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -125,6 +137,11 @@ pub fn atoi(text: &str) -> i32 {
 /// Parses the attribute part of a tag (everything after the element name).
 #[must_use]
 pub fn parse_attrs(body: &str) -> Attrs {
+    read_attrs(body).0
+}
+
+/// [`parse_attrs`], and whether attributes were left out as too many.
+fn read_attrs(body: &str) -> (Attrs, bool) {
     let bytes = body.as_bytes();
     let mut attrs = Attrs::default();
     let mut i = 0;
@@ -152,6 +169,9 @@ pub fn parse_attrs(body: &str) -> Attrs {
                 .iter()
                 .position(|&b| b == quote)
                 .map_or(bytes.len(), |offset| value_start + offset);
+            if attrs.len() >= limits::ATTRIBUTES {
+                return (attrs, true);
+            }
             attrs.push(name, &body[value_start..value_end]);
             i = (value_end + 1).min(bytes.len());
         } else {
@@ -159,11 +179,14 @@ pub fn parse_attrs(body: &str) -> Attrs {
             while j < bytes.len() && !bytes[j].is_ascii_whitespace() {
                 j += 1;
             }
+            if attrs.len() >= limits::ATTRIBUTES {
+                return (attrs, true);
+            }
             attrs.push(name, &body[value_start..j]);
             i = j;
         }
     }
-    attrs
+    (attrs, false)
 }
 
 fn is_name_byte(byte: u8) -> bool {
@@ -243,19 +266,101 @@ impl Element {
 /// a synthetic element named `#document`.
 #[must_use]
 pub fn parse_document(text: &str) -> Element {
-    parse(text, false)
+    parse(text, false).0
 }
 
 /// Parses an XML file (VLC's `theme.xml`) as [`parse_document`] does, with
 /// quoted values that may hold `>` and `<`.
 #[must_use]
 pub fn parse_xml(text: &str) -> Element {
-    parse(text, true)
+    parse(text, true).0
 }
 
-fn parse(text: &str, quotes: bool) -> Element {
+/// Parses a skin's own markup (`xml`: as [`parse_xml`], else as
+/// [`parse_document`]).
+///
+/// # Errors
+/// Fails when the markup nests deeper, or has more elements or more
+/// attributes on one of them, than [`crate::limits`] allow.
+pub fn parse_within(text: &str, xml: bool) -> Result<Element, SkinError> {
+    match parse(text, xml) {
+        (root, None) => Ok(root),
+        (_, Some(error)) => Err(error),
+    }
+}
+
+/// The tree a text is read into, within the limits.
+struct Tree {
+    /// The document and, below it, the elements that are still open.
+    stack: Vec<Element>,
+    /// The first limit the text went over.
+    over: Option<SkinError>,
+    /// The opening tags read so far.
+    elements: usize,
+    /// Open elements that lie deeper than the limit and are left out:
+    /// their closing tags close them, not the elements above.
+    left_out: usize,
+}
+
+impl Tree {
+    /// Adds the element of an opening tag: `name`, its attributes' text
+    /// and whether the tag closes it. False when the document has all the
+    /// elements it may have: the rest of the text is left out.
+    fn open(&mut self, name: &str, body: &str, self_closing: bool, line: usize) -> bool {
+        self.elements += 1;
+        if self.elements > limits::MARKUP_ELEMENTS {
+            self.over.get_or_insert_with(|| {
+                limits::exceeded("more elements in the markup", limits::MARKUP_ELEMENTS)
+            });
+            return false;
+        }
+        let (attrs, more) = read_attrs(body);
+        if more {
+            self.over.get_or_insert_with(|| {
+                limits::exceeded(
+                    &format!("more attributes on an element (line {})", line + 1),
+                    limits::ATTRIBUTES,
+                )
+            });
+        }
+        let element = Element::new(name, attrs, line);
+        // The stack holds the document, which is no element of the skin,
+        // and the open elements: as many as the new one is deep.
+        if self.stack.len() > limits::MARKUP_DEPTH {
+            self.over.get_or_insert_with(|| {
+                limits::exceeded(
+                    &format!("markup nested deeper (line {})", line + 1),
+                    limits::MARKUP_DEPTH,
+                )
+            });
+            self.left_out += usize::from(!self_closing);
+        } else if self_closing {
+            append(&mut self.stack, element);
+        } else {
+            self.stack.push(element);
+        }
+        true
+    }
+
+    /// Closes the nearest open element named `name`.
+    fn close(&mut self, name: &str) {
+        if self.left_out > 0 {
+            self.left_out -= 1;
+        } else {
+            close(&mut self.stack, name);
+        }
+    }
+}
+
+/// The tree, and the first limit the text went over.
+fn parse(text: &str, quotes: bool) -> (Element, Option<SkinError>) {
     let bytes = text.as_bytes();
-    let mut stack: Vec<Element> = vec![Element::new("#document", Attrs::default(), 0)];
+    let mut tree = Tree {
+        stack: vec![Element::new("#document", Attrs::default(), 0)],
+        over: None,
+        elements: 0,
+        left_out: 0,
+    };
     let mut line = 0;
     let mut line_counted_to = 0;
     let mut i = 0;
@@ -284,7 +389,7 @@ fn parse(text: &str, quotes: bool) -> Element {
             while name_end < bytes.len() && is_name_byte(bytes[name_end]) {
                 name_end += 1;
             }
-            close(&mut stack, &text[name_start..name_end]);
+            tree.close(&text[name_start..name_end]);
             i = text[start..]
                 .find('>')
                 .map_or(bytes.len(), |end| start + end + 1);
@@ -304,17 +409,17 @@ fn parse(text: &str, quotes: bool) -> Element {
             if self_closing {
                 body = &body[..body.len() - 1];
             }
-            let element = Element::new(&text[name_start..name_end], parse_attrs(body), line);
-            if self_closing {
-                append(&mut stack, element);
-            } else {
-                stack.push(element);
+            if !tree.open(&text[name_start..name_end], body, self_closing, line) {
+                break;
             }
             i = resume;
         } else {
             i = start + 1;
         }
     }
+    let Tree {
+        mut stack, over, ..
+    } = tree;
     while stack.len() > 1 {
         let element = stack
             .pop()
@@ -326,7 +431,7 @@ fn parse(text: &str, quotes: bool) -> Element {
         .unwrap_or_else(|| Element::new("#document", Attrs::default(), 0));
     let mut next_id = 0;
     root.assign_ids(&mut next_id);
-    root
+    (root, over)
 }
 
 /// Finds where a tag body ends. Returns the end of the body and the offset
@@ -393,7 +498,11 @@ fn close(stack: &mut Vec<Element>, name: &str) {
 
 #[cfg(test)]
 mod tests {
-    use super::{atoi, parse_attrs, parse_document, parse_xml};
+    use std::fmt::Write as _;
+
+    use super::{Element, atoi, parse_attrs, parse_document, parse_within, parse_xml};
+    use crate::error::SkinError;
+    use crate::limits;
 
     #[test]
     fn atoi_matches_c() {
@@ -489,6 +598,100 @@ mod tests {
         assert_eq!(
             parse_document(text).children[0].children[0].attrs.get("T"),
             Some("Info")
+        );
+    }
+
+    /// The depth of the tree below `element` and its number of elements.
+    fn shape(element: &Element) -> (usize, usize) {
+        let mut deepest = 0;
+        let mut count = 1;
+        for child in &element.children {
+            let (depth, elements) = shape(child);
+            deepest = deepest.max(depth);
+            count += elements;
+        }
+        (deepest + 1, count)
+    }
+
+    fn limit(result: Result<Element, SkinError>) -> String {
+        match result {
+            Err(SkinError::Limit(what)) => what,
+            other => panic!("not a limit: {:?}", other.map(|root| shape(&root))),
+        }
+    }
+
+    #[test]
+    fn nesting_is_bounded() {
+        // Tags that are never closed nest: a tree 100,000 deep ends the
+        // process when it is walked, copied or dropped.
+        let text = "<a>".repeat(100_000);
+        let (error, depth, elements) = limits::on_small_stack(move || {
+            let error = limit(parse_within(&text, false));
+            let tree = parse_document(&text);
+            let copy = tree.clone();
+            let mut walked = 0;
+            copy.walk(&mut |_| walked += 1);
+            let (depth, elements) = shape(&tree);
+            assert_eq!(walked, elements);
+            assert!(tree.find("none").is_none());
+            (error, depth, elements)
+        });
+        assert!(error.contains("deeper"), "{error}");
+        // The document, and no more levels than the limit below it.
+        assert_eq!(depth, limits::MARKUP_DEPTH + 1);
+        assert_eq!(elements, limits::MARKUP_DEPTH + 1);
+        // The deepest level a skin may have, and one more.
+        let nested = |levels: usize| "<a>".repeat(levels) + &"</a>".repeat(levels);
+        let deepest = parse_within(&nested(limits::MARKUP_DEPTH), false).unwrap();
+        assert_eq!(shape(&deepest).0, limits::MARKUP_DEPTH + 1);
+        assert!(parse_within(&nested(limits::MARKUP_DEPTH + 1), true).is_err());
+        // Elements that lie deeper are left out, with their closing
+        // tags: what follows them keeps its place.
+        let text = format!("<w>{}</w><last/>", nested(limits::MARKUP_DEPTH));
+        let tree = parse_xml(&text);
+        assert_eq!(
+            shape(&tree),
+            (limits::MARKUP_DEPTH + 1, limits::MARKUP_DEPTH + 2)
+        );
+        assert!(tree.children[0].is("w") && tree.children[1].is("last"));
+    }
+
+    #[test]
+    fn elements_are_bounded() {
+        let text = "<a/>".repeat(limits::MARKUP_ELEMENTS + 1);
+        assert!(limit(parse_within(&text, false)).contains("elements"));
+        assert_eq!(shape(&parse_document(&text)).1, limits::MARKUP_ELEMENTS + 1);
+        let text = "<a/>".repeat(limits::MARKUP_ELEMENTS);
+        assert_eq!(
+            shape(&parse_within(&text, false).unwrap()).1,
+            limits::MARKUP_ELEMENTS + 1
+        );
+    }
+
+    #[test]
+    fn attributes_are_bounded() {
+        let tag = |count: usize| {
+            let mut tag = String::from("<e ");
+            for n in 0..count {
+                let _ = write!(tag, "a{n}='{n}' ");
+            }
+            tag + "/>"
+        };
+        let full = parse_within(&tag(limits::ATTRIBUTES), false).unwrap();
+        assert_eq!(full.children[0].attrs.len(), limits::ATTRIBUTES);
+        assert!(limit(parse_within(&tag(limits::ATTRIBUTES + 1), false)).contains("attributes"));
+        // Each attribute is compared with those before it: 200,000 of
+        // them on one element would take hours.
+        let many = tag(200_000);
+        assert!(limit(parse_within(&many, true)).contains("attributes"));
+        let kept = parse_document(&many);
+        assert_eq!(kept.children[0].attrs.len(), limits::ATTRIBUTES);
+        assert_eq!(kept.children[0].attrs.int("a7"), Some(7));
+        // A name that comes again is not one more attribute.
+        let again = format!("<e {}/>", "a='1' ".repeat(limits::ATTRIBUTES * 4));
+        assert_eq!(
+            parse_within(&again, false).unwrap().children[0].attrs.len(),
+            1
         );
     }
 }

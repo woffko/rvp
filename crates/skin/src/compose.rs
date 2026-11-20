@@ -2,6 +2,7 @@
 //! cut and joined, and markup in PotPlayer's format written element by
 //! element (`crate::winamp::build`, `crate::vlc::build`).
 
+use std::borrow::Borrow;
 use std::fmt::Write as _;
 
 use crate::image::Image;
@@ -27,23 +28,35 @@ pub fn crop(image: &Image, x: i32, y: i32, w: i32, h: i32) -> Image {
     out
 }
 
-/// Pictures side by side (`vertical`: stacked), top-left aligned.
+/// The size of [`join`]'s picture; `None` when its sides are no numbers
+/// a picture can have.
 #[must_use]
-pub fn join(parts: &[Image], vertical: bool) -> Image {
-    let (width, height) = if vertical {
-        (
-            parts.iter().map(Image::width).max().unwrap_or(1),
-            parts.iter().map(Image::height).sum::<u32>().max(1),
-        )
+pub fn joined_size<I: Borrow<Image>>(parts: &[I], vertical: bool) -> Option<(u32, u32)> {
+    let sum = |side: fn(&Image) -> u32| {
+        parts
+            .iter()
+            .try_fold(0_u32, |sum, part| sum.checked_add(side(part.borrow())))
+    };
+    let most = |side: fn(&Image) -> u32| parts.iter().map(|part| side(part.borrow())).max();
+    Some(if vertical {
+        (most(Image::width).unwrap_or(1), sum(Image::height)?.max(1))
     } else {
-        (
-            parts.iter().map(Image::width).sum::<u32>().max(1),
-            parts.iter().map(Image::height).max().unwrap_or(1),
-        )
+        (sum(Image::width)?.max(1), most(Image::height).unwrap_or(1))
+    })
+}
+
+/// Pictures side by side (`vertical`: stacked), top-left aligned. The
+/// parts are RVP's own or checked ([`joined_size`], [`crate::limits`]);
+/// parts whose sizes do not add up give an empty picture.
+#[must_use]
+pub fn join<I: Borrow<Image>>(parts: &[I], vertical: bool) -> Image {
+    let Some((width, height)) = joined_size(parts, vertical) else {
+        return Image::new(1, 1);
     };
     let mut out = Image::new(width, height);
     let mut offset = 0_u32;
     for part in parts {
+        let part = part.borrow();
         for row in 0..part.height() {
             for column in 0..part.width() {
                 let (x, y) = if vertical {
@@ -135,5 +148,34 @@ impl El {
             child.write(out, depth + 1);
         }
         let _ = writeln!(out, "{indent}</{}>", self.name);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{join, joined_size};
+    use crate::image::Image;
+
+    #[test]
+    fn joined_pictures_are_as_long_as_all_and_as_wide_as_the_widest() {
+        let mut first = Image::new(2, 3);
+        first.fill([1, 1, 1, 255]);
+        let mut second = Image::new(4, 1);
+        second.fill([2, 2, 2, 255]);
+        let parts = [first, second];
+        assert_eq!(joined_size(&parts, false), Some((6, 3)));
+        assert_eq!(joined_size(&parts, true), Some((4, 4)));
+        // Borrowed parts join as owned ones do.
+        let borrowed: Vec<&Image> = parts.iter().collect();
+        let side = join(&borrowed, false);
+        assert_eq!(side, join(&parts, false));
+        assert_eq!((side.width(), side.height()), (6, 3));
+        assert_eq!(side.pixel(1, 2), [1, 1, 1, 255]);
+        assert_eq!(side.pixel(2, 0), [2, 2, 2, 255]);
+        assert_eq!(side.pixel(2, 1), [0; 4]);
+        let stacked = join(&parts, true);
+        assert_eq!(stacked.pixel(3, 3), [2, 2, 2, 255]);
+        let none: [Image; 0] = [];
+        assert_eq!(joined_size(&none, true), Some((1, 1)));
     }
 }

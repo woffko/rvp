@@ -19,6 +19,9 @@ pub enum SkinError {
     MissingArea(String),
     /// A font file could not be parsed.
     Font { path: String, reason: String },
+    /// The skin is over one of [`crate::limits`]: what it has, and the most
+    /// it may have.
+    Limit(String),
 }
 
 impl fmt::Display for SkinError {
@@ -30,6 +33,7 @@ impl fmt::Display for SkinError {
             Self::Image { name, reason } => write!(f, "cannot decode image {name}: {reason}"),
             Self::MissingArea(name) => write!(f, "skin has no {name} section"),
             Self::Font { path, reason } => write!(f, "cannot use font {path}: {reason}"),
+            Self::Limit(what) => write!(f, "the skin is too large: {what}"),
         }
     }
 }

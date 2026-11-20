@@ -3,14 +3,30 @@
 use crate::fonts::Fonts;
 use crate::geometry::Rect;
 use crate::image::Image;
+use crate::limits;
 use crate::paint::{DisplayList, HAlign, Op, TextOp, VAlign};
 use crate::skin::Skin;
 
-/// Draws a display list into a new transparent image.
+/// The canvas of a `width` x `height` window: the window's size, cut
+/// down to [`limits::PICTURE_SIDE`] a side and to the rows that
+/// [`limits::CANVAS_PIXELS`] hold.
+fn canvas_size(width: i32, height: i32) -> (u32, u32) {
+    let side = |size: i32| {
+        u32::try_from(size.max(0))
+            .unwrap_or(0)
+            .min(limits::PICTURE_SIDE)
+    };
+    let (width, height) = (side(width), side(height));
+    let rows = limits::CANVAS_PIXELS / u64::from(width.max(1));
+    (width, height.min(u32::try_from(rows).unwrap_or(u32::MAX)))
+}
+
+/// Draws a display list into a new transparent image: the list's window,
+/// or as much of it from its top-left corner as a canvas may hold
+/// ([`limits::CANVAS_PIXELS`]).
 #[must_use]
 pub fn rasterize(list: &DisplayList, skin: &Skin, fonts: &mut Fonts) -> Image {
-    let width = u32::try_from(list.width.max(0)).unwrap_or(0);
-    let height = u32::try_from(list.height.max(0)).unwrap_or(0);
+    let (width, height) = canvas_size(list.width, list.height);
     let mut canvas = Image::new(width, height);
     for op in &list.ops {
         match op {
@@ -44,7 +60,9 @@ pub fn rasterize(list: &DisplayList, skin: &Skin, fonts: &mut Fonts) -> Image {
 /// The opaque parts of a display list (alpha above 0) as rectangles, as
 /// `x,y,w,h;...` for a window's shape (M9: VLC's windows are the union of
 /// their drawn pixels). Equal runs of neighbouring rows join; texts do not
-/// count.
+/// count. A shape of more than [`limits::REGION_RECTS`] rectangles is
+/// none (empty, as for a window drawn nowhere: the window stays a
+/// rectangle).
 #[must_use]
 pub fn opaque_region(list: &DisplayList, skin: &Skin) -> String {
     let image = rasterize(list, skin, &mut Fonts::new(Vec::new()));
@@ -66,22 +84,27 @@ pub fn opaque_region(list: &DisplayList, skin: &Skin) -> String {
             }
             runs.push((start, x - start));
         }
+        // The runs and the rectangles still open from the row above both
+        // lie from left to right: one pass pairs them.
         let mut next = Vec::with_capacity(runs.len());
+        let mut above = open.into_iter().peekable();
         for (start, length) in runs {
-            match open
-                .iter()
-                .position(|(x, _, w, _)| *x == start && *w == length)
-            {
-                Some(index) => {
-                    let mut rect = open.swap_remove(index);
+            while let Some(rect) = above.next_if(|rect| rect.0 < start) {
+                done.push(rect);
+            }
+            match above.next_if(|rect| rect.0 == start && rect.2 == length) {
+                Some(mut rect) => {
                     rect.3 += 1;
                     next.push(rect);
                 }
                 None => next.push((start, y, length, 1)),
             }
         }
-        done.append(&mut open);
+        done.extend(above);
         open = next;
+        if done.len() + open.len() > limits::REGION_RECTS {
+            return String::new();
+        }
     }
     done.append(&mut open);
     done.sort_unstable();
@@ -343,9 +366,101 @@ fn draw_glyph(
 
 #[cfg(test)]
 mod tests {
-    use super::{blend, blit_tiled};
+    use super::{blend, blit_tiled, canvas_size, opaque_region};
+    use crate::archive::SkinArchive;
     use crate::geometry::Rect;
     use crate::image::Image;
+    use crate::limits;
+    use crate::paint::{DisplayList, Op};
+    use crate::skin::Skin;
+
+    #[test]
+    fn a_canvas_is_no_larger_than_its_limits() {
+        assert_eq!(canvas_size(1920, 1080), (1920, 1080));
+        assert_eq!(canvas_size(7680, 4320), (7680, 4320));
+        assert_eq!(canvas_size(-5, 10), (0, 10));
+        // A window of two thousand million pixels a side: the widest
+        // canvas, and the rows that its pixels' limit holds.
+        let (width, height) = canvas_size(i32::MAX, i32::MAX);
+        assert_eq!(width, limits::PICTURE_SIDE);
+        assert_eq!(u64::from(width) * u64::from(height), limits::CANVAS_PIXELS);
+        assert_eq!(canvas_size(10_000, 10_000), (10_000, 6710));
+    }
+
+    /// A skin whose `c.png` is a checkerboard of single pixels.
+    fn checker_skin() -> Skin {
+        let mut checker = Image::new(2, 2);
+        checker.data_mut()[..4].copy_from_slice(&[255; 4]);
+        checker.data_mut()[12..].copy_from_slice(&[255; 4]);
+        let files = [
+            ("VideoSkin.xml", b"<Skin/>".to_vec()),
+            ("c.png", checker.encode_png().unwrap()),
+        ];
+        Skin::load(SkinArchive::from_files("test", files), "VideoSkin.xml").unwrap()
+    }
+
+    fn fill(x: i32, y: i32, w: i32, h: i32) -> Op {
+        Op::Fill {
+            rect: Rect::new(x, y, w, h),
+            color: [9, 9, 9, 255],
+        }
+    }
+
+    #[test]
+    fn a_shape_joins_the_equal_runs_of_its_rows() {
+        let skin = checker_skin();
+        let region = |ops: Vec<Op>| {
+            let list = DisplayList {
+                width: 6,
+                height: 4,
+                ops,
+            };
+            opaque_region(&list, &skin)
+        };
+        assert_eq!(region(Vec::new()), "");
+        // An L: two rows of two pixels, two of six.
+        assert_eq!(
+            region(vec![fill(0, 0, 2, 4), fill(2, 2, 4, 2)]),
+            "0,0,2,2;0,2,6,2"
+        );
+        // Two columns that last while a pixel between them comes and goes,
+        // and one that starts where another ended.
+        assert_eq!(
+            region(vec![fill(0, 0, 1, 3), fill(4, 0, 1, 3), fill(2, 1, 1, 1)]),
+            "0,0,1,3;2,1,1,1;4,0,1,3"
+        );
+        assert_eq!(
+            region(vec![fill(0, 0, 3, 1), fill(1, 1, 3, 1), fill(0, 2, 3, 2)]),
+            "0,0,3,1;0,2,3,2;1,1,3,1"
+        );
+    }
+
+    #[test]
+    fn a_shape_of_too_many_rectangles_is_none() {
+        let skin = checker_skin();
+        // A checkerboard of single pixels: no run joins the one above it.
+        let region = |width: i32, height: i32| {
+            let window = Rect::new(0, 0, width, height);
+            let list = DisplayList {
+                width,
+                height,
+                ops: vec![Op::Image {
+                    atlas: "c.png".to_owned(),
+                    src: Rect::new(0, 0, 2, 2),
+                    dst: window,
+                    clip: window,
+                }],
+            };
+            opaque_region(&list, &skin)
+        };
+        let small = region(100, 100);
+        assert_eq!(small.split(';').count(), 5000);
+        assert!(small.starts_with("0,0,1,1;0,2,1,1;"), "{}", &small[..40]);
+        // A larger one's rectangles are more than a shape may have.
+        let over = i32::try_from(limits::REGION_RECTS / 64 + 1).unwrap();
+        assert_eq!(region(128, over), "");
+        assert_eq!(region(4096, 4096), "");
+    }
 
     #[test]
     fn blending() {
