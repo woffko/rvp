@@ -229,6 +229,7 @@ fn the_control_api_serves_a_headless_player() {
     access(&mut h);
     playback(&mut h);
     albums(&mut h);
+    addresses(&mut h);
     mistakes(&mut h);
     limits(&mut h);
     window_thread(&mut h);
@@ -396,6 +397,58 @@ fn albums(h: &mut Harness) {
     });
     assert_eq!(h.call("GET", "/api/albums/7", None).0, 404);
     assert_eq!(h.call("POST", "/api/albums/0/play/9", None).0, 404);
+}
+
+/// `open` takes files and network addresses: every other address is
+/// refused, and nothing of it reaches the album or the player.
+fn addresses(h: &mut Harness) {
+    let entries = |h: &mut Harness| {
+        let (status, album) = h.call("GET", "/api/albums/0", None);
+        assert_eq!(status, 200);
+        album["entries"].as_array().expect("entries").len()
+    };
+    let before = entries(h);
+    for path in [
+        "av://lavfi:testsrc",
+        "AV://v4l2:/dev/video0",
+        "fdclose://9",
+        "dvd://longest//discs/film",
+        "edl://a.mkv",
+        "file://example.org/share/a.mkv",
+        "-",
+    ] {
+        let body = serde_json::json!({ "path": path }).to_string();
+        let (status, answer) = h.call("POST", "/api/open", Some(&body));
+        assert_eq!(status, 403, "{path}: {answer}");
+        assert!(answer["error"].is_string(), "{path}: {answer}");
+    }
+    assert_eq!(entries(h), before);
+    let (_, status) = h.call("GET", "/api/status", None);
+    assert_eq!(status["entry"], 0, "{status}");
+    assert!(
+        status["file"]
+            .as_str()
+            .is_some_and(|file| file.ends_with("fixture-60s.mkv")),
+        "{status}"
+    );
+    // A file URL of this computer is its file: the tone joins the album
+    // once more and plays.
+    let url = rvp_app::media::file_url(&media("fixture-tone.ogg"));
+    assert!(url.starts_with("file:///"), "{url}");
+    let body = serde_json::json!({ "path": url }).to_string();
+    assert_eq!(h.call("POST", "/api/open", Some(&body)).0, 200);
+    h.wait("the tone by its URL", |s| {
+        s["entry"] == before
+            && s["state"] == "playing"
+            && s["file"]
+                .as_str()
+                .is_some_and(|file| file.ends_with("fixture-tone.ogg"))
+    });
+    assert_eq!(entries(h), before + 1);
+    assert_eq!(h.call("POST", "/api/albums/0/play/0", None).0, 200);
+    h.wait("the first entry again", |s| {
+        s["entry"] == 0 && s["state"] == "playing"
+    });
 }
 
 /// Wrong paths, methods and bodies.

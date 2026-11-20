@@ -51,6 +51,171 @@ pub fn is_url(text: &str) -> bool {
         .is_some_and(|(scheme, _)| scheme.len() > 1 && scheme.chars().all(char::is_alphanumeric))
 }
 
+/// The network schemes a text from outside may name (see [`admitted`]), in
+/// lower case. They are the ones mpv itself lets a playlist name, which
+/// reach no local file or device: the `safe_protos` of its
+/// `stream_lavf.c` with `rtsp`, and curl's `ftp` of `stream_curl.c`. Left
+/// out of those are the ones no list of films names (`data`, `gopher`,
+/// `httpproxy`, `ipfs`); added is `udp`, the transport under `rtp`, which
+/// IPTV lists name.
+pub const NETWORK_SCHEMES: &[&str] = &[
+    "dav", "davs", "ftp", "ftps", "http", "https", "mms", "mmsh", "mmshttp", "mmst", "rist",
+    "rtmp", "rtmpe", "rtmps", "rtmpt", "rtmpte", "rtmpts", "rtp", "rtsp", "rtsps", "srt", "srtp",
+    "udp", "webdav", "webdavs",
+];
+
+/// The scheme of a text a player may read as `scheme://...`. mpv takes a
+/// letter, then letters, digits, `+`, `-` and `.` (its `mp_is_url`); a
+/// digit first and `_` count here too, so that nothing a player may take
+/// for a scheme passes as a path. One letter is a Windows drive
+/// (`C://films`), which [`local_path`] writes as a path.
+fn scheme(text: &str) -> Option<&str> {
+    let (scheme, _) = text.split_once("://")?;
+    (scheme.len() > 1
+        && scheme
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || b"+-._".contains(&byte)))
+    .then_some(scheme)
+}
+
+/// True for an address of one of the [`NETWORK_SCHEMES`], in any case.
+#[must_use]
+pub fn network_address(text: &str) -> bool {
+    scheme(text).is_some_and(|scheme| {
+        NETWORK_SCHEMES
+            .iter()
+            .any(|known| scheme.eq_ignore_ascii_case(known))
+    })
+}
+
+/// What a text from outside becomes as a playlist entry, or `None` when it
+/// may not be one. Outside is whatever RVP did not make itself: a playlist
+/// file's line, the clipboard, a dropped link, an address typed into a
+/// dialog, another program's request. Such a text may name
+///
+/// * a local path (but not `-`, which is standard input to mpv),
+/// * a `file://` URL of this computer, which becomes its path, or
+/// * an address of the [`NETWORK_SCHEMES`], or `ytdl://`, whose rest goes
+///   to yt-dlp ([`crate::ytdl`]).
+///
+/// Every other scheme mpv knows opens something a list or a link should
+/// not: capture devices and FFmpeg's filter graphs, which read and write
+/// files (`av://`), the process's descriptors (`fd://`), discs
+/// (`dvd://`). RVP's own Open menu makes such addresses itself and opens
+/// them without asking here, and an album keeps and plays them.
+#[must_use]
+pub fn admitted(text: &str) -> Option<String> {
+    let text = text.trim();
+    let Some(scheme) = scheme(text) else {
+        return (!text.is_empty() && text != "-").then(|| text.to_owned());
+    };
+    if scheme.eq_ignore_ascii_case("file") {
+        // `file:///path` or `file://localhost/path`: another host's file
+        // is not this computer's.
+        let rest = &text[scheme.len() + 3..];
+        let rest = rest.strip_prefix("localhost").unwrap_or(rest);
+        return rest
+            .starts_with('/')
+            .then(|| crate::media::file_path(&format!("file://{rest}")));
+    }
+    (scheme.eq_ignore_ascii_case("ytdl") || network_address(text)).then(|| text.to_owned())
+}
+
+/// What the doors left out (see [`admitted`]): how many, and their kinds
+/// for one notice however many there were.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct Refused {
+    count: usize,
+    kinds: BTreeSet<String>,
+}
+
+impl Refused {
+    /// Kinds a notice names.
+    const KINDS: usize = 4;
+
+    /// Counts one text that [`admitted`] refused.
+    pub fn add(&mut self, text: &str) {
+        self.count += 1;
+        // The scheme only: the rest of the text is whatever its writer
+        // wished to show.
+        let kind = scheme(text.trim()).map_or_else(
+            || "standard input".to_owned(),
+            |scheme| format!("{}://", scheme.to_ascii_lowercase()),
+        );
+        if self.kinds.len() < Self::KINDS {
+            self.kinds.insert(kind);
+        }
+    }
+
+    /// Adds what another door left out.
+    pub fn merge(&mut self, other: Self) {
+        self.count += other.count;
+        for kind in other.kinds {
+            if self.kinds.len() < Self::KINDS {
+                self.kinds.insert(kind);
+            }
+        }
+    }
+
+    /// How many texts were left out.
+    #[must_use]
+    pub fn count(&self) -> usize {
+        self.count
+    }
+
+    /// The notice, when anything was left out.
+    #[must_use]
+    pub fn notice(&self) -> Option<String> {
+        let what = match self.count {
+            0 => return None,
+            1 => "1 address".to_owned(),
+            count => format!("{count} addresses"),
+        };
+        let kinds: Vec<&str> = self.kinds.iter().map(String::as_str).collect();
+        Some(format!(
+            "Not opened: {what} ({}). Only files and network addresses are taken this way.",
+            kinds.join(", ")
+        ))
+    }
+}
+
+/// The texts of `items` that may be entries, as [`admitted`] keeps them,
+/// and what was left out.
+#[must_use]
+pub fn admit_all<S: AsRef<str>>(items: &[S]) -> (Vec<String>, Refused) {
+    let mut refused = Refused::default();
+    let kept = items
+        .iter()
+        .filter_map(|item| {
+            let kept = admitted(item.as_ref());
+            if kept.is_none() {
+                refused.add(item.as_ref());
+            }
+            kept
+        })
+        .collect();
+    (kept, refused)
+}
+
+/// True for a Windows path that names another computer or a device, not a
+/// file on a drive: `\\server\share\...` (also as `\\?\UNC\...`), a device
+/// (`\\.\...`) and the other `\\?\` forms but a drive's (`\\?\C:\...`).
+/// Either slash counts, as Windows takes both. Opening one reaches for the
+/// server with the user's account, so RVP opens it only to play it.
+#[must_use]
+pub fn windows_network_path(path: &str) -> bool {
+    let separator = |byte: u8| byte == b'\\' || byte == b'/';
+    let bytes = path.as_bytes();
+    if bytes.len() < 3 || !separator(bytes[0]) || !separator(bytes[1]) {
+        return false;
+    }
+    // `\\?\C:\...` is a file on a drive.
+    !matches!(
+        &bytes[2..],
+        [b'?', sep, drive, b':', ..] if separator(*sep) && drive.is_ascii_alphabetic()
+    )
+}
+
 /// A local path as mpv's `path` property reports it, so that the entry
 /// that plays can be recognised by it. On Windows mpv turns `/` into `\`
 /// and drops `.` and `..` (`C:/a/../b.mkv` plays as `C:\b.mkv`); file
@@ -1233,6 +1398,228 @@ mod tests {
             assert_eq!(local_path("/home/u/./films//a.mkv"), "/home/u/films/a.mkv");
         }
         assert_eq!(Entry::new("C:/x.mkv").path, local_path("C:/x.mkv"));
+    }
+
+    #[test]
+    fn network_addresses_are_admitted_in_any_case() {
+        for scheme in NETWORK_SCHEMES {
+            let address = format!("{scheme}://example.org/live/1");
+            assert_eq!(admitted(&address).as_deref(), Some(address.as_str()));
+            assert!(network_address(&address), "{address}");
+            let upper = format!("{}://example.org/live/1", scheme.to_uppercase());
+            assert_eq!(admitted(&upper).as_deref(), Some(upper.as_str()));
+        }
+        // Around the text only the blanks go.
+        assert_eq!(
+            admitted("  https://example.org/a b.mkv\t").as_deref(),
+            Some("https://example.org/a b.mkv")
+        );
+        // yt-dlp's own prefix, which is no network address of an answer.
+        assert_eq!(
+            admitted("ytdl://example.org/watch").as_deref(),
+            Some("ytdl://example.org/watch")
+        );
+        assert!(!network_address("ytdl://example.org/watch"));
+        assert!(!network_address("/films/a.mkv"));
+    }
+
+    #[test]
+    fn other_schemes_are_refused() {
+        // Every other protocol of mpv and FFmpeg: devices and filter
+        // graphs, descriptors, discs, mpv's own containers of addresses,
+        // FFmpeg's raw and file protocols.
+        for scheme in [
+            "av",
+            "avdevice",
+            "fd",
+            "fdclose",
+            "lavf",
+            "ffmpeg",
+            "dvd",
+            "dvdnav",
+            "bd",
+            "br",
+            "bluray",
+            "cdda",
+            "dvb",
+            "dvda",
+            "rvpdisc",
+            "edl",
+            "mf",
+            "memory",
+            "hex",
+            "slice",
+            "appending",
+            "archive",
+            "concat",
+            "null",
+            "env",
+            "mpv",
+            "aes-ctr",
+            "data",
+            "gopher",
+            "gophers",
+            "httpproxy",
+            "ipfs",
+            "ipns",
+            "tcp",
+            "tls",
+            "unix",
+            "smb",
+            "sftp",
+            "pipe",
+            "crypto",
+            "subfile",
+            "cache",
+            "async",
+            "md5",
+            "tee",
+            "hls+http",
+            "x-unknown",
+            "a_b",
+            "3gp",
+        ] {
+            for text in [
+                format!("{scheme}://lavfi:testsrc"),
+                format!("{}://9", scheme.to_uppercase()),
+            ] {
+                assert_eq!(admitted(&text), None, "{text}");
+                assert!(!network_address(&text), "{text}");
+            }
+        }
+        assert_eq!(admitted("Av://lavfi:testsrc"), None);
+        // Standard input, and nothing.
+        assert_eq!(admitted("-"), None);
+        assert_eq!(admitted(" - "), None);
+        assert_eq!(admitted(""), None);
+    }
+
+    #[test]
+    fn local_paths_are_admitted() {
+        for path in [
+            "/films/a.mkv",
+            "films/a.mkv",
+            "a.mkv",
+            // A drive is no scheme, with either slash, nor with two.
+            r"C:\films\a.mkv",
+            "C:/films/a.mkv",
+            "C://films/a.mkv",
+            r"\\nas\films\a.mkv",
+            "//nas/films/a.mkv",
+            // `://` after a folder is part of a name.
+            "/films/av://a.mkv",
+            r"C:\films\av://a.mkv",
+            "./-",
+            // No scheme a player reads: its letters are not ASCII.
+            "фильм://a.mkv",
+        ] {
+            assert_eq!(admitted(path).as_deref(), Some(path), "{path}");
+        }
+    }
+
+    #[test]
+    fn file_urls_become_this_computers_paths() {
+        let (url, path) = if cfg!(windows) {
+            ("file:///C:/films/a%20b.mkv", "C:/films/a b.mkv")
+        } else {
+            ("file:///films/a%20b.mkv", "/films/a b.mkv")
+        };
+        assert_eq!(admitted(url).as_deref(), Some(path));
+        assert_eq!(
+            admitted(&url.replace("file:", "FILE:")).as_deref(),
+            Some(path)
+        );
+        assert_eq!(
+            admitted("file://localhost/films/a.mkv").as_deref(),
+            Some("/films/a.mkv")
+        );
+        // Another host's file, and what is no path after the scheme.
+        assert_eq!(admitted("file://nas/films/a.mkv"), None);
+        assert_eq!(admitted("file://-"), None);
+        assert_eq!(admitted("file://av://lavfi:testsrc"), None);
+        assert_eq!(admitted("file://"), None);
+        // A path that hides a scheme stays a path: no player reads one
+        // after a slash, and `local_path` takes the double slash away.
+        let hidden = admitted("file:///av%3A//lavfi:testsrc").expect("a path");
+        assert_eq!(hidden, "/av://lavfi:testsrc");
+        assert_eq!(admitted(&hidden).as_deref(), Some(hidden.as_str()));
+        assert!(!Entry::new(&hidden).path.contains("://"));
+    }
+
+    #[test]
+    fn what_is_left_out_makes_one_notice() {
+        let (kept, refused) = admit_all(&[
+            "/films/a.mkv",
+            "av://lavfi:testsrc",
+            "https://example.org/v",
+            "AV://v4l2:/dev/video0",
+            "fdclose://9",
+            "-",
+            "file:///films/b.mkv",
+        ]);
+        assert_eq!(
+            kept,
+            ["/films/a.mkv", "https://example.org/v", "/films/b.mkv"]
+        );
+        assert_eq!(refused.count(), 4);
+        // The kinds only: nothing else of a refused text is shown.
+        assert_eq!(
+            refused.notice().as_deref(),
+            Some(
+                "Not opened: 4 addresses (av://, fdclose://, standard input). \
+                 Only files and network addresses are taken this way."
+            )
+        );
+        let (_, one) = admit_all(&["dvd://1"]);
+        assert_eq!(
+            one.notice().as_deref(),
+            Some(
+                "Not opened: 1 address (dvd://). \
+                 Only files and network addresses are taken this way."
+            )
+        );
+        let (kept, none) = admit_all(&["/films/a.mkv"]);
+        assert_eq!((kept.len(), none.notice()), (1, None));
+        // A long list names a few kinds and counts the rest.
+        let many: Vec<String> = (0..500).map(|n| format!("x{n}://y")).collect();
+        let (kept, mut refused) = admit_all(&many);
+        assert!(kept.is_empty());
+        refused.merge(one);
+        assert_eq!(refused.count(), 501);
+        let notice = refused.notice().expect("a notice");
+        assert!(
+            notice.starts_with("Not opened: 501 addresses ("),
+            "{notice}"
+        );
+        assert!(notice.len() < 160, "{notice}");
+    }
+
+    #[test]
+    fn windows_paths_of_other_computers_and_devices() {
+        for path in [
+            r"\\server\share\a.mkv",
+            "//server/share/a.mkv",
+            r"\/server\share\a.mkv",
+            r"\\?\UNC\server\share\a.mkv",
+            r"\\.\pipe\name",
+            r"\\.\PhysicalDrive0",
+            r"\\?\GLOBALROOT\Device\Mup\server\share\a.mkv",
+            r"\\?\Volume{0}\a.mkv",
+        ] {
+            assert!(windows_network_path(path), "{path}");
+        }
+        for path in [
+            r"C:\films\a.mkv",
+            "C:/films/a.mkv",
+            r"\\?\C:\films\a.mkv",
+            r"\films\a.mkv",
+            "/films/a.mkv",
+            "films/a.mkv",
+            r"\\",
+            "",
+        ] {
+            assert!(!windows_network_path(path), "{path}");
+        }
     }
 
     #[test]

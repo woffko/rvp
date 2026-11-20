@@ -8,6 +8,9 @@
 //!   address with one stream each, a single format its `url`; the HTTP
 //!   headers it asks for, the title and the duration go with the file
 //!   (`loadfile`'s per-file options);
+//! * the answer is the page's word, not RVP's: each `url` must be a
+//!   network address ([`crate::playlist::network_address`]; mpv's own hook
+//!   checks its answers the same way), or nothing of the answer plays;
 //! * when yt-dlp is missing or does not know the site, the address plays
 //!   as it is, as FFmpeg opens it.
 //!
@@ -82,14 +85,37 @@ fn edl_part(text: &str) -> String {
     format!("%{}%{text}", text.len())
 }
 
-/// mpv's string lists split at commas: a header value keeps its own.
+/// The headers as mpv's `http-header-fields` takes them. Its string lists
+/// split at commas, and a comma after a backslash is none: a header keeps
+/// its own commas that way, and one that ends in a backslash gets a space
+/// after it (HTTP drops it), or it would take the next header into its
+/// value. A header with a control character is left out: a line break in
+/// it would start another header, or the request's body.
 fn header_list(headers: &serde_json::Map<String, Value>) -> String {
     headers
         .iter()
         .filter_map(|(name, value)| Some(format!("{name}: {}", value.as_str()?)))
-        .map(|header| header.replace(',', "\\,"))
+        .filter(|header| !header.chars().any(char::is_control))
+        .map(|header| {
+            let mut header = header.replace(',', "\\,");
+            if header.ends_with('\\') {
+                header.push(' ');
+            }
+            header
+        })
         .collect::<Vec<_>>()
         .join(",")
+}
+
+/// The address of one of the answer's formats (or of the answer itself):
+/// a network address, as the module comment says.
+fn stream_url<'a>(format: &'a Value, missing: &str) -> Result<&'a str, String> {
+    let url = format["url"].as_str().ok_or_else(|| missing.to_owned())?;
+    if crate::playlist::network_address(url) {
+        Ok(url)
+    } else {
+        Err("an address that is no network stream".to_owned())
+    }
 }
 
 /// Reads yt-dlp's JSON for one video.
@@ -115,9 +141,7 @@ pub fn parse(json: &Value) -> Result<Resolved, String> {
         Some(formats) if formats.len() > 1 => {
             let mut parts = Vec::new();
             for format in formats {
-                let url = format["url"]
-                    .as_str()
-                    .ok_or_else(|| "a format without an address".to_owned())?;
+                let url = stream_url(format, "a format without an address")?;
                 if let Some(more) = format["http_headers"].as_object() {
                     for (name, value) in more {
                         headers.entry(name.clone()).or_insert_with(|| value.clone());
@@ -127,14 +151,10 @@ pub fn parse(json: &Value) -> Result<Resolved, String> {
             }
             format!("edl://{}", parts.join(";!new_stream;"))
         }
-        Some(formats) if formats.len() == 1 => formats[0]["url"]
-            .as_str()
-            .ok_or_else(|| "a format without an address".to_owned())?
-            .to_owned(),
-        _ => video["url"]
-            .as_str()
-            .ok_or_else(|| "no address to play".to_owned())?
-            .to_owned(),
+        Some(formats) if formats.len() == 1 => {
+            stream_url(&formats[0], "a format without an address")?.to_owned()
+        }
+        _ => stream_url(video, "no address to play")?.to_owned(),
     };
     let mut options = Vec::new();
     if !headers.is_empty() {
@@ -321,7 +341,110 @@ mod tests {
         let single = parse(&json!({"url": "https://only.example/x.mp4"})).expect("single");
         assert_eq!(single.target, "https://only.example/x.mp4");
         assert!(parse(&json!({"title": "nothing"})).is_err());
-        let playlist = parse(&json!({"_type": "playlist", "entries": [{"url": "u"}]}));
-        assert_eq!(playlist.expect("first entry").target, "u");
+        let playlist = parse(&json!({
+            "_type": "playlist",
+            "entries": [{"url": "https://first.example/v"}]
+        }));
+        assert_eq!(
+            playlist.expect("first entry").target,
+            "https://first.example/v"
+        );
+    }
+
+    #[test]
+    fn an_answer_names_network_addresses_only() {
+        // What a page could make yt-dlp answer: a capture device or a
+        // filter graph, a local file, a descriptor, a disc, standard
+        // input, yt-dlp again.
+        for url in [
+            "av://lavfi:testsrc",
+            "AV://v4l2:/dev/video0",
+            "file:///etc/hostname",
+            "/etc/hostname",
+            "fdclose://9",
+            "dvd://1",
+            "edl://a.mkv",
+            "data://text/plain,x",
+            "ytdl://example.org/again",
+            "-",
+            "",
+        ] {
+            // Alone, as the one format, as one of two, and in a playlist.
+            for answer in [
+                json!({"url": url}),
+                json!({"requested_formats": [{"url": url}]}),
+                json!({"requested_formats": [
+                    {"url": "https://v.example/video"},
+                    {"url": url}
+                ]}),
+                json!({"requested_formats": [
+                    {"url": url},
+                    {"url": "https://a.example/audio"}
+                ]}),
+                json!({"_type": "playlist", "entries": [{"url": url}]}),
+            ] {
+                assert_eq!(
+                    parse(&answer),
+                    Err("an address that is no network stream".to_owned()),
+                    "{answer}"
+                );
+            }
+        }
+        // The streams sites give.
+        for url in [
+            "https://cdn.example/v.m3u8",
+            "http://cdn.example/v.mp4",
+            "rtmp://live.example/app/stream",
+            "rtsp://camera.example/1",
+            "mms://radio.example/live",
+        ] {
+            assert_eq!(parse(&json!({"url": url})).expect("plays").target, url);
+        }
+    }
+
+    /// mpv's string lists as its `get_nextsep` splits them: a comma after
+    /// a backslash is part of the item, and the backslash goes.
+    fn mpv_list(text: &str) -> Vec<String> {
+        let mut items = vec![String::new()];
+        let mut chars = text.chars().peekable();
+        while let Some(c) = chars.next() {
+            let item = items.last_mut().expect("an item");
+            match c {
+                '\\' if chars.peek() == Some(&',') => {
+                    item.push(',');
+                    chars.next();
+                }
+                ',' => items.push(String::new()),
+                other => item.push(other),
+            }
+        }
+        items
+    }
+
+    #[test]
+    fn headers_stay_apart_in_mpvs_list() {
+        let headers = json!({
+            "A-Comma": "one, two",
+            "B-Backslash": "ends in \\",
+            "C-Both": "x\\,y\\",
+            "D-Break": "v\r\nInjected: 1",
+            "E-Tab\u{1}": "v",
+            "F-Last": "plain",
+            "G-Number": 5
+        });
+        let list = header_list(headers.as_object().expect("an object"));
+        assert_eq!(
+            mpv_list(&list),
+            [
+                "A-Comma: one, two",
+                // The space keeps the backslash from the comma after it.
+                "B-Backslash: ends in \\ ",
+                "C-Both: x\\,y\\ ",
+                "F-Last: plain"
+            ]
+        );
+        assert!(!list.chars().any(char::is_control), "{list:?}");
+        // Without the space, the header after it would be part of it.
+        assert_eq!(mpv_list("B: a\\,C: b"), ["B: a,C: b"]);
     }
 }

@@ -205,6 +205,26 @@ pub fn run_file_job(files: &[PathBuf], folder: &Path, operation: FileOperation) 
     report
 }
 
+/// The paths of `paths` whose durations are found in the background: the
+/// local ones (in mpv's form), without those that name another computer
+/// or a device when `local_only` asks so (see [`App::add_listed`]).
+fn background_paths(paths: &[String], local_only: bool) -> Vec<String> {
+    paths
+        .iter()
+        .filter(|path| !is_url(path))
+        .map(|path| crate::playlist::local_path(path))
+        .filter(|path| !(local_only && crate::playlist::windows_network_path(path)))
+        .collect()
+}
+
+/// The file "Open File Location" shows: the first of `paths` when it is a
+/// file or folder that exists. An entry may name anything (a playlist
+/// file's line, an address), and only what exists has a location to show.
+fn shown_location(paths: &[String]) -> Option<PathBuf> {
+    let path = paths.first().filter(|path| !is_url(path))?;
+    Path::new(path).exists().then(|| PathBuf::from(path))
+}
+
 /// The file jobs under way.
 #[derive(Debug, Default)]
 pub(crate) struct FileJobs {
@@ -274,10 +294,7 @@ impl App {
                 kind: "save",
                 text: format!("{}.m3u8", self.library().shown().name),
             }),
-            ListAction::OpenLocation => {
-                let path = paths.first().filter(|path| !is_url(path))?;
-                Some(UiRequest::ShowFile(PathBuf::from(path)))
-            }
+            ListAction::OpenLocation => shown_location(&paths).map(UiRequest::ShowFile),
             ListAction::RenameFile => {
                 let path = paths.first().filter(|path| !is_url(path))?;
                 Some(UiRequest::ListDialog {
@@ -462,6 +479,19 @@ impl App {
     /// Adds paths to an album (once each when "Do not add duplicate
     /// files" is on); durations are found in the background.
     pub(crate) fn add_paths(&mut self, album: usize, paths: &[String]) -> Option<usize> {
+        self.add_paths_from(album, paths, false)
+    }
+
+    /// [`App::add_paths`] for the lines of a list from outside (a playlist
+    /// file, addresses typed or pasted into a dialog). On Windows a line
+    /// may name another computer (`\\server\share`), and opening it
+    /// signs in there with the user's account: such a path is opened when
+    /// the user plays it, not before to find its duration.
+    pub(crate) fn add_listed(&mut self, album: usize, paths: &[String]) -> Option<usize> {
+        self.add_paths_from(album, paths, true)
+    }
+
+    fn add_paths_from(&mut self, album: usize, paths: &[String], listed: bool) -> Option<usize> {
         let paths: Vec<String> = if self.settings.playlist.no_duplicates {
             let known: std::collections::BTreeSet<String> = self
                 .library()
@@ -480,12 +510,7 @@ impl App {
         };
         let first = self.library_mut().insert(album, None, &paths);
         if self.settings.playlist.detect_durations {
-            let local: Vec<String> = paths
-                .iter()
-                .filter(|path| !is_url(path))
-                .map(|path| crate::playlist::local_path(path))
-                .collect();
-            self.detect_durations(&local);
+            self.detect_durations(&background_paths(&paths, listed && cfg!(windows)));
         }
         first
     }
@@ -516,21 +541,26 @@ impl App {
                 }
             }
             "url" => {
-                let items: Vec<String> = text
+                let lines: Vec<String> = text
                     .lines()
                     .map(str::trim)
                     .filter(|line| !line.is_empty())
                     .map(str::to_owned)
                     .collect();
-                self.add_paths(album, &items);
-                None
+                let items = self.admit(&lines);
+                self.add_listed(album, &items);
+                self.refusal()
             }
             "rename" => self.rename_entry(engine, text),
             "open" => match crate::playlist_files::read(Path::new(text), &self.drive_map()) {
-                Ok(entries) => {
+                Ok((entries, refused)) => {
+                    self.refused.merge(refused);
+                    let refusal = self.refusal();
                     let paths: Vec<String> =
                         entries.iter().map(|entry| entry.path.clone()).collect();
-                    let first = self.add_paths(album, &paths)?;
+                    let Some(first) = self.add_listed(album, &paths) else {
+                        return refusal;
+                    };
                     for (offset, entry) in entries.iter().enumerate() {
                         if entry.title.is_some() {
                             self.library_mut().set_title(
@@ -540,7 +570,7 @@ impl App {
                             );
                         }
                     }
-                    None
+                    refusal
                 }
                 Err(error) => Some(UiRequest::Message(error)),
             },
@@ -767,6 +797,67 @@ mod tests {
         assert_eq!(sorted_order(&entries, SortField::Duration), [2, 0, 1]);
         assert_eq!(sorted_order(&entries, SortField::Folder), [2, 1, 0]);
         assert_eq!(sorted_order(&entries, SortField::Release), [1, 0, 2]);
+    }
+
+    #[test]
+    fn a_lists_network_paths_wait_for_playback() {
+        // Windows' forms, as plain text: the check is the same on Linux,
+        // where it is not applied (a backslash is a character of a name).
+        let paths: Vec<String> = [
+            r"\\server\share\a.mkv",
+            r"\\?\UNC\server\share\b.mkv",
+            r"\\.\pipe\name",
+            r"C:\films\c.mkv",
+            "https://example.org/v",
+        ]
+        .map(str::to_owned)
+        .to_vec();
+        let local = |path: &str| crate::playlist::local_path(path);
+        // A playlist file's lines: only the file on a drive is opened to
+        // find its duration.
+        assert_eq!(background_paths(&paths, true), [local(r"C:\films\c.mkv")]);
+        // The user's own files, as before: all but the address.
+        assert_eq!(
+            background_paths(&paths, false),
+            [
+                local(r"\\server\share\a.mkv"),
+                local(r"\\?\UNC\server\share\b.mkv"),
+                local(r"\\.\pipe\name"),
+                local(r"C:\films\c.mkv")
+            ]
+        );
+    }
+
+    #[test]
+    fn only_a_file_that_exists_has_a_location_to_show() {
+        let dir = std::env::temp_dir().join(format!("rvp-location-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).expect("dir");
+        let file = dir.join("a.mkv");
+        std::fs::write(&file, b"a").expect("file");
+        let text = |path: &Path| path.to_string_lossy().into_owned();
+        assert_eq!(shown_location(&[text(&file)]), Some(file.clone()));
+        // The first of several, as the menu shows one.
+        assert_eq!(
+            shown_location(&[text(&file), text(&dir.join("missing.mkv"))]),
+            Some(file.clone())
+        );
+        for missing in [
+            text(&dir.join("missing.mkv")),
+            // A playlist's line that is no file name on Windows.
+            "C:\\x\" y".to_owned(),
+            format!("{}\" b", text(&file)),
+            "https://example.org/v".to_owned(),
+            String::new(),
+        ] {
+            assert_eq!(
+                shown_location(std::slice::from_ref(&missing)),
+                None,
+                "{missing}"
+            );
+        }
+        assert_eq!(shown_location(&[]), None);
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]

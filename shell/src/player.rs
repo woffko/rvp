@@ -1318,8 +1318,13 @@ impl qobject::Player {
             drop(core.app.tensorrt_install());
         }
         let action = core.app.switch_action(core.engine, &request);
+        // What the command line (or an imported playlist) named and RVP
+        // does not open that way.
+        let refusal = core.app.refusal();
         if let Err(error) = result {
             self.as_mut().show_message(&format!("cannot open: {error}"));
+        } else if let Some(refusal) = refusal {
+            self.as_mut().handle_request(refusal);
         }
         // The control API follows the application from here (M15).
         self.as_mut().apply_remote();
@@ -2672,11 +2677,15 @@ impl qobject::Player {
         let Some(core) = self.as_mut().core_mut() else {
             return;
         };
-        let text = match core.app.import_playlists(folder) {
+        let mut text = match core.app.import_playlists(folder) {
             Ok(0) => format!("No PotPlayer playlists in {}", folder.display()),
             Ok(count) => format!("Imported {count} albums from PotPlayer"),
             Err(error) => format!("Cannot import {}: {error}", folder.display()),
         };
+        // Entries that are neither files nor network addresses stayed out.
+        if let Some(rvp_app::UiRequest::Message(refusal)) = core.app.refusal() {
+            text = format!("{text}. {refusal}");
+        }
         self.as_mut().show_message(&text);
         self.sync_chrome();
     }
@@ -2695,21 +2704,25 @@ impl qobject::Player {
         let Some(core) = self.as_mut().core_mut() else {
             return;
         };
+        // A dialog's or a drop's text is from outside: files and network
+        // addresses (`rvp_app::playlist::admitted`).
         if let Some(pending) = core.pending.as_mut() {
             // Not ready yet: open them with the start.
             if !append {
                 pending.files.clear();
             }
-            pending.files.extend(files);
+            pending.files.extend(core.app.admit(&files));
             return;
         }
         // Appended files do not play: the window keeps its size.
-        if !append {
+        let plays = files
+            .iter()
+            .any(|file| rvp_app::playlist::admitted(file).is_some());
+        if !append && plays {
             core.request_fit();
         }
-        let result = core.app.open(core.engine, &files, append);
-        if let Err(error) = result {
-            self.show_message(&format!("cannot open: {error}"));
+        if let Some(request) = core.app.open_outside(core.engine, &files, append) {
+            self.handle_request(request);
         }
     }
 
@@ -3038,6 +3051,9 @@ impl qobject::Player {
         let Some(core) = self.as_mut().core_mut() else {
             return;
         };
+        // First, so that a request whose files all stay out (see
+        // `Request::admit`) neither raises the window nor fits it.
+        core.app.prepare_switches(&mut request);
         if request.mode == rvp_app::instance::Mode::Play && !request.files.is_empty() {
             core.request_fit();
             self.as_mut().ui_request(request::RAISE, 0);
@@ -3045,11 +3061,13 @@ impl qobject::Player {
         let Some(core) = self.as_mut().core_mut() else {
             return;
         };
-        core.app.prepare_switches(&mut request);
         let result = core.app.remote(core.engine, &request);
         let action = core.app.switch_action(core.engine, &request);
+        let refusal = core.app.refusal();
         if let Err(error) = result {
             self.as_mut().show_message(&format!("cannot open: {error}"));
+        } else if let Some(refusal) = refusal {
+            self.as_mut().handle_request(refusal);
         }
         if let Some(action) = action {
             self.as_mut().handle_request(action);

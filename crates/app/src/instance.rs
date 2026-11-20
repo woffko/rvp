@@ -19,12 +19,21 @@
 //! `QLocalServer`: a Unix socket or a Windows named pipe) as one JSON line.
 //! The self-test neither forwards nor listens unless `--instance=NAME`
 //! names a separate channel, so it never talks to the owner's player.
+//!
+//! What a command line names is checked the same way whether this process
+//! plays it or a running one does ([`Request::admit`]): files and network
+//! addresses, and the disc and capture addresses RVP's own Open menu
+//! makes, which "Play in new instance" hands over. `-` is standard input,
+//! which only the process that was given it can read: a command line that
+//! names it is not handed over ([`forwards`]), and a request does not
+//! carry it.
 
 use std::path::Path;
 
 use serde::{Deserialize, Serialize};
 
 use crate::Cli;
+use crate::playlist::{Refused, admitted};
 
 /// What the running instance does with the files.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -173,16 +182,55 @@ impl Request {
         serde_json::to_string(self).unwrap_or_default()
     }
 
+    /// A request as it arrives. Standard input is its sender's, not this
+    /// process's: `-` is no file of it.
     #[must_use]
     pub fn decode(line: &str) -> Option<Self> {
-        serde_json::from_str(line.trim()).ok()
+        let mut request: Self = serde_json::from_str(line.trim()).ok()?;
+        request.files.retain(|file| file != STDIN);
+        Some(request)
+    }
+
+    /// Leaves out what a command line may not name, a first start's and
+    /// one handed over alike, and returns it for the notice. A file stays
+    /// when it is a path or a network address
+    /// ([`crate::playlist::admitted`]), an address of RVP's own Open menu
+    /// ([`crate::sources::own_address`]) or standard input; `/sub` and
+    /// `/aud` name files or network addresses.
+    pub fn admit(&mut self) -> Refused {
+        let mut refused = Refused::default();
+        self.files = std::mem::take(&mut self.files)
+            .into_iter()
+            .filter_map(|file| {
+                if file == STDIN || crate::sources::own_address(&file) {
+                    return Some(file);
+                }
+                let kept = admitted(&file);
+                if kept.is_none() {
+                    refused.add(&file);
+                }
+                kept
+            })
+            .collect();
+        for extra in [&mut self.switches.sub, &mut self.switches.aud] {
+            if let Some(file) = extra.take() {
+                *extra = admitted(&file);
+                if extra.is_none() {
+                    refused.add(&file);
+                }
+            }
+        }
+        refused
     }
 }
+
+/// Standard input on a command line.
+const STDIN: &str = "-";
 
 /// URLs, absolute paths and `-` (standard input) stay; anything else is
 /// joined to `cwd`.
 fn absolute(file: &str, cwd: &Path) -> String {
-    if file == "-" || crate::playlist::is_url(file) || Path::new(file).is_absolute() {
+    if file == STDIN || crate::playlist::is_url(file) || Path::new(file).is_absolute() {
         file.to_owned()
     } else {
         cwd.join(file).display().to_string()
@@ -225,10 +273,11 @@ fn channel_in(cli: &Cli, runtime: Option<&Path>) -> Option<String> {
 }
 
 /// Whether this process hands its files to a running instance: not with
-/// `/new`, and not without a channel.
+/// `/new`, not without a channel, and not when a file is standard input,
+/// which a running instance cannot read: this process plays it.
 #[must_use]
 pub fn forwards(cli: &Cli) -> bool {
-    !cli.flag("new") && channel(cli).is_some()
+    !cli.flag("new") && !cli.files.iter().any(|file| file == STDIN) && channel(cli).is_some()
 }
 
 #[cfg(test)]
@@ -341,5 +390,76 @@ mod tests {
         }));
         assert!(!forwards(&cli(&["/new", "a.mkv"])));
         assert!(forwards(&cli(&["a.mkv"])));
+    }
+
+    #[test]
+    fn standard_input_stays_with_its_process() {
+        // A running instance cannot read this process's input: the
+        // command line that names it is not handed over.
+        assert!(!forwards(&cli(&["-"])));
+        assert!(!forwards(&cli(&["/add", "a.mkv", "-"])));
+        assert!(forwards(&cli(&["a.mkv", "--", "-b.mkv"])));
+        // It is this process's own file, kept as it is.
+        let cwd = Path::new("/home/u/films");
+        let mut own = Request::from_cli(&cli(&["-"]), cwd);
+        assert_eq!(own.files, ["-"]);
+        assert_eq!(own.admit().count(), 0);
+        assert_eq!(own.files, ["-"]);
+        // A request that names it anyway arrives without it.
+        let arrived =
+            Request::decode(r#"{"mode":"play","files":["-","/a.mkv","-"]}"#).expect("decodes");
+        assert_eq!(arrived.files, ["/a.mkv"]);
+    }
+
+    #[test]
+    fn a_command_line_names_files_network_and_own_addresses() {
+        let cwd = Path::new("/home/u/films");
+        let mut request = Request::from_cli(
+            &cli(&[
+                "/add",
+                "/sub=av://lavfi:subtitles",
+                "/aud=https://example.org/a.flac",
+                "/m/a.mkv",
+                "av://lavfi:testsrc",
+                "https://example.org/v",
+                "FD://0",
+                "dvd://longest//discs/film",
+                "av://v4l2:/dev/video0",
+                "edl://a.mkv",
+            ]),
+            cwd,
+        );
+        let refused = request.admit();
+        // Files and network addresses, and what the Open menu itself
+        // makes ("Play in new instance" hands such entries over).
+        assert_eq!(
+            request.files,
+            [
+                "/m/a.mkv",
+                "https://example.org/v",
+                "dvd://longest//discs/film",
+                "av://v4l2:/dev/video0"
+            ]
+        );
+        assert_eq!(request.switches.sub, None);
+        assert_eq!(
+            request.switches.aud.as_deref(),
+            Some("https://example.org/a.flac")
+        );
+        assert_eq!(refused.count(), 4);
+        assert_eq!(
+            refused.notice().as_deref(),
+            Some(
+                "Not opened: 4 addresses (av://, edl://, fd://). \
+                 Only files and network addresses are taken this way."
+            )
+        );
+        // The same request, handed over, is left with the same files.
+        let mut handed = Request::decode(
+            &Request::from_cli(&cli(&["av://lavfi:testsrc", "/m/a.mkv", "cdda://"]), cwd).encode(),
+        )
+        .expect("decodes");
+        assert_eq!(handed.admit().count(), 1);
+        assert_eq!(handed.files, ["/m/a.mkv", "cdda://"]);
     }
 }

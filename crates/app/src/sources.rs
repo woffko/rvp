@@ -12,8 +12,8 @@
 //!   system;
 //! * addresses FFmpeg opens (HTTP, HTTPS, FTP, `WebDAV` as `dav://`), and
 //!   streaming sites through the user's yt-dlp ([`crate::ytdl`]);
-//! * the clipboard (file paths, `file://` URLs and other addresses, one a
-//!   line), recent items and favorites ([`crate::marks`]);
+//! * the clipboard (file paths, `file://` URLs and network addresses, one
+//!   a line), recent items and favorites ([`crate::marks`]);
 //! * the Default Open Action, and "When Files Opened": a file opened alone
 //!   brings the folder's similar files (the same name but its numbers and
 //!   the same kind of extension) or all its media files, in name order,
@@ -22,6 +22,12 @@
 //!
 //! What libmpv cannot open (its `protocol-list` lacks the protocol) is
 //! refused with a notice.
+//!
+//! The disc and capture addresses are RVP's own: it makes them here and
+//! opens them through [`App::open`]. Text from outside (the clipboard, a
+//! playlist file, a link, another program) names files and network
+//! addresses only ([`crate::playlist::admitted`]); a command line may also
+//! name the addresses made here ([`own_address`]).
 
 use std::path::{Path, PathBuf};
 
@@ -281,51 +287,30 @@ pub fn files_for(opened: &Path, rule: WhenOpened) -> Vec<PathBuf> {
 }
 
 /// Paths and addresses in a text: one a line, `file://` URLs as paths,
-/// quotes taken off.
+/// quotes taken off. The clipboard's text is from outside (a page's link,
+/// a list someone sent): a line is taken when it is an absolute path or
+/// an address [`crate::playlist::admitted`] lets in; other addresses are
+/// counted as left out, and lines that are neither are no items at all.
 #[must_use]
-pub fn clipboard_items(text: &str) -> Vec<String> {
-    text.lines()
+pub fn clipboard_items(text: &str) -> (Vec<String>, crate::playlist::Refused) {
+    let mut refused = crate::playlist::Refused::default();
+    let items = text
+        .lines()
         .map(|line| line.trim().trim_matches('"').trim())
         .filter(|line| !line.is_empty())
         .filter_map(|line| {
-            if let Some(rest) = line.strip_prefix("file://") {
-                let path = percent_decode(rest);
-                // `file:///C:/x` on Windows.
-                let path = if cfg!(windows) {
-                    path.trim_start_matches('/').to_owned()
-                } else {
-                    path
-                };
-                return Some(path);
+            let address = crate::playlist::is_url(line);
+            if !address && !Path::new(line).is_absolute() {
+                return None;
             }
-            if crate::playlist::is_url(line) || Path::new(line).is_absolute() {
-                return Some(line.to_owned());
+            let kept = crate::playlist::admitted(line);
+            if kept.is_none() {
+                refused.add(line);
             }
-            None
+            kept
         })
-        .collect()
-}
-
-/// `%20` and the like in a `file://` URL.
-fn percent_decode(text: &str) -> String {
-    let bytes = text.as_bytes();
-    let mut out = Vec::with_capacity(bytes.len());
-    let mut index = 0;
-    while index < bytes.len() {
-        if bytes[index] == b'%'
-            && index + 2 < bytes.len()
-            && let Some(byte) = std::str::from_utf8(&bytes[index + 1..index + 3])
-                .ok()
-                .and_then(|hex| u8::from_str_radix(hex, 16).ok())
-        {
-            out.push(byte);
-            index += 3;
-            continue;
-        }
-        out.push(bytes[index]);
-        index += 1;
-    }
-    String::from_utf8_lossy(&out).into_owned()
+        .collect();
+    (items, refused)
 }
 
 /// The disc a path names: a drive or folder, or a file inside the disc
@@ -543,6 +528,37 @@ pub fn device_address(name: &str) -> String {
     }
 }
 
+/// True for an address RVP's own Open menu makes: a disc (`dvd://`,
+/// `bd://`, `cdda://`) or a capture source ([`screen_address`],
+/// [`linux_screen_address`], [`device_address`]). A command line may name
+/// these ([`crate::instance::Request::admit`]). Of FFmpeg's `av://` inputs
+/// they are the devices that only capture, and the one filter graph RVP
+/// writes itself, in its exact form: another graph can read and write
+/// files.
+#[must_use]
+pub fn own_address(text: &str) -> bool {
+    const OWN: &[&str] = &[
+        "dvd://",
+        "bd://",
+        "cdda://",
+        "av://gdigrab:",
+        "av://x11grab:",
+        "av://dshow:",
+        "av://v4l2:",
+    ];
+    if OWN.iter().any(|prefix| text.starts_with(prefix)) {
+        return true;
+    }
+    text.strip_prefix("av://lavfi:ddagrab=framerate=")
+        .and_then(|rest| rest.strip_suffix(",hwdownload,format=bgra"))
+        .and_then(|rest| rest.split_once(":draw_mouse="))
+        .is_some_and(|(rate, pointer)| {
+            !rate.is_empty()
+                && rate.bytes().all(|byte| byte.is_ascii_digit())
+                && matches!(pointer, "0" | "1")
+        })
+}
+
 /// Files that belong to a media file: its subtitles and other files of
 /// the same name in its folder ("related files").
 #[must_use]
@@ -732,11 +748,13 @@ impl App {
 
     /// The clipboard's text, for `purpose`.
     pub fn paste_text(&mut self, engine: &Engine, purpose: Paste, text: &str) -> Option<UiRequest> {
-        let items = clipboard_items(text);
+        let (items, refused) = clipboard_items(text);
+        self.refused.merge(refused);
+        let refusal = self.refusal();
         if items.is_empty() {
-            return Some(UiRequest::Osd("Nothing to paste".to_owned()));
+            return refusal.or_else(|| Some(UiRequest::Osd("Nothing to paste".to_owned())));
         }
-        match purpose {
+        let failure = match purpose {
             Paste::Open => self.open_now(engine, &items),
             Paste::List => {
                 let shown = self.library().lists().shown;
@@ -755,7 +773,8 @@ impl App {
                 self.library_mut().insert(shown, at, &items);
                 None
             }
-        }
+        };
+        failure.or(refusal)
     }
 
     /// The files opening `files` adds, by "When Files Opened": a file
@@ -994,8 +1013,11 @@ fn cd_device(drive: &str) -> String {
 impl App {
     /// The command line's switches before its files open: their order,
     /// `/same`, and the first file's options (start, subtitle, audio,
-    /// title, HTTP headers).
+    /// title, HTTP headers). First of all, what a command line may not
+    /// name leaves the request ([`crate::instance::Request::admit`]) and
+    /// is counted for the notice ([`App::refusal`]).
     pub fn prepare_switches(&mut self, request: &mut crate::instance::Request) {
+        self.refused.merge(request.admit());
         let switches = &request.switches;
         if switches.sort {
             request
@@ -1222,10 +1244,73 @@ mod tests {
             )
         };
         let text = format!("\"{path}\"\n{url}\n\nhttps://example.com/v\nnot a path\n");
-        assert_eq!(
-            clipboard_items(&text),
-            [path, from_url, "https://example.com/v"]
+        let (items, refused) = clipboard_items(&text);
+        assert_eq!(items, [path, from_url, "https://example.com/v"]);
+        assert_eq!(refused.count(), 0);
+    }
+
+    #[test]
+    fn the_clipboard_gives_no_other_addresses() {
+        // What a page may put on the clipboard: a capture device, a filter
+        // graph, a descriptor, a disc, another host's file, standard input.
+        let text = format!(
+            "av://v4l2:/dev/video0\n\"AV://lavfi:testsrc\"\nfdclose://9\ndvd://1\n\
+             file://example.org/share/a.mkv\n-\n{}\nrtmp://example.org/live\n",
+            if cfg!(windows) {
+                "C:\\films\\a.mkv"
+            } else {
+                "/films/a.mkv"
+            }
         );
+        let (items, refused) = clipboard_items(&text);
+        assert_eq!(items.len(), 2, "{items:?}");
+        assert!(items[0].ends_with("a.mkv"), "{items:?}");
+        assert_eq!(items[1], "rtmp://example.org/live");
+        // The line that is neither a path nor an address is no item, and
+        // not counted.
+        assert_eq!(refused.count(), 5);
+    }
+
+    #[test]
+    fn the_open_menus_addresses_are_rvps_own() {
+        let mut devices = Devices::default();
+        let mut own = vec![
+            screen_address(&devices),
+            linux_screen_address(Some("x11"), Some(":0")).expect("x11"),
+            device_address("USB Camera"),
+            device_address("/dev/video0"),
+            disc_address(Path::new("/discs/film"), false),
+            disc_address(Path::new("/discs/film"), true),
+            disc_address(Path::new("/discs/film/BDMV/PLAYLIST/00012.mpls"), true),
+            "dvd://1//discs/film".to_owned(),
+            "cdda://".to_owned(),
+            "cdda:///dev/sr0".to_owned(),
+        ];
+        devices.capture = Capture::Ddagrab;
+        devices.capture_fps = 144;
+        devices.capture_pointer = false;
+        own.push(screen_address(&devices));
+        for address in &own {
+            assert!(own_address(address), "{address}");
+            // None of them is admitted from outside.
+            assert_eq!(crate::playlist::admitted(address), None, "{address}");
+        }
+        for other in [
+            "av://lavfi:testsrc",
+            "av://lavfi:ddagrab=framerate=30:draw_mouse=1,hwdownload,format=bgra,metadata=print",
+            "av://lavfi:ddagrab=framerate=30:draw_mouse=1:output_idx=0,hwdownload,format=bgra",
+            "av://lavfi:ddagrab=framerate=:draw_mouse=1,hwdownload,format=bgra",
+            "av://rawvideo:/films/a.mkv",
+            "AV://V4L2:/dev/video0",
+            "avdevice://v4l2:/dev/video0",
+            "fd://0",
+            "edl://a.mkv",
+            "rvpdisc://1",
+            "/films/dvd://a.mkv",
+            "https://example.org/v",
+        ] {
+            assert!(!own_address(other), "{other}");
+        }
     }
 
     #[test]

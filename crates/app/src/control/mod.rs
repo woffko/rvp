@@ -25,7 +25,7 @@
 //! | `POST /api/action/NAME` | | runs the action as keys and menus do |
 //! | `POST /api/seek` | `{"to": s}`, `{"by": s}` or `{"fraction": f}` | |
 //! | `POST /api/volume` | `{"percent": p}`, `{"mute": b}` or both | |
-//! | `POST /api/open` | `{"path": "..."}`: a file, folder or URL | |
+//! | `POST /api/open` | `{"path": "..."}`: a file, a folder or a network address ([`crate::playlist::admitted`]; 403 for any other) | |
 //! | `GET /api/albums` | | the albums: `index`, `name`, `entries`, `playing`, `current` |
 //! | `GET /api/albums/A` | | album A with its `entries`: `index`, `title`, `duration` |
 //! | `POST /api/albums/A/play/E` | | plays entry E of album A |
@@ -136,7 +136,7 @@ pub enum Command {
         percent: Option<f64>,
         mute: Option<bool>,
     },
-    /// A file, folder or URL to open and play.
+    /// A file, a folder or a network address to open and play.
     Open(String),
     Albums,
     Album(usize),
@@ -659,6 +659,20 @@ impl App {
             .map_or(0.0, |t| (t * 10.0).round() / 10.0)
     }
 
+    /// Opens what a request names. It is another program's text: a file,
+    /// a folder or a network address ([`crate::playlist::admitted`]), and
+    /// nothing else mpv would open.
+    fn control_open(&mut self, engine: &Engine, path: &str) -> Answer {
+        let Some(path) = crate::playlist::admitted(path) else {
+            let refused = "only files, folders and network addresses are opened";
+            return Err((403, refused.to_owned()));
+        };
+        match self.open(engine, &[path], false) {
+            Ok(()) => Ok(json!({})),
+            Err(failure) => Err((409, failure.to_string())),
+        }
+    }
+
     /// Carries out a command other than an action (the shell runs those
     /// as keys do): the answer, and what the window should do.
     pub fn control_command(
@@ -695,13 +709,7 @@ impl App {
                 }
                 (done(), request)
             }
-            Command::Open(path) => {
-                let path = crate::media::file_path(&path);
-                match self.open(engine, &[path], false) {
-                    Ok(()) => (done(), None),
-                    Err(failure) => (Err((409, failure.to_string())), None),
-                }
-            }
+            Command::Open(path) => (self.control_open(engine, &path), None),
             Command::Albums => {
                 let lists = self.library().lists();
                 let albums: Vec<Value> = lists

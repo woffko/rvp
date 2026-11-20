@@ -2850,6 +2850,20 @@ Window {
                       () => "playlist " + t.before.playlist_count + " -> " + s.playlist_count)
             break
         case 32:
+            // A drop or a dialog names files and network addresses: any
+            // other address stays out of the album, with a notice.
+            t.before = s
+            player.open_files("av://lavfi:testsrc", true)
+            t.next()
+            break
+        case 33:
+            t.check("other_address_stays_out", s.playlist_count === t.before.playlist_count
+                    && String(s.message).indexOf("Not opened: 1 address (av://)") === 0,
+                    "playlist " + t.before.playlist_count + " -> " + s.playlist_count + " message " + s.message)
+            player.message = ""
+            t.next()
+            break
+        case 34:
             // M3: the playlist panel, albums, normalizer, editor, instance.
             t.step = 100
             t.stepStarted = Date.now()

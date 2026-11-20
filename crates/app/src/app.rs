@@ -348,6 +348,9 @@ pub struct App {
     first_start: bool,
     /// Warnings from loading the settings, for the shell to show once.
     pub warnings: Vec<String>,
+    /// What came from outside and was left out since the last notice
+    /// ([`App::refusal`]).
+    pub(crate) refused: crate::playlist::Refused,
     /// Picture and playback state for this session (M4's commands).
     pub(crate) session: Session,
     /// Where the resume store, the albums and generated files live.
@@ -526,6 +529,7 @@ impl App {
             writer: storage::Writer::new()?,
             first_start,
             warnings,
+            refused: crate::playlist::Refused::default(),
             session,
             state_dir: state_dir.to_path_buf(),
             svp: crate::svp::Watch::default(),
@@ -796,7 +800,10 @@ impl App {
     }
 
     /// Opens files: they are added to the shown album and the first one
-    /// plays, or with `append` they are only added.
+    /// plays, or with `append` they are only added. The addresses are
+    /// RVP's own (a disc, a capture device, a folder's files) or ones a
+    /// door admitted: text from outside goes through
+    /// [`App::open_outside`].
     ///
     /// # Errors
     /// Fails when libmpv rejects a command.
@@ -870,6 +877,43 @@ impl App {
         self.play_entry(engine, shown, index, false)
     }
 
+    /// The texts from outside that may become entries, as
+    /// [`crate::playlist::admitted`] keeps them; the others are counted
+    /// for the notice ([`App::refusal`]).
+    pub fn admit(&mut self, texts: &[String]) -> Vec<String> {
+        let (kept, refused) = crate::playlist::admit_all(texts);
+        self.refused.merge(refused);
+        kept
+    }
+
+    /// The notice for what came from outside and was left out since the
+    /// last one: one notice however many addresses there were.
+    pub fn refusal(&mut self) -> Option<UiRequest> {
+        std::mem::take(&mut self.refused)
+            .notice()
+            .map(UiRequest::Message)
+    }
+
+    /// Opens what came from outside, as [`App::open`] does its files: a
+    /// file dialog's or a drop's paths, a typed address, another program's
+    /// request. What may not become an entry is left out, with a notice.
+    pub fn open_outside(
+        &mut self,
+        engine: &Engine,
+        texts: &[String],
+        append: bool,
+    ) -> Option<UiRequest> {
+        let files = self.admit(texts);
+        let refusal = self.refusal();
+        if files.is_empty() {
+            return refusal;
+        }
+        match self.open(engine, &files, append) {
+            Ok(()) => refusal,
+            Err(error) => Some(UiRequest::Message(format!("Cannot open: {error}"))),
+        }
+    }
+
     /// Adds files after the entry that plays (PotPlayer's `/insert`).
     pub fn insert_after_current(&mut self, files: &[String]) {
         let lists = self.library.lists();
@@ -881,11 +925,16 @@ impl App {
     }
 
     /// Carries out a second instance's request (or this one's own `/add`
-    /// or `/insert` at start).
+    /// or `/insert` at start), after [`App::prepare_switches`] left in it
+    /// what a command line may name. A request without files (a switch
+    /// alone, or files that all stayed out) leaves the albums as they are.
     ///
     /// # Errors
     /// Fails when libmpv rejects a command.
     pub fn remote(&mut self, engine: &Engine, request: &Request) -> Result<(), EngineError> {
+        if request.files.is_empty() {
+            return Ok(());
+        }
         match request.mode {
             Mode::Play => self.open(engine, &request.files, false),
             Mode::Add => self.open(engine, &request.files, true),
@@ -1467,6 +1516,8 @@ impl App {
 
     /// Imports PotPlayer's playlists from `folder` (read-only) as albums,
     /// with their resume positions; returns how many albums came in.
+    /// Entries that are neither files nor network addresses are left out
+    /// and counted for the notice ([`App::refusal`]).
     ///
     /// # Errors
     /// Fails when the folder cannot be read.
@@ -1475,6 +1526,7 @@ impl App {
         let count = imported.len();
         let mut first = None;
         for item in imported {
+            self.refused.merge(item.refused);
             let mut album = item.album;
             let fills_empty = self
                 .library

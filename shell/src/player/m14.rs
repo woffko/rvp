@@ -783,8 +783,23 @@ impl qobject::Player {
         match choice {
             0 | 1 => self.open_files(paths, choice == 1),
             _ => {
-                for path in paths.to_string().lines().filter(|line| !line.is_empty()) {
+                // A dropped link is text from outside, as in `open_files`.
+                let lines: Vec<String> = paths
+                    .to_string()
+                    .lines()
+                    .filter(|line| !line.is_empty())
+                    .map(str::to_owned)
+                    .collect();
+                let Some(core) = self.as_mut().core_mut() else {
+                    return;
+                };
+                let files = core.app.admit(&lines);
+                let refusal = core.app.refusal();
+                for path in &files {
                     self.as_mut().load_subtitle(&QString::from(path));
+                }
+                if let Some(refusal) = refusal {
+                    self.handle_request(refusal);
                 }
             }
         }

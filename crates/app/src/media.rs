@@ -64,7 +64,7 @@ pub enum MediaCommand {
     /// 1.0 is 100 %.
     SetVolume(f64),
     SetRate(f64),
-    /// Play this file or URL.
+    /// Play this file (a `file://` URL) or `http` address.
     OpenUri(String),
     Raise,
     Quit,
@@ -162,7 +162,12 @@ impl App {
                 drop(engine.set_double("speed", rate.clamp(RATE_RANGE.0, RATE_RANGE.1)));
             }
             MediaCommand::OpenUri(uri) => {
-                drop(self.open(engine, &[file_path(&uri)], false));
+                return match opened_uri(&uri) {
+                    Some(file) => self.open_outside(engine, &[file], false),
+                    None => Some(UiRequest::Message(
+                        "Not opened: the media controls take a file or an http address".to_owned(),
+                    )),
+                };
             }
             MediaCommand::Raise => return Some(UiRequest::Raise),
             MediaCommand::Quit => return Some(UiRequest::Exit),
@@ -174,6 +179,23 @@ impl App {
         }
         None
     }
+}
+
+/// What the media controls' `OpenUri` plays: an `http` or `https` address,
+/// or the `file://` URL of a file that exists, as its path. These are the
+/// schemes RVP tells the desktop it takes. Any program on the session bus
+/// may call it, so a folder (which would replace the shown album with all
+/// it holds) and every other address are not opened.
+fn opened_uri(uri: &str) -> Option<String> {
+    let (scheme, _) = uri.split_once("://")?;
+    if scheme.eq_ignore_ascii_case("http") || scheme.eq_ignore_ascii_case("https") {
+        return Some(uri.to_owned());
+    }
+    if !scheme.eq_ignore_ascii_case("file") {
+        return None;
+    }
+    let path = crate::playlist::admitted(uri)?;
+    std::path::Path::new(&path).is_file().then_some(path)
 }
 
 /// Bytes a `file://` URL keeps as they are.

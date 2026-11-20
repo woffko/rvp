@@ -30,12 +30,16 @@
 //! `/mnt/<letter>` (`C:\x.mkv` → `/mnt/c/x.mkv`), and a network path its
 //! mount point (`\\nas\Media\a.mkv` → `/mnt/nas/Media/a.mkv`).
 //! URLs stay as they are.
+//!
+//! A playlist is text from outside: an entry is a file or a network
+//! address ([`crate::playlist::admitted`]); what else a file names is
+//! left out and counted.
 
 use std::collections::BTreeMap;
 use std::io;
 use std::path::Path;
 
-use crate::playlist::{Album, Entry};
+use crate::playlist::{Album, Entry, Refused, admitted};
 
 /// How Windows paths become Linux paths (see the module comment). The
 /// default maps nothing: Windows keeps its paths.
@@ -103,6 +107,8 @@ pub struct Imported {
     pub album: Album,
     /// Resume positions in seconds, by mapped path.
     pub positions: Vec<(String, f64)>,
+    /// The entries left out: neither files nor network addresses.
+    pub refused: Refused,
 }
 
 #[derive(Default)]
@@ -149,11 +155,15 @@ pub fn parse(name: &str, text: &str, map: &DriveMap) -> Imported {
     }
     let mut album = Album::new(name);
     let mut positions = Vec::new();
+    let mut refused = Refused::default();
     for raw in raws.into_values() {
         let Some(file) = raw.file else {
             continue;
         };
-        let path = map.map(&file);
+        let Some(path) = admitted(&map.map(&file)) else {
+            refused.add(&file);
+            continue;
+        };
         // Milliseconds as seconds; durations are far below 2^52 ms.
         #[allow(clippy::cast_precision_loss)]
         let seconds = |ms: u64| ms as f64 / 1000.0;
@@ -177,7 +187,11 @@ pub fn parse(name: &str, text: &str, map: &DriveMap) -> Imported {
         });
     }
     album.top = top;
-    Imported { album, positions }
+    Imported {
+        album,
+        positions,
+        refused,
+    }
 }
 
 /// Reads every `.dpl` in `dir` (read-only): "Default" first, then by name.
@@ -293,6 +307,47 @@ mod tests {
                 ("/mnt/media/F/two.mkv".to_owned(), 125.5),
                 ("https://example.org/live.ts".to_owned(), 61.0)
             ]
+        );
+    }
+
+    #[test]
+    fn only_files_and_network_addresses_are_imported() {
+        let text = "\u{feff}DAUMPLAYLIST\r\nplayname=V:\\F\\two.mkv\r\nplaytime=5000\r\n\
+                    1*file*av://dshow:video=Camera\r\n1*title*Camera\r\n1*start*9000\r\n\
+                    2*file*V:\\F\\one.mkv\r\n\
+                    3*file*DVD://1/D:\r\n\
+                    4*file*V:\\F\\two.mkv\r\n\
+                    5*file*fd://0\r\n\
+                    6*file*mms://example.org/radio\r\n";
+        let imported = parse("Mixed", text, &map());
+        let paths: Vec<&str> = imported
+            .album
+            .entries
+            .iter()
+            .map(|entry| entry.path.as_str())
+            .collect();
+        assert_eq!(
+            paths,
+            [
+                "/mnt/media/F/one.mkv",
+                "/mnt/media/F/two.mkv",
+                "mms://example.org/radio"
+            ]
+        );
+        // The entry that played is found among those that stayed, and a
+        // left-out entry leaves no position behind.
+        assert_eq!(imported.album.current, Some(1));
+        assert_eq!(
+            imported.positions,
+            vec![("/mnt/media/F/two.mkv".to_owned(), 5.0)]
+        );
+        assert_eq!(imported.refused.count(), 3);
+        assert_eq!(
+            imported.refused.notice().as_deref(),
+            Some(
+                "Not opened: 3 addresses (av://, dvd://, fd://). \
+                 Only files and network addresses are taken this way."
+            )
         );
     }
 

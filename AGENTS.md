@@ -895,6 +895,21 @@ smoothing for users without SVP, after a study of the engines.
 - RVP chooses the next entry itself (queue, shuffle, the end of a file):
   seamless playback and the file navigator were studied and left out
   (`docs/spikes/m11-studies.md`).
+- Text from outside becomes an album entry only through
+  `playlist::admitted`: a local path (never `-`), a `file://` URL of this
+  computer, or a network address of `NETWORK_SCHEMES`. Its doors: the
+  playlist readers and the `.dpl` import, the clipboard, the playlist's
+  address dialog, `App::open_outside` (the shell's `open_files`: the file
+  and URL dialogs and drops), the control API's open, MPRIS `OpenUri` (a
+  file that exists or `http(s)`, never a folder) and yt-dlp's answer
+  (`network_address`). A command line, a first start's and one handed
+  over alike, may also name what the Open menu itself makes
+  (`sources::own_address`; `Request::admit` in `App::prepare_switches`),
+  since "Play in new instance" hands entries over that way. `App::open`
+  and `play_entry` check nothing: discs, capture devices and yt-dlp's EDL
+  go through them, and albums keep such entries. A new door calls the gate
+  and shows `App::refusal` (one notice however many were left out); a new
+  address of RVP's own joins `own_address`.
 
 ## Audio audit (docs/audits/audio.md)
 
