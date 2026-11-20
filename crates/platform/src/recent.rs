@@ -3,8 +3,13 @@
 //! `$XDG_DATA_HOME/recently-used.xbel`, which GTK's file dialogs and
 //! GNOME's Files and Activities read. RVP adds or renews the entry of a
 //! file it played, with its MIME type and RVP as the program, and writes
-//! the file whole into a temporary file renamed over it. Other programs'
-//! entries are kept as they are.
+//! the file whole into a temporary file renamed over it, readable by its
+//! owner only (0600, as GTK keeps it). Other programs' entries are kept
+//! as they are. A file's entry is found by its decoded `href`, so
+//! `GLib`'s `&apos;` and a plain `'` are one entry (`GLib` refuses a list
+//! with two entries of one file), and RVP writes the attributes escaped
+//! as `GLib` does. A list that is a symbolic link (one to `/dev/null`
+//! turns the list off) or not a regular file is left alone.
 
 use std::fmt::Write as _;
 use std::path::{Path, PathBuf};
@@ -39,6 +44,9 @@ pub fn add(list: &Path, file: &Path, now: SystemTime) -> Result<(), String> {
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner);
     let error = |e: std::io::Error| format!("recent files: {}: {e}", list.display());
+    if std::fs::symlink_metadata(list).is_ok_and(|meta| !meta.file_type().is_file()) {
+        return Ok(());
+    }
     let text = match std::fs::read_to_string(list) {
         Ok(text) if text.contains("</xbel>") => text,
         Ok(text) if text.trim().is_empty() => EMPTY.to_owned(),
@@ -57,20 +65,33 @@ pub fn add(list: &Path, file: &Path, now: SystemTime) -> Result<(), String> {
         std::fs::create_dir_all(folder).map_err(error)?;
     }
     let temporary = list.with_extension(format!("xbel.rvp-{}", std::process::id()));
-    std::fs::write(&temporary, updated).map_err(error)?;
+    write_private(&temporary, updated.as_bytes()).map_err(error)?;
     std::fs::rename(&temporary, list).map_err(|e| {
         drop(std::fs::remove_file(&temporary));
         error(e)
     })
 }
 
-/// `text` with `file`'s entry new at its end (an older entry of the same
+/// Writes `bytes` into a new file at `path` that only its owner may read.
+fn write_private(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
+    use std::io::Write as _;
+    use std::os::unix::fs::OpenOptionsExt as _;
+    // One left by an earlier process of the same number.
+    drop(std::fs::remove_file(path));
+    let mut file = std::fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .mode(0o600)
+        .open(path)?;
+    file.write_all(bytes)
+}
+
+/// `text` with `file`'s entry new at its end (older entries of the same
 /// file taken out).
 fn with_entry(text: &str, file: &Path, stamp: &str) -> String {
     let uri = file_uri(file);
-    let opening = format!("<bookmark href=\"{}\"", escape(&uri));
     let mut text = text.to_owned();
-    if let Some(start) = text.find(&opening)
+    while let Some(start) = find_entry(&text, &uri)
         && let Some(length) = entry_length(&text[start..])
     {
         let mut end = start + length;
@@ -95,6 +116,78 @@ fn with_entry(text: &str, file: &Path, stamp: &str) -> String {
     let end = text.rfind("</xbel>").unwrap_or(text.len());
     text.insert_str(end, &entry);
     text
+}
+
+/// Where the bookmark of `uri` starts in `text`: the first `<bookmark`
+/// whose decoded `href` is `uri`.
+fn find_entry(text: &str, uri: &str) -> Option<usize> {
+    let mut from = 0;
+    while let Some(at) = text[from..].find("<bookmark") {
+        let start = from + at;
+        let rest = &text[start + "<bookmark".len()..];
+        if rest.starts_with(char::is_whitespace) && href(rest).is_some_and(|href| href == uri) {
+            return Some(start);
+        }
+        from = start + 1;
+    }
+    None
+}
+
+/// The decoded `href` among the attributes that start `tag`.
+fn href(tag: &str) -> Option<String> {
+    let mut rest = tag;
+    loop {
+        rest = rest.trim_start();
+        if rest.is_empty() || rest.starts_with('>') || rest.starts_with('/') {
+            return None;
+        }
+        let (name, after) = rest.split_once('=')?;
+        let after = after.trim_start();
+        let quote = after.chars().next().filter(|c| *c == '"' || *c == '\'')?;
+        let value_and_rest = &after[1..];
+        let end = value_and_rest.find(quote)?;
+        if name.trim() == "href" {
+            return Some(unescape(&value_and_rest[..end]));
+        }
+        rest = &value_and_rest[end + 1..];
+    }
+}
+
+/// XML's five named entities and its character references decoded;
+/// anything else is kept as it is.
+fn unescape(text: &str) -> String {
+    let mut out = String::with_capacity(text.len());
+    let mut rest = text;
+    while let Some(at) = rest.find('&') {
+        out.push_str(&rest[..at]);
+        rest = &rest[at..];
+        let decoded = rest.find(';').and_then(|end| {
+            let name = &rest[1..end];
+            let character = match name {
+                "amp" => Some('&'),
+                "lt" => Some('<'),
+                "gt" => Some('>'),
+                "quot" => Some('"'),
+                "apos" => Some('\''),
+                _ => name
+                    .strip_prefix("#x")
+                    .map(|hex| u32::from_str_radix(hex, 16))
+                    .or_else(|| name.strip_prefix('#').map(str::parse))
+                    .and_then(Result::ok)
+                    .and_then(char::from_u32),
+            };
+            character.map(|character| (character, end + 1))
+        });
+        if let Some((character, length)) = decoded {
+            out.push(character);
+            rest = &rest[length..];
+        } else {
+            out.push('&');
+            rest = &rest[1..];
+        }
+    }
+    out.push_str(rest);
+    out
 }
 
 /// The length of the bookmark at the start of `text`: up to its
@@ -139,11 +232,13 @@ fn file_uri(file: &Path) -> String {
     uri
 }
 
+/// Text in an attribute, escaped as `GLib`'s `g_markup_escape_text` does.
 fn escape(text: &str) -> String {
     text.replace('&', "&amp;")
         .replace('<', "&lt;")
         .replace('>', "&gt;")
         .replace('"', "&quot;")
+        .replace('\'', "&apos;")
 }
 
 /// The time as the bookmarks write it: UTC, `YYYY-MM-DDThh:mm:ss.ffffffZ`.
@@ -233,6 +328,91 @@ mod tests {
             std::fs::read_to_string(&list).expect("read"),
             "<xbel version=\"1.0\">truncated"
         );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// A list of `entries` in a folder of its own, named after `test`.
+    fn list_in(test: &str, entries: &str) -> (PathBuf, PathBuf) {
+        let dir = std::env::temp_dir().join(format!("rvp-recent-{test}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).expect("dir");
+        let list = dir.join("recently-used.xbel");
+        if !entries.is_empty() {
+            std::fs::write(
+                &list,
+                EMPTY.replace("</xbel>", &format!("{entries}</xbel>")),
+            )
+            .expect("list");
+        }
+        (dir, list)
+    }
+
+    #[test]
+    fn an_apostrophe_makes_no_second_entry() {
+        // GLib's entry for the file, as GNOME's Files leaves it, and one an
+        // older RVP wrote with a plain apostrophe.
+        let glib = "  <bookmark href=\"file:///f/it&apos;s%20a%20&amp;%20b%20(1).mkv\" added=\"2026-11-01T09:30:00.123456Z\" modified=\"2026-11-01T09:30:00.123456Z\" visited=\"2026-11-01T09:30:00.123456Z\">\n    <info>\n      <metadata owner=\"http://freedesktop.org\">\n        <mime:mime-type type=\"video/x-matroska\"/>\n        <bookmark:applications>\n          <bookmark:application name=\"Files\" exec=\"&apos;org.gnome.Nautilus %u&apos;\" modified=\"2026-11-01T09:30:00.123456Z\" count=\"1\"/>\n        </bookmark:applications>\n      </metadata>\n    </info>\n  </bookmark>\n";
+        let older = "  <bookmark href=\"file:///f/it's%20a%20&amp;%20b%20(1).mkv\" added=\"x\"/>\n";
+        let (dir, list) = list_in("apostrophe", &format!("{glib}{older}"));
+        let film = Path::new("/f/it's a & b (1).mkv");
+        add(&list, film, UNIX_EPOCH).expect("renewed");
+        let text = std::fs::read_to_string(&list).expect("read");
+        assert_eq!(text.matches("<bookmark ").count(), 1, "{text}");
+        assert!(
+            text.contains("<bookmark href=\"file:///f/it&apos;s%20a%20&amp;%20b%20(1).mkv\" added=\"1970-01-01T00:00:00.000000Z\""),
+            "{text}"
+        );
+        assert!(!text.contains("2026-11-01"), "{text}");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn hrefs_are_decoded() {
+        assert_eq!(
+            href(" added=\"a\" href='file:///a&amp;b&apos;&#x41;&#66;&bad;' />").as_deref(),
+            Some("file:///a&b'AB&bad;")
+        );
+        assert_eq!(href(" added=\"a\">"), None);
+        assert!(find_entry("<bookmarks href=\"file:///a\">", "file:///a").is_none());
+    }
+
+    #[test]
+    fn the_list_stays_its_owners_alone() {
+        use std::os::unix::fs::PermissionsExt as _;
+        let mode =
+            |list: &Path| std::fs::metadata(list).expect("list").permissions().mode() & 0o777;
+        let (dir, list) = list_in("mode", "");
+        add(&list, Path::new("/a.mkv"), UNIX_EPOCH).expect("made");
+        assert_eq!(mode(&list), 0o600);
+        std::fs::set_permissions(&list, std::fs::Permissions::from_mode(0o644)).expect("mode");
+        add(&list, Path::new("/b.mkv"), UNIX_EPOCH).expect("added");
+        assert_eq!(mode(&list), 0o600);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_list_that_is_a_link_is_left_alone() {
+        let (dir, list) = list_in("link", "");
+        // The desktop's recent files turned off.
+        std::os::unix::fs::symlink("/dev/null", &list).expect("link");
+        add(&list, Path::new("/a.mkv"), UNIX_EPOCH).expect("left alone");
+        assert_eq!(
+            std::fs::read_link(&list).expect("a link"),
+            Path::new("/dev/null")
+        );
+        // A link to a list elsewhere stays a link, and that list as it is.
+        let elsewhere = dir.join("elsewhere.xbel");
+        std::fs::write(&elsewhere, EMPTY).expect("list");
+        std::fs::remove_file(&list).expect("removed");
+        std::os::unix::fs::symlink(&elsewhere, &list).expect("link");
+        add(&list, Path::new("/a.mkv"), UNIX_EPOCH).expect("left alone");
+        assert!(
+            std::fs::symlink_metadata(&list)
+                .expect("link")
+                .file_type()
+                .is_symlink()
+        );
+        assert_eq!(std::fs::read_to_string(&elsewhere).expect("read"), EMPTY);
         let _ = std::fs::remove_dir_all(&dir);
     }
 

@@ -62,7 +62,7 @@ fn main() {
     screensaver::separate_state();
     process::restrict_library_search();
     metrics::start();
-    let cli = Cli::parse(std::env::args().skip(1));
+    let cli = Cli::from_env();
     install_crash_logs(&cli);
     let settings = player::preload_skin();
     ffi::bridge::rvp_setup_graphics();
@@ -146,6 +146,11 @@ fn single_instance(cli: &Cli, settings: &rvp_app::Settings) {
     let cwd = std::env::current_dir().unwrap_or_default();
     let request = Request::from_cli(cli, &cwd);
     if ffi::bridge::rvp_instance_send(&channel, &request.encode()) {
+        // This process ends here: the arguments it could not hand over
+        // are named on its standard error (a first RVP shows them).
+        for notice in cli.notices() {
+            rvp_app::log::report(rvp_app::log::Level::Warning, &notice);
+        }
         std::process::exit(0);
     }
     if !ffi::bridge::rvp_instance_listen(&channel) {

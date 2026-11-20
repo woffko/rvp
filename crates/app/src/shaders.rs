@@ -8,13 +8,17 @@
 //!   folder's `shaders/rvp` when used;
 //! - PotPlayer's `PxShader` folder (Windows, read where PotPlayer is
 //!   installed, never copied): MPC-HC's HLSL, translated into mpv hooks
-//!   (`crate::hlsl`) into `shaders/translated/pre` or `post`;
+//!   (`crate::hlsl`) into `shaders/translated/pre` or `post`, each file
+//!   named by its source's stem and a hash of the source's path (two
+//!   shaders of one name in different folders, or `a.txt` beside
+//!   `a.hlsl`, are two files);
 //! - the user's folders and RVP's own shader folder: mpv's `.glsl` and
 //!   `.hook` files as they are, `.hlsl`, `.txt` and `.fx` translated.
 //!
 //! mpv's own shaders run where their `//!HOOK` lines say, so each is listed
 //! under the list of its stage; a translated one can go in either.
 
+use std::fmt::Write as _;
 use std::path::{Path, PathBuf};
 
 use crate::app::{App, UiRequest};
@@ -181,10 +185,9 @@ impl App {
                     continue;
                 }
                 let stage = match kind(&path) {
-                    Some(true) => Some(
-                        std::fs::read_to_string(&path)
-                            .map_or(Stage::Pre, |source| glsl_stage(&source)),
-                    ),
+                    Some(true) => {
+                        Some(read_shader(&path).map_or(Stage::Pre, |source| glsl_stage(&source)))
+                    }
                     _ => None,
                 };
                 entries.push(ShaderEntry {
@@ -250,8 +253,8 @@ impl App {
         match kind(path) {
             Some(true) => Ok(path.to_path_buf()),
             Some(false) => {
-                let source = std::fs::read_to_string(path)
-                    .map_err(|error| format!("{}: {error}", path.display()))?;
+                let source =
+                    read_shader(path).map_err(|error| format!("{}: {error}", path.display()))?;
                 let title = crate::hlsl::declared_name(&source).unwrap_or_else(|| name.clone());
                 let glsl = crate::hlsl::translate(&source, stage, &title)
                     .map_err(|reason| format!("{name}: {reason}"))?;
@@ -263,7 +266,7 @@ impl App {
                             Stage::Pre => "pre",
                             Stage::Post => "post",
                         });
-                let target = folder.join(format!("{name}.glsl"));
+                let target = folder.join(translated_name(path));
                 write_if_changed(&target, &glsl)?;
                 Ok(target)
             }
@@ -391,6 +394,28 @@ fn file_stem(path: &str) -> String {
     )
 }
 
+/// A shader file's text: characters that are not UTF-8 (comments in a
+/// legacy code page) replaced, and a byte order mark left out.
+fn read_shader(path: &Path) -> std::io::Result<String> {
+    let bytes = std::fs::read(path)?;
+    let text = String::from_utf8_lossy(&bytes);
+    Ok(text.strip_prefix('\u{feff}').unwrap_or(&text).to_owned())
+}
+
+/// The translated file's name: the source's stem and the start of the
+/// SHA-256 of its path.
+fn translated_name(path: &Path) -> String {
+    use sha2::{Digest, Sha256};
+    let hash = Sha256::digest(path.as_os_str().as_encoded_bytes());
+    let mut name = file_stem(&path.to_string_lossy());
+    name.push('-');
+    for byte in &hash[..8] {
+        let _ = write!(name, "{byte:02x}");
+    }
+    name.push_str(".glsl");
+    name
+}
+
 /// Writes `text` to `path` unless it holds it already.
 fn write_if_changed(path: &Path, text: &str) -> Result<(), String> {
     if std::fs::read_to_string(path).is_ok_and(|old| old == text) {
@@ -415,5 +440,38 @@ mod tests {
         assert_eq!(kind(Path::new("a.HLSL")), Some(false));
         assert_eq!(kind(Path::new("a.hook")), Some(true));
         assert_eq!(kind(Path::new("a.png")), None);
+    }
+
+    #[test]
+    fn translated_files_are_named_by_their_source() {
+        let first = translated_name(Path::new("/one/sharpen.hlsl"));
+        let hash = first
+            .strip_prefix("sharpen-")
+            .and_then(|rest| rest.strip_suffix(".glsl"))
+            .unwrap_or_default();
+        assert_eq!(hash.len(), 16, "{first}");
+        assert!(hash.chars().all(|c| c.is_ascii_hexdigit()), "{first}");
+        assert_eq!(first, translated_name(Path::new("/one/sharpen.hlsl")));
+        // Another folder's shader of the name, and another extension.
+        assert_ne!(first, translated_name(Path::new("/two/sharpen.hlsl")));
+        assert_ne!(first, translated_name(Path::new("/one/sharpen.txt")));
+    }
+
+    #[test]
+    fn shader_files_are_read_lossily_without_a_byte_order_mark() {
+        let dir = std::env::temp_dir().join(format!("rvp-shader-read-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).expect("dir");
+        let file = dir.join("legacy.hlsl");
+        // A BOM, then a comment in Windows-1251 ("\xd1\xe2\xe5\xf2").
+        std::fs::write(
+            &file,
+            b"\xef\xbb\xbf// \xd1\xe2\xe5\xf2\nfloat4 main() : COLOR { return 1; }\n",
+        )
+        .expect("written");
+        let source = read_shader(&file).expect("read");
+        assert!(source.starts_with("// \u{fffd}"), "{source}");
+        assert!(source.contains("float4 main()"));
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }

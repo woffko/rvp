@@ -14,10 +14,10 @@ pub fn launch() -> Option<i32> {
     {
         return None;
     }
-    let first = std::env::args()
+    let first = std::env::args_os()
         .nth(1)
-        .unwrap_or_default()
-        .to_ascii_lowercase();
+        .map(|arg| arg.to_string_lossy().to_ascii_lowercase())
+        .unwrap_or_default();
     let mode = match first.get(..2) {
         Some("/s" | "-s") => "--screensaver",
         Some("/p" | "-p") => return Some(0),
@@ -33,7 +33,7 @@ pub fn launch() -> Option<i32> {
 /// positions), so the saver's files never join the user's. Before any
 /// thread starts.
 pub fn separate_state() {
-    if !std::env::args().any(|arg| arg == "--screensaver") {
+    if !std::env::args_os().any(|arg| arg == "--screensaver") {
         return;
     }
     if let Ok(dirs) = rvp_app::Dirs::from_env() {

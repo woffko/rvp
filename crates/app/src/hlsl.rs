@@ -87,6 +87,8 @@ pub fn declared_name(source: &str) -> Option<String> {
 /// # Errors
 /// Fails with the reason when the shader needs what mpv's hooks lack.
 pub fn translate(source: &str, stage: Stage, name: &str) -> Result<String, String> {
+    // A file saved as "UTF-8 with BOM" starts with one.
+    let source = source.strip_prefix('\u{feff}').unwrap_or(source);
     let source = source.replace("\r\n", "\n").replace('\r', "\n");
     refuse(&source)?;
     let mut body = String::with_capacity(source.len() + 256);
@@ -244,17 +246,18 @@ fn remove_unroll_counts(line: &str) -> String {
     out
 }
 
-/// `1.5f` and `2f` lose their suffix.
+/// `1.5f` and `2f` lose their suffix. The line is copied in slices
+/// between the suffixes, so text outside ASCII (in comments) stays whole.
 fn float_suffixes(line: &str) -> String {
     let bytes = line.as_bytes();
     let mut out = String::with_capacity(line.len());
+    let mut copied = 0;
     let mut i = 0;
     while i < bytes.len() {
         let c = bytes[i];
         let starts_number = (c.is_ascii_digit() || c == b'.')
             && (i == 0 || !(bytes[i - 1].is_ascii_alphanumeric() || bytes[i - 1] == b'_'));
         if starts_number {
-            let start = i;
             while i < bytes.len() && (bytes[i].is_ascii_digit() || bytes[i] == b'.') {
                 i += 1;
             }
@@ -269,18 +272,19 @@ fn float_suffixes(line: &str) -> String {
                     i += 1;
                 }
             }
-            out.push_str(&line[start..i]);
             let suffix = i < bytes.len() && (bytes[i] == b'f' || bytes[i] == b'F');
             let ends = i + 1 >= bytes.len()
                 || !(bytes[i + 1].is_ascii_alphanumeric() || bytes[i + 1] == b'_');
             if suffix && ends {
+                out.push_str(&line[copied..i]);
                 i += 1;
+                copied = i;
             }
             continue;
         }
-        out.push(char::from(c));
         i += 1;
     }
+    out.push_str(&line[copied..]);
     out
 }
 
@@ -454,7 +458,8 @@ fn vector_returns(body: &str) -> String {
                 .next()
                 .is_some_and(|c| c.is_ascii_alphanumeric() || c == '_');
         if !is_return {
-            i += 1;
+            // By characters: the code may hold text outside ASCII.
+            i += function[i..].chars().next().map_or(1, char::len_utf8);
             continue;
         }
         // The value runs to the `;` outside parentheses.
@@ -573,6 +578,25 @@ float4 main(float2 tex : TEXCOORD0) : COLOR
         );
         assert!(glsl.contains("float4 c0 = float4(0);"), "{glsl}");
         assert!(glsl.contains("#define mul(a, b) ((b) * (a))"));
+    }
+
+    #[test]
+    fn text_outside_ascii_is_kept_whole() {
+        // Saved with a BOM, a no-break space in the entry point's code (as
+        // pasted from a web page), and comments in other scripts.
+        let source = "\u{feff}// Яркость=ps_2_0\nsampler s0 : register(s0);\n// Коэффициент 1.5f\nfloat4 main(float2 tex : TEXCOORD0) : COLOR\n{\n\tfloat\u{a0}k = 1.5f; // é\n\treturn tex2D(s0, tex) * k; /* è */\n}\n";
+        let glsl = translate(source, Stage::Pre, "x").expect("translates");
+        assert!(glsl.contains("// Коэффициент 1.5\n"), "{glsl}");
+        assert!(glsl.contains("float\u{a0}k = 1.5; // é"), "{glsl}");
+        assert!(
+            glsl.contains("return float4(tex2D(s0, tex) * k); /* è */"),
+            "{glsl}"
+        );
+        assert!(!glsl.contains('\u{feff}'), "{glsl}");
+        assert_eq!(
+            declared_name("// Яркость=ps_2_0"),
+            Some("Яркость".to_owned())
+        );
     }
 
     #[test]

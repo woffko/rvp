@@ -789,7 +789,7 @@ fn point_at_vapoursynth(settings: &Settings) {
 /// while Qt and QML start (called first in `main`). The settings are read
 /// here and again in `start`; both are cheap.
 pub fn preload_skin() -> Settings {
-    let cli = Cli::parse(std::env::args().skip(1));
+    let cli = Cli::from_env();
     let settings = Dirs::from_env()
         .ok()
         .and_then(|dirs| rvp_app::read_json::<Settings>(&dirs.config.join("settings.json")).ok())
@@ -1122,9 +1122,9 @@ impl qobject::Player {
         }
         // First, so that --selftest runs (and reports) even when the start
         // fails below.
-        let cli = Cli::parse(std::env::args().skip(1));
+        let cli = Cli::from_env();
         self.as_mut().rust_mut().get_mut().cli = cli.clone();
-        let mut messages = Vec::new();
+        let mut messages = cli.notices();
         let (mut app, portable) = match load_app() {
             Ok((app, portable, message)) => {
                 messages.extend(message);
@@ -1314,7 +1314,7 @@ impl qobject::Player {
         // `--install-tensorrt`: RIFE (TensorRT)'s download at once, NVIDIA's
         // terms accepted by asking for it (tests and scripts); a failure is
         // in the log.
-        if Cli::parse(std::env::args().skip(1)).flag("install-tensorrt") {
+        if Cli::from_env().flag("install-tensorrt") {
             drop(core.app.tensorrt_install());
         }
         let action = core.app.switch_action(core.engine, &request);
