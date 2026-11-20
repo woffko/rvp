@@ -18,15 +18,80 @@
 //! * Files only this process writes and mpv reads (the VapourSynth scripts,
 //!   the subtitle working copies) carry the process's ID in their names
 //!   ([`process_file_name`]) and are removed when RVP closes.
+//!
+//! # Several RVPs on one folder
+//!
+//! Several RVP processes may run on one settings and state folder
+//! ("Multiple instances", `rvp /new`, New Player). Each reads `state.json`,
+//! `marks.json`, `playlists.json` and `settings.json` once, at start, and
+//! does not take the others' changes while it runs (no watching, no
+//! reloading). But one instance never writes another's changes back over:
+//! it writes only its own changes onto the newest copy on disk, so nothing
+//! either saves is lost and the next start sees all of it. A file is
+//! written so once [`Writer::merge_into`] names its rule ([`Merge`]):
+//!
+//! * The write takes the lock file `.<name>.lock` beside the file
+//!   ([`fs::File::lock`], held for that write only: the file itself is
+//!   replaced by a rename, so it cannot hold a lock), reads the file again,
+//!   puts onto it what this instance changed since its last write (its
+//!   content then, the base, against its content now) and writes the result
+//!   atomically. Afterwards this instance's own content is the base, not
+//!   the merged file: what it has not changed since is never written again,
+//!   so its old values never replace the other's newer ones.
+//! * While the file is still the one this instance read at start or last
+//!   wrote whole, no one else wrote it: the content is written whole, as a
+//!   single RVP always wrote it. A missing or damaged file is written whole
+//!   too.
+//! * A lock that is not free within [`LOCK_WAIT`] (another RVP stalled in
+//!   its write, a stalled network folder) does not hold the write up: it
+//!   goes on without the lock, merged all the same, and the log says so;
+//!   where the file system has no such locks, writes go without them. A
+//!   failed write keeps the base, so the next one carries the change again.
+//!
+//! What counts as one change, file by file (the same one changed in both
+//! instances: the last write wins; a removal is a change too, so the other
+//! instance's older copy never brings back what this one removed):
+//!
+//! * `state.json` ([`crate::resume`]) by entry: each file's position, audio
+//!   track and subtitle tracks, each skin mode's window; the last file, the
+//!   volume, mute, the window and the other single values each alone.
+//! * `marks.json` ([`crate::marks`]) by entry: each file's bookmarks and A-B
+//!   list together, each favorite by its path; the recent items opened here
+//!   since go before the disk's, less those removed here.
+//! * `settings.json` ([`crate::presets`]) by setting: each
+//!   leaf value this instance changed, added or removed (a key binding is
+//!   one; a list's item while the list keeps its length, else the list).
+//!   The presets' list by preset name: a preset added, removed or renamed
+//!   here (a rename removes the old name) is applied, one changed here gets
+//!   the settings changed in it (its conditions and values), one untouched
+//!   here is the disk's. The active preset's name and the page's options
+//!   are settings like the others, and so are the default preset's values,
+//!   the file's top level.
+//! * `playlists.json` ([`crate::playlist`]) by album, known by its name (and
+//!   its place among albums of the same name, so two albums given one name
+//!   in two instances are one album here): an album this instance added,
+//!   removed or renamed (the old name removed) is applied, one whose name
+//!   or entries it edited is written whole, one it did not touch is the
+//!   disk's. The selection, the scroll position and the playback marks
+//!   (the current entry, played, durations, the queue) are each instance's
+//!   own view: changed alone, they are written while the other instance
+//!   left that album's entries as they were, and give way otherwise. The
+//!   shown and the playing album are this instance's when it changed them,
+//!   else the disk's. Undo and redo stay with each instance.
+//! * A list the user orders (albums, presets, favorites) takes the order of
+//!   the instance that reordered it; the other's new items go after their
+//!   neighbours there.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Condvar, Mutex, PoisonError};
 use std::thread::JoinHandle;
-use std::time::Duration;
+use std::time::{Duration, Instant};
+
+use serde_json::Value;
 
 /// The configuration directory (settings) and the state directory (resume
 /// store, window geometry).
@@ -248,11 +313,11 @@ fn rename_retrying(from: &Path, to: &Path) -> io::Result<()> {
 
 /// Runs `step` until it succeeds, fails for another reason than
 /// `passing`, or ran `tries` times; the waits between double.
-fn retry(
-    mut step: impl FnMut() -> io::Result<()>,
+fn retry<T>(
+    mut step: impl FnMut() -> io::Result<T>,
     tries: u32,
     passing: impl Fn(&io::Error) -> bool,
-) -> io::Result<()> {
+) -> io::Result<T> {
     let mut wait = RENAME_WAIT;
     let mut attempt = 1;
     loop {
@@ -280,13 +345,22 @@ fn in_use(error: &io::Error) -> bool {
 /// # Errors
 /// Fails on I/O errors other than a missing file.
 pub fn read_json<T: serde::de::DeserializeOwned>(path: &Path) -> io::Result<Option<T>> {
+    Ok(load_json(path)?.map(|(value, _)| value))
+}
+
+/// [`read_json`] with the bytes the value came from (for
+/// [`Writer::merge_into`]).
+///
+/// # Errors
+/// Fails on I/O errors other than a missing file.
+pub fn load_json<T: serde::de::DeserializeOwned>(path: &Path) -> io::Result<Option<(T, Vec<u8>)>> {
     let bytes = match fs::read(path) {
         Ok(bytes) => bytes,
         Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(None),
         Err(error) => return Err(error),
     };
     if let Ok(value) = serde_json::from_slice(&bytes) {
-        Ok(Some(value))
+        Ok(Some((value, bytes)))
     } else {
         let mut bad = path.as_os_str().to_owned();
         bad.push(".bad");
@@ -303,15 +377,46 @@ pub fn read_json<T: serde::de::DeserializeOwned>(path: &Path) -> io::Result<Opti
 /// # Errors
 /// Fails on serialization or I/O errors.
 pub fn write_json<T: serde::Serialize>(path: &Path, value: &T) -> io::Result<()> {
+    write_atomic(path, &json_bytes(value)?)
+}
+
+/// A value as RVP's JSON files hold it: pretty, with a final new line.
+///
+/// # Errors
+/// Fails when the value cannot be serialized.
+pub fn json_bytes<T: serde::Serialize>(value: &T) -> io::Result<Vec<u8>> {
     let mut bytes = serde_json::to_vec_pretty(value).map_err(io::Error::other)?;
     bytes.push(b'\n');
-    write_atomic(path, &bytes)
+    Ok(bytes)
+}
+
+/// A file's rule for several RVPs (module comment): the file on disk now
+/// (`disk`) with this instance's changes put onto it, which are its
+/// content now (`ours`) against its content at its last write (`base`).
+/// `None` when `disk` is no such file (damaged): `ours` is written whole.
+pub type Merge = fn(disk: &[u8], base: &[u8], ours: &[u8]) -> Option<Vec<u8>>;
+
+/// How long a write waits for the lock another RVP holds while it writes
+/// the same file. Such a write takes milliseconds; a lock held this long
+/// belongs to a process or a disk that is stuck.
+pub const LOCK_WAIT: Duration = Duration::from_secs(2);
+
+/// A file several RVPs write ([`Writer::merge_into`]).
+struct Merging {
+    merge: Merge,
+    /// This instance's content when it last wrote the file (or read it).
+    base: Vec<u8>,
+    /// The file as this instance read it or last wrote it whole: while the
+    /// file is still that, it holds no one else's changes.
+    own: Option<Vec<u8>>,
 }
 
 #[derive(Default)]
 struct WriterState {
     /// The newest content waiting for each file.
     pending: BTreeMap<PathBuf, Vec<u8>>,
+    /// The files written by merging, and how.
+    merging: BTreeMap<PathBuf, Merging>,
     /// A write is in progress.
     busy: bool,
     /// The last write error, until it is taken.
@@ -323,7 +428,8 @@ type Shared = Arc<(Mutex<WriterState>, Condvar)>;
 
 /// Writes files atomically ([`write_atomic`]) on a background thread. Only
 /// the newest pending content of each file is written; dropping the writer
-/// finishes what is pending.
+/// finishes what is pending. A file several RVPs share is merged first
+/// ([`Writer::merge_into`]).
 pub struct Writer {
     shared: Shared,
     thread: Option<JoinHandle<()>>,
@@ -338,10 +444,17 @@ fn writer_loop(shared: &Shared) {
     loop {
         if let Some(path) = state.pending.keys().next().cloned() {
             let bytes = state.pending.remove(&path).unwrap_or_default();
+            let mut merging = state.merging.remove(&path);
             state.busy = true;
             drop(state);
-            let result = write_atomic(&path, &bytes);
+            let result = match merging.as_mut() {
+                Some(merging) => write_merged(&path, &bytes, merging),
+                None => write_atomic(&path, &bytes),
+            };
             state = lock(shared);
+            if let Some(merging) = merging {
+                state.merging.entry(path.clone()).or_insert(merging);
+            }
             state.busy = false;
             if let Err(error) = result {
                 state.error = Some(format!("{}: {error}", path.display()));
@@ -353,6 +466,235 @@ fn writer_loop(shared: &Shared) {
             state = shared.1.wait(state).unwrap_or_else(PoisonError::into_inner);
         }
     }
+}
+
+/// Writes `ours` to a file several RVPs share: under its lock, onto the
+/// file as it is now (module comment).
+fn write_merged(path: &Path, ours: &[u8], merging: &mut Merging) -> io::Result<()> {
+    let _lock = take_lock(path);
+    let read = retry(|| fs::read(path), RENAME_TRIES, in_use);
+    let merged = match read {
+        Ok(disk) if merging.own.as_deref() != Some(disk.as_slice()) => {
+            (merging.merge)(&disk, &merging.base, ours)
+        }
+        Ok(_) => None,
+        Err(error) if error.kind() == io::ErrorKind::NotFound => None,
+        Err(error) => return Err(error),
+    };
+    let written = merged.as_deref().unwrap_or(ours);
+    write_atomic(path, written)?;
+    merging.own = (written == ours).then(|| ours.to_vec());
+    ours.clone_into(&mut merging.base);
+    Ok(())
+}
+
+/// The lock file of a shared file: `.<name>.lock` beside it.
+fn lock_path(path: &Path) -> PathBuf {
+    let mut name = std::ffi::OsString::from(".");
+    name.push(path.file_name().unwrap_or_default());
+    name.push(".lock");
+    path.with_file_name(name)
+}
+
+/// Takes the lock of a shared file, waiting at most [`LOCK_WAIT`] for
+/// another RVP's write. `None` when the write goes on without it: the
+/// wait ran out (logged), or the folder or its file system gives no lock.
+/// The lock is released when the file is dropped.
+fn take_lock(path: &Path) -> Option<fs::File> {
+    let lock = lock_path(path);
+    if let Some(dir) = lock.parent() {
+        let _ = fs::create_dir_all(dir);
+    }
+    let file = fs::OpenOptions::new()
+        .read(true)
+        .write(true)
+        .create(true)
+        .truncate(false)
+        .open(&lock)
+        .ok()?;
+    let deadline = Instant::now() + LOCK_WAIT;
+    let mut wait = Duration::from_millis(1);
+    loop {
+        match file.try_lock() {
+            Ok(()) => return Some(file),
+            Err(fs::TryLockError::WouldBlock) if Instant::now() < deadline => {
+                std::thread::sleep(wait);
+                wait = (wait * 2).min(Duration::from_millis(50));
+            }
+            Err(fs::TryLockError::WouldBlock) => {
+                crate::log::report(
+                    crate::log::Level::Warning,
+                    &format!(
+                        "{} stayed locked by another RVP for {} s: written without the lock",
+                        path.display(),
+                        LOCK_WAIT.as_secs()
+                    ),
+                );
+                return None;
+            }
+            Err(fs::TryLockError::Error(_)) => return None,
+        }
+    }
+}
+
+/// `ours` when this instance changed the value (it differs from `base`),
+/// else the disk's.
+pub(crate) fn pick<T: PartialEq + Clone>(disk: T, base: &T, ours: &T) -> T {
+    if ours == base { disk } else { ours.clone() }
+}
+
+/// A map merged by entry: the entries this instance added, changed or
+/// removed (against `base`) put onto `disk`; the rest stay the disk's.
+pub(crate) fn merge_map<K: Ord + Clone, V: PartialEq + Clone>(
+    mut disk: BTreeMap<K, V>,
+    base: &BTreeMap<K, V>,
+    ours: &BTreeMap<K, V>,
+) -> BTreeMap<K, V> {
+    for key in base.keys().filter(|key| !ours.contains_key(*key)) {
+        disk.remove(key);
+    }
+    for (key, value) in ours {
+        if base.get(key) != Some(value) {
+            disk.insert(key.clone(), value.clone());
+        }
+    }
+    disk
+}
+
+/// A list merged by item, each known by its `key` (a key that comes twice
+/// by its place among them): an item this instance added or removed
+/// (against `base`) is added or removed on `disk`, one it changed is
+/// `item(disk's, base's, ours)` (or `ours` again when the other instance
+/// removed it), and the rest stay the disk's, the other's new items too.
+/// The order is the disk's with this instance's new items after their
+/// neighbours, or this instance's with the other's new items so, when this
+/// instance reordered the items both have.
+pub(crate) fn merge_list<T: PartialEq + Clone, K: Ord + Clone>(
+    disk: Vec<T>,
+    base: &[T],
+    ours: &[T],
+    key: impl Fn(&T) -> K,
+    item: impl Fn(T, &T, &T) -> T,
+) -> Vec<T> {
+    if ours == base {
+        return disk;
+    }
+    let ids = |list: &[T]| -> Vec<(K, usize)> {
+        let mut seen: BTreeMap<K, usize> = BTreeMap::new();
+        list.iter()
+            .map(|value| {
+                let key = key(value);
+                let count = seen.entry(key.clone()).or_default();
+                *count += 1;
+                (key, *count - 1)
+            })
+            .collect()
+    };
+    let (base_ids, ours_ids, disk_ids) = (ids(base), ids(ours), ids(&disk));
+    let in_base: BTreeMap<&(K, usize), &T> = base_ids.iter().zip(base).collect();
+    let in_ours: BTreeSet<&(K, usize)> = ours_ids.iter().collect();
+    let mut on_disk: BTreeMap<&(K, usize), T> = disk_ids.iter().zip(disk).collect();
+    let mut merged: BTreeMap<&(K, usize), T> = BTreeMap::new();
+    for (id, value) in ours_ids.iter().zip(ours) {
+        let disk = on_disk.remove(id);
+        let kept = match in_base.get(id) {
+            // Untouched here: the disk's, or gone with the other's removal.
+            Some(known) if *known == value => disk,
+            Some(known) => Some(match disk {
+                Some(disk) => item(disk, known, value),
+                None => value.clone(),
+            }),
+            None => Some(value.clone()),
+        };
+        if let Some(kept) = kept {
+            merged.insert(id, kept);
+        }
+    }
+    // What is left on disk and not in `base` is the other's new; what is
+    // in `base` was removed here.
+    merged.extend(
+        on_disk
+            .into_iter()
+            .filter(|(id, _)| !in_base.contains_key(id)),
+    );
+    let both = |ids: &[(K, usize)]| -> Vec<(K, usize)> {
+        ids.iter()
+            .filter(|id| in_base.contains_key(id) && in_ours.contains(id))
+            .cloned()
+            .collect()
+    };
+    let (frame, others) = if both(&ours_ids) == both(&base_ids) {
+        (&disk_ids, &ours_ids)
+    } else {
+        (&ours_ids, &disk_ids)
+    };
+    let mut order: Vec<&(K, usize)> = frame.iter().filter(|id| merged.contains_key(id)).collect();
+    for (at, id) in others.iter().enumerate() {
+        if !merged.contains_key(id) || order.contains(&id) {
+            continue;
+        }
+        let after = others[..at]
+            .iter()
+            .rev()
+            .find_map(|before| order.iter().position(|placed| *placed == before));
+        order.insert(after.map_or(0, |place| place + 1), id);
+    }
+    order
+        .into_iter()
+        .filter_map(|id| merged.remove(id))
+        .collect()
+}
+
+/// JSON merged by key, all the way down: the keys this instance added,
+/// changed or removed (against `base`) put onto `disk`. A list of one
+/// length on all three sides merges item by item (the settings window
+/// names `seek-seconds.0`); any other value that differs (a number, a list
+/// that grew) is one value.
+pub(crate) fn merge_value(disk: Value, base: &Value, ours: &Value) -> Value {
+    if ours == base {
+        return disk;
+    }
+    match (disk, base, ours) {
+        (Value::Object(mut disk), Value::Object(base), Value::Object(ours)) => {
+            disk.retain(|key, _| !base.contains_key(key) || ours.contains_key(key));
+            for (key, value) in ours {
+                match (base.get(key), disk.get_mut(key)) {
+                    (Some(known), _) if known == value => {}
+                    (Some(known), Some(slot)) => *slot = merge_value(slot.take(), known, value),
+                    _ => {
+                        disk.insert(key.clone(), value.clone());
+                    }
+                }
+            }
+            Value::Object(disk)
+        }
+        (Value::Array(disk), Value::Array(base), Value::Array(ours))
+            if disk.len() == base.len() && base.len() == ours.len() =>
+        {
+            Value::Array(
+                disk.into_iter()
+                    .zip(base.iter().zip(ours))
+                    .map(|(disk, (base, ours))| merge_value(disk, base, ours))
+                    .collect(),
+            )
+        }
+        _ => ours.clone(),
+    }
+}
+
+/// A [`Merge`] for a JSON file of `T`: `merge(disk, base, ours)` on the
+/// parsed values, written as [`json_bytes`] writes them. `None` when one of
+/// them is no such file.
+pub(crate) fn merge_json<T: serde::Serialize + serde::de::DeserializeOwned>(
+    disk: &[u8],
+    base: &[u8],
+    ours: &[u8],
+    merge: impl FnOnce(T, &T, &T) -> T,
+) -> Option<Vec<u8>> {
+    let disk = serde_json::from_slice(disk).ok()?;
+    let base = serde_json::from_slice(base).ok()?;
+    let ours = serde_json::from_slice(ours).ok()?;
+    json_bytes(&merge(disk, &base, &ours)).ok()
 }
 
 impl Writer {
@@ -370,6 +712,21 @@ impl Writer {
             shared,
             thread: Some(thread),
         })
+    }
+
+    /// Writes to `path` from now on put this instance's changes onto the
+    /// file as it is then, by `merge` (module comment). `read` is the file
+    /// as this instance read it (`None`: missing or damaged), `base` this
+    /// instance's content then, in the form its writes take.
+    pub fn merge_into(&self, path: &Path, read: Option<Vec<u8>>, base: Vec<u8>, merge: Merge) {
+        lock(&self.shared).merging.insert(
+            path.to_owned(),
+            Merging {
+                merge,
+                base,
+                own: read,
+            },
+        );
     }
 
     /// Queues `bytes` for `path`, replacing content still waiting for it.
@@ -601,7 +958,7 @@ mod tests {
         assert_eq!(calls, 3);
         // Another error, or too many tries: the error.
         let mut calls = 0;
-        let result = retry(
+        let result: io::Result<()> = retry(
             || {
                 calls += 1;
                 Err(io::Error::from(io::ErrorKind::NotFound))
@@ -616,7 +973,7 @@ mod tests {
         assert_eq!(calls, 1);
         let mut calls = 0;
         assert!(
-            retry(
+            retry::<()>(
                 || {
                     calls += 1;
                     Err(busy())
@@ -672,6 +1029,244 @@ mod tests {
         fs::create_dir_all(dir.join("state.json.bad").join("inside")).expect("blocker");
         let value: Option<serde_json::Value> = read_json(&path).expect("read");
         assert!(value.is_none());
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn maps_values_and_lists_merge_by_entry() {
+        let map = |pairs: &[(&str, u32)]| -> BTreeMap<String, u32> {
+            pairs.iter().map(|(k, v)| ((*k).to_owned(), *v)).collect()
+        };
+        // Here: a changed, b removed, d added; there: c added, e changed.
+        let base = map(&[("a", 1), ("b", 2), ("e", 5)]);
+        let ours = map(&[("a", 10), ("d", 4), ("e", 5)]);
+        let disk = map(&[("a", 1), ("b", 2), ("c", 3), ("e", 50)]);
+        assert_eq!(
+            merge_map(disk, &base, &ours),
+            map(&[("a", 10), ("c", 3), ("d", 4), ("e", 50)])
+        );
+        assert_eq!(pick(1, &2, &2), 1);
+        assert_eq!(pick(1, &2, &3), 3);
+
+        let base = serde_json::json!({ "a": 1, "b": { "c": 2, "d": 3 }, "l": [1, 2], "s": [1, 2], "gone": 0 });
+        let ours = serde_json::json!({ "a": 1, "b": { "c": 20, "d": 3 }, "l": [1], "s": [10, 2], "new": 7 });
+        let disk = serde_json::json!({ "a": 9, "b": { "c": 2, "d": 30 }, "l": [1, 2, 3], "s": [1, 20], "gone": 0, "x": 1 });
+        assert_eq!(
+            merge_value(disk, &base, &ours),
+            serde_json::json!({ "a": 9, "b": { "c": 20, "d": 30 }, "l": [1], "s": [10, 20], "new": 7, "x": 1 })
+        );
+
+        // Items by key: here "b" changed, "c" removed, "n" added after "a";
+        // there "a" changed, "b" changed, "t" added at the end.
+        let item = |key: &str, value: u32| (key.to_owned(), value);
+        let base = [item("a", 1), item("b", 2), item("c", 3)];
+        let ours = [item("a", 1), item("n", 9), item("b", 20)];
+        let disk = vec![item("a", 10), item("b", 21), item("c", 3), item("t", 5)];
+        let merged = merge_list(
+            disk.clone(),
+            &base,
+            &ours,
+            |(key, _)| key.clone(),
+            |_, _, ours| ours.clone(),
+        );
+        assert_eq!(
+            merged,
+            [item("a", 10), item("n", 9), item("b", 20), item("t", 5)]
+        );
+        // Untouched here: the disk's as it is.
+        assert_eq!(
+            merge_list(
+                disk.clone(),
+                &base,
+                &base,
+                |(key, _)| key.clone(),
+                |d, _, _| d
+            ),
+            disk
+        );
+        // Reordered here: this order, the other's new item after its
+        // neighbour; an item changed here that the other removed is back.
+        let ours = [item("c", 30), item("b", 2), item("a", 1)];
+        let disk = vec![item("a", 1), item("t", 5), item("b", 2)];
+        let merged = merge_list(
+            disk,
+            &base,
+            &ours,
+            |(key, _)| key.clone(),
+            |_, _, ours| ours.clone(),
+        );
+        assert_eq!(
+            merged,
+            [item("c", 30), item("b", 2), item("a", 1), item("t", 5)]
+        );
+    }
+
+    /// The numbers' file of the tests below: a map merged by entry.
+    fn merge_numbers(disk: &[u8], base: &[u8], ours: &[u8]) -> Option<Vec<u8>> {
+        merge_json(
+            disk,
+            base,
+            ours,
+            |disk: BTreeMap<String, u32>, base, ours| merge_map(disk, base, ours),
+        )
+    }
+
+    fn numbers(pairs: &[(&str, u32)]) -> BTreeMap<String, u32> {
+        pairs.iter().map(|(k, v)| ((*k).to_owned(), *v)).collect()
+    }
+
+    fn read_numbers(path: &Path) -> BTreeMap<String, u32> {
+        read_json(path).expect("read").expect("there")
+    }
+
+    /// A writer as an RVP that read `path` at start sets it up.
+    fn instance(path: &Path) -> (Writer, BTreeMap<String, u32>) {
+        let (start, read) = match load_json(path).expect("read") {
+            Some((start, bytes)) => (start, Some(bytes)),
+            None => (BTreeMap::new(), None),
+        };
+        let writer = Writer::new().expect("writer");
+        writer.merge_into(
+            path,
+            read,
+            json_bytes(&start).expect("bytes"),
+            merge_numbers,
+        );
+        (writer, start)
+    }
+
+    fn save(writer: &Writer, path: &Path, numbers: &BTreeMap<String, u32>) {
+        writer.write(path, json_bytes(numbers).expect("bytes"));
+        writer.flush();
+        assert_eq!(writer.take_error(), None);
+    }
+
+    /// Two RVPs on one file: each writes its own changes onto the other's,
+    /// in either order, and a removal stays removed.
+    #[test]
+    fn two_instances_keep_each_others_changes() {
+        let dir = scratch("instances");
+        let path = dir.join("numbers.json");
+        // Not in RVP's form: the first write of one instance alone is its
+        // content whole, as before.
+        fs::create_dir_all(&dir).expect("dir");
+        fs::write(&path, br#"{"a":1,"b":2,"old":0}"#).expect("write");
+        let (one, mut mine) = instance(&path);
+        let (two, mut theirs) = instance(&path);
+        mine.insert("a".into(), 10);
+        mine.remove("b");
+        save(&one, &path, &mine);
+        assert_eq!(
+            fs::read(&path).expect("read"),
+            json_bytes(&mine).expect("bytes")
+        );
+        theirs.insert("c".into(), 3);
+        save(&two, &path, &theirs);
+        assert_eq!(
+            read_numbers(&path),
+            numbers(&[("a", 10), ("c", 3), ("old", 0)])
+        );
+        mine.insert("d".into(), 4);
+        save(&one, &path, &mine);
+        // The same entry changed in both: the last write wins.
+        theirs.insert("a".into(), 20);
+        theirs.remove("old");
+        save(&two, &path, &theirs);
+        assert_eq!(
+            read_numbers(&path),
+            numbers(&[("a", 20), ("c", 3), ("d", 4)])
+        );
+        mine.insert("e".into(), 5);
+        save(&one, &path, &mine);
+        assert_eq!(
+            read_numbers(&path),
+            numbers(&[("a", 20), ("c", 3), ("d", 4), ("e", 5)])
+        );
+        // One alone again (the other stopped): still merged, as the file
+        // holds the other's changes.
+        mine.insert("f".into(), 6);
+        save(&one, &path, &mine);
+        assert_eq!(
+            read_numbers(&path),
+            numbers(&[("a", 20), ("c", 3), ("d", 4), ("e", 5), ("f", 6)])
+        );
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_missing_or_damaged_file_takes_the_whole_copy() {
+        let dir = scratch("whole");
+        let path = dir.join("numbers.json");
+        fs::create_dir_all(&dir).expect("dir");
+        fs::write(&path, br#"{"a":1}"#).expect("write");
+        let (writer, mut mine) = instance(&path);
+        let (other, mut theirs) = instance(&path);
+        theirs.insert("t".into(), 1);
+        save(&other, &path, &theirs);
+        fs::write(&path, b"{ damaged").expect("damage");
+        mine.insert("b".into(), 2);
+        save(&writer, &path, &mine);
+        assert_eq!(
+            fs::read(&path).expect("read"),
+            json_bytes(&mine).expect("bytes")
+        );
+        fs::remove_file(&path).expect("remove");
+        mine.insert("c".into(), 3);
+        save(&writer, &path, &mine);
+        assert_eq!(
+            read_numbers(&path),
+            numbers(&[("a", 1), ("b", 2), ("c", 3)])
+        );
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    /// Another RVP's write holds the lock: the write waits for it and goes
+    /// onto what that one wrote; a lock never freed delays it by
+    /// [`LOCK_WAIT`] and no more.
+    #[test]
+    fn a_held_lock_delays_the_write_and_loses_nothing() {
+        let dir = scratch("lock");
+        let path = dir.join("numbers.json");
+        fs::create_dir_all(&dir).expect("dir");
+        fs::write(&path, br#"{"a":1}"#).expect("write");
+        let (writer, mut mine) = instance(&path);
+        let held = fs::OpenOptions::new()
+            .write(true)
+            .create(true)
+            .truncate(false)
+            .open(lock_path(&path))
+            .expect("lock file");
+        held.lock().expect("lock");
+        let other = {
+            let path = path.clone();
+            std::thread::spawn(move || {
+                std::thread::sleep(Duration::from_millis(300));
+                write_json(&path, &numbers(&[("a", 1), ("t", 9)])).expect("write");
+                drop(held);
+            })
+        };
+        let start = Instant::now();
+        mine.insert("b".into(), 2);
+        save(&writer, &path, &mine);
+        assert!(start.elapsed() >= Duration::from_millis(300));
+        other.join().expect("other");
+        assert_eq!(
+            read_numbers(&path),
+            numbers(&[("a", 1), ("b", 2), ("t", 9)])
+        );
+
+        let held = fs::File::open(lock_path(&path)).expect("lock file");
+        held.lock().expect("lock");
+        let start = Instant::now();
+        mine.insert("c".into(), 3);
+        save(&writer, &path, &mine);
+        let waited = start.elapsed();
+        assert!(waited >= LOCK_WAIT && waited < LOCK_WAIT * 3, "{waited:?}");
+        assert_eq!(
+            read_numbers(&path),
+            numbers(&[("a", 1), ("b", 2), ("c", 3), ("t", 9)])
+        );
+        drop(held);
         let _ = fs::remove_dir_all(&dir);
     }
 }

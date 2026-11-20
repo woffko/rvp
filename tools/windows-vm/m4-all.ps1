@@ -24,7 +24,7 @@ $missing = @($names | Where-Object { -not ($lines -match "^check $_=PASS") })
 Write-Host "m4_missing=$($missing.Count) $($missing -join ',')"
 
 Write-Host '== portable'
-Remove-Item -Recurse -Force "$bundle\settings.json", "$bundle\state" -ErrorAction SilentlyContinue
+Remove-Item -Recurse -Force "$bundle\settings.json", "$bundle\.settings.json.lock", "$bundle\state" -ErrorAction SilentlyContinue
 New-Item -ItemType File -Force "$bundle\rvp.portable" | Out-Null
 Set-Location $bundle
 $env:QT_OPENGL = 'software'
@@ -34,4 +34,4 @@ Remove-Item Env:RVP_CONFIG_DIR, Env:RVP_STATE_DIR -ErrorAction SilentlyContinue
 Write-Host "exit=$LASTEXITCODE"
 $portable = (Test-Path "$bundle\settings.json") -and (Test-Path "$bundle\state")
 Write-Host "portable=$portable"
-Remove-Item -Recurse -Force "$bundle\rvp.portable", "$bundle\settings.json", "$bundle\state" -ErrorAction SilentlyContinue
+Remove-Item -Recurse -Force "$bundle\rvp.portable", "$bundle\settings.json", "$bundle\.settings.json.lock", "$bundle\state" -ErrorAction SilentlyContinue

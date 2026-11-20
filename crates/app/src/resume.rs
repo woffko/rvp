@@ -6,7 +6,9 @@
 //! atomically ([`crate::storage`]) on important changes and at most every
 //! [`SAVE_INTERVAL`] while playing, so a killed process loses less than that
 //! (section 4 asks for at most 5 s). The writing happens on the storage
-//! writer's thread; [`ResumeStore::save_and_wait`] waits for it.
+//! writer's thread; [`ResumeStore::save_and_wait`] waits for it. Several
+//! RVPs on one state folder merge their saves by entry
+//! ([`crate::storage`]'s rules, `ResumeState::merged`).
 
 use std::collections::BTreeMap;
 use std::io;
@@ -118,6 +120,58 @@ impl Default for ResumeState {
     }
 }
 
+/// Drops the entries of the smallest sequence beyond [`MAX_POSITIONS`].
+fn drop_oldest<V>(entries: &mut BTreeMap<String, V>, sequence: impl Fn(&V) -> u64) {
+    while entries.len() > MAX_POSITIONS {
+        let Some(oldest) = entries
+            .iter()
+            .min_by_key(|(_, value)| sequence(value))
+            .map(|(name, _)| name.clone())
+        else {
+            return;
+        };
+        entries.remove(&oldest);
+    }
+}
+
+impl ResumeState {
+    /// This instance's state `ours`, changed from `base`, put onto `disk`,
+    /// the newest file on disk ([`crate::storage`]): each file's position
+    /// and tracks and each mode's window by entry, the single values each
+    /// alone.
+    pub(crate) fn merged(disk: Self, base: &Self, ours: &Self) -> Self {
+        use storage::{merge_map, pick};
+        let mut merged = Self {
+            version: ours.version,
+            last_file: pick(disk.last_file, &base.last_file, &ours.last_file),
+            volume: pick(disk.volume, &base.volume, &ours.volume),
+            mute: pick(disk.mute, &base.mute, &ours.mute),
+            window: pick(disk.window, &base.window, &ours.window),
+            panel: pick(disk.panel, &base.panel, &ours.panel),
+            positions: merge_map(disk.positions, &base.positions, &ours.positions),
+            sequence: disk.sequence.max(ours.sequence),
+            audio_tracks: merge_map(disk.audio_tracks, &base.audio_tracks, &ours.audio_tracks),
+            subtitle_tracks: merge_map(
+                disk.subtitle_tracks,
+                &base.subtitle_tracks,
+                &ours.subtitle_tracks,
+            ),
+            audio_skin: pick(disk.audio_skin, &base.audio_skin, &ours.audio_skin),
+            mode_windows: merge_map(disk.mode_windows, &base.mode_windows, &ours.mode_windows),
+            settings_page: pick(disk.settings_page, &base.settings_page, &ours.settings_page),
+        };
+        drop_oldest(&mut merged.positions, |position| position.sequence);
+        drop_oldest(&mut merged.audio_tracks, |track| track.sequence);
+        drop_oldest(&mut merged.subtitle_tracks, |tracks| tracks.sequence);
+        merged
+    }
+}
+
+/// `state.json`'s rule for several RVPs ([`storage::Merge`]).
+fn merge_file(disk: &[u8], base: &[u8], ours: &[u8]) -> Option<Vec<u8>> {
+    storage::merge_json(disk, base, ours, ResumeState::merged)
+}
+
 /// The resume store and its file.
 #[derive(Debug)]
 pub struct ResumeStore {
@@ -137,13 +191,18 @@ impl ResumeStore {
     /// thread cannot start.
     pub fn open(dir: &Path) -> io::Result<Self> {
         let path = dir.join("state.json");
-        let state = storage::read_json(&path)?.unwrap_or_default();
+        let (state, read) = match storage::load_json(&path)? {
+            Some((state, bytes)) => (state, Some(bytes)),
+            None => (ResumeState::default(), None),
+        };
+        let writer = storage::Writer::new()?;
+        writer.merge_into(&path, read, storage::json_bytes(&state)?, merge_file);
         Ok(Self {
             path,
             state,
             dirty: false,
             last_save: None,
-            writer: storage::Writer::new()?,
+            writer,
         })
     }
 
@@ -184,16 +243,7 @@ impl ResumeStore {
             self.state.positions.insert(file.to_owned(), position);
             self.dirty = true;
         }
-        if self.state.positions.len() > MAX_POSITIONS
-            && let Some(oldest) = self
-                .state
-                .positions
-                .iter()
-                .min_by_key(|(_, position)| position.sequence)
-                .map(|(name, _)| name.clone())
-        {
-            self.state.positions.remove(&oldest);
-        }
+        drop_oldest(&mut self.state.positions, |position| position.sequence);
     }
 
     /// The audio track chosen last in `file`.
@@ -214,16 +264,7 @@ impl ResumeStore {
         };
         self.state.audio_tracks.insert(file.to_owned(), track);
         self.dirty = true;
-        if self.state.audio_tracks.len() > MAX_POSITIONS
-            && let Some(oldest) = self
-                .state
-                .audio_tracks
-                .iter()
-                .min_by_key(|(_, track)| track.sequence)
-                .map(|(name, _)| name.clone())
-        {
-            self.state.audio_tracks.remove(&oldest);
-        }
+        drop_oldest(&mut self.state.audio_tracks, |track| track.sequence);
     }
 
     /// The subtitles chosen last in `file`: the first (`None`: off) and the
@@ -249,16 +290,7 @@ impl ResumeStore {
         };
         self.state.subtitle_tracks.insert(file.to_owned(), tracks);
         self.dirty = true;
-        if self.state.subtitle_tracks.len() > MAX_POSITIONS
-            && let Some(oldest) = self
-                .state
-                .subtitle_tracks
-                .iter()
-                .min_by_key(|(_, tracks)| tracks.sequence)
-                .map(|(name, _)| name.clone())
-        {
-            self.state.subtitle_tracks.remove(&oldest);
-        }
+        drop_oldest(&mut self.state.subtitle_tracks, |tracks| tracks.sequence);
     }
 
     /// Forgets the position of `file` (played to the end).

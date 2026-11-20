@@ -4,7 +4,11 @@
 //! Next, Previous and the end of a file move through the album that plays.
 //! Every edit can be undone. The albums live in `playlists.json` in the
 //! state directory, written atomically by the storage writer after every
-//! change, so a killed process keeps them.
+//! change, so a killed process keeps them. Several RVPs on one state folder
+//! merge their saves by album ([`crate::storage`]'s rules,
+//! `Playlists::merged`): an edit (what `Library::edit` changes) makes an
+//! album this instance's, while selection, scrolling and playback marks
+//! (what `Library::update` changes) give way to the other's edits.
 
 use std::collections::BTreeSet;
 use std::io;
@@ -399,14 +403,19 @@ impl Library {
     /// thread cannot start.
     pub fn open(dir: &Path) -> io::Result<Self> {
         let path = dir.join("playlists.json");
-        let mut lists: Playlists = storage::read_json(&path)?.unwrap_or_default();
+        let (mut lists, read) = match storage::load_json::<Playlists>(&path)? {
+            Some((lists, bytes)) => (lists, Some(bytes)),
+            None => (Playlists::default(), None),
+        };
         lists.repair();
+        let writer = storage::Writer::new()?;
+        writer.merge_into(&path, read, storage::json_bytes(&lists)?, merge_file);
         Ok(Self {
             lists,
             undo: Vec::new(),
             redo: Vec::new(),
             path,
-            writer: storage::Writer::new()?,
+            writer,
         })
     }
 
@@ -1234,7 +1243,95 @@ impl Library {
     }
 }
 
+impl Album {
+    /// What an edit changes: the name and the entries (their files, titles
+    /// and order). The rest is the view and the playback marks.
+    fn edited_part(&self) -> (&str, Vec<(&str, Option<&str>)>) {
+        let entries = self
+            .entries
+            .iter()
+            .map(|entry| (entry.path.as_str(), entry.title.as_deref()))
+            .collect();
+        (&self.name, entries)
+    }
+
+    /// An album this instance changed (`ours`, from `base`) against the
+    /// disk's: an edit here makes it ours whole; the view and marks alone
+    /// are ours while the other instance left the entries as they were.
+    fn merged(disk: Self, base: &Self, ours: &Self) -> Self {
+        let known = base.edited_part();
+        if ours.edited_part() != known || disk.edited_part() == known {
+            ours.clone()
+        } else {
+            disk
+        }
+    }
+}
+
+/// An album's name and its place among the albums of that name: how
+/// several RVPs know it (`Playlists::merged`).
+fn album_id(albums: &[Album], index: Option<usize>) -> Option<(String, usize)> {
+    let index = index?;
+    let album = albums.get(index)?;
+    let before = albums[..index]
+        .iter()
+        .filter(|other| other.name == album.name)
+        .count();
+    Some((album.name.clone(), before))
+}
+
+/// Where the album of [`album_id`] `id` is.
+fn album_index(albums: &[Album], id: &(String, usize)) -> Option<usize> {
+    albums
+        .iter()
+        .enumerate()
+        .filter(|(_, album)| album.name == id.0)
+        .nth(id.1)
+        .map(|(index, _)| index)
+}
+
+/// `playlists.json`'s rule for several RVPs ([`storage::Merge`]).
+fn merge_file(disk: &[u8], base: &[u8], ours: &[u8]) -> Option<Vec<u8>> {
+    storage::merge_json(disk, base, ours, Playlists::merged)
+}
+
 impl Playlists {
+    /// This instance's albums `ours`, changed from `base`, put onto `disk`,
+    /// the newest file on disk ([`crate::storage`]): by album, each known
+    /// by its name; the shown and the playing album are this instance's
+    /// when it changed them, else the disk's.
+    fn merged(disk: Self, base: &Self, ours: &Self) -> Self {
+        // Which album: this instance's choice when it changed it, else the
+        // disk's (and the other one when the chosen album is gone).
+        let choose = |ours_at, base_at, disk_at| {
+            let mine = album_id(&ours.albums, ours_at);
+            let theirs = album_id(&disk.albums, disk_at);
+            if mine == album_id(&base.albums, base_at) {
+                (theirs, mine)
+            } else {
+                (mine, theirs)
+            }
+        };
+        let shown = choose(Some(ours.shown), Some(base.shown), Some(disk.shown));
+        let (playing, _) = choose(ours.playing, base.playing, disk.playing);
+        let albums = storage::merge_list(
+            disk.albums,
+            &base.albums,
+            &ours.albums,
+            |album| album.name.clone(),
+            Album::merged,
+        );
+        let find = |id: Option<(String, usize)>| id.and_then(|id| album_index(&albums, &id));
+        let mut merged = Self {
+            version: ours.version,
+            shown: find(shown.0).or_else(|| find(shown.1)).unwrap_or(0),
+            playing: find(playing),
+            albums,
+        };
+        merged.repair();
+        merged
+    }
+
     /// Keeps indexes in range after loading or editing.
     fn repair(&mut self) {
         if self.albums.is_empty() {

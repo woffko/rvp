@@ -482,16 +482,27 @@ impl App {
     /// Fails on I/O errors other than missing files.
     pub fn load(dirs: &Dirs) -> io::Result<Self> {
         let settings_path = dirs.config.join("settings.json");
-        let settings = if let Some(settings) = storage::read_json(&settings_path)? {
-            settings
+        let (settings, read) = if let Some(loaded) = storage::load_json(&settings_path)? {
+            loaded
         } else {
             let settings = Settings::default();
-            storage::write_json(&settings_path, &settings)?;
-            settings
+            let bytes = storage::json_bytes(&settings)?;
+            storage::write_atomic(&settings_path, &bytes)?;
+            (settings, bytes)
         };
         let mut app = Self::new(settings, &dirs.state)?;
-        app.settings_path = Some(settings_path);
+        app.settings_path = Some(settings_path.clone());
         app.start_presets();
+        // Other RVPs on this folder keep their changes (`crate::storage`):
+        // what this one changes is measured from the settings it starts
+        // with, in the form its saves take.
+        let base = storage::json_bytes(&app.stored_settings())?;
+        app.writer.merge_into(
+            &settings_path,
+            Some(read),
+            base,
+            crate::presets::merge_settings_file,
+        );
         Ok(app)
     }
 

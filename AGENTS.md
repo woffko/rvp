@@ -147,6 +147,16 @@ smoothing for users without SVP, after a study of the engines.
   RVP that answered late keeps it. The self-test neither forwards nor
   listens unless `--instance=NAME` names a separate channel, so test runs
   never reach the owner's player.
+- Several RVPs may still run on one folder ("Multiple instances", `rvp
+  /new`), and one never writes another's state back: `state.json`,
+  `marks.json`, `playlists.json` and `settings.json` go through
+  `storage::Writer::merge_into`, which under the lock file `.<name>.lock`
+  reads the file again and puts only this instance's changes on it (by
+  entry, setting, preset or album; the rules are `storage.rs`'s module
+  comment). Instances do not reload each other's changes while they run.
+  A new field of these files needs its place in that file's `merged`, and
+  view state (selection, scrolling, playback marks) never counts as an
+  album edit (`Album::edited_part`). Checks: `tests/shared_state.rs`.
 - The Windows test VM's checks are `tools/windows-vm/m3-all.ps1`,
   `m4-all.ps1`, `m6-all.ps1`, `m7-all.ps1` (RVP Default with no skin
   set, then the test copy of BlackSpace; copy them and `run.ps1` to

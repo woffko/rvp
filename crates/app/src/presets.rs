@@ -22,6 +22,14 @@
 //! * Export writes what settings.json holds (`App::stored_settings`),
 //!   and Import takes a file as a start takes settings.json
 //!   ([`App::import_settings`]).
+//! * Several RVPs on one settings folder ([`crate::storage`]'s rules,
+//!   `merge_settings`): the default preset's values (the file's top
+//!   level) and each preset's merge by setting; the list by preset name
+//!   (a rename is the old name removed and the new one added), so presets
+//!   added or removed in one RVP and values changed in another all stay.
+//!   The active preset's name is one setting: the RVP that changed it last
+//!   wins, and one that names a preset another RVP deleted makes the next
+//!   start run the default (`PresetsSettings::validate`).
 
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -590,6 +598,49 @@ impl App {
     }
 }
 
+/// settings.json as several RVPs write it ([`crate::storage`]): this
+/// instance's file `ours`, changed from `base`, put onto `disk` by setting,
+/// with the presets' list by preset name (each preset by setting too).
+pub(crate) fn merge_settings(disk: Value, base: &Value, ours: &Value) -> Value {
+    /// Takes the presets' list out of a file.
+    fn take_list(file: &mut Value) -> Option<Vec<Value>> {
+        match file.get_mut("presets")?.as_object_mut()?.remove("list")? {
+            Value::Array(list) => Some(list),
+            _ => None,
+        }
+    }
+    let (mut disk, mut base, mut ours) = (disk, base.clone(), ours.clone());
+    let lists = (
+        take_list(&mut disk),
+        take_list(&mut base),
+        take_list(&mut ours),
+    );
+    let mut merged = crate::storage::merge_value(disk, &base, &ours);
+    let list = match lists {
+        (Some(disk), Some(base), Some(ours)) => Some(crate::storage::merge_list(
+            disk,
+            &base,
+            &ours,
+            |preset| preset["name"].to_string(),
+            crate::storage::merge_value,
+        )),
+        (disk, base, ours) => crate::storage::pick(disk, &base, &ours),
+    };
+    if let (Some(list), Value::Object(file)) = (list, &mut merged)
+        && let Value::Object(presets) = file
+            .entry("presets")
+            .or_insert_with(|| Value::Object(serde_json::Map::new()))
+    {
+        presets.insert("list".to_owned(), Value::Array(list));
+    }
+    merged
+}
+
+/// settings.json's rule for several RVPs ([`crate::storage::Merge`]).
+pub(crate) fn merge_settings_file(disk: &[u8], base: &[u8], ours: &[u8]) -> Option<Vec<u8>> {
+    crate::storage::merge_json(disk, base, ours, merge_settings)
+}
+
 /// A preset's name as RVP shows it.
 fn shown(name: &str) -> &str {
     if name.is_empty() { "Default" } else { name }
@@ -598,6 +649,58 @@ fn shown(name: &str) -> &str {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Two RVPs' settings: the presets by name (a rename removes the old
+    /// one), each preset's values and the rest by setting.
+    #[test]
+    fn settings_merge_presets_by_name() {
+        let preset =
+            |name: &str, values: Value| serde_json::json!({ "name": name, "values": values });
+        let file = |step: u32, active: &str, list: Vec<Value>| serde_json::json!({ "volume-step": step, "presets": { "active": active, "list": list } });
+        let base = file(
+            5,
+            "",
+            vec![
+                preset("A", serde_json::json!({ "x": 1, "y": 1 })),
+                preset("B", Value::Null),
+            ],
+        );
+        // Here: B renamed C, A's x changed.
+        let ours = file(
+            5,
+            "",
+            vec![
+                preset("A", serde_json::json!({ "x": 2, "y": 1 })),
+                preset("C", Value::Null),
+            ],
+        );
+        // There: A's y changed, D added, A active, the default's step.
+        let disk = file(
+            9,
+            "A",
+            vec![
+                preset("A", serde_json::json!({ "x": 1, "y": 3 })),
+                preset("B", Value::Null),
+                preset("D", Value::Null),
+            ],
+        );
+        assert_eq!(
+            merge_settings(disk, &base, &ours),
+            file(
+                9,
+                "A",
+                vec![
+                    preset("A", serde_json::json!({ "x": 2, "y": 3 })),
+                    preset("C", Value::Null),
+                    preset("D", Value::Null),
+                ],
+            )
+        );
+        // A file without presets gets this instance's list.
+        let without = serde_json::json!({ "volume-step": 9 });
+        let merged = merge_settings(without, &base, &ours);
+        assert_eq!(merged["presets"]["list"], ours["presets"]["list"]);
+    }
 
     #[test]
     fn wildcards_match_names() {

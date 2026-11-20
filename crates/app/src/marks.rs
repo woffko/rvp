@@ -13,7 +13,8 @@
 //!
 //! Files are keyed by mpv's `path`, as positions are
 //! ([`crate::resume`]). The file is written by the storage writer after
-//! every change.
+//! every change; several RVPs on one state folder merge their saves by
+//! entry ([`crate::storage`]'s rules, `Marks::merged`).
 
 use std::collections::BTreeMap;
 use std::io;
@@ -109,6 +110,58 @@ impl Default for Marks {
     }
 }
 
+impl Marks {
+    /// This instance's marks `ours`, changed from `base`, put onto `disk`,
+    /// the newest file on disk ([`crate::storage`]): each file's marks and
+    /// each favorite (by its path) as an entry; the recent items opened
+    /// here go first.
+    pub(crate) fn merged(disk: Self, base: &Self, ours: &Self) -> Self {
+        Self {
+            version: ours.version,
+            files: storage::merge_map(disk.files, &base.files, &ours.files),
+            favorites: storage::merge_list(
+                disk.favorites,
+                &base.favorites,
+                &ours.favorites,
+                |favorite| favorite.path.clone(),
+                |_, _, ours| ours.clone(),
+            ),
+            recent: merge_recent(disk.recent, &base.recent, &ours.recent),
+        }
+    }
+}
+
+/// The recent items: those opened here since `base` (the front of `ours`
+/// up to where the rest is `base`'s in its order) first, then the disk's
+/// but those removed here (cleared, or pushed past the end).
+fn merge_recent(disk: Vec<String>, base: &[String], ours: &[String]) -> Vec<String> {
+    if ours == base {
+        return disk;
+    }
+    let follows_base = |rest: &[String]| {
+        let mut known = base.iter();
+        rest.iter()
+            .all(|item| known.any(|candidate| candidate == item))
+    };
+    let fresh = (0..=ours.len())
+        .find(|&start| follows_base(&ours[start..]))
+        .unwrap_or(ours.len());
+    let opened = &ours[..fresh];
+    let removed = |item: &String| base.contains(item) && !ours.contains(item);
+    let mut recent = opened.to_vec();
+    recent.extend(
+        disk.into_iter()
+            .filter(|item| !opened.contains(item) && !removed(item)),
+    );
+    recent.truncate(RECENT_ITEMS);
+    recent
+}
+
+/// `marks.json`'s rule for several RVPs ([`storage::Merge`]).
+fn merge_file(disk: &[u8], base: &[u8], ours: &[u8]) -> Option<Vec<u8>> {
+    storage::merge_json(disk, base, ours, Marks::merged)
+}
+
 /// The marks and their file.
 #[derive(Debug)]
 pub struct MarkStore {
@@ -125,11 +178,16 @@ impl MarkStore {
     /// thread cannot start.
     pub fn open(dir: &Path) -> io::Result<Self> {
         let path = dir.join("marks.json");
-        let marks = storage::read_json(&path)?.unwrap_or_default();
+        let (marks, read) = match storage::load_json(&path)? {
+            Some((marks, bytes)) => (marks, Some(bytes)),
+            None => (Marks::default(), None),
+        };
+        let writer = storage::Writer::new()?;
+        writer.merge_into(&path, read, storage::json_bytes(&marks)?, merge_file);
         Ok(Self {
             path,
             marks,
-            writer: storage::Writer::new()?,
+            writer,
         })
     }
 
@@ -405,6 +463,25 @@ mod tests {
             "empty files go"
         );
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// Two RVPs' recent items: those opened here first, the other's after,
+    /// and what was cleared here stays cleared.
+    #[test]
+    fn recent_items_of_two_instances_merge() {
+        let list = |items: &[&str]| -> Vec<String> {
+            items.iter().map(|item| (*item).to_owned()).collect()
+        };
+        let base = list(&["b", "c", "d"]);
+        // Here x, then c again; there y.
+        let ours = list(&["c", "x", "b", "d"]);
+        let disk = list(&["y", "b", "c", "d"]);
+        assert_eq!(
+            merge_recent(disk.clone(), &base, &ours),
+            list(&["c", "x", "y", "b", "d"])
+        );
+        assert_eq!(merge_recent(disk.clone(), &base, &base), disk);
+        assert_eq!(merge_recent(disk, &base, &[]), list(&["y"]));
     }
 
     #[test]
