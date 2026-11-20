@@ -90,6 +90,26 @@ smoothing for users without SVP, after a study of the engines.
   `RVP_REFERENCE_DIR`; they must pass (with a note) when the skin is absent.
 - `cargo run --release -p rvp-skin --example compare_reference -- RENDER REF OUT`
   aligns a render with a scaled screenshot and writes side-by-side crops.
+- A skin is untrusted input: what it may ask of the engine (archive bytes
+  and members, pictures, markup, includes, layout coordinates, its own
+  windows) is one table, `crates/skin/src/limits.rs`. Each limit is
+  several times the largest value measured over real skins (its comment
+  names that value); before changing one, measure again with
+  `cargo run --release -p rvp-skin --example skin_limits -- FOLDER...`.
+  A skin over a limit does not load (`SkinError::Limit`), and a skin that
+  does not load leaves the skin shown and the setting as they were, with
+  a notice (`App::skin_failed`); the setting names a skin only once the
+  window has shown it (`App::skin_loaded`).
+- The first-load marker (`crates/app/src/skin_marker.rs`) covers what no
+  error catches (an abort, a hang): each RVP holds `skin-load-<pid>.json`
+  in the state folder, locked, for its life; it names a skin from the
+  start of the skin's first load in the process (`player::marker_loading`)
+  to its first frame drawn (`skin_view` reports it, the one-second tick
+  clears it). A start that finds the marker of an RVP that ended (alone
+  on the folder at its start, or with a window of its own: a second `rvp`
+  that hands its files over leaves one behind) naming the configured skin
+  shows RVP Default, clears the setting and says so; the skin stays in
+  the skin list for that session.
 
 ## Own look (crates/look)
 

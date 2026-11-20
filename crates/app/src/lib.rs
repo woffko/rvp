@@ -58,6 +58,7 @@ mod resume;
 pub mod scenes;
 mod settings;
 pub mod shaders;
+pub mod skin_marker;
 pub mod skins;
 pub mod smoothing;
 pub mod sources;

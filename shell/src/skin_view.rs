@@ -130,6 +130,8 @@ fn paint_frame(mut painter: Pin<&mut qobject::QPainter>, frame: &Frame, region: 
     for op in frame.ops_for(region) {
         draw(painter.as_mut(), skin, op);
     }
+    // The skin's first frame clears its load's marker.
+    crate::player::skin_drawn(skin.id());
 }
 
 /// Paints every operation of `frame` (the control panel, the logo) at

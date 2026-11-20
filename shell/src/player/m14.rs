@@ -10,15 +10,15 @@ use cxx_qt_lib::QString;
 use rvp_app::UiRequest;
 use rvp_app::chrome::Mode;
 use rvp_app::pointer::Pointer;
-use rvp_app::skins::{SkinInfo, ThemeWant};
+use rvp_app::skins::{SkinInfo, SkinWant, ThemeWant};
 use rvp_app::window::WindowRequest;
 
 use rvp_app::chrome::Chrome;
 use rvp_app::logos::Logo;
 
 use super::{
-    LOGO_FRAME, PANEL_ZOOM, SkinSource, ZOOM, file_url, request, show_skin, skin_variant,
-    to_window, window_length,
+    Core, LOGO_FRAME, PANEL_ZOOM, SkinSource, ZOOM, file_url, json_string, marker_settled,
+    marker_shown, marker_skin, request, show_skin, skin_variant, to_window, window_length,
 };
 use crate::player_qobject::qobject;
 
@@ -39,6 +39,44 @@ pub(super) struct Look {
     /// "Automatically run at system startup" as last applied (or found at
     /// start).
     pub(super) startup: Option<bool>,
+}
+
+/// The skin's part of `Player::status`: the skin its load's marker names,
+/// the skin shown, whether it forces the window's height, and its
+/// spectrum.
+pub(super) fn status(core: &Core) -> Vec<(&'static str, String)> {
+    let text = |value: Option<&str>| value.map_or_else(|| "null".to_owned(), json_string);
+    let chrome = core.chrome.as_ref();
+    vec![
+        // The skin loading or not drawn yet (`rvp_app::skin_marker`).
+        ("skin_marker", text(marker_skin().as_deref())),
+        ("skin_file", text(chrome.map(|chrome| chrome.skin().file()))),
+        (
+            "skin_id",
+            chrome
+                .and_then(|chrome| i64::try_from(chrome.skin().id()).ok())
+                .map_or_else(|| "null".to_owned(), |id| id.to_string()),
+        ),
+        (
+            "skin_forces_height",
+            chrome
+                .is_some_and(|chrome| Mode::Window.limits(chrome.skin()).force_height)
+                .to_string(),
+        ),
+        // The skin's spectrum: its highest bar now (M14).
+        (
+            "spectrum",
+            chrome
+                .map(|chrome| {
+                    chrome
+                        .data
+                        .visual
+                        .iter()
+                        .fold(0.0_f32, |high, level| high.max(*level))
+                })
+                .map_or_else(|| "null".to_owned(), |high| format!("{high:.3}")),
+        ),
+    ]
 }
 
 /// RVP's own logo (`crates/look`), from the shell's resources.
@@ -63,9 +101,15 @@ impl qobject::Player {
                 self.as_mut().sync_opacity();
                 self.as_mut().refresh_overlay();
                 self.as_mut().sync_logo();
-                if self
-                    .core()
-                    .is_some_and(|core| core.app.settings.osd.messages)
+                // A skin that did not load said why instead.
+                let refused = self
+                    .as_mut()
+                    .core_mut()
+                    .is_some_and(|core| core.app.take_skin_refused());
+                if !refused
+                    && self
+                        .core()
+                        .is_some_and(|core| core.app.settings.osd.messages)
                 {
                     self.set_osd(QString::from(&text));
                 }
@@ -90,7 +134,10 @@ impl qobject::Player {
 
     /// Shows the skin the application wants now (`App::skin_want`: the
     /// skin, the audio or video skin, the colour theme) when it differs
-    /// from the one shown.
+    /// from the one shown. Every way a skin is chosen ends here (the
+    /// start's own load aside): a skin that loads is shown and its setting
+    /// saved (`App::skin_loaded`); one that does not leaves the skin shown
+    /// and the setting as they were (`App::skin_failed`).
     pub(super) fn sync_skin(mut self: Pin<&mut Self>) {
         let Some(core) = self.as_mut().core_mut() else {
             return;
@@ -111,12 +158,7 @@ impl qobject::Player {
         let touch = want.touch;
         let base = match skin_variant(&source, None, None, touch) {
             Ok(skin) => skin,
-            Err(error) => {
-                // The skin cannot be shown: the one shown stays.
-                core.look.skin_want = Some(want);
-                self.show_message(&format!("cannot load the skin {error}"));
-                return;
-            }
+            Err(error) => return self.skin_not_loaded(want, &error),
         };
         let themes = base.color_themes();
         let (logo, loading_logo) = base.logo_states();
@@ -142,11 +184,7 @@ impl qobject::Player {
             .or_else(|| want.audio.then_some("AudioSkin.xml"));
         let skin = match skin_variant(&source, file, tint, touch) {
             Ok(skin) => skin,
-            Err(error) => {
-                core.look.skin_want = Some(want);
-                self.show_message(&format!("cannot load the skin {error}"));
-                return;
-            }
+            Err(error) => return self.skin_not_loaded(want, &error),
         };
         let mode_changed = core
             .look
@@ -155,6 +193,7 @@ impl qobject::Player {
             .is_some_and(|old| old.audio != want.audio || old.file != want.file);
         let shown = core.chrome.as_ref().map(rvp_app::chrome::Chrome::skin);
         if shown.map(rvp_skin::Skin::id) == Some(skin.id()) {
+            core.app.skin_loaded(want.path.as_deref());
             core.look.skin_want = Some(want);
             return;
         }
@@ -182,8 +221,15 @@ impl qobject::Player {
         let panel = core.panel.take().is_some();
         core.app.skin_shown(want.audio);
         let audio = want.audio;
+        let path = want.path.clone();
         core.look.skin_want = Some(want);
         self.as_mut().relayout();
+        // Shown and laid out: a skin the setting names is saved from now
+        // on, and its first frame clears its load's marker.
+        if let Some(core) = self.as_mut().core_mut() {
+            core.app.skin_loaded(path.as_deref());
+        }
+        marker_shown(skin);
         // The new skin's other windows (M9). Wayland lets no program place
         // its windows: such a skin runs through XWayland, which RVP takes
         // at start (`player::prefer_x11`), so a switch on Wayland says so
@@ -202,6 +248,29 @@ impl qobject::Player {
             self.as_mut().keep_video_size(video);
         }
         self.log_skin(audio);
+    }
+
+    /// The skin of `want` did not load (`error` says why): the one shown
+    /// stays, and so does the setting the choice replaced
+    /// (`App::skin_failed`); its load's marker is cleared.
+    fn skin_not_loaded(mut self: Pin<&mut Self>, want: SkinWant, error: &str) {
+        marker_settled();
+        let Some(core) = self.as_mut().core_mut() else {
+            return;
+        };
+        let other_skin = want.path.as_deref() != core.app.skin_showing();
+        let notice = core.app.skin_failed(want.path.as_deref(), error);
+        if !other_skin {
+            // Another mode, file or theme of the skin shown: not tried
+            // again until something else changes.
+            core.look.skin_want = Some(want);
+        }
+        self.as_mut().show_message(&notice);
+        if other_skin {
+            // The skin shown again, with what else changed with the choice
+            // (a preset's theme, the mode).
+            self.sync_skin();
+        }
     }
 
     /// PotPlayer keeps the video's size when the skin changes and builds

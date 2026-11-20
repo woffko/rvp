@@ -434,18 +434,20 @@ impl App {
     /// presets, the active one's values taken from the settings running.
     #[must_use]
     pub(crate) fn stored_settings(&self) -> Value {
-        let active = &self.settings.presets.active;
+        // A skin is saved once the window shows it (`crate::skins`).
+        let settings = self.settings_to_save();
+        let active = &settings.presets.active;
         let Some(default_values) = self.default_values.as_ref().filter(|_| !active.is_empty())
         else {
-            return serde_json::to_value(&self.settings).unwrap_or(Value::Null);
+            return serde_json::to_value(&*settings).unwrap_or(Value::Null);
         };
-        let mut presets = self.settings.presets.clone();
+        let mut presets = settings.presets.clone();
         if let Some(preset) = presets
             .list
             .iter_mut()
             .find(|preset| preset.name == *active)
         {
-            preset.values = values(&self.settings);
+            preset.values = values(&settings);
         }
         let mut stored = default_values.clone();
         if let Some(map) = stored.as_object_mut() {

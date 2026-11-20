@@ -108,8 +108,14 @@ Item {
             }
             break
         case 8:
-            if (t.waitFor("classic_playlist_hides", () => window(s, "WinampPlaylistSkinArea").shown === false,
-                          5000, () => shown(s)))
+            t.waitFor("classic_playlist_hides", () => window(s, "WinampPlaylistSkinArea").shown === false,
+                      5000, () => shown(s))
+            break
+        case 9:
+            // The skin has drawn: its first frame cleared the marker of its
+            // load (rvp_app::skin_marker).
+            if (t.waitFor("classic_skin_drawn", () => s.skin_marker === null, 5000,
+                          () => "marker " + s.skin_marker))
                 t.finish()
             break
         }

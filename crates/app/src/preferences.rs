@@ -291,8 +291,9 @@ impl Settings {
             }
             ok
         });
+        // A skin may be a folder.
         if let Some(skin) = &self.skin
-            && !skin.is_file()
+            && !skin.exists()
         {
             notes.push(format!("skin {} is not there", skin.display()));
         }

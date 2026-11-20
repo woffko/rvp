@@ -58,6 +58,8 @@ pub(crate) fn restrict_library_search() {
 
 /// Ends the process with `code` (see the module's documentation).
 pub(crate) fn leave(code: i32) -> ! {
+    // A clean exit: the skin marker goes (`rvp_app::skin_marker`).
+    crate::player::marker_exit();
     #[cfg(windows)]
     if rife_loaded() {
         use std::io::Write as _;

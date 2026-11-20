@@ -897,7 +897,10 @@ QImage imageFromRgba(rust::Slice<const std::uint8_t> rgba, std::int32_t width, s
         || rgba.size() < static_cast<std::size_t>(width) * static_cast<std::size_t>(height) * 4) {
         return {};
     }
-    return QImage(rgba.data(), width, height, width * 4, QImage::Format_RGBA8888).copy();
+    // The row's bytes in qsizetype, as QImage takes them: no int product.
+    return QImage(rgba.data(), width, height, static_cast<qsizetype>(width) * 4,
+                  QImage::Format_RGBA8888)
+        .copy();
 }
 
 } // namespace
@@ -977,8 +980,11 @@ void rvp_atlas_insert(rust::Str name, rust::Slice<const std::uint8_t> rgba, std:
         || rgba.size() < static_cast<std::size_t>(width) * static_cast<std::size_t>(height) * 4) {
         return;
     }
-    // Copy the pixels: the slice belongs to Rust.
-    const QImage image = QImage(rgba.data(), width, height, width * 4, QImage::Format_RGBA8888)
+    // Copy the pixels: the slice belongs to Rust. The row's bytes in
+    // qsizetype: no int product (a skin's pictures are within
+    // rvp_skin::limits::PICTURE_SIDE anyway).
+    const QImage image = QImage(rgba.data(), width, height, static_cast<qsizetype>(width) * 4,
+                                QImage::Format_RGBA8888)
                              .convertToFormat(QImage::Format_ARGB32_Premultiplied);
     const QMutexLocker lock(&atlasMutex);
     atlases.insert(fromStr(name), image);
@@ -1030,16 +1036,27 @@ void rvp_paint_atlas(QPainter &painter, rust::Str name, std::array<std::int32_t,
     }
     painter.save();
     painter.setClipRect(area);
-    // Sprites are tiled, never scaled (rvp_skin::paint).
-    for (int y = target.y(); y < target.y() + target.height(); y += source.height()) {
-        if (y + source.height() <= area.top() || y > area.bottom()) {
-            continue;
-        }
-        for (int x = target.x(); x < target.x() + target.width(); x += source.width()) {
-            if (x + source.width() <= area.left() || x > area.right()) {
-                continue;
-            }
-            painter.drawImage(QRect(x, y, source.width(), source.height()), image, source);
+    // Sprites are tiled, never scaled (rvp_skin::paint). The tiles lie on a
+    // grid from the target's corner, but only those that meet the clip are
+    // visited: from the first one that reaches into `area` to `area`'s end,
+    // so a target far larger than the window costs what shows of it. The
+    // skin engine keeps layout coordinates within +-2^20 of the window
+    // (rvp_skin::limits::COORDINATE), and the sums here are 64-bit.
+    const std::int64_t stepX = source.width();
+    const std::int64_t stepY = source.height();
+    const std::int64_t left = area.x();
+    const std::int64_t top = area.y();
+    const std::int64_t right = left + area.width();
+    const std::int64_t bottom = top + area.height();
+    // `area` lies inside `target`: the offsets are not negative.
+    const std::int64_t firstX = target.x() + (left - target.x()) / stepX * stepX;
+    const std::int64_t firstY = target.y() + (top - target.y()) / stepY * stepY;
+    for (std::int64_t y = firstY; y < bottom; y += stepY) {
+        for (std::int64_t x = firstX; x < right; x += stepX) {
+            // Within `area`'s numbers, which are ints.
+            painter.drawImage(QRect(static_cast<int>(x), static_cast<int>(y), source.width(),
+                                    source.height()),
+                              image, source);
         }
     }
     painter.restore();

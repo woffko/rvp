@@ -464,6 +464,8 @@ pub struct App {
     /// The skin the command line or `RVP_SKIN` chose (`Some(None)`: RVP
     /// Default) until the user picks one.
     pub(crate) skin_override: crate::skins::SkinOverride,
+    /// The skin the window shows and the skin setting as saved.
+    pub(crate) shown_skin: crate::skins::ShownSkin,
     /// The file that plays has no video (the audio skin mode).
     pub(crate) audio_only: bool,
 }
@@ -493,6 +495,8 @@ impl App {
         let mut app = Self::new(settings, &dirs.state)?;
         app.settings_path = Some(settings_path.clone());
         app.start_presets();
+        // The active preset's skin is the configured one.
+        app.shown_skin = crate::skins::ShownSkin::new(app.settings.skin.clone());
         // Other RVPs on this folder keep their changes (`crate::storage`):
         // what this one changes is measured from the settings it starts
         // with, in the form its saves take.
@@ -593,8 +597,10 @@ impl App {
             preset_before_auto: None,
             on_battery: None,
             skin_override: crate::skins::SkinOverride::Off,
+            shown_skin: crate::skins::ShownSkin::default(),
             audio_only: false,
         };
+        app.shown_skin = crate::skins::ShownSkin::new(app.settings.skin.clone());
         app.start_picture();
         Ok(app)
     }

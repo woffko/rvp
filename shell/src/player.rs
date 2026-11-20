@@ -12,7 +12,7 @@ use std::collections::BTreeMap;
 use std::fmt::Write as _;
 use std::path::{Path, PathBuf};
 use std::pin::Pin;
-use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, OnceLock, RwLock};
 use std::time::Instant;
 
@@ -171,6 +171,98 @@ fn loaded_skin(key: &SkinKey) -> Option<&'static Skin> {
         .map(|(_, skin)| *skin)
 }
 
+/// This process's skin marker (`rvp_app::skin_marker`): made at start,
+/// removed at a clean exit ([`marker_exit`]).
+static MARKER: Mutex<Option<rvp_app::skin_marker::Marker>> = Mutex::new(None);
+
+/// The skins whose load never finished, found at start for
+/// `Player::start`.
+static UNFINISHED: Mutex<Vec<PathBuf>> = Mutex::new(Vec::new());
+
+/// The skin whose first frame the marker waits for (its id; 0: none), and
+/// the skin the main window drew last (`skin_view`, on the render thread).
+static MARKER_WAIT: AtomicU64 = AtomicU64::new(0);
+static DRAWN: AtomicU64 = AtomicU64::new(0);
+
+/// The markers RVPs that ended left in `state`, then this process's own
+/// marker; the skins whose load never finished.
+fn start_marker(state: &Path) -> Vec<PathBuf> {
+    let (marker, unfinished) = rvp_app::skin_marker::start(state);
+    if let Ok(mut slot) = MARKER.lock() {
+        *slot = marker;
+    }
+    if let Ok(mut slot) = UNFINISHED.lock() {
+        slot.clone_from(&unfinished);
+    }
+    unfinished
+}
+
+/// Runs `change` on the marker, when this process has one.
+fn with_marker(change: impl FnOnce(&mut rvp_app::skin_marker::Marker)) {
+    if let Ok(mut slot) = MARKER.lock()
+        && let Some(marker) = slot.as_mut()
+    {
+        change(marker);
+    }
+}
+
+/// Before a skin file loads for the first time in the process: the marker
+/// names the skin. A few bytes written in place, without waiting for the
+/// disk: this is where the skin's own files are read, on the same thread.
+fn marker_loading(source: &SkinSource) {
+    if let SkinSource::File(path) = source {
+        MARKER_WAIT.store(0, Ordering::Release);
+        with_marker(|marker| marker.set_skin(Some(path)));
+    }
+}
+
+/// `skin` shows, laid out: the marker, when it names a skin, waits for its
+/// first frame. A frame the painter drew before (the old layout) does not
+/// count.
+fn marker_shown(skin: &Skin) {
+    let mut naming = false;
+    with_marker(|marker| naming = marker.skin().is_some());
+    if naming {
+        DRAWN.store(0, Ordering::Release);
+        MARKER_WAIT.store(skin.id(), Ordering::Release);
+    }
+}
+
+/// The load the marker names is over: its skin drew, or it failed with an
+/// error.
+fn marker_settled() {
+    MARKER_WAIT.store(0, Ordering::Release);
+    with_marker(|marker| marker.set_skin(None));
+}
+
+/// The main window drew a frame of the skin `id` (on the render thread).
+pub fn skin_drawn(id: u64) {
+    DRAWN.store(id, Ordering::Release);
+}
+
+/// Each second, on the window's thread: the skin the marker waits for has
+/// drawn.
+fn marker_tick() {
+    let wait = MARKER_WAIT.load(Ordering::Acquire);
+    if wait != 0 && DRAWN.load(Ordering::Acquire) == wait {
+        marker_settled();
+    }
+}
+
+/// The skin the marker names (the self-test's status).
+fn marker_skin() -> Option<String> {
+    let mut skin = None;
+    with_marker(|marker| skin = marker.skin().map(str::to_owned));
+    skin
+}
+
+/// A clean exit: the marker goes.
+pub fn marker_exit() {
+    if let Some(marker) = MARKER.lock().ok().and_then(|mut slot| slot.take()) {
+        marker.remove();
+    }
+}
+
 /// VLC themes' font files (M9) by theme and name: `Some` waits for the
 /// window's thread, `None` is Qt's. Qt's font database takes them only once
 /// the application exists, and the first skin loads before it does, on a
@@ -214,20 +306,9 @@ fn start_request(cli: &Cli, app: &mut App, engine: &Engine) -> Request {
     request
 }
 
-/// The command line's or `RVP_SKIN`'s skin stays until the user picks one
-/// (M14).
-fn command_line_skin(cli: &Cli, app: &mut App) {
-    match skin_source(cli, &app.settings) {
-        SkinSource::File(path) if app.settings.skin.as_ref() != Some(&path) => {
-            app.set_skin_override(Some(path));
-        }
-        SkinSource::Default if app.settings.skin.is_some() => app.set_skin_override(None),
-        _ => {}
-    }
-}
-
 /// The skin of `source`'s `file` (`None`: its video skin), tinted when
-/// asked: loaded once, then kept.
+/// asked: loaded once, then kept. The marker names a skin before a file of
+/// it loads.
 fn skin_variant(
     source: &SkinSource,
     file: Option<&str>,
@@ -244,6 +325,7 @@ fn skin_variant(
         if let Some(skin) = loaded_skin(&base_key(file)) {
             skin
         } else {
+            marker_loading(source);
             keep_skin(base_key(file), open_skin_file(source, Some(file), touch)?)
         }
     } else {
@@ -261,6 +343,7 @@ fn skin_variant(
         if let Some(skin) = found {
             skin
         } else {
+            marker_loading(source);
             let skin = open_skin_file(source, None, touch)?;
             keep_skin(base_key(skin.file()), skin)
         }
@@ -671,16 +754,26 @@ enum SkinSource {
     Default,
 }
 
-/// The skin to load: `--skin=PATH`, the setting, `RVP_SKIN`, or RVP
-/// Default. `--skin=` with no path asks for RVP Default whatever else is
-/// set (the Linux kit's RVP Default check).
-fn skin_source(cli: &Cli, settings: &Settings) -> SkinSource {
+impl SkinSource {
+    /// The skin's file (`None`: RVP Default).
+    fn path(&self) -> Option<PathBuf> {
+        match self {
+            Self::File(path) => Some(path.clone()),
+            Self::Default => None,
+        }
+    }
+}
+
+/// The skin to load: `--skin=PATH`, the `configured` one, `RVP_SKIN`, or
+/// RVP Default. `--skin=` with no path asks for RVP Default whatever else
+/// is set (the Linux kit's RVP Default check).
+fn skin_source(cli: &Cli, configured: Option<&Path>) -> SkinSource {
     if cli.flag("skin") && cli.value("skin").is_none() {
         return SkinSource::Default;
     }
     cli.value("skin")
         .map(PathBuf::from)
-        .or_else(|| settings.skin.clone())
+        .or_else(|| configured.map(Path::to_path_buf))
         .or_else(|| {
             std::env::var_os("RVP_SKIN")
                 .filter(|value| !value.is_empty())
@@ -787,11 +880,14 @@ fn point_at_vapoursynth(settings: &Settings) {
 
 /// Points libmpv at VapourSynth and starts loading the skin on a thread
 /// while Qt and QML start (called first in `main`). The settings are read
-/// here and again in `start`; both are cheap.
+/// here and again in `start`; both are cheap. A configured skin whose load
+/// never finished at an earlier start (`rvp_app::skin_marker`) is not
+/// loaded: `start` shows RVP Default and says why.
 pub fn preload_skin() -> Settings {
     let cli = Cli::from_env();
-    let settings = Dirs::from_env()
-        .ok()
+    let dirs = Dirs::from_env().ok();
+    let settings = dirs
+        .as_ref()
         .and_then(|dirs| rvp_app::read_json::<Settings>(&dirs.config.join("settings.json")).ok())
         .flatten()
         .unwrap_or_default();
@@ -802,7 +898,17 @@ pub fn preload_skin() -> Settings {
     if !settings.general.dialog.dpi_aware {
         crate::ffi::bridge::rvp_set_env("QT_ENABLE_HIGHDPI_SCALING", "0");
     }
-    let source = skin_source(&cli, &settings);
+    let unfinished = dirs
+        .map(|dirs| start_marker(&dirs.state))
+        .unwrap_or_default();
+    let configured = settings.skin.as_deref().filter(|skin| {
+        !unfinished
+            .iter()
+            .any(|other| rvp_app::skin_marker::same_skin(skin, other))
+    });
+    let source = skin_source(&cli, configured);
+    // From here on the skin's files are read (also by `prefer_x11`).
+    marker_loading(&source);
     #[cfg(target_os = "linux")]
     prefer_x11(&settings, &source);
     #[cfg(target_os = "linux")]
@@ -866,11 +972,13 @@ fn load_skin(source: &SkinSource) -> Result<&'static Skin, String> {
         .ok()
         .and_then(|mut slot| slot.take())
         .filter(|(preloaded, _)| preloaded == source);
-    let skin = match preloaded {
-        Some((_, handle)) => handle
+    let skin = if let Some((_, handle)) = preloaded {
+        handle
             .join()
-            .map_err(|_| "the skin loader stopped".to_owned())??,
-        None => open_skin(source)?,
+            .map_err(|_| "the skin loader stopped".to_owned())??
+    } else {
+        marker_loading(source);
+        open_skin(source)?
     };
     // The skin lives for the whole process: the layout borrows it and the
     // render thread paints from it.
@@ -882,6 +990,7 @@ fn load_skin(source: &SkinSource) -> Result<&'static Skin, String> {
     };
     let skin = keep_skin(key, skin);
     show_skin(skin);
+    marker_shown(skin);
     Ok(skin)
 }
 
@@ -966,25 +1075,33 @@ fn settings_result(notes: &[String], restart: bool, error: Option<&str>) -> QStr
 }
 
 /// The chrome with the configured skin, or with RVP Default when that
-/// skin cannot be loaded (the reason goes to `messages`).
-fn load_chrome(cli: &Cli, settings: &Settings, messages: &mut Vec<String>) -> Option<Chrome> {
-    let source = skin_source(cli, settings);
+/// skin cannot be loaded (the reason goes to `messages`), and the skin
+/// shown (`None`: RVP Default).
+fn load_chrome(
+    cli: &Cli,
+    settings: &Settings,
+    messages: &mut Vec<String>,
+) -> (Option<Chrome>, Option<PathBuf>) {
+    let source = skin_source(cli, settings.skin.as_deref());
     match load_skin(&source) {
-        Ok(skin) => return Some(Chrome::new(skin)),
-        Err(error) => messages.push(if source == SkinSource::Default {
-            format!("cannot load the skin {error}")
-        } else {
-            format!("cannot load the skin {error}; RVP Default is shown instead")
-        }),
+        Ok(skin) => return (Some(Chrome::new(skin)), source.path()),
+        Err(error) => {
+            marker_settled();
+            messages.push(if source == SkinSource::Default {
+                format!("cannot load the skin {error}")
+            } else {
+                format!("cannot load the skin {error}; RVP Default is shown instead")
+            });
+        }
     }
     if source == SkinSource::Default {
-        return None;
+        return (None, None);
     }
     match load_skin(&SkinSource::Default) {
-        Ok(skin) => Some(Chrome::new(skin)),
+        Ok(skin) => (Some(Chrome::new(skin)), None),
         Err(error) => {
             messages.push(format!("cannot load the skin {error}"));
-            None
+            (None, None)
         }
     }
 }
@@ -1136,10 +1253,21 @@ impl qobject::Player {
             }
         };
         messages.extend(app.warnings.iter().cloned());
+        // This process has a window of its own: its marker counts from here
+        // whatever it found at start (`rvp_app::skin_marker`). A configured
+        // skin whose load never finished is left out, and said first.
+        with_marker(rvp_app::skin_marker::Marker::set_window);
+        let unfinished = UNFINISHED
+            .lock()
+            .map(|mut skins| std::mem::take(&mut *skins))
+            .unwrap_or_default();
+        messages.splice(0..0, app.skip_unfinished_skins(&unfinished));
         crate::metrics::mark("settings_loaded_ms");
         prepare_app(&cli, &mut app);
-        let chrome = load_chrome(&cli, &app.settings, &mut messages);
-        command_line_skin(&cli, &mut app);
+        let (chrome, shown) = load_chrome(&cli, &app.settings, &mut messages);
+        // The command line's skin, or RVP Default in place of one that did
+        // not load, stays until the user picks one (M14).
+        app.skin_started(shown);
         crate::metrics::mark("skin_loaded_ms");
 
         crate::ffi::bridge::rvp_set_c_numeric_locale();
@@ -3371,6 +3499,7 @@ impl qobject::Player {
 
     pub(crate) fn tick(mut self: Pin<&mut Self>) {
         let started = Instant::now();
+        marker_tick();
         let Some(core) = self.as_mut().core_mut() else {
             return;
         };
@@ -3631,42 +3760,10 @@ impl qobject::Player {
             ),
             ("tooltip", text(Some(&self.tooltip().to_string()))),
             ("state_file", text(core.app.store().path().to_str())),
-            (
-                "skin_file",
-                text(core.chrome.as_ref().map(|chrome| chrome.skin().file())),
-            ),
-            (
-                "skin_id",
-                integer(
-                    core.chrome
-                        .as_ref()
-                        .and_then(|chrome| i64::try_from(chrome.skin().id()).ok()),
-                ),
-            ),
-            (
-                "skin_forces_height",
-                core.chrome
-                    .as_ref()
-                    .is_some_and(|chrome| Mode::Window.limits(chrome.skin()).force_height)
-                    .to_string(),
-            ),
-            // The skin's spectrum: its highest bar now (M14).
-            (
-                "spectrum",
-                core.chrome
-                    .as_ref()
-                    .map(|chrome| {
-                        chrome
-                            .data
-                            .visual
-                            .iter()
-                            .fold(0.0_f32, |high, level| high.max(*level))
-                    })
-                    .map_or_else(|| "null".to_owned(), |high| format!("{high:.3}")),
-            ),
         ];
         let body: Vec<String> = fields
             .into_iter()
+            .chain(m14::status(core))
             .chain(self.playlist_status(core))
             .chain(m11::status(self, core))
             .chain(m16::status(self, core))

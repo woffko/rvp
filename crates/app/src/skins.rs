@@ -26,7 +26,18 @@
 //!   them can run at the playback speed (`App::skin_times`).
 //! * The shell loads and tints the skins ([`SkinWant`]) and tells the app
 //!   what the skin offers ([`SkinInfo`]).
+//! * A skin is chosen in the Skins menu or page, by opening its file (also
+//!   one a second `rvp` hands over), by a preset or imported settings, or by
+//!   `--skin=PATH`; the start shows the configured one. Each way ends in the
+//!   shell's load, which tells the app how it went: a skin that loaded is
+//!   the one shown, and a skin the setting names is saved only from then on
+//!   ([`App::skin_loaded`]); one that did not load leaves the skin shown and
+//!   the setting as they were, with a notice that says why
+//!   ([`App::skin_failed`]). What no error catches (an abort, a hang) is
+//!   `crate::skin_marker`'s: a start after a load that never finished shows
+//!   RVP Default ([`App::skip_unfinished_skins`]).
 
+use std::borrow::Cow;
 use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
@@ -276,8 +287,9 @@ impl SkinsSettings {
     }
 }
 
-/// The skin the command line or `RVP_SKIN` chose: it shows in place of
-/// the setting's until the user picks a skin.
+/// The skin that shows in place of the setting's until the user picks a
+/// skin: the command line's or `RVP_SKIN`'s, or the one shown when the
+/// skin asked for did not load.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub enum SkinOverride {
     /// The setting's skin shows.
@@ -285,6 +297,43 @@ pub enum SkinOverride {
     Off,
     /// RVP Default (`None`) or a `.dsf` file.
     Skin(Option<PathBuf>),
+}
+
+/// The skin the window shows and the skin setting as saved.
+#[derive(Debug, Clone, Default)]
+pub(crate) struct ShownSkin {
+    /// The skin the window shows (`None`: RVP Default).
+    path: Option<PathBuf>,
+    /// The skin setting as saved: the configured one at start, then each
+    /// one the window showed from the setting. Another skin the setting
+    /// names is saved once the window shows it, so the settings never name
+    /// a skin that did not load.
+    kept: Option<PathBuf>,
+    /// The configured skin this start left out (`crate::skin_marker`):
+    /// listed for the session, to be chosen again on purpose.
+    skipped: Option<PathBuf>,
+    /// The skin of the last Skins menu choice or opened skin file did not
+    /// load.
+    refused: bool,
+}
+
+impl ShownSkin {
+    /// The configured `skin`, shown and saved.
+    pub(crate) fn new(skin: Option<PathBuf>) -> Self {
+        Self {
+            path: skin.clone(),
+            kept: skin,
+            ..Self::default()
+        }
+    }
+}
+
+/// A skin's name for notices: its file's, or RVP Default.
+fn skin_name(skin: Option<&Path>) -> String {
+    skin.map_or_else(
+        || "RVP Default".to_owned(),
+        |path| crate::view::file_name(&path.to_string_lossy()).to_owned(),
+    )
 }
 
 /// What the loaded skin offers (from the shell).
@@ -428,14 +477,27 @@ fn skins_in(folder: &Path, out: &mut std::collections::BTreeSet<PathBuf>) {
 }
 
 /// A skin file: PotPlayer's `.dsf`, a classic Winamp skin (`.wsz`) or a
-/// VLC theme (`.vlt`, M9).
+/// VLC theme (`.vlt`, M9). `.dsf` is also DSD audio (Sony's DSD Stream
+/// File, which starts with `DSD `): a `.dsf` is a skin only as a folder or
+/// a ZIP archive (`PK`), and the audio plays.
 #[must_use]
 pub fn is_skin_file(path: &Path) -> bool {
-    path.extension().is_some_and(|ext| {
-        ext.eq_ignore_ascii_case("dsf")
-            || ext.eq_ignore_ascii_case("wsz")
-            || ext.eq_ignore_ascii_case("vlt")
-    })
+    let Some(ext) = path.extension() else {
+        return false;
+    };
+    if ext.eq_ignore_ascii_case("wsz") || ext.eq_ignore_ascii_case("vlt") {
+        return true;
+    }
+    ext.eq_ignore_ascii_case("dsf") && (path.is_dir() || starts_as_zip(path))
+}
+
+/// Whether the file starts as a ZIP archive does.
+fn starts_as_zip(path: &Path) -> bool {
+    use std::io::Read as _;
+    let mut start = [0_u8; 2];
+    std::fs::File::open(path)
+        .and_then(|mut file| file.read_exact(&mut start))
+        .is_ok_and(|()| start == *b"PK")
 }
 
 impl App {
@@ -460,6 +522,7 @@ impl App {
                 SkinOverride::Skin(skin) => skin.as_ref(),
                 SkinOverride::Off => None,
             },
+            self.shown_skin.skipped.as_ref(),
         ];
         for skin in chosen.into_iter().flatten() {
             if let Some(folder) = skin.parent() {
@@ -510,10 +573,103 @@ impl App {
         }
     }
 
-    /// The skin the command line or `RVP_SKIN` chose, in place of the
-    /// setting until the user picks a skin (`None`: RVP Default).
-    pub fn set_skin_override(&mut self, skin: Option<PathBuf>) {
-        self.skin_override = SkinOverride::Skin(skin);
+    /// At start, the skin the window shows (`None`: RVP Default): the
+    /// command line's or `RVP_SKIN`'s, the setting's, or RVP Default when
+    /// the one asked for did not load. It is the skin chosen until the user
+    /// picks one; the setting stays.
+    pub fn skin_started(&mut self, shown: Option<PathBuf>) {
+        self.skin_override = if self.settings.skin == shown {
+            SkinOverride::Off
+        } else {
+            SkinOverride::Skin(shown.clone())
+        };
+        self.shown_skin.path = shown;
+    }
+
+    /// At start, the skins whose load or first frame never finished
+    /// (`crate::skin_marker`), before the skin loads: the configured one
+    /// is not loaded, its setting is cleared, and it stays in the skin list
+    /// for this session to be chosen again on purpose. Returns the notices.
+    pub fn skip_unfinished_skins(&mut self, unfinished: &[PathBuf]) -> Vec<String> {
+        let mut notices = Vec::new();
+        for skin in unfinished {
+            let name = skin_name(Some(skin));
+            let configured = self
+                .settings
+                .skin
+                .as_deref()
+                .is_some_and(|configured| crate::skin_marker::same_skin(configured, skin));
+            if configured {
+                self.shown_skin.skipped = self.settings.skin.take();
+                self.shown_skin.kept = None;
+                self.shown_skin.path = None;
+                self.save_settings();
+                notices.push(format!(
+                    "RVP closed while the skin {name} was loading last time: RVP Default is \
+                     shown instead (choose the skin again in the Skins menu to try it)"
+                ));
+            } else {
+                notices.push(format!(
+                    "RVP closed while the skin {name} was loading last time"
+                ));
+            }
+        }
+        notices
+    }
+
+    /// The skin the window shows (`None`: RVP Default).
+    #[must_use]
+    pub fn skin_showing(&self) -> Option<&Path> {
+        self.shown_skin.path.as_deref()
+    }
+
+    /// The window shows the skin it wanted ([`App::skin_want`]'s `path`):
+    /// one the setting names is saved from now on.
+    pub fn skin_loaded(&mut self, path: Option<&Path>) {
+        self.shown_skin.path = path.map(Path::to_path_buf);
+        if self.settings.skin.as_deref() == path && self.shown_skin.kept != self.settings.skin {
+            self.shown_skin.kept.clone_from(&self.settings.skin);
+            self.save_settings();
+        }
+    }
+
+    /// The window could not load the skin `path` it wanted (`error` says
+    /// why): the skin shown stays, and so does the setting the choice
+    /// replaced; the skin shown is the one chosen. Returns the notice.
+    pub fn skin_failed(&mut self, path: Option<&Path>, error: &str) -> String {
+        let shown = self.shown_skin.path.clone();
+        if self.settings.skin.as_deref() == path {
+            self.settings.skin.clone_from(&self.shown_skin.kept);
+        }
+        self.skin_override = if self.settings.skin == shown {
+            SkinOverride::Off
+        } else {
+            SkinOverride::Skin(shown.clone())
+        };
+        self.shown_skin.refused = true;
+        format!(
+            "cannot load the skin {error}; {} stays",
+            skin_name(shown.as_deref())
+        )
+    }
+
+    /// Whether the skin of the last Skins menu choice or opened skin file
+    /// did not load (asked once, for its notice).
+    pub fn take_skin_refused(&mut self) -> bool {
+        std::mem::take(&mut self.shown_skin.refused)
+    }
+
+    /// The settings as saved: a skin the setting names is saved once the
+    /// window shows it ([`App::skin_loaded`]).
+    pub(crate) fn settings_to_save(&self) -> Cow<'_, crate::Settings> {
+        if self.settings.skin == self.shown_skin.kept {
+            Cow::Borrowed(&self.settings)
+        } else {
+            Cow::Owned(crate::Settings {
+                skin: self.shown_skin.kept.clone(),
+                ..self.settings.clone()
+            })
+        }
     }
 
     /// The shell loaded a skin: what it offers.
@@ -651,6 +807,7 @@ impl App {
     /// The Skins menu's commands; `SkinChanged` asks the shell to show the
     /// skin wanted now.
     pub(crate) fn skin_command(&mut self, command: SkinCommand) -> UiRequest {
+        self.shown_skin.refused = false;
         let skins = &mut self.settings.skins;
         let text = match command {
             SkinCommand::ThemeNone => {
@@ -770,33 +927,33 @@ impl App {
     /// Skin files among files opened (the command line's or a second
     /// instance's) are no media: the last one becomes the skin, as if
     /// chosen in the Skins menu, and they leave the list. PotPlayer applies
-    /// a `.dsf` that is opened too.
+    /// a `.dsf` that is opened too. As a menu choice, the setting is saved
+    /// once the window shows the skin.
     pub fn take_skin_files(&mut self, files: &mut Vec<String>) -> Option<UiRequest> {
-        let skin = files
+        let mut skins = files
             .iter()
-            .rev()
-            .find(|file| !crate::playlist::is_url(file) && is_skin_file(Path::new(file)))?
-            .clone();
-        files.retain(|file| crate::playlist::is_url(file) || !is_skin_file(Path::new(file)));
+            .filter(|file| !crate::playlist::is_url(file) && is_skin_file(Path::new(file)))
+            .cloned()
+            .collect::<Vec<_>>();
+        let skin = skins.pop()?;
+        files.retain(|file| !skins.contains(file) && *file != skin);
         // Absolute, as the Skins menu lists them (no `\\?\` prefix of
         // `canonicalize` on Windows).
         let path = std::path::absolute(&skin).unwrap_or_else(|_| PathBuf::from(&skin));
-        let name = crate::view::file_name(&path.to_string_lossy()).to_owned();
+        let name = skin_name(Some(&path));
         self.settings.skin = Some(path);
         self.skin_override = SkinOverride::Off;
-        self.save_settings();
-        Some(UiRequest::Osd(format!("Skin: {name}")))
+        self.shown_skin.refused = false;
+        Some(UiRequest::SkinChanged(format!("Skin: {name}")))
     }
 
     /// A choice of the Skins menu's lists.
     pub(crate) fn skin_choice(&mut self, choice: SkinChoice) -> Option<UiRequest> {
+        self.shown_skin.refused = false;
         let text = match choice {
             SkinChoice::Skin(index) => {
                 let skin = self.skin_list().get(index)?.clone();
-                let name = skin.as_ref().map_or_else(
-                    || "RVP Default".to_owned(),
-                    |path| crate::view::file_name(&path.to_string_lossy()).to_owned(),
-                );
+                let name = skin_name(skin.as_deref());
                 self.settings.skin = skin;
                 self.skin_override = SkinOverride::Off;
                 format!("Skin: {name}")

@@ -518,7 +518,10 @@ fn blackspace_menus_build() {
 #[test]
 fn an_opened_skin_file_becomes_the_skin() {
     let (mut app, dir) = new_app("skin-file", Settings::default());
+    std::fs::create_dir_all(&dir.0).expect("dir");
+    // A ZIP archive, as PotPlayer's skins are.
     let skin = dir.0.join("Some Skin.DSF");
+    std::fs::write(&skin, b"PK\x03\x04 a skin").expect("write");
     let mut files = vec![
         "/media/a.mkv".to_owned(),
         skin.display().to_string(),
@@ -526,7 +529,7 @@ fn an_opened_skin_file_becomes_the_skin() {
     ];
     let notice = app.take_skin_files(&mut files);
     assert!(
-        matches!(&notice, Some(rvp_app::UiRequest::Osd(text)) if text == "Skin: Some Skin.DSF"),
+        matches!(&notice, Some(rvp_app::UiRequest::SkinChanged(text)) if text == "Skin: Some Skin.DSF"),
         "{notice:?}"
     );
     // A URL is never a skin; the media stay.
@@ -536,4 +539,26 @@ fn an_opened_skin_file_becomes_the_skin() {
     let mut none = vec!["/media/a.mkv".to_owned()];
     assert!(app.take_skin_files(&mut none).is_none());
     assert_eq!(none.len(), 1);
+
+    // `.dsf` is also DSD audio (it starts with `DSD `): it plays, and the
+    // skin stays. So does a `.dsf` that is not there.
+    let song = dir.0.join("song.dsf");
+    std::fs::write(&song, b"DSD \x1c\0\0\0\0\0\0\0").expect("write");
+    let missing = dir.0.join("missing.dsf");
+    let mut audio = vec![song.display().to_string(), missing.display().to_string()];
+    assert!(app.take_skin_files(&mut audio).is_none());
+    assert_eq!(audio.len(), 2);
+    assert_eq!(app.settings.skin.as_deref(), Some(skin.as_path()));
+    assert!(!rvp_app::skins::is_skin_file(&song));
+    // A skin unpacked into a folder is one; the other players' skins go by
+    // their extension.
+    let folder = dir.0.join("Unpacked.dsf");
+    std::fs::create_dir_all(&folder).expect("dir");
+    assert!(rvp_app::skins::is_skin_file(&folder));
+    assert!(rvp_app::skins::is_skin_file(&dir.0.join("classic.wsz")));
+    assert!(rvp_app::skins::is_skin_file(&dir.0.join("theme.VLT")));
+    let mut unpacked = vec![song.display().to_string(), folder.display().to_string()];
+    assert!(app.take_skin_files(&mut unpacked).is_some());
+    assert_eq!(unpacked, [song.display().to_string()]);
+    assert_eq!(app.settings.skin.as_deref(), Some(folder.as_path()));
 }
