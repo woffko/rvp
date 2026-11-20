@@ -1,0 +1,121 @@
+RVP's change to libbluray 1.5.1 for its Windows build: tools/discs/build.sh
+applies it after the checkout and stops when it does not apply.
+
+A composition object's crop comes from the stream unchecked: libbluray
+passed a crop reaching past its object on to the program as the
+overlay's size, and its crop read the object's runs past their end. Here
+the crop is clamped to its object (and dropped when it starts outside
+it), the crop reads no more runs than the object's width times height
+pixels (all an object holds: pg_decode.c refuses any other), and a run
+that ends where the crop starts no longer leaves a run of 0, an end of
+line, inside a line.
+
+--- a/src/libbluray/decoders/graphics_controller.c
++++ b/src/libbluray/decoders/graphics_controller.c
+@@ -617,17 +617,30 @@
+         ov.img     = object->img;
+ 
+         if (cobj->crop_flag) {
+-            if (cobj->crop_x || cobj->crop_y || cobj->crop_w != object->width) {
+-                cropped_img = rle_crop_object(object->img, object->width,
+-                                              cobj->crop_x, cobj->crop_y, cobj->crop_w, cobj->crop_h);
++            /* the crop comes from the stream: keep it inside the object */
++            unsigned crop_x = cobj->crop_x, crop_y = cobj->crop_y;
++            unsigned crop_w = cobj->crop_w, crop_h = cobj->crop_h;
++            if (crop_x >= object->width || crop_y >= object->height) {
++                BD_DEBUG(DBG_DECODE | DBG_CRIT, "Crop outside of PG object\n");
++                return;
++            }
++            if (crop_w > object->width - crop_x) {
++                crop_w = object->width - crop_x;
++            }
++            if (crop_h > object->height - crop_y) {
++                crop_h = object->height - crop_y;
++            }
++            if (object->img && (crop_x || crop_y || crop_w != object->width)) {
++                cropped_img = rle_crop_object(object->img, object->width, object->height,
++                                              crop_x, crop_y, crop_w, crop_h);
+                 if (!cropped_img) {
+                     BD_DEBUG(DBG_DECODE | DBG_CRIT, "Error cropping PG object\n");
+                     return;
+                 }
+                 ov.img = cropped_img;
+             }
+-            ov.w  = cobj->crop_w;
+-            ov.h  = cobj->crop_h;
++            ov.w  = crop_w;
++            ov.h  = crop_h;
+         }
+ 
+         ov.palette_update_flag = palette_update_flag;
+--- a/src/libbluray/decoders/rle.c
++++ b/src/libbluray/decoders/rle.c
+@@ -75,13 +75,16 @@
+     return _enc_elem(p, 0, 0);
+ }
+ 
+-BD_PG_RLE_ELEM *rle_crop_object(const BD_PG_RLE_ELEM *orig, int width,
++BD_PG_RLE_ELEM *rle_crop_object(const BD_PG_RLE_ELEM *orig, int width, int height,
+                                 int crop_x, int crop_y, int crop_w, int crop_h)
+ {
+     RLE_ENC  rle;
+     int      x0 = crop_x;
+     int      x1 = crop_x + crop_w; /* first pixel outside of cropped region */
+     int      x, y;
++    /* the object's runs hold exactly width * height pixels (pg_decode.c):
++     * nothing past them is read, whatever its lines hold */
++    int64_t  left = (int64_t)width * height;
+ 
+     if (rle_begin(&rle) < 0) {
+         return NULL;
+@@ -89,22 +92,24 @@
+ 
+     /* skip crop_y */
+     for (y = 0; y < crop_y; y++) {
+-        for (x = 0; x < width; x += orig->len, orig++) ;
++        for (x = 0; x < width && left > 0; x += orig->len, left -= orig->len, orig++) ;
+     }
+ 
+     /* crop lines */
+ 
+     for (y = 0; y < crop_h; y++) {
+-        for (x = 0; x < width; ) {
++        for (x = 0; x < width && left > 0; ) {
+           BD_PG_RLE_ELEM bite = *(orig++);
++          left -= bite.len;
+ 
+             if (BD_UNLIKELY(bite.len < 1)) {
+                 BD_DEBUG(DBG_GC | DBG_CRIT, "rle eol marker in middle of line (x=%d/%d)\n", x, width);
+                 continue;
+             }
+ 
+-            /* starts outside, ends outside */
+-            if (x + bite.len < x0 || x >= x1) {
++            /* starts outside, ends outside (a run ending at x0 too: it
++             * would leave a run of 0, an end of line, in the line) */
++            if (x + bite.len <= x0 || x >= x1) {
+                 x += bite.len;
+                 continue;
+             }
+@@ -127,7 +132,9 @@
+             }
+         }
+ 
+-        if (BD_LIKELY(!orig->len)) {
++        if (left <= 0) {
++            /* end of object */
++        } else if (BD_LIKELY(!orig->len)) {
+             /* skip eol marker */
+             orig++;
+         } else {
+--- a/src/libbluray/decoders/rle.h
++++ b/src/libbluray/decoders/rle.h
+@@ -45,7 +45,7 @@
+ #include "util/refcnt.h"
+ #include "util/macro.h"
+ 
+-BD_PRIVATE BD_PG_RLE_ELEM *rle_crop_object(const BD_PG_RLE_ELEM *orig, int width,
++BD_PRIVATE BD_PG_RLE_ELEM *rle_crop_object(const BD_PG_RLE_ELEM *orig, int width, int height,
+                                            int crop_x, int crop_y, int crop_w, int crop_h);
+ 
+ static inline int rle_begin(RLE_ENC *p)

@@ -90,8 +90,16 @@ constexpr uint32_t SETTING_PERSISTENT_ROOT = 0x200;
 constexpr uint32_t SETTING_CACHE_ROOT = 0x201;
 // BD_VK_MOUSE_ACTIVATE.
 constexpr uint32_t KEY_MOUSE_ACTIVATE = 17;
-// BD_OVERLAY_CLOSE, for libbluray's "close all" (a null overlay).
+// bd_overlay_plane_e and bd_overlay_cmd_e values RVP looks at (the ARGB
+// commands have the same numbers).
+constexpr uint8_t PLANE_IG = 1;
+constexpr uint8_t OVERLAY_INIT = 0;
 constexpr uint8_t OVERLAY_CLOSE = 1;
+constexpr uint8_t OVERLAY_DRAW = 3;
+// The largest plane RVP opens (`crate::disc::bluray` in rvp-app keeps the
+// same): UHD Blu-ray's video, 3840 x 2160, fits with room.
+constexpr uint16_t MAX_PLANE_WIDTH = 4096;
+constexpr uint16_t MAX_PLANE_HEIGHT = 2304;
 
 using OverlayProc = void (*)(void *, const Overlay *);
 using ArgbOverlayProc = void (*)(void *, const ArgbOverlay *);
@@ -204,68 +212,143 @@ BdOverlay closing(uint8_t plane)
     return overlay;
 }
 
-// libbluray's callbacks, on the thread of the call that drew (a read or an
-// input, under the caller's lock): a copy of the event for the queue.
-void onOverlay(void *handle, const Overlay *overlay)
+// The interactive plane's size after an INIT or a CLOSE of it (one too
+// large stays closed, as in `crate::disc::bluray`).
+void notePlane(BlurayNavigator &nav, uint8_t plane, uint8_t command, uint16_t w, uint16_t h)
 {
-    auto *nav = static_cast<BlurayNavigator *>(handle);
-    std::lock_guard<std::mutex> guard(nav->lock);
-    if (overlay == nullptr) {
-        // Every plane closes.
-        nav->overlays.push_back(closing(0));
-        nav->overlays.push_back(closing(1));
+    if (plane != PLANE_IG)
         return;
+    const bool opens = command == OVERLAY_INIT && w <= MAX_PLANE_WIDTH && h <= MAX_PLANE_HEIGHT;
+    if (command == OVERLAY_INIT || command == OVERLAY_CLOSE) {
+        nav.planeWidth = opens ? w : 0;
+        nav.planeHeight = opens ? h : 0;
     }
-    BdOverlay copy{};
-    copy.argb = false;
-    copy.plane = overlay->plane;
-    copy.command = overlay->cmd;
-    copy.x = overlay->x;
-    copy.y = overlay->y;
-    copy.width = overlay->w;
-    copy.height = overlay->h;
-    if (overlay->palette != nullptr) {
-        for (int i = 0; i < 256; ++i) {
-            const PaletteEntry &e = overlay->palette[i];
-            copy.palette.push_back(uint32_t(e.y) << 24 | uint32_t(e.cr) << 16 | uint32_t(e.cb) << 8 | e.t);
-        }
-    }
-    if (overlay->img != nullptr) {
-        // Runs until the rectangle is covered; a run of 0 ends a line.
-        int64_t left = int64_t(overlay->w) * overlay->h;
-        for (const RleElement *run = overlay->img; left > 0; ++run) {
-            copy.data.push_back(uint32_t(run->len) << 16 | run->color);
-            left -= run->len;
-        }
-    }
-    nav->overlays.push_back(std::move(copy));
 }
 
-void onArgbOverlay(void *handle, const ArgbOverlay *overlay)
+// How many of a DRAW's runs make its w x h image: row by row, a row
+// ending at an end-of-line run (length 0) or once it holds w pixels (with
+// the end-of-line run right after it), for h rows, and never past w x h
+// pixels in all. libbluray gives no length with the runs, so these bounds
+// are what keeps the walk inside them, and they rest on libbluray's own
+// rules: its decoder keeps an object only when its runs hold exactly its
+// width times its height pixels (so a walk that has seen fewer has runs
+// left to read), and its crop writes each row as runs of at most the
+// crop's width followed by an end-of-line run. libbluray 1.5.1 passes a
+// crop taller than its object on unchecked, as the object's own runs
+// with the crop's height (RVP's Windows build clamps the crop to the
+// object, tools/discs/libbluray-crop.patch; on Linux the system's library
+// is used): there the walk reads at most w + 1 runs for each row the
+// object lacks.
+size_t runCount(const RleElement *img, uint16_t w, uint16_t h)
 {
-    auto *nav = static_cast<BlurayNavigator *>(handle);
-    std::lock_guard<std::mutex> guard(nav->lock);
-    if (overlay == nullptr) {
-        nav->overlays.push_back(closing(0));
-        nav->overlays.push_back(closing(1));
-        return;
-    }
-    BdOverlay copy{};
-    copy.argb = true;
-    copy.plane = overlay->plane;
-    copy.command = overlay->cmd;
-    copy.x = overlay->x;
-    copy.y = overlay->y;
-    copy.width = overlay->w;
-    copy.height = overlay->h;
-    if (overlay->argb != nullptr) {
-        for (uint16_t y = 0; y < overlay->h; ++y) {
-            const uint32_t *line = overlay->argb + size_t(y) * overlay->stride;
-            for (uint16_t x = 0; x < overlay->w; ++x)
-                copy.data.push_back(line[x]);
+    const uint64_t pixels = uint64_t(w) * h;
+    uint64_t seen = 0;
+    size_t count = 0;
+    for (uint32_t row = 0; row < h && seen < pixels; ++row) {
+        uint32_t x = 0;
+        while (seen < pixels) {
+            const uint16_t length = img[count++].len;
+            if (length == 0)
+                break;
+            x += length;
+            seen += length;
+            if (x >= w) {
+                if (seen < pixels && img[count].len == 0)
+                    ++count;
+                break;
+            }
         }
     }
-    nav->overlays.push_back(std::move(copy));
+    return count;
+}
+
+// libbluray's callbacks, on the thread of the call that drew (a read or an
+// input, under the caller's lock): a copy of the event for the queue. They
+// run inside libbluray's C code, so nothing may leave them as an
+// exception: an event that cannot be queued (no memory) is dropped.
+void onOverlay(void *handle, const Overlay *overlay) noexcept
+{
+    auto *nav = static_cast<BlurayNavigator *>(handle);
+    try {
+        std::lock_guard<std::mutex> guard(nav->lock);
+        if (overlay == nullptr) {
+            // Every plane closes.
+            notePlane(*nav, PLANE_IG, OVERLAY_CLOSE, 0, 0);
+            nav->overlays.push_back(closing(0));
+            nav->overlays.push_back(closing(1));
+            return;
+        }
+        notePlane(*nav, overlay->plane, overlay->cmd, overlay->w, overlay->h);
+        BdOverlay copy{};
+        copy.argb = false;
+        copy.plane = overlay->plane;
+        copy.command = overlay->cmd;
+        copy.x = overlay->x;
+        copy.y = overlay->y;
+        copy.width = overlay->w;
+        copy.height = overlay->h;
+        // RVP draws the interactive plane only (mpv the subtitles).
+        if (overlay->plane == PLANE_IG && overlay->cmd == OVERLAY_DRAW) {
+            // An image larger than the plane is not drawn.
+            if (overlay->w > nav->planeWidth || overlay->h > nav->planeHeight)
+                return;
+            if (overlay->palette != nullptr) {
+                copy.palette.reserve(256);
+                for (int i = 0; i < 256; ++i) {
+                    const PaletteEntry &e = overlay->palette[i];
+                    copy.palette.push_back(uint32_t(e.y) << 24 | uint32_t(e.cr) << 16 | uint32_t(e.cb) << 8 | e.t);
+                }
+            }
+            if (overlay->img != nullptr) {
+                const size_t count = runCount(overlay->img, overlay->w, overlay->h);
+                copy.data.reserve(count);
+                for (size_t i = 0; i < count; ++i) {
+                    const RleElement &run = overlay->img[i];
+                    copy.data.push_back(uint32_t(run.len) << 16 | run.color);
+                }
+            }
+        }
+        nav->overlays.push_back(std::move(copy));
+    } catch (...) {
+    }
+}
+
+void onArgbOverlay(void *handle, const ArgbOverlay *overlay) noexcept
+{
+    auto *nav = static_cast<BlurayNavigator *>(handle);
+    try {
+        std::lock_guard<std::mutex> guard(nav->lock);
+        if (overlay == nullptr) {
+            notePlane(*nav, PLANE_IG, OVERLAY_CLOSE, 0, 0);
+            nav->overlays.push_back(closing(0));
+            nav->overlays.push_back(closing(1));
+            return;
+        }
+        notePlane(*nav, overlay->plane, overlay->cmd, overlay->w, overlay->h);
+        BdOverlay copy{};
+        copy.argb = true;
+        copy.plane = overlay->plane;
+        copy.command = overlay->cmd;
+        copy.x = overlay->x;
+        copy.y = overlay->y;
+        copy.width = overlay->w;
+        copy.height = overlay->h;
+        // The pixels come with the DRAW; the FLUSH after it repeats them.
+        if (overlay->plane == PLANE_IG && overlay->cmd == OVERLAY_DRAW && overlay->argb != nullptr) {
+            // BD-J's pixels are the plane's own: the rectangle lies in it.
+            if (uint32_t(overlay->x) + overlay->w > nav->planeWidth
+                || uint32_t(overlay->y) + overlay->h > nav->planeHeight)
+                return;
+            copy.data.reserve(size_t(overlay->w) * overlay->h);
+            for (uint16_t y = 0; y < overlay->h; ++y) {
+                const uint32_t *line = overlay->argb + size_t(y) * overlay->stride;
+                for (uint16_t x = 0; x < overlay->w; ++x)
+                    copy.data.push_back(line[x]);
+            }
+        }
+        nav->overlays.push_back(std::move(copy));
+    } catch (...) {
+    }
 }
 
 } // namespace

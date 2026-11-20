@@ -19,8 +19,9 @@ struct BdEvent;
 struct BdInfo;
 struct BdOverlay;
 
-// One open disc: libbluray's handle, closed with the object, and the
-// overlay events its callbacks queued.
+// One open disc: libbluray's handle, closed with the object, the overlay
+// events its callbacks queued, and the size of the interactive plane its
+// last INIT opened (0 x 0 while none is open, or when it was too large).
 class BlurayNavigator {
 public:
     explicit BlurayNavigator(void *handle);
@@ -31,6 +32,8 @@ public:
     void *handle;
     std::mutex lock;
     std::vector<BdOverlay> overlays;
+    uint16_t planeWidth = 0;
+    uint16_t planeHeight = 0;
 };
 
 // Loads libbluray once; false (and why in `message`) without it.

@@ -4,9 +4,23 @@
 //! palette-coded runs (Y, Cr, Cb and transparency, BT.709 on HD planes,
 //! BT.601 on SD ones), BD-J menus as ARGB. RVP shows the interactive
 //! plane only: mpv draws the subtitles (PG) of the stream itself.
+//!
+//! The sizes and places come from the disc unchecked (libbluray passes
+//! its 16-bit fields on): a plane larger than [`MAX_WIDTH`] x
+//! [`MAX_HEIGHT`] stays closed, and a draw or a wipe touches only the
+//! part of its rectangle inside the plane. Runs are read row by row (a
+//! row ends at an end-of-line run, or once it holds the image's width,
+//! with an end-of-line run right after it) for the image's height at
+//! most, straight into the plane: the work follows the runs given and
+//! the plane, never the sizes the disc claims.
 
 /// libbluray's planes (`bd_overlay_plane_e`).
 pub const PLANE_IG: u8 = 1;
+
+/// The largest plane RVP opens (`cpp/bluray.cpp` keeps the same): UHD
+/// Blu-ray's video, 3840 x 2160, fits with room.
+pub const MAX_WIDTH: usize = 4096;
+pub const MAX_HEIGHT: usize = 2304;
 
 /// libbluray's overlay commands (`bd_overlay_cmd_e`).
 pub mod command {
@@ -70,9 +84,16 @@ impl Plane {
         }
         match overlay.command {
             command::INIT => {
-                self.width = usize::from(overlay.width);
-                self.height = usize::from(overlay.height);
-                self.pixels = vec![0; self.width * self.height * 4];
+                let (width, height) = (usize::from(overlay.width), usize::from(overlay.height));
+                if width > MAX_WIDTH || height > MAX_HEIGHT {
+                    // No disc's video is that large: the plane stays
+                    // closed, and what showed goes.
+                    *self = Self::default();
+                    return true;
+                }
+                self.width = width;
+                self.height = height;
+                self.pixels = vec![0; width * height * 4];
                 self.hidden = false;
                 false
             }
@@ -106,28 +127,12 @@ impl Plane {
         match &overlay.image {
             Image::None => {}
             Image::Runs { runs, palette } => {
+                // The rectangle is the image's: what no run covers is
+                // transparent.
+                self.fill(overlay, |_, _| [0; 4]);
                 let hd = self.height > 576;
                 let colours: Vec<[u8; 4]> = palette.iter().map(|e| bgra(*e, hd)).collect();
-                let mut indices =
-                    Vec::with_capacity(usize::from(overlay.width) * usize::from(overlay.height));
-                let mut line = 0;
-                for &(length, colour) in runs {
-                    if length == 0 {
-                        // The line ends: pad it.
-                        line += 1;
-                        indices.resize(line * usize::from(overlay.width), 0);
-                        continue;
-                    }
-                    indices.extend(std::iter::repeat_n(colour, usize::from(length)));
-                }
-                let width = usize::from(overlay.width);
-                self.fill(overlay, |x, y| {
-                    indices
-                        .get(y * width + x)
-                        .and_then(|&index| colours.get(usize::from(index)))
-                        .copied()
-                        .unwrap_or([0; 4])
-                });
+                self.draw_runs(overlay, runs, &colours);
             }
             Image::Argb(pixels) => {
                 let width = usize::from(overlay.width);
@@ -140,12 +145,53 @@ impl Plane {
         }
     }
 
+    /// Writes the runs of (length, palette index) into the overlay's
+    /// rectangle: row by row from its corner, a row ending at a run of 0
+    /// or once it holds the overlay's width (an end-of-line run right
+    /// after it belongs to it), until the overlay's or the plane's last
+    /// row. Runs and parts of runs outside the plane cost a sum each.
+    fn draw_runs(&mut self, overlay: &Overlay, runs: &[(u16, u8)], colours: &[[u8; 4]]) {
+        let (left, top) = (usize::from(overlay.x), usize::from(overlay.y));
+        let width = usize::from(overlay.width);
+        let rows = usize::from(overlay.height).min(self.height.saturating_sub(top));
+        let mut runs = runs.iter().peekable();
+        let (mut x, mut y) = (0, 0);
+        while y < rows {
+            let Some(&(length, index)) = runs.next() else {
+                break;
+            };
+            let length = usize::from(length);
+            if length == 0 {
+                (x, y) = (0, y + 1);
+                continue;
+            }
+            // The run's part inside the overlay's width and the plane.
+            let from = (left + x).min(self.width);
+            let to = (left + (x + length).min(width)).min(self.width);
+            if from < to {
+                let colour = colours.get(usize::from(index)).copied().unwrap_or([0; 4]);
+                let row = (top + y) * self.width;
+                let pixels = &mut self.pixels[(row + from) * 4..(row + to) * 4];
+                pixels.as_chunks_mut::<4>().0.fill(colour);
+            }
+            x += length;
+            if x >= width {
+                runs.next_if(|&&(length, _)| length == 0);
+                (x, y) = (0, y + 1);
+            }
+        }
+    }
+
     /// Sets each pixel of the overlay's rectangle (inside the plane) to
     /// `pixel(x, y)`, with x and y from the rectangle's corner.
     fn fill(&mut self, overlay: &Overlay, pixel: impl Fn(usize, usize) -> [u8; 4]) {
-        let (x0, y0) = (usize::from(overlay.x), usize::from(overlay.y));
-        let x1 = (x0 + usize::from(overlay.width)).min(self.width);
-        let y1 = (y0 + usize::from(overlay.height)).min(self.height);
+        let (left, top) = (usize::from(overlay.x), usize::from(overlay.y));
+        let (x0, y0) = (left.min(self.width), top.min(self.height));
+        let x1 = (left + usize::from(overlay.width)).min(self.width);
+        let y1 = (top + usize::from(overlay.height)).min(self.height);
+        if x0 >= x1 || y0 >= y1 {
+            return;
+        }
         for y in y0..y1 {
             let row = &mut self.pixels[(y * self.width + x0) * 4..(y * self.width + x1) * 4];
             for (x, out) in row.as_chunks_mut::<4>().0.iter_mut().enumerate() {
@@ -280,6 +326,98 @@ mod tests {
         assert!(plane.picture().is_none());
         assert!(plane.apply(&overlay(command::CLOSE, 0, 0, 0, 0, Image::None)));
         assert_eq!(plane.size(), (0, 0));
+    }
+
+    fn runs(runs: Vec<(u16, u8)>) -> Image {
+        Image::Runs {
+            runs,
+            palette: palette(),
+        }
+    }
+
+    #[test]
+    fn draws_and_wipes_outside_the_plane_change_nothing() {
+        let mut plane = Plane::default();
+        plane.apply(&overlay(command::INIT, 0, 0, 1920, 1080, Image::None));
+        let white = || runs(vec![(4, 1), (0, 0), (4, 1), (0, 0)]);
+        // Right of the plane, with its rows inside it; then below it.
+        plane.apply(&overlay(command::DRAW, 5000, 10, 4, 2, white()));
+        plane.apply(&overlay(command::DRAW, 10, 2000, 4, 2, white()));
+        plane.apply(&overlay(command::WIPE, 5000, 10, 4, 2, Image::None));
+        plane.apply(&overlay(command::WIPE, 10, 2000, 4, 2, Image::None));
+        let argb = Image::Argb(vec![0xFFFF_FFFF; 8]);
+        plane.apply(&overlay(command::DRAW, 1920, 1080, 4, 2, argb));
+        assert!(plane.picture().is_none());
+        // Across the corner: only the part inside the plane.
+        plane.apply(&overlay(command::DRAW, 1918, 1079, 4, 2, white()));
+        let (x, y, width, height, _) = plane.picture().expect("the corner");
+        assert_eq!((x, y, width, height), (1918, 1079, 2, 1));
+        plane.apply(&overlay(
+            command::WIPE,
+            1917,
+            1078,
+            60_000,
+            60_000,
+            Image::None,
+        ));
+        assert!(plane.picture().is_none());
+    }
+
+    #[test]
+    fn a_plane_larger_than_any_video_stays_closed() {
+        let mut plane = Plane::default();
+        plane.apply(&overlay(command::INIT, 0, 0, 720, 480, Image::None));
+        plane.apply(&overlay(command::DRAW, 0, 0, 4, 1, runs(vec![(4, 1)])));
+        assert!(plane.picture().is_some());
+        // The refused plane takes the old one's picture away.
+        assert!(plane.apply(&overlay(command::INIT, 0, 0, 65535, 65535, Image::None)));
+        assert_eq!(plane.size(), (0, 0));
+        assert!(plane.picture().is_none());
+        plane.apply(&overlay(command::CLEAR, 0, 0, 0, 0, Image::None));
+        plane.apply(&overlay(command::DRAW, 0, 0, 4, 1, runs(vec![(4, 1)])));
+        assert!(plane.picture().is_none());
+        assert!(!plane.apply(&overlay(command::INIT, 0, 0, 4096, 2304, Image::None)));
+        assert_eq!(plane.size(), (4096, 2304));
+        plane.apply(&overlay(command::INIT, 0, 0, 4097, 1080, Image::None));
+        assert_eq!(plane.size(), (0, 0));
+    }
+
+    #[test]
+    fn runs_stop_at_the_images_last_row() {
+        let mut plane = Plane::default();
+        plane.apply(&overlay(command::INIT, 0, 0, 1920, 1080, Image::None));
+        // A million ends of line in an image two rows high and as wide as
+        // the disc can say, then a run: past its last row.
+        let mut markers = vec![(0, 0); 1_000_000];
+        markers.push((4, 1));
+        plane.apply(&overlay(command::DRAW, 0, 0, 65535, 2, runs(markers)));
+        assert!(plane.picture().is_none());
+        // A row longer than the image's width is cut there; the next run
+        // starts the next row.
+        plane.apply(&overlay(
+            command::DRAW,
+            10,
+            20,
+            4,
+            2,
+            runs(vec![(10, 1), (4, 2), (0, 0), (4, 1)]),
+        ));
+        let (x, y, width, height, pixels) = plane.picture().expect("two rows");
+        assert_eq!((x, y, width, height), (10, 20, 4, 2));
+        assert_eq!(&pixels[12..16], &[255, 255, 255, 255]);
+        assert_eq!(&pixels[16..20], &[64, 64, 64, 128]);
+    }
+
+    #[test]
+    fn more_pixels_than_the_plane_holds_cost_only_the_plane() {
+        let mut plane = Plane::default();
+        plane.apply(&overlay(command::INIT, 0, 0, 1920, 1080, Image::None));
+        // An image the disc says is 65535 x 65535, its rows given as runs
+        // of its width: drawn where it meets the plane.
+        let rows = vec![(65535, 1); 2000];
+        plane.apply(&overlay(command::DRAW, 100, 50, 65535, 65535, runs(rows)));
+        let (x, y, width, height, _) = plane.picture().expect("a picture");
+        assert_eq!((x, y, width, height), (100, 50, 1820, 1030));
     }
 
     #[test]

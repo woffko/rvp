@@ -101,7 +101,7 @@ impl Navigator {
     fn take_overlays(&mut self, notify: &Notify) {
         let overlays = ffi::rvp_bluray_overlays(self.bd());
         let mut shown = false;
-        for overlay in &overlays {
+        for overlay in overlays {
             shown |= self.plane.apply(&convert(overlay));
         }
         if shown {
@@ -212,9 +212,9 @@ impl Navigator {
 }
 
 /// libbluray's event as the plane's.
-fn convert(overlay: &BdOverlay) -> Overlay {
+fn convert(overlay: BdOverlay) -> Overlay {
     let image = if overlay.argb {
-        Image::Argb(overlay.data.clone())
+        Image::Argb(overlay.data)
     } else if overlay.data.is_empty() {
         Image::None
     } else {

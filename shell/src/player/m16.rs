@@ -431,38 +431,30 @@ impl qobject::Player {
         let Some(osd) = Osd::read(core.engine) else {
             return;
         };
-        #[allow(clippy::cast_precision_loss)] // Frame sizes are small.
-        let frame = (frame.0 as f64, frame.1 as f64);
-        #[allow(clippy::cast_precision_loss)] // So are the picture's.
-        let (x, y, width, height) = (
-            picture.x as f64,
-            picture.y as f64,
-            picture.width as f64,
-            picture.height as f64,
-        );
         let (video_width, video_height) = osd.video();
-        if video_width < 1.0 || video_height < 1.0 || frame.0 < 1.0 || frame.1 < 1.0 {
+        if video_width < 1.0 || video_height < 1.0 || frame.0 == 0 || frame.1 == 0 {
             return;
         }
-        let (scale_x, scale_y) = (video_width / frame.0, video_height / frame.1);
-        // OSD pixels: small positive numbers.
+        // OSD sizes: small positive numbers.
         #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
         let to_osd = |value: f64| value.round().max(0.0) as usize;
-        let (left, top) = (
-            to_osd(osd.left + x * scale_x),
-            to_osd(osd.top + y * scale_y),
-        );
-        let (to_width, to_height) = (
-            to_osd(width * scale_x).max(1),
-            to_osd(height * scale_y).max(1),
-        );
-        let scaled = overlay::scale(
+        let view = overlay::View {
+            frame,
+            video: (osd.left, osd.top, video_width, video_height),
+            osd: (to_osd(osd.width), to_osd(osd.height)),
+        };
+        let Some(placed) = overlay::place(
             &picture.pixels,
-            picture.width,
-            picture.height,
-            to_width,
-            to_height,
-        );
+            (picture.x, picture.y),
+            (picture.width, picture.height),
+            &view,
+        ) else {
+            remove_overlay(core.engine, playing);
+            return;
+        };
+        let (left, top, to_width, to_height) =
+            (placed.left, placed.top, placed.width, placed.height);
+        let scaled = placed.pixels;
         // mpv reads the pixels at this address while the command runs;
         // `shown` keeps them until the overlay is replaced or removed.
         let address = format!("&{}", scaled.as_ptr() as usize);
@@ -487,6 +479,9 @@ impl qobject::Player {
         }
         playing.shown = Some(scaled);
         playing.osd = Some(osd);
+        // Frame sizes are small.
+        #[allow(clippy::cast_precision_loss)]
+        let frame = (frame.0 as f64, frame.1 as f64);
         playing.frame = frame;
     }
 

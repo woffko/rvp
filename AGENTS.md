@@ -734,6 +734,15 @@ smoothing for users without SVP, after a study of the engines.
   refuses such files); a user may put their own beside `rvp.exe`.
   libdvdread is built with `-mno-ms-bitfields` like libdvdnav (MinGW's
   default layout broke the button rectangles).
+- A disc's menu sizes and places come unchecked: the Blu-ray plane
+  (`crates/app/src/disc/bluray.rs`) stays closed above 4096 x 2304 and
+  clips every draw, `bluray.cpp` copies a DRAW's runs by a bounded row
+  walk inside the last INIT's plane (libbluray gives no length), and a
+  menu picture is scaled only where the frame and the OSD show it
+  (`overlay::place`). RVP's Windows libbluray carries
+  `tools/discs/libbluray-crop.patch` (a crop is kept inside its object;
+  `build.sh` stops when it does not apply); on Linux the system's
+  library is used, and the bounded walk is the protection.
 - Tests: `tools/test-clips/make-m16-dvd.sh` and `make-m16-bluray.py`
   write the synthetic discs (never committed; CI makes them);
   `shell/src/disc/tests.rs` (`RVP_DVD_MENU`, `RVP_BD_MENU`, and

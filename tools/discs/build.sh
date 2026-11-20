@@ -6,7 +6,10 @@
 # which run with the user's own Java; no libaacs or keys: libbluray loads a
 # user's libaacs at run time). Each at a release, built with meson and the
 # toolchain of tools/libmpv/build.sh's work folder; libudfread, freetype and
-# libxml2 come statically from that build's prefix.
+# libxml2 come statically from that build's prefix. libbluray gets RVP's
+# change libbluray-crop.patch (beside this script): a menu's crop
+# rectangle from the disc is kept inside its object; the build stops when
+# the patch does not apply.
 #
 # Runs where tools/libmpv/build.sh ran (inside the build root of
 # tools/libmpv/rootless.sh: `tools/libmpv/rootless.sh ROOT WORK
@@ -20,6 +23,7 @@ set -euo pipefail
 
 WORK=${1:-$HOME/rvp-deps/mpv-build}
 OUT=${2:-$WORK/discs-out/discs}
+HERE=$(cd "$(dirname "$0")" && pwd)
 SYSROOT=$WORK/build64/x86_64-w64-mingw32
 SRC=$WORK/discs-src
 PREFIX=$WORK/discs-prefix
@@ -58,6 +62,9 @@ build() {
     # The toolchain has no libssp, which libbluray asks for with MinGW
     # (the recipe drops the same line).
     [ "$name" != libbluray ] || sed -i "/find_library('ssp')/d" "$SRC/$name/meson.build"
+    if [ "$name" = libbluray ]; then
+        git -C "$SRC/$name" apply "$HERE/libbluray-crop.patch"
+    fi
     # Inside the source: the build writes its ChangeLog with `git log`.
     local build=$SRC/$name/build-rvp
     rm -rf "$build"
