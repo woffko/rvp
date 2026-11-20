@@ -9,19 +9,24 @@
 //!   the lines of a track inside the video, so those cannot be saved or
 //!   edited.
 //! * Edits show at once: RVP writes the cues to a working copy in its state
-//!   folder (`subtitles/editing.<ext>`) and gives mpv that file in place of
-//!   the track (`sub-add` with the source's name as its title, then
-//!   `sub-remove` of the old track).
+//!   folder (`subtitles/editing-<pid>.<ext>`, each RVP's own, removed when
+//!   it closes) and gives mpv that file in place of the track (`sub-add`
+//!   with the source's name as its title, then `sub-remove` of the old
+//!   track).
 //! * The sync applied: a cue's time `t` shows at `t * speed + delay`, where
 //!   the speed is the rate the subtitles were made for over the video's
 //!   (`sub-fps`) and the delay is `sub-delay` (mpv's `dec_sub.c`). Saving
 //!   writes the times as they show; saving into the file mpv shows also
 //!   sets the sync back to none, as the file now carries it.
-//! * A file RVP writes over goes to `subtitles/backup/` first. Files are
-//!   written to a temporary name and renamed, without a flush (the window's
-//!   thread waits for no disk).
+//! * A file RVP writes over is copied to `subtitles/backup/` first, under a
+//!   name no file has there (`clip.srt`, then `clip (2).srt`...): a backup
+//!   is never written over, so the first one keeps the original. Files are
+//!   written to a temporary file of their own and renamed, without a flush
+//!   (the window's thread waits for no disk); a subtitle that is a symbolic
+//!   link stays one ([`crate::storage::write_unflushed`]).
 //! * Edits not saved when another file starts or RVP closes are kept in
-//!   `subtitles/unsaved-<name>`, with a message saying so.
+//!   `subtitles/unsaved-<name>` (a free name, as the backups'), with a
+//!   message saying so.
 
 use std::path::{Path, PathBuf};
 
@@ -189,17 +194,56 @@ pub(crate) fn newest_external(engine: &Engine) -> Option<i64> {
         .max()
 }
 
-/// Writes `bytes` to `path` through a temporary file and a rename, without
-/// a flush.
-pub(crate) fn write_file(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
-    if let Some(dir) = path.parent() {
-        std::fs::create_dir_all(dir)?;
+/// How many names [`create_free`] tries.
+const FREE_NAMES: u32 = 10_000;
+
+/// Creates the first file of `<stem>.<extension>`, `<stem> (2).<extension>`
+/// ... that is not in `dir` (a name a file or a link has is never opened).
+fn create_free(
+    dir: &Path,
+    stem: &str,
+    extension: &str,
+) -> std::io::Result<(PathBuf, std::fs::File)> {
+    std::fs::create_dir_all(dir)?;
+    let mut options = std::fs::OpenOptions::new();
+    options.write(true).create_new(true);
+    let dot = if extension.is_empty() { "" } else { "." };
+    for number in 1..=FREE_NAMES {
+        let name = if number == 1 {
+            format!("{stem}{dot}{extension}")
+        } else {
+            format!("{stem} ({number}){dot}{extension}")
+        };
+        let path = dir.join(name);
+        match options.open(&path) {
+            Ok(file) => return Ok((path, file)),
+            Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {}
+            Err(error) => return Err(error),
+        }
     }
-    let mut temporary = path.as_os_str().to_owned();
-    temporary.push(".rvp-tmp");
-    let temporary = PathBuf::from(temporary);
-    std::fs::write(&temporary, bytes)?;
-    std::fs::rename(&temporary, path)
+    Err(std::io::Error::other(format!(
+        "{FREE_NAMES} files named {stem} are there already"
+    )))
+}
+
+/// Writes `bytes` into a new file of a free name ([`create_free`]).
+fn write_free(dir: &Path, stem: &str, extension: &str, bytes: &[u8]) -> std::io::Result<PathBuf> {
+    let (path, mut file) = create_free(dir, stem, extension)?;
+    if let Err(error) = std::io::Write::write_all(&mut file, bytes) {
+        drop(file);
+        let _ = std::fs::remove_file(&path);
+        return Err(error);
+    }
+    Ok(path)
+}
+
+/// The stem and extension of `path`'s name (`clip`, `srt`).
+fn stem_and_extension(path: &Path) -> (String, String) {
+    let part = |part: Option<&std::ffi::OsStr>| {
+        part.map(|part| part.to_string_lossy().into_owned())
+            .unwrap_or_default()
+    };
+    (part(path.file_stem()), part(path.extension()))
 }
 
 impl App {
@@ -279,8 +323,11 @@ impl App {
             return Ok(());
         };
         let format = open.editor.document().format;
-        let copy = folder.join(format!("editing.{}", format.extension()));
-        write_file(&copy, &open.editor.document().to_bytes(format))
+        let copy = folder.join(crate::storage::process_file_name(
+            "editing",
+            format.extension(),
+        ));
+        crate::storage::write_unflushed(&copy, &open.editor.document().to_bytes(format))
             .map_err(|error| format!("Cannot write {}: {error}", copy.display()))?;
         let language = shown_subtitle(engine)
             .ok()
@@ -329,20 +376,24 @@ impl App {
     }
 
     /// Puts a copy of `path` into RVP's backup folder before it is written
-    /// over.
+    /// over, under a name no backup has.
     fn back_up(&self, path: &Path) -> Result<(), String> {
         if !path.exists() {
             return Ok(());
         }
-        let name = path.file_name().unwrap_or_default();
-        let backup = self.subtitle_folder().join("backup").join(name);
-        if let Some(dir) = backup.parent() {
-            std::fs::create_dir_all(dir)
-                .map_err(|error| format!("Cannot keep a backup of {}: {error}", path.display()))?;
+        let failed =
+            |error: std::io::Error| format!("Cannot keep a backup of {}: {error}", path.display());
+        let mut source = std::fs::File::open(path).map_err(failed)?;
+        let (stem, extension) = stem_and_extension(path);
+        let (backup, mut file) =
+            create_free(&self.subtitle_folder().join("backup"), &stem, &extension)
+                .map_err(failed)?;
+        if let Err(error) = std::io::copy(&mut source, &mut file) {
+            drop(file);
+            let _ = std::fs::remove_file(&backup);
+            return Err(failed(error));
         }
-        std::fs::copy(path, &backup)
-            .map(drop)
-            .map_err(|error| format!("Cannot keep a backup of {}: {error}", path.display()))
+        Ok(())
     }
 
     /// Saves the open subtitles with the sync applied to `target`. Saved
@@ -357,7 +408,7 @@ impl App {
         if let Err(error) = self.back_up(target) {
             return UiRequest::Message(error);
         }
-        if let Err(error) = write_file(target, &document.to_bytes(format)) {
+        if let Err(error) = crate::storage::write_unflushed(target, &document.to_bytes(format)) {
             return UiRequest::Message(format!("Cannot save {name}: {error}"));
         }
         let delay = self.model.double(PropertyId::SubDelay).unwrap_or(0.0);
@@ -507,20 +558,19 @@ impl App {
             return None;
         }
         let document = open.editor.document();
-        let stem = open.source.as_ref().map_or_else(
-            || "typed".to_owned(),
-            |path| {
-                path.file_stem()
-                    .map(|stem| stem.to_string_lossy().into_owned())
-                    .unwrap_or_default()
-            },
-        );
-        let kept = self
-            .subtitle_folder()
-            .join(format!("unsaved-{stem}.{}", document.format.extension()));
+        let stem = open
+            .source
+            .as_deref()
+            .map_or_else(|| "typed".to_owned(), |path| stem_and_extension(path).0);
+        // A free name: the edits kept before stay as they are.
         Some(UiRequest::Message(
-            match write_file(&kept, &document.to_bytes(document.format)) {
-                Ok(()) => format!("Unsaved subtitle edits are kept in {}", kept.display()),
+            match write_free(
+                &self.subtitle_folder(),
+                &format!("unsaved-{stem}"),
+                document.format.extension(),
+                &document.to_bytes(document.format),
+            ) {
+                Ok(kept) => format!("Unsaved subtitle edits are kept in {}", kept.display()),
                 Err(error) => format!("Unsaved subtitle edits were lost: {error}"),
             },
         ))

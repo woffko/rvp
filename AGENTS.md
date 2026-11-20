@@ -509,9 +509,11 @@ smoothing for users without SVP, after a study of the engines.
   the browser and editor, Input Subtitles and Subtitle Saving work on the
   external file that shows (`crate::subtitle_editor`). libmpv gives no
   access to embedded tracks' lines. Edits show through a working copy
-  (`<state>/subtitles/editing.<ext>`) added in place of the track; a file
-  RVP writes over goes to `<state>/subtitles/backup/` first, and unsaved
-  edits to `unsaved-<name>` when another file starts or RVP closes.
+  (`<state>/subtitles/editing-<pid>.<ext>`, each process's own) added in
+  place of the track; a file RVP writes over goes to
+  `<state>/subtitles/backup/` first and unsaved edits to `unsaved-<name>`
+  when another file starts or RVP closes, both under a free name (a
+  backup is never written over).
   Saving writes the times as they show (`t * sub-fps / video fps +
   sub-delay`, mpv's `dec_sub.c`) and, into the file mpv shows, sets the
   sync back to none.

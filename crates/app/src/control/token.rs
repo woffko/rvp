@@ -24,13 +24,20 @@ fn path(state_dir: &Path) -> PathBuf {
 /// Fails when the system gives no random bytes or the file cannot be
 /// written.
 pub fn load_or_create(state_dir: &Path) -> io::Result<String> {
-    if let Ok(text) = std::fs::read_to_string(path(state_dir)) {
-        let text = text.trim();
-        if valid(text) {
-            return Ok(text.to_owned());
-        }
+    if let Some(token) = read(state_dir) {
+        return Ok(token);
     }
-    renew(state_dir)
+    let made = renew(state_dir)?;
+    // Two RVPs starting at once each make one: the file's is the one both
+    // keep.
+    Ok(read(state_dir).unwrap_or(made))
+}
+
+/// The token in the file, when it holds one.
+fn read(state_dir: &Path) -> Option<String> {
+    let text = std::fs::read_to_string(path(state_dir)).ok()?;
+    let text = text.trim();
+    valid(text).then(|| text.to_owned())
 }
 
 /// A new token in place of the old one: clients that had the old one are
@@ -48,28 +55,10 @@ pub fn renew(state_dir: &Path) -> io::Result<String> {
             let _ = write!(text, "{byte:02x}");
             text
         });
-    std::fs::create_dir_all(state_dir)?;
-    let target = path(state_dir);
-    let temporary = state_dir.join(format!("{FILE}.new"));
-    write_private(&temporary, &token)?;
-    std::fs::rename(&temporary, &target)?;
+    // Only its owner may read it where the system has such modes (on
+    // Windows the state folder is the user's own).
+    crate::storage::write_private(&path(state_dir), token.as_bytes())?;
     Ok(token)
-}
-
-/// Writes a file only its owner may read where the system has such modes
-/// (on Windows the state folder is the user's own).
-fn write_private(path: &Path, text: &str) -> io::Result<()> {
-    let _ = std::fs::remove_file(path);
-    let mut options = std::fs::OpenOptions::new();
-    options.write(true).create_new(true);
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::OpenOptionsExt;
-        options.mode(0o600);
-    }
-    let mut file = options.open(path)?;
-    io::Write::write_all(&mut file, text.as_bytes())?;
-    file.sync_all()
 }
 
 fn valid(text: &str) -> bool {
@@ -110,6 +99,32 @@ mod tests {
                 .permissions()
                 .mode();
             assert_eq!(mode & 0o777, 0o600);
+        }
+        let names: Vec<_> = std::fs::read_dir(&dir)
+            .expect("list")
+            .map(|entry| entry.expect("entry").file_name())
+            .collect();
+        assert_eq!(names, [FILE]);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// Two RVPs starting at once on a new state folder both get a token.
+    #[test]
+    fn first_starts_at_once_both_get_a_token() {
+        let dir = std::env::temp_dir().join(format!("rvp-token-race-{}", std::process::id()));
+        for _ in 0..20 {
+            let _ = std::fs::remove_dir_all(&dir);
+            let starts: Vec<_> = (0..4)
+                .map(|_| {
+                    let dir = dir.clone();
+                    std::thread::spawn(move || load_or_create(&dir))
+                })
+                .collect();
+            for start in starts {
+                let token = start.join().expect("start").expect("a token");
+                assert!(valid(&token));
+            }
+            assert!(read(&dir).is_some());
         }
         let _ = std::fs::remove_dir_all(&dir);
     }

@@ -766,7 +766,7 @@ impl App {
         // The GPU power budget may have taken the script off.
         if vs.enabled && vs.script.is_some() && !self.gpu_step_taken(crate::gpu_power::Step::Script)
         {
-            let wrapper = self.state_dir().join("vapoursynth").join("rvp-script.vpy");
+            let wrapper = self.script_wrapper_path();
             filters.push((
                 SCRIPT_LABEL.to_owned(),
                 script_entry(&wrapper, vs.buffered_frames),
@@ -775,6 +775,14 @@ impl App {
         // M18's motion smoothing comes last.
         filters.extend(self.smoothing_filter());
         filters
+    }
+
+    /// The script slot's wrapper, which mpv reads again at every start and
+    /// seek: this process's own.
+    pub(crate) fn script_wrapper_path(&self) -> PathBuf {
+        self.state_dir()
+            .join("vapoursynth")
+            .join(crate::storage::process_file_name("rvp-script", "vpy"))
     }
 
     /// True while a filter that needs decoded frames in memory runs.
@@ -853,7 +861,7 @@ impl App {
         if vs.enabled
             && let Some(script) = &vs.script
         {
-            let wrapper = self.state_dir().join("vapoursynth").join("rvp-script.vpy");
+            let wrapper = self.script_wrapper_path();
             // PotPlayer's script wants MVTools: RVP's own runtime's too.
             let mut plugins = vs.plugins.clone();
             if let Some(plugin) = &self.smoothing.runtime.mvtools_plugin
@@ -861,7 +869,7 @@ impl App {
             {
                 plugins.push(plugin.clone());
             }
-            crate::storage::write_atomic(
+            crate::storage::write_unflushed(
                 &wrapper,
                 script_wrapper(script, &plugins, &vs.avs_plugins).as_bytes(),
             )

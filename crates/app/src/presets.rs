@@ -12,6 +12,16 @@
 //! * Activating by hand can reopen the playing file and copy the preset's
 //!   values into the default; "Activate default preset at program start"
 //!   starts with the default whatever was active.
+//! * The active preset's name changes only with its values: Rename
+//!   ([`App::rename_preset`]) changes the list, the active name and the
+//!   preset auto-activation returns to in one change, and a settings change
+//!   that would leave the active preset out of the list, or name another,
+//!   is refused (`preferences::change`): the values running would go to the
+//!   wrong preset. Duplicate copies the values in force
+//!   ([`App::duplicate_preset`]).
+//! * Export writes what settings.json holds (`App::stored_settings`),
+//!   and Import takes a file as a start takes settings.json
+//!   ([`App::import_settings`]).
 
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -280,31 +290,136 @@ fn settings_from(values: &Value, presets: &PresetsSettings) -> Settings {
     serde_json::from_value(value).unwrap_or_default()
 }
 
+/// The settings to run with for `stored` as settings.json holds them (the
+/// default's values with the presets), and the default's values while
+/// another preset is active.
+fn running(stored: Settings) -> (Settings, Option<Value>) {
+    let presets = &stored.presets;
+    let Some(preset) = presets
+        .list
+        .iter()
+        .find(|preset| !presets.active.is_empty() && preset.name == presets.active)
+    else {
+        return (stored, None);
+    };
+    let default_values = Some(values(&stored));
+    if preset.values.is_null() {
+        return (stored, default_values);
+    }
+    let mut settings = settings_from(&preset.values, presets);
+    settings.validate();
+    (settings, default_values)
+}
+
 impl App {
     /// At start, after the settings were read: the active preset's values,
     /// or the default's when the page says so.
     pub(crate) fn start_presets(&mut self) {
-        let presets = self.settings.presets.clone();
-        if presets.active.is_empty() {
-            return;
-        }
-        if presets.default_at_start {
+        if self.settings.presets.default_at_start {
             self.settings.presets.active.clear();
             return;
         }
-        let Some(preset) = presets
+        let (settings, default_values) = running(std::mem::take(&mut self.settings));
+        self.settings = settings;
+        self.default_values = default_values;
+    }
+
+    /// Makes an imported settings file the settings, as a start takes
+    /// settings.json: its own values are the default preset's, and the
+    /// preset it names runs with its values.
+    pub fn import_settings(
+        &mut self,
+        engine: &rvp_engine::Engine,
+        imported: Settings,
+    ) -> crate::preferences::Applied {
+        let (settings, default_values) = running(imported);
+        self.default_values = default_values;
+        self.preset_before_auto = None;
+        self.apply_settings(engine, settings)
+    }
+
+    /// Writes what settings.json holds to `path` (Export): the default
+    /// preset's values with the presets, the active one's values as they
+    /// run.
+    ///
+    /// # Errors
+    /// Fails on I/O errors.
+    pub fn export_settings(&self, path: &std::path::Path) -> std::io::Result<()> {
+        crate::storage::write_json(path, &self.stored_settings())
+    }
+
+    /// Renames the preset `old` to `new` (the page's Rename): the list,
+    /// the active preset's name and the one auto-activation returns to
+    /// change together, so the values running stay with their preset and
+    /// the default's with the default.
+    ///
+    /// # Errors
+    /// The reason when `new` is no free name or `old` no preset.
+    pub fn rename_preset(
+        &mut self,
+        engine: &rvp_engine::Engine,
+        old: &str,
+        new: &str,
+    ) -> Result<crate::preferences::Applied, String> {
+        let new = new.trim();
+        let mut settings = self.settings.clone();
+        let presets = &mut settings.presets;
+        if new.is_empty() {
+            return Err("A preset needs a name".to_owned());
+        }
+        if presets.list.iter().any(|preset| preset.name == new) {
+            return Err(format!("A preset is named {new} already"));
+        }
+        let preset = presets
+            .list
+            .iter_mut()
+            .find(|preset| preset.name == old)
+            .ok_or_else(|| format!("No preset is named {old}"))?;
+        new.clone_into(&mut preset.name);
+        if presets.active == old {
+            new.clone_into(&mut presets.active);
+        }
+        if self.preset_before_auto.as_deref() == Some(old) {
+            self.preset_before_auto = Some(new.to_owned());
+        }
+        Ok(self.apply_settings(engine, settings))
+    }
+
+    /// Adds a copy of the preset `name` (the page's Duplicate) as
+    /// "<name> (copy)": its conditions, and its values as they are in
+    /// force (the active preset's are the settings running).
+    ///
+    /// # Errors
+    /// The reason when `name` is no preset.
+    pub fn duplicate_preset(
+        &mut self,
+        engine: &rvp_engine::Engine,
+        name: &str,
+    ) -> Result<crate::preferences::Applied, String> {
+        let mut settings = self.settings.clone();
+        let presets = &mut settings.presets;
+        let mut copy = presets
             .list
             .iter()
-            .find(|preset| preset.name == presets.active)
-        else {
-            return;
-        };
-        self.default_values = Some(values(&self.settings));
-        if !preset.values.is_null() {
-            let mut settings = settings_from(&preset.values, &presets);
-            settings.validate();
-            self.settings = settings;
+            .find(|preset| preset.name == name)
+            .cloned()
+            .ok_or_else(|| format!("No preset is named {name}"))?;
+        if presets.active == name {
+            copy.values = values(&self.settings);
         }
+        // One more name than there are presets: one of them is free.
+        copy.name = (1..=presets.list.len() + 1)
+            .map(|number| {
+                if number == 1 {
+                    format!("{name} (copy)")
+                } else {
+                    format!("{name} (copy {number})")
+                }
+            })
+            .find(|candidate| !presets.list.iter().any(|preset| preset.name == *candidate))
+            .unwrap_or_default();
+        presets.list.push(copy);
+        Ok(self.apply_settings(engine, settings))
     }
 
     /// What settings.json holds now: the default's values with the

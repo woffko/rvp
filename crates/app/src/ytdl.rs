@@ -16,15 +16,27 @@
 //!
 //! The album keeps the page's address, so the entry resolves again when it
 //! plays next (the media addresses yt-dlp gives expire).
+//!
+//! One resolution runs at a time, for the entry that is starting: another
+//! entry, Close and RVP's end cancel it (`App::cancel_resolution`) and
+//! end the process, and an answer counts only while its entry is still
+//! the one starting. yt-dlp gets [`TIMEOUT`] to answer; the address then
+//! plays as it is, as after an error.
 
+use std::io::Read as _;
 use std::path::Path;
-use std::sync::mpsc;
-use std::time::Instant;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, Mutex, PoisonError, mpsc};
+use std::time::{Duration, Instant};
 
 use rvp_engine::Engine;
 use serde_json::Value;
 
 use crate::app::{App, UiRequest};
+
+/// How long yt-dlp may take to answer. Sites answer in seconds; the first
+/// run of a packed yt-dlp also unpacks itself.
+pub const TIMEOUT: Duration = Duration::from_mins(1);
 
 /// What a page resolved to.
 #[derive(Debug, Clone, PartialEq)]
@@ -37,18 +49,80 @@ pub struct Resolved {
     pub duration: Option<f64>,
 }
 
+/// What a resolution asks yt-dlp.
+#[derive(Debug, Clone)]
+pub(crate) struct Ask {
+    pub program: String,
+    pub format: String,
+    pub url: String,
+}
+
+/// The yt-dlp process of a resolution, shared between its thread and the
+/// window's, so that a cancel ends it.
+#[derive(Debug, Default)]
+pub(crate) struct Process {
+    child: Mutex<Option<std::process::Child>>,
+    cancelled: AtomicBool,
+}
+
+impl Process {
+    fn child(&self) -> std::sync::MutexGuard<'_, Option<std::process::Child>> {
+        self.child.lock().unwrap_or_else(PoisonError::into_inner)
+    }
+
+    /// Ends the process (or keeps it from starting).
+    pub fn cancel(&self) {
+        let mut child = self.child();
+        self.cancelled.store(true, Ordering::Relaxed);
+        if let Some(child) = child.as_mut() {
+            drop(child.kill());
+        }
+    }
+
+    /// The resolution was cancelled.
+    #[must_use]
+    pub fn cancelled(&self) -> bool {
+        self.cancelled.load(Ordering::Relaxed)
+    }
+}
+
+/// What runs a resolution, on a thread of its own: yt-dlp ([`run`]), or a
+/// test's stand-in.
+pub(crate) type Run = Arc<dyn Fn(&Ask, &Process) -> Result<Resolved, String> + Send + Sync>;
+
 /// A resolution under way.
 #[derive(Debug)]
 struct Pending {
     url: String,
+    /// The entry's per-file options (the command line's), added to the
+    /// answer's.
+    options: Vec<(String, String)>,
     receiver: mpsc::Receiver<Result<Resolved, String>>,
+    process: Arc<Process>,
     started: Instant,
 }
 
 /// The resolution under way, if any.
-#[derive(Debug, Default)]
 pub(crate) struct Resolver {
     pending: Option<Pending>,
+    run: Run,
+}
+
+impl Default for Resolver {
+    fn default() -> Self {
+        Self {
+            pending: None,
+            run: Arc::new(run),
+        }
+    }
+}
+
+impl std::fmt::Debug for Resolver {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Resolver")
+            .field("pending", &self.pending)
+            .finish_non_exhaustive()
+    }
 }
 
 /// True for addresses yt-dlp should see first.
@@ -171,30 +245,79 @@ pub fn parse(json: &Value) -> Result<Resolved, String> {
     })
 }
 
-/// Runs yt-dlp (on the caller's thread: a worker's).
-fn run(program: &str, format: &str, url: &str) -> Result<Resolved, String> {
-    let url = url.strip_prefix("ytdl://").unwrap_or(url);
+/// Runs yt-dlp (on the caller's thread: a worker's). Its error output is
+/// read on a thread of its own and its answer here, so that neither pipe
+/// fills and holds it up; a cancel ([`Process::cancel`]) ends it.
+fn run(ask: &Ask, process: &Process) -> Result<Resolved, String> {
+    use std::process::Stdio;
+    let program = &ask.program;
+    let url = ask.url.strip_prefix("ytdl://").unwrap_or(&ask.url);
     let mut command = std::process::Command::new(program);
-    command.args([
-        "-J",
-        "--no-playlist",
-        "--no-warnings",
-        "-f",
-        format,
-        "--",
-        url,
-    ]);
+    command
+        .args([
+            "-J",
+            "--no-playlist",
+            "--no-warnings",
+            "-f",
+            &ask.format,
+            "--",
+            url,
+        ])
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
     #[cfg(windows)]
     {
         use std::os::windows::process::CommandExt as _;
         // CREATE_NO_WINDOW: no console flashes up from the GUI.
         command.creation_flags(0x0800_0000);
     }
-    let output = command
-        .output()
+    if process.cancelled() {
+        return Err("cancelled".to_owned());
+    }
+    let mut child = command
+        .spawn()
         .map_err(|error| format!("{program}: {error}"))?;
-    if !output.status.success() {
-        let message = String::from_utf8_lossy(&output.stderr);
+    let (stdout, stderr) = (child.stdout.take(), child.stderr.take());
+    {
+        // A cancel either came first, and the process ends here, or finds
+        // it in its place.
+        let mut slot = process.child();
+        if process.cancelled() {
+            drop(child.kill());
+            drop(child.wait());
+            return Err("cancelled".to_owned());
+        }
+        *slot = Some(child);
+    }
+    let errors = stderr.and_then(|mut pipe| {
+        std::thread::Builder::new()
+            .name("rvp-ytdl-err".to_owned())
+            .spawn(move || {
+                let mut text = Vec::new();
+                drop(pipe.read_to_end(&mut text));
+                text
+            })
+            .ok()
+    });
+    let mut answer = Vec::new();
+    if let Some(mut pipe) = stdout {
+        drop(pipe.read_to_end(&mut answer));
+    }
+    let errors = errors
+        .and_then(|thread| thread.join().ok())
+        .unwrap_or_default();
+    // The answer is complete once its pipe closed: the wait is short.
+    let child = process.child().take();
+    let status = child
+        .map(|mut child| child.wait())
+        .transpose()
+        .map_err(|error| format!("{program}: {error}"))?;
+    if process.cancelled() {
+        return Err("cancelled".to_owned());
+    }
+    if !status.is_some_and(|status| status.success()) {
+        let message = String::from_utf8_lossy(&errors);
         let line = message
             .lines()
             .rev()
@@ -202,28 +325,35 @@ fn run(program: &str, format: &str, url: &str) -> Result<Resolved, String> {
             .unwrap_or("failed");
         return Err(line.trim().to_owned());
     }
-    let json: Value = serde_json::from_slice(&output.stdout)
-        .map_err(|error| format!("yt-dlp's answer: {error}"))?;
+    let json: Value =
+        serde_json::from_slice(&answer).map_err(|error| format!("yt-dlp's answer: {error}"))?;
     parse(&json)
 }
 
 impl App {
     /// Starts resolving `url` with yt-dlp when it needs it; true when the
-    /// file loads later ([`App::resolver_tick`]).
-    pub(crate) fn resolve_stream(&mut self, engine: &Engine, url: &str) -> bool {
+    /// file loads later ([`App::resolver_tick`]) with `options` added.
+    pub(crate) fn resolve_stream(
+        &mut self,
+        engine: &Engine,
+        url: &str,
+        options: &[(String, String)],
+    ) -> bool {
         let open = &self.settings.open;
         if !open.ytdl || !needs_resolving(url) {
             return false;
         }
-        let (program, format, page) = (
-            open.ytdl_path.clone(),
-            open.ytdl_format.clone(),
-            url.to_owned(),
-        );
+        let ask = Ask {
+            program: open.ytdl_path.clone(),
+            format: open.ytdl_format.clone(),
+            url: url.to_owned(),
+        };
         let (sender, receiver) = mpsc::channel();
+        let process = Arc::new(Process::default());
+        let (run, worker) = (Arc::clone(&self.resolver.run), Arc::clone(&process));
         let started = std::thread::Builder::new()
             .name("rvp-ytdl".to_owned())
-            .spawn(move || drop(sender.send(run(&program, &format, &page))));
+            .spawn(move || drop(sender.send(run(&ask, &worker))));
         if started.is_err() {
             return false;
         }
@@ -231,30 +361,55 @@ impl App {
         drop(engine.stop());
         self.resolver.pending = Some(Pending {
             url: url.to_owned(),
+            options: options.to_vec(),
             receiver,
+            process,
             started: Instant::now(),
         });
         true
     }
 
-    /// About once a second and after each drain: a finished resolution
-    /// loads its file, or the address plays as it is.
+    /// Cancels the resolution under way, if any, and ends its yt-dlp:
+    /// another entry starts, playback closes or RVP ends.
+    pub(crate) fn cancel_resolution(&mut self) {
+        if let Some(pending) = self.resolver.pending.take() {
+            pending.process.cancel();
+        }
+    }
+
+    /// About once a second: a finished resolution loads its file, or the
+    /// address plays as it is (an error, or no answer within [`TIMEOUT`]).
+    /// An answer counts only while its entry is the one starting.
     pub fn resolver_tick(&mut self, engine: &Engine) -> Vec<UiRequest> {
         let Some(pending) = &self.resolver.pending else {
             return Vec::new();
         };
         let result = match pending.receiver.try_recv() {
             Ok(result) => result,
-            Err(mpsc::TryRecvError::Empty) => return Vec::new(),
+            Err(mpsc::TryRecvError::Empty) if pending.started.elapsed() < TIMEOUT => {
+                return Vec::new();
+            }
+            Err(mpsc::TryRecvError::Empty) => {
+                pending.process.cancel();
+                Err(format!("no answer in {} s", TIMEOUT.as_secs()))
+            }
             Err(mpsc::TryRecvError::Disconnected) => Err("yt-dlp stopped".to_owned()),
         };
         let Some(pending) = self.resolver.pending.take() else {
             return Vec::new();
         };
+        let still_starting = self.starting()
+            && self
+                .library()
+                .playing()
+                .is_some_and(|(_, entry)| entry.path == pending.url);
+        if !still_starting {
+            return Vec::new();
+        }
         let waited = pending.started.elapsed().as_secs_f64();
         let mut requests = Vec::new();
         match result {
-            Ok(resolved) => {
+            Ok(mut resolved) => {
                 if let Some((album, index)) = self
                     .library()
                     .lists()
@@ -272,6 +427,9 @@ impl App {
                         self.library_mut().set_duration(&pending.url, duration);
                     }
                 }
+                // The entry's own options last: the command line's title or
+                // headers win over the page's.
+                resolved.options.extend(pending.options);
                 if let Err(error) = engine.load_with_options(&resolved.target, &resolved.options) {
                     requests.push(UiRequest::Message(format!("Cannot play: {error}")));
                 }
@@ -280,7 +438,7 @@ impl App {
             Err(error) => {
                 // Not a site yt-dlp knows, or no yt-dlp: as FFmpeg opens it.
                 requests.push(UiRequest::Osd(format!("yt-dlp: {error}")));
-                if let Err(error) = engine.load(&pending.url, false) {
+                if let Err(error) = engine.load_with_options(&pending.url, &pending.options) {
                     requests.push(UiRequest::Message(format!("Cannot play: {error}")));
                 }
             }
@@ -302,6 +460,270 @@ impl App {
 mod tests {
     use super::*;
     use serde_json::json;
+    use std::path::PathBuf;
+
+    fn fixture(name: &str) -> String {
+        PathBuf::from(concat!(env!("CARGO_MANIFEST_DIR"), "/../../testdata/media"))
+            .join(name)
+            .to_string_lossy()
+            .into_owned()
+    }
+
+    /// A page: yt-dlp's (here the stand-in's). Played as it is, it is a
+    /// port on this machine that refuses at once.
+    const PAGE: &str = "http://127.0.0.1:9/watch?v=1";
+
+    /// A headless player whose yt-dlp is a stand-in that answers only when
+    /// the test sends it an answer, then says whether it was cancelled
+    /// meanwhile.
+    struct Late {
+        app: App,
+        engine: Engine,
+        dir: PathBuf,
+        answers: mpsc::Sender<Result<Resolved, String>>,
+        told: mpsc::Receiver<(String, bool)>,
+    }
+
+    impl Late {
+        /// The page starts with `options`, as the command line gives them.
+        fn new(name: &str, options: Vec<(String, String)>) -> Self {
+            let dir = std::env::temp_dir().join(format!("rvp-ytdl-{name}-{}", std::process::id()));
+            let _ = std::fs::remove_dir_all(&dir);
+            let engine = Engine::new(&rvp_engine::EngineOptions::headless()).expect("engine");
+            let settings = crate::Settings {
+                reopen_last_file: false,
+                remember_positions: false,
+                ipc_server: String::new(),
+                ..crate::Settings::default()
+            };
+            assert!(settings.open.ytdl);
+            let mut app = App::new(settings, &dir).expect("app");
+            let (answers, gate) = mpsc::channel::<Result<Resolved, String>>();
+            let gate = Mutex::new(gate);
+            let (tell, told) = mpsc::channel();
+            app.resolver.run = Arc::new(move |ask: &Ask, process: &Process| {
+                let answer = gate
+                    .lock()
+                    .unwrap_or_else(PoisonError::into_inner)
+                    .recv()
+                    .unwrap_or_else(|_| Err("no answer".to_owned()));
+                drop(tell.send((ask.url.clone(), process.cancelled())));
+                answer
+            });
+            app.play.next_options = options;
+            app.open(
+                &engine,
+                &[PAGE.to_owned(), fixture("fixture-60s.mkv")],
+                false,
+            )
+            .expect("open");
+            assert_eq!(app.resolving(), Some(PAGE));
+            // Taken by the page, for its stream.
+            assert!(app.play.next_options.is_empty());
+            Self {
+                app,
+                engine,
+                dir,
+                answers,
+                told,
+            }
+        }
+
+        /// The page resolves to the 3 s fixture, with a title; the
+        /// stand-in says whether it was cancelled.
+        fn answer(&self) -> bool {
+            self.answers
+                .send(Ok(Resolved {
+                    target: fixture("fixture-3s.mkv"),
+                    options: vec![("force-media-title".to_owned(), "Page title".to_owned())],
+                    title: Some("Page title".to_owned()),
+                    duration: Some(3.0),
+                }))
+                .expect("send");
+            let (url, cancelled) = self
+                .told
+                .recv_timeout(Duration::from_secs(5))
+                .expect("the stand-in answered");
+            assert_eq!(url, PAGE);
+            cancelled
+        }
+
+        /// Drains and ticks for `ms`, or until `done` holds.
+        fn pump(&mut self, ms: u64, done: impl Fn(&App) -> bool) -> Vec<UiRequest> {
+            let end = Instant::now() + Duration::from_millis(ms);
+            let mut requests = Vec::new();
+            while Instant::now() < end && !done(&self.app) {
+                std::thread::sleep(Duration::from_millis(5));
+                requests.extend(self.app.drain(&self.engine, Instant::now()).requests);
+                requests.extend(self.app.resolver_tick(&self.engine));
+            }
+            requests
+        }
+
+        fn loaded(&self, name: &str) -> bool {
+            self.app
+                .model
+                .loaded_path()
+                .is_some_and(|path| path.ends_with(name))
+        }
+
+        fn titles(&self) -> Vec<Option<String>> {
+            self.app.library().lists().albums[0]
+                .entries
+                .iter()
+                .map(|entry| entry.title.clone())
+                .collect()
+        }
+    }
+
+    impl Drop for Late {
+        fn drop(&mut self) {
+            drop(self.engine.stop());
+            let _ = std::fs::remove_dir_all(&self.dir);
+        }
+    }
+
+    /// A page's answer that comes after another entry started, or after
+    /// Close, plays nothing and names nothing; the resolution was
+    /// cancelled.
+    #[test]
+    fn a_late_answer_replaces_nothing() {
+        let mut h = Late::new("other", Vec::new());
+        h.app.play_entry(&h.engine, 0, 1, false).expect("play");
+        assert_eq!(h.app.resolving(), None);
+        h.pump(10_000, |app| {
+            app.model
+                .loaded_path()
+                .is_some_and(|path| path.ends_with("fixture-60s.mkv"))
+        });
+        assert!(h.loaded("fixture-60s.mkv"));
+        assert!(h.answer(), "cancelled when the other entry started");
+        h.pump(400, |_| false);
+        assert!(
+            h.loaded("fixture-60s.mkv"),
+            "{:?}",
+            h.app.model.loaded_path()
+        );
+        assert_eq!(h.titles(), [None, None]);
+
+        // Close while the page resolves: nothing plays afterwards.
+        h.app.play_entry(&h.engine, 0, 0, false).expect("play");
+        assert_eq!(h.app.resolving(), Some(PAGE));
+        drop(h.app.dispatch(&h.engine, crate::Action::CloseMedia));
+        assert_eq!(h.app.resolving(), None);
+        assert!(h.answer(), "cancelled by Close");
+        h.pump(400, |_| false);
+        assert!(
+            !h.app.model.media_loaded(),
+            "{:?}",
+            h.app.model.loaded_path()
+        );
+        assert_eq!(h.titles(), [None, None]);
+
+        // The entry left the album while its page resolved: its answer is
+        // no one's.
+        h.app.play_entry(&h.engine, 0, 0, false).expect("play");
+        h.app
+            .library_mut()
+            .remove(0, &std::collections::BTreeSet::from([0]));
+        assert!(!h.answer());
+        h.pump(5000, |app| app.resolving().is_none());
+        assert_eq!(h.app.resolving(), None);
+        h.pump(300, |_| false);
+        assert!(
+            !h.app.model.media_loaded(),
+            "{:?}",
+            h.app.model.loaded_path()
+        );
+        assert_eq!(h.titles(), [None]);
+    }
+
+    /// The answer for the entry still starting plays with the entry's own
+    /// options (the command line's), which win over the page's.
+    #[test]
+    fn an_answer_plays_with_the_entrys_options() {
+        let mut h = Late::new(
+            "options",
+            vec![(
+                "force-media-title".to_owned(),
+                "From the command line".to_owned(),
+            )],
+        );
+        assert!(!h.answer());
+        h.pump(10_000, |app| {
+            app.model
+                .loaded_path()
+                .is_some_and(|path| path.ends_with("fixture-3s.mkv"))
+        });
+        assert!(h.loaded("fixture-3s.mkv"));
+        assert_eq!(
+            h.engine.get_text("media-title").as_deref(),
+            Some("From the command line")
+        );
+        assert_eq!(h.titles(), [Some("Page title".to_owned()), None]);
+        drop(h.app.dispatch(&h.engine, crate::Action::CloseMedia));
+    }
+
+    /// No answer in time: the resolution is cancelled and the address
+    /// plays as it is.
+    #[test]
+    fn a_resolution_without_an_answer_ends() {
+        let mut h = Late::new("timeout", Vec::new());
+        let pending = h.app.resolver.pending.as_mut().expect("pending");
+        pending.started = Instant::now()
+            .checked_sub(TIMEOUT + Duration::from_secs(1))
+            .expect("an instant that long ago");
+        let requests = h.app.resolver_tick(&h.engine);
+        assert_eq!(
+            requests,
+            [UiRequest::Osd("yt-dlp: no answer in 60 s".to_owned())]
+        );
+        assert_eq!(h.app.resolving(), None);
+        assert!(h.answer(), "cancelled at the timeout");
+        drop(h.app.dispatch(&h.engine, crate::Action::CloseMedia));
+    }
+
+    /// A cancel ends yt-dlp's process at once, whatever it was doing.
+    #[cfg(unix)]
+    #[test]
+    fn a_cancel_ends_the_process() {
+        use std::os::unix::fs::PermissionsExt as _;
+        let dir = std::env::temp_dir().join(format!("rvp-ytdl-kill-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).expect("dir");
+        let program = dir.join("yt-dlp");
+        std::fs::write(&program, "#!/bin/sh\nexec sleep 30\n").expect("write");
+        std::fs::set_permissions(&program, std::fs::Permissions::from_mode(0o755)).expect("mode");
+        let ask = Ask {
+            program: program.to_string_lossy().into_owned(),
+            format: "best".to_owned(),
+            url: PAGE.to_owned(),
+        };
+        // A program just written can be busy for a moment while another
+        // test's process starts: once more then.
+        for _ in 0..3 {
+            let process = Arc::new(Process::default());
+            let (ask, worker) = (ask.clone(), Arc::clone(&process));
+            let started = Instant::now();
+            let thread = std::thread::spawn(move || run(&ask, &worker));
+            // Until the process runs (or failed to start).
+            while process.child().is_none()
+                && !thread.is_finished()
+                && started.elapsed() < Duration::from_secs(5)
+            {
+                std::thread::sleep(Duration::from_millis(5));
+            }
+            process.cancel();
+            let result = thread.join().expect("the thread");
+            if result.as_ref().is_err_and(|error| error.contains("busy")) {
+                continue;
+            }
+            assert_eq!(result, Err("cancelled".to_owned()));
+            assert!(started.elapsed() < Duration::from_secs(10));
+            break;
+        }
+        let _ = std::fs::remove_dir_all(&dir);
+    }
 
     #[test]
     fn pages_go_to_yt_dlp_and_files_do_not() {

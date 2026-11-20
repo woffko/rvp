@@ -325,6 +325,16 @@ pub mod qobject {
         #[qinvokable]
         fn import_settings(self: Pin<&mut Self>, path: &QString) -> QString;
 
+        /// Renames a preset (`App::rename_preset`: the list and the active
+        /// name in one change); JSON as `set_setting`.
+        #[qinvokable]
+        fn rename_preset(self: Pin<&mut Self>, old: &QString, name: &QString) -> QString;
+
+        /// Adds a copy of a preset with the values in force
+        /// (`App::duplicate_preset`); JSON as `set_setting`.
+        #[qinvokable]
+        fn duplicate_preset(self: Pin<&mut Self>, name: &QString) -> QString;
+
         /// Exports the settings; JSON as `set_setting`.
         #[qinvokable]
         fn export_settings(self: &Self, path: &QString) -> QString;

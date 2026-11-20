@@ -15,7 +15,6 @@
 //! * Import reads a settings file (unknown fields are named and ignored)
 //!   and applies it as one change; export writes the current settings.
 
-use std::io;
 use std::path::Path;
 
 use rvp_engine::Engine;
@@ -23,7 +22,6 @@ use serde_json::{Map, Value};
 
 use crate::app::App;
 use crate::settings::Settings;
-use crate::storage;
 
 /// mpv `hwdec` values the window offers (others typed into the file stay).
 pub const HWDEC: &[&str] = &[
@@ -332,7 +330,11 @@ impl Settings {
 /// repaired.
 ///
 /// # Errors
-/// Fails when the path names no setting or the value has the wrong type.
+/// Fails when the path names no setting or the value has the wrong type,
+/// and when the change would name another preset active or leave the
+/// active one out of the list: the settings running are that preset's
+/// values, which go with it only through activation and
+/// [`App::rename_preset`].
 pub fn change(
     settings: &Settings,
     path: &str,
@@ -357,6 +359,11 @@ pub fn change(
     let mut changed: Settings =
         serde_json::from_value(root).map_err(|error| format!("{path}: {error}"))?;
     let notes = changed.validate();
+    if changed.presets.active != settings.presets.active {
+        return Err(format!(
+            "{path}: the active preset is renamed with Rename and changed by activating another"
+        ));
+    }
     Ok((changed, notes))
 }
 
@@ -473,14 +480,6 @@ pub fn import(path: &Path) -> Result<(Settings, Vec<String>), String> {
         .collect();
     notes.extend(settings.validate());
     Ok((settings, notes))
-}
-
-/// Writes the settings to `path` (pretty JSON, as `settings.json`).
-///
-/// # Errors
-/// Fails on I/O errors.
-pub fn export(settings: &Settings, path: &Path) -> io::Result<()> {
-    storage::write_json(path, settings)
 }
 
 /// What applying settings did.
@@ -903,6 +902,27 @@ mod tests {
         assert!(change(&settings, "no-such", json!(1)).is_err());
         assert!(change(&settings, "seek-seconds.9", json!(1)).is_err());
         assert!(change(&settings, "volume-step", json!("loud")).is_err());
+        // The active preset keeps its place: no other is named active, and
+        // the list keeps it (its values are the settings running).
+        let mut with_preset = settings.clone();
+        with_preset.presets.list = vec![crate::presets::Preset {
+            name: "Night".to_owned(),
+            ..crate::presets::Preset::default()
+        }];
+        with_preset.presets.active = "Night".to_owned();
+        let renamed = json!([{ "name": "Evening", "conditions": {}, "values": null }]);
+        assert!(change(&with_preset, "presets.list", renamed.clone()).is_err());
+        assert!(change(&with_preset, "presets.list.0.name", json!("Evening")).is_err());
+        assert!(change(&with_preset, "presets.active", json!("")).is_err());
+        assert!(change(&settings, "presets.list", renamed).is_ok());
+        let (moved, _) = change(
+            &with_preset,
+            "presets.list",
+            json!([{ "name": "Day", "conditions": {}, "values": null },
+                   { "name": "Night", "conditions": {}, "values": null }]),
+        )
+        .expect("the active preset is still there");
+        assert_eq!(moved.presets.active, "Night");
     }
 
     #[test]
@@ -915,7 +935,7 @@ mod tests {
         };
         settings.keys.insert("Ctrl+B".into(), "frame-back".into());
         let file = dir.join("exported.json");
-        export(&settings, &file).expect("export");
+        crate::storage::write_json(&file, &settings).expect("export");
         let (back, notes) = import(&file).expect("import");
         assert_eq!(back, settings);
         assert!(notes.is_empty(), "{notes:?}");

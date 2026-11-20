@@ -3290,13 +3290,9 @@ ApplicationWindow {
                             Button {
                                 text: qsTr("Duplicate")
                                 enabled: presetPage.selected > 0
-                                onClicked: {
-                                    const copy = presetPage.copyList()
-                                    const source = JSON.parse(JSON.stringify(copy[presetPage.selected - 1]))
-                                    source.name = source.name + " (copy)"
-                                    copy.push(source)
-                                    presetPage.store(copy)
-                                }
+                                // In Rust: the copy takes the values in force.
+                                onClicked: win.report(win.player.duplicate_preset(presetPage.list[presetPage.selected - 1].name),
+                                                      qsTr("Applied."))
                             }
                             Button {
                                 text: qsTr("Activate")
@@ -3329,16 +3325,14 @@ ApplicationWindow {
                             Button {
                                 text: qsTr("Rename")
                                 enabled: presetPage.selected > 0
+                                // One change in Rust: the list, the active name and
+                                // the values running go together.
                                 onClicked: {
                                     const name = presetName.text.trim()
-                                    const copy = presetPage.copyList()
-                                    if (name === "" || copy.some(p => p.name === name))
+                                    if (name === "" || presetPage.list.some(p => p.name === name))
                                         return
-                                    const old = copy[presetPage.selected - 1].name
-                                    copy[presetPage.selected - 1].name = name
-                                    presetPage.store(copy)
-                                    if ((win.value("presets.active") || "") === old)
-                                        win.set("presets.active", name)
+                                    win.report(win.player.rename_preset(presetPage.list[presetPage.selected - 1].name, name),
+                                               qsTr("Applied."))
                                 }
                             }
                             Button {

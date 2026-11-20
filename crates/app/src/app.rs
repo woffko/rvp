@@ -1013,6 +1013,8 @@ impl App {
         else {
             return Ok(());
         };
+        // A page still resolving was for the entry before.
+        self.cancel_resolution();
         if self.library.lists().playing != Some(album) {
             self.reset_shuffle();
         }
@@ -1022,6 +1024,12 @@ impl App {
         self.tracking = Tracking::Loading;
         self.remember_recent(&path);
         engine.set_pause(paused)?;
+        // This entry's options (the command line's), whichever way it
+        // plays. The visualization's graph names the old file's track, and
+        // a stream recording ends with its file (M12).
+        let options = std::mem::take(&mut self.play.next_options);
+        self.clear_visual(engine);
+        drop(self.record_file_ended(engine));
         // A whole disc plays through its menus (M16): the shell's
         // navigator.
         if self.plays_disc_menus(&path) {
@@ -1029,14 +1037,9 @@ impl App {
             return Ok(());
         }
         // Streaming sites go through yt-dlp first (crate::ytdl).
-        if self.resolve_stream(engine, &path) {
+        if self.resolve_stream(engine, &path, &options) {
             return Ok(());
         }
-        let options = std::mem::take(&mut self.play.next_options);
-        // The visualization's graph names this file's track, and a stream
-        // recording ends with its file (M12).
-        self.clear_visual(engine);
-        drop(self.record_file_ended(engine));
         engine.load_with_options(&path, &options)
     }
 
@@ -1289,7 +1292,10 @@ impl App {
                     engine.set_pause(false)
                 }
             }
-            Action::CloseMedia => engine.stop(),
+            Action::CloseMedia => {
+                self.cancel_resolution();
+                engine.stop()
+            }
             Action::Previous => self.step(engine, -1),
             Action::Next => self.step(engine, 1),
             Action::OpenDefault => return Some(self.default_open()),
@@ -2418,13 +2424,38 @@ impl App {
     pub fn shutdown(&mut self, engine: &Engine, now: Instant) -> io::Result<()> {
         // Subtitle edits not saved stay in RVP's folder.
         drop(self.close_subtitle_editor());
+        self.cancel_resolution();
         self.stop_speech(true, true);
         self.stop_second();
         drop(engine.stop());
+        self.remove_process_files();
         self.writer.flush();
         self.library.flush()?;
         self.marks.flush()?;
         self.store.save_and_wait(now)
+    }
+
+    /// Removes the files only this process wrote for mpv (the scripts, the
+    /// subtitles' working copies): every RVP has its own
+    /// ([`storage::process_file_name`]).
+    fn remove_process_files(&self) {
+        let subtitles = self.state_dir().join("subtitles");
+        let copies = [
+            rvp_subtitle::Format::Srt,
+            rvp_subtitle::Format::Ass,
+            rvp_subtitle::Format::WebVtt,
+        ]
+        .map(|format| subtitles.join(storage::process_file_name("editing", format.extension())));
+        for file in [
+            self.smoothing_script_path(),
+            self.script_wrapper_path(),
+            self.realtime_subtitle_path(),
+        ]
+        .into_iter()
+        .chain(copies)
+        {
+            let _ = std::fs::remove_file(file);
+        }
     }
 }
 

@@ -5,13 +5,28 @@
 //! the new version, never a partial file. [`Writer`] does this on its own
 //! thread: flushing to disk can take tens of milliseconds, and on the GUI
 //! thread during playback that showed as dropped video frames.
+//!
+//! * Each write has a temporary file of its own (`.<name>.<pid>.<n>.tmp`,
+//!   created only when no file of that name is there), so several RVP
+//!   processes, or threads, writing one file never share one; a failed
+//!   write removes its temporary file.
+//! * A file that is a symbolic link stays one: the new version goes beside
+//!   the file the link points to.
+//! * On Windows a rename over a file another program holds open (a virus
+//!   scanner, an indexer) fails for a moment: it is tried again a few
+//!   times.
+//! * Files only this process writes and mpv reads (the VapourSynth scripts,
+//!   the subtitle working copies) carry the process's ID in their names
+//!   ([`process_file_name`]) and are removed when RVP closes.
 
 use std::collections::BTreeMap;
 use std::fs;
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Condvar, Mutex, PoisonError};
 use std::thread::JoinHandle;
+use std::time::Duration;
 
 /// The configuration directory (settings) and the state directory (resume
 /// store, window geometry).
@@ -108,18 +123,66 @@ impl Dirs {
 /// # Errors
 /// Fails on any I/O error; the old file is then left as it was.
 pub fn write_atomic(path: &Path, bytes: &[u8]) -> io::Result<()> {
-    let dir = path.parent().unwrap_or_else(|| Path::new("."));
+    replace(path, bytes, true, false)
+}
+
+/// [`write_atomic`] for a file only its owner may read where the system
+/// has such modes (Unix: 0600; on Windows the state folder is the user's
+/// own).
+///
+/// # Errors
+/// As [`write_atomic`].
+pub fn write_private(path: &Path, bytes: &[u8]) -> io::Result<()> {
+    replace(path, bytes, true, true)
+}
+
+/// Writes `bytes` to `path` through a temporary file and a rename as
+/// [`write_atomic`] does, without the flush to disk: for files written on
+/// the window's thread, which waits for no disk (subtitles, the scripts
+/// mpv reads), where the newest version may be lost in a crash.
+///
+/// # Errors
+/// As [`write_atomic`].
+pub fn write_unflushed(path: &Path, bytes: &[u8]) -> io::Result<()> {
+    replace(path, bytes, false, false)
+}
+
+/// `<stem>-<pid>.<extension>`: the name of a file only this process writes
+/// and reads, so that several RVPs on one state folder keep theirs apart.
+#[must_use]
+pub fn process_file_name(stem: &str, extension: &str) -> String {
+    format!("{stem}-{}.{extension}", std::process::id())
+}
+
+/// How many names a temporary file tries: a name is taken only by a file
+/// a process of the same ID left behind.
+const TEMPORARY_NAMES: u32 = 64;
+
+/// How many times a rename is tried while Windows reports the target in
+/// use, and the first wait (doubled each time: 150 ms in all).
+const RENAME_TRIES: u32 = 5;
+const RENAME_WAIT: Duration = Duration::from_millis(10);
+
+/// The temporary files' numbers in this process.
+static TEMPORARY_NUMBER: AtomicU64 = AtomicU64::new(0);
+
+fn replace(path: &Path, bytes: &[u8], flush: bool, private: bool) -> io::Result<()> {
+    let path = link_target(path);
+    let dir = match path.parent() {
+        Some(dir) if !dir.as_os_str().is_empty() => dir,
+        _ => Path::new("."),
+    };
     fs::create_dir_all(dir)?;
-    let mut temporary = path.as_os_str().to_owned();
-    temporary.push(".tmp");
-    let temporary = PathBuf::from(temporary);
-    {
-        let mut file = fs::File::create(&temporary)?;
-        file.write_all(bytes)?;
-        file.sync_all()?;
+    let (temporary, mut file) = create_temporary(dir, &path, private)?;
+    let written = file
+        .write_all(bytes)
+        .and_then(|()| if flush { file.sync_all() } else { Ok(()) });
+    drop(file);
+    if let Err(error) = written.and_then(|()| rename_retrying(&temporary, &path)) {
+        let _ = fs::remove_file(&temporary);
+        return Err(error);
     }
-    fs::rename(&temporary, path)?;
-    if !cfg!(windows) {
+    if flush && !cfg!(windows) {
         // Make the rename itself durable; directories cannot be opened for
         // this on Windows, where the rename is already flushed.
         fs::File::open(dir)?.sync_all()?;
@@ -127,8 +190,92 @@ pub fn write_atomic(path: &Path, bytes: &[u8]) -> io::Result<()> {
     Ok(())
 }
 
+/// The file a write replaces: a symbolic link's target, so that the link
+/// stays (and the file it names gets the new content).
+fn link_target(path: &Path) -> PathBuf {
+    match fs::symlink_metadata(path) {
+        Ok(meta) if meta.file_type().is_symlink() => {
+            fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf())
+        }
+        _ => path.to_path_buf(),
+    }
+}
+
+/// A new temporary file beside `path`, under a name no file has (a name
+/// that is taken, by a file or a link, is never opened).
+fn create_temporary(dir: &Path, path: &Path, private: bool) -> io::Result<(PathBuf, fs::File)> {
+    // The start of the file's name says whose a leftover is; long names
+    // are cut so the temporary one stays within the system's limit.
+    let name = path
+        .file_name()
+        .map(|name| name.to_string_lossy().into_owned())
+        .unwrap_or_default();
+    let mut end = name.len().min(64);
+    while !name.is_char_boundary(end) {
+        end -= 1;
+    }
+    let mut options = fs::OpenOptions::new();
+    options.write(true).create_new(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt as _;
+        if private {
+            options.mode(0o600);
+        }
+    }
+    #[cfg(not(unix))]
+    let _ = private;
+    let mut taken = None;
+    for _ in 0..TEMPORARY_NAMES {
+        let number = TEMPORARY_NUMBER.fetch_add(1, Ordering::Relaxed);
+        let temporary = dir.join(format!(
+            ".{}.{}.{number}.tmp",
+            &name[..end],
+            std::process::id()
+        ));
+        match options.open(&temporary) {
+            Ok(file) => return Ok((temporary, file)),
+            Err(error) if error.kind() == io::ErrorKind::AlreadyExists => taken = Some(error),
+            Err(error) => return Err(error),
+        }
+    }
+    Err(taken.unwrap_or_else(|| io::ErrorKind::AlreadyExists.into()))
+}
+
+fn rename_retrying(from: &Path, to: &Path) -> io::Result<()> {
+    retry(|| fs::rename(from, to), RENAME_TRIES, in_use)
+}
+
+/// Runs `step` until it succeeds, fails for another reason than
+/// `passing`, or ran `tries` times; the waits between double.
+fn retry(
+    mut step: impl FnMut() -> io::Result<()>,
+    tries: u32,
+    passing: impl Fn(&io::Error) -> bool,
+) -> io::Result<()> {
+    let mut wait = RENAME_WAIT;
+    let mut attempt = 1;
+    loop {
+        match step() {
+            Err(error) if attempt < tries && passing(&error) => {
+                std::thread::sleep(wait);
+                wait *= 2;
+                attempt += 1;
+            }
+            result => return result,
+        }
+    }
+}
+
+/// Windows' errors for a file another program holds open: access denied,
+/// a sharing or a lock violation.
+fn in_use(error: &io::Error) -> bool {
+    cfg!(windows) && matches!(error.raw_os_error(), Some(5 | 32 | 33))
+}
+
 /// Reads a JSON file. A missing file is `Ok(None)`; a damaged one is moved
-/// aside to `<name>.bad` and also `Ok(None)`, so a bad file never stops RVP.
+/// aside to `<name>.bad` when it can be and also `Ok(None)`, so a bad file
+/// never stops RVP.
 ///
 /// # Errors
 /// Fails on I/O errors other than a missing file.
@@ -143,7 +290,10 @@ pub fn read_json<T: serde::de::DeserializeOwned>(path: &Path) -> io::Result<Opti
     } else {
         let mut bad = path.as_os_str().to_owned();
         bad.push(".bad");
-        fs::rename(path, PathBuf::from(bad))?;
+        // A file that cannot be moved (another RVP moved it first, the
+        // folder is read-only, the name is taken) is no reason to stop:
+        // the next save replaces it.
+        let _ = fs::rename(path, PathBuf::from(bad));
         Ok(None)
     }
 }
@@ -332,15 +482,154 @@ mod tests {
         dir
     }
 
+    /// The names in `dir`, sorted.
+    fn names(dir: &Path) -> Vec<String> {
+        let mut names: Vec<String> = fs::read_dir(dir)
+            .expect("list")
+            .map(|entry| {
+                entry
+                    .expect("entry")
+                    .file_name()
+                    .to_string_lossy()
+                    .into_owned()
+            })
+            .collect();
+        names.sort();
+        names
+    }
+
     #[test]
     fn atomic_write_replaces_and_leaves_no_temporary() {
         let dir = scratch("atomic");
         let path = dir.join("a.json");
         write_atomic(&path, b"one").expect("first write");
         write_atomic(&path, b"two").expect("second write");
-        assert_eq!(fs::read(&path).expect("read"), b"two");
-        assert!(!dir.join("a.json.tmp").exists());
+        write_unflushed(&path, b"three").expect("third write");
+        assert_eq!(fs::read(&path).expect("read"), b"three");
+        assert_eq!(names(&dir), ["a.json"]);
+        // A failed write leaves its temporary file behind neither: a
+        // directory where the file should be.
+        fs::create_dir_all(dir.join("b.json").join("inside")).expect("blocker");
+        assert!(write_atomic(&dir.join("b.json"), b"x").is_err());
+        assert_eq!(names(&dir), ["a.json", "b.json"]);
         let _ = fs::remove_dir_all(&dir);
+    }
+
+    /// Several processes (here threads) write one file at once: each
+    /// write has its own temporary file, so none fails and the file is
+    /// always one whole version.
+    #[test]
+    fn writers_of_one_file_do_not_share_a_temporary_file() {
+        let dir = scratch("writers");
+        let path = dir.join("state.json");
+        let writers: Vec<_> = (0..6u8)
+            .map(|writer| {
+                let path = path.clone();
+                std::thread::spawn(move || {
+                    // Different lengths: a shorter version written over a
+                    // longer one would keep the longer one's tail.
+                    let bytes = vec![b'a' + writer; 4096 * (usize::from(writer) + 1)];
+                    for _ in 0..20 {
+                        write_atomic(&path, &bytes)?;
+                        let read = fs::read(&path)?;
+                        let first = read.first().copied().unwrap_or_default();
+                        let whole = first >= b'a'
+                            && read.len() == 4096 * usize::from(first - b'a' + 1)
+                            && read.iter().all(|byte| *byte == first);
+                        if !whole {
+                            return Err(io::Error::other(format!(
+                                "a mixed file of {} bytes",
+                                read.len()
+                            )));
+                        }
+                    }
+                    Ok::<(), io::Error>(())
+                })
+            })
+            .collect();
+        for writer in writers {
+            writer.join().expect("writer").expect("writes");
+        }
+        assert_eq!(names(&dir), ["state.json"]);
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    // Links need a privilege on Windows.
+    #[cfg(unix)]
+    #[test]
+    fn a_linked_file_stays_a_link() {
+        use std::os::unix::fs::PermissionsExt as _;
+        let dir = scratch("link");
+        let real = dir.join("real");
+        fs::create_dir_all(&real).expect("dir");
+        write_atomic(&real.join("settings.json"), b"old").expect("write");
+        let link = dir.join("settings.json");
+        std::os::unix::fs::symlink(real.join("settings.json"), &link).expect("link");
+        write_atomic(&link, b"new").expect("write through the link");
+        assert!(
+            fs::symlink_metadata(&link)
+                .expect("meta")
+                .file_type()
+                .is_symlink()
+        );
+        assert_eq!(fs::read(real.join("settings.json")).expect("read"), b"new");
+        assert_eq!(names(&dir), ["real", "settings.json"]);
+        assert_eq!(names(&real), ["settings.json"]);
+        // The owner-only kind.
+        write_private(&dir.join("token"), b"secret").expect("private");
+        let mode = fs::metadata(dir.join("token"))
+            .expect("meta")
+            .permissions()
+            .mode();
+        assert_eq!(mode & 0o777, 0o600);
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_step_is_tried_again_only_while_its_error_passes() {
+        let mut calls = 0;
+        let busy = || io::Error::from(io::ErrorKind::ResourceBusy);
+        let result = retry(
+            || {
+                calls += 1;
+                if calls < 3 { Err(busy()) } else { Ok(()) }
+            },
+            5,
+            |error| error.kind() == io::ErrorKind::ResourceBusy,
+        );
+        assert!(result.is_ok());
+        assert_eq!(calls, 3);
+        // Another error, or too many tries: the error.
+        let mut calls = 0;
+        let result = retry(
+            || {
+                calls += 1;
+                Err(io::Error::from(io::ErrorKind::NotFound))
+            },
+            5,
+            |error| error.kind() == io::ErrorKind::ResourceBusy,
+        );
+        assert_eq!(
+            result.map_err(|error| error.kind()),
+            Err(io::ErrorKind::NotFound)
+        );
+        assert_eq!(calls, 1);
+        let mut calls = 0;
+        assert!(
+            retry(
+                || {
+                    calls += 1;
+                    Err(busy())
+                },
+                5,
+                |error| error.kind() == io::ErrorKind::ResourceBusy,
+            )
+            .is_err()
+        );
+        assert_eq!(calls, 5);
+        // Windows' sharing errors pass there, and nothing elsewhere.
+        assert_eq!(in_use(&io::Error::from_raw_os_error(32)), cfg!(windows));
+        assert!(!in_use(&io::Error::from(io::ErrorKind::NotFound)));
     }
 
     #[test]
@@ -376,6 +665,13 @@ mod tests {
         assert!(!path.exists());
         let missing: Option<serde_json::Value> = read_json(&dir.join("none.json")).expect("read");
         assert!(missing.is_none());
+        // A damaged file that cannot be moved aside (its `.bad` name is a
+        // folder with something in it) does not stop the start either.
+        write_atomic(&path, b"{ damaged again").expect("write");
+        fs::remove_file(dir.join("state.json.bad")).expect("remove");
+        fs::create_dir_all(dir.join("state.json.bad").join("inside")).expect("blocker");
+        let value: Option<serde_json::Value> = read_json(&path).expect("read");
+        assert!(value.is_none());
         let _ = fs::remove_dir_all(&dir);
     }
 }

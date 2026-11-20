@@ -230,10 +230,9 @@ fn edits_show_at_once_and_save_writes_the_sync_into_the_file() {
     assert_eq!(h.edit("text", 0, "edited line"), None);
     h.sub_text("the edited subtitle", "edited line");
     assert!(h.browser()["dirty"].as_bool().unwrap_or_default());
-    assert_eq!(
-        h.shown_file(),
-        Some(h.state("editing.srt").to_string_lossy().into_owned())
-    );
+    // The working copy is this RVP's own: its process ID in the name.
+    let copy = h.state(&format!("editing-{}.srt", std::process::id()));
+    assert_eq!(h.shown_file(), Some(copy.to_string_lossy().into_owned()));
     assert_eq!(h.edit("undo", -1, ""), None);
     h.sub_text("the undone edit", "first line");
     assert_eq!(h.edit("redo", -1, ""), None);
@@ -266,6 +265,68 @@ fn edits_show_at_once_and_save_writes_the_sync_into_the_file() {
         .seek(rvp_engine::Seek::Absolute(31.0))
         .expect("seek");
     h.sub_text("the saved subtitle", "edited line");
+
+    // A second save keeps the first one's backup, the original: its own
+    // backup takes a free name.
+    assert_eq!(h.edit("text", 0, "edited twice"), None);
+    assert!(matches!(h.edit("save", -1, ""), Some(UiRequest::Osd(_))));
+    assert!(read(&file).contains("edited twice"));
+    assert_eq!(read(&h.state("backup/clip.srt")), SRT);
+    assert_eq!(read(&h.state("backup/clip (2).srt")), saved);
+    // A file of the same name from another folder: a third backup.
+    let elsewhere = h.dir.join("other").join("clip.srt");
+    std::fs::create_dir_all(elsewhere.parent().expect("folder")).expect("folder");
+    std::fs::write(&elsewhere, "elsewhere").expect("write");
+    let target = elsewhere.clone();
+    assert!(matches!(
+        h.app.save_subtitle_as(&h.engine, &target),
+        UiRequest::Osd(_)
+    ));
+    assert!(read(&elsewhere).contains("edited twice"));
+    assert_eq!(read(&h.state("backup/clip (3).srt")), "elsewhere");
+    assert_eq!(read(&h.state("backup/clip.srt")), SRT);
+    // The working copy goes when RVP closes.
+    assert!(copy.exists());
+    h.app.shutdown(&h.engine, Instant::now()).expect("shutdown");
+    assert!(!copy.exists());
+}
+
+// Links need a privilege on Windows.
+#[cfg(unix)]
+#[test]
+fn a_linked_subtitle_stays_a_link_and_no_planted_name_is_followed() {
+    let mut h = Harness::new("link", |_| {});
+    let real = h.dir.join("real");
+    std::fs::create_dir_all(&real).expect("folder");
+    std::fs::write(real.join("clip.srt"), SRT).expect("write");
+    let file = h.dir.join("clip.srt");
+    std::os::unix::fs::symlink(real.join("clip.srt"), &file).expect("link");
+    // A link where the old fixed temporary name was, to a file the save
+    // must not touch.
+    let victim = h.dir.join("victim.txt");
+    std::fs::write(&victim, "untouched").expect("write");
+    std::os::unix::fs::symlink(&victim, h.dir.join("clip.srt.rvp-tmp")).expect("link");
+    let request = h.app.load_subtitle(&h.engine, &file);
+    assert!(matches!(request, Some(UiRequest::Osd(_))), "{request:?}");
+    h.sub_text("the first subtitle", "first line");
+    h.browser();
+    assert_eq!(h.edit("text", 0, "edited line"), None);
+    assert!(matches!(h.edit("save", -1, ""), Some(UiRequest::Osd(_))));
+    assert_eq!(read(&victim), "untouched");
+    assert!(
+        std::fs::symlink_metadata(&file)
+            .expect("meta")
+            .file_type()
+            .is_symlink()
+    );
+    assert!(read(&real.join("clip.srt")).contains("edited line"));
+    assert_eq!(read(&h.state("backup/clip.srt")), SRT);
+    // No temporary file is left beside the real one.
+    let names: Vec<_> = std::fs::read_dir(&real)
+        .expect("list")
+        .map(|entry| entry.expect("entry").file_name())
+        .collect();
+    assert_eq!(names, ["clip.srt"]);
 }
 
 #[test]
@@ -383,12 +444,17 @@ fn unsaved_edits_are_kept_when_another_file_starts() {
     h.sub_text("the first subtitle", "first line");
     h.browser();
     assert_eq!(h.edit("delete", 2, ""), None);
+    // Edits kept before from a file of the same name (or typed ones, all
+    // named "typed") are not written over: these take a free name.
+    let earlier = h.state("unsaved-clip.srt");
+    std::fs::create_dir_all(earlier.parent().expect("folder")).expect("folder");
+    std::fs::write(&earlier, "kept before").expect("write");
     let other = h.dir.join("other.mkv");
     std::fs::copy(media("fixture-3s.mkv"), &other).expect("copy");
     h.app
         .open(&h.engine, &[other.to_string_lossy().into_owned()], false)
         .expect("open");
-    let kept = h.state("unsaved-clip.srt");
+    let kept = h.state("unsaved-clip (2).srt");
     let message = format!("Unsaved subtitle edits are kept in {}", kept.display());
     h.wait("the next file", |app, _| {
         app.model
@@ -404,4 +470,5 @@ fn unsaved_edits_are_kept_when_another_file_starts() {
     );
     let unsaved = read(&kept);
     assert!(unsaved.contains("second line") && !unsaved.contains("third line"));
+    assert_eq!(read(&earlier), "kept before");
 }

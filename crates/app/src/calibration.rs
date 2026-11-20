@@ -369,17 +369,13 @@ pub fn load(folder: &Path) -> Option<Calibration> {
     serde_json::from_str(&text).ok()
 }
 
-/// Writes `calibration` to `folder` (a temporary file renamed over the
-/// old one).
+/// Writes `calibration` to `folder` ([`crate::storage::write_atomic`]).
 ///
 /// # Errors
 /// Fails when the file cannot be written.
 pub fn save(folder: &Path, calibration: &Calibration) -> std::io::Result<()> {
-    std::fs::create_dir_all(folder)?;
     let text = serde_json::to_string_pretty(calibration).map_err(std::io::Error::other)?;
-    let temporary = folder.join(format!("{FILE_NAME}.tmp"));
-    std::fs::write(&temporary, text)?;
-    std::fs::rename(&temporary, folder.join(FILE_NAME))
+    crate::storage::write_atomic(&folder.join(FILE_NAME), text.as_bytes())
 }
 
 /// What a calibration needs: the machine's key, the engines and their
@@ -488,7 +484,16 @@ impl Drop for Runner {
 /// The thread: measures until [`next`] has nothing left, then writes the
 /// results.
 fn run(job: &Job, cancel: &AtomicBool, sender: &Sender<Event>) {
-    let script = job.folder.join("vapoursynth").join("rvp-calibrate.vpy");
+    let script = job
+        .folder
+        .join("vapoursynth")
+        .join(crate::storage::process_file_name("rvp-calibrate", "vpy"));
+    measure_all(job, &script, cancel, sender);
+    let _ = std::fs::remove_file(&script);
+}
+
+/// [`run`]'s measurements with the script at `script`.
+fn measure_all(job: &Job, script: &Path, cancel: &AtomicBool, sender: &Sender<Event>) {
     let mut calibration = Calibration {
         version: VERSION,
         key: job.key.clone(),
@@ -509,7 +514,7 @@ fn run(job: &Job, cancel: &AtomicBool, sender: &Sender<Event>) {
     };
     while let Some(step) = next(&calibration.points, &job.available, &calibration.failed) {
         if cancel.load(Ordering::Relaxed)
-            || !measure_step(job, &files, &script, step, &mut calibration, cancel, sender)
+            || !measure_step(job, &files, script, step, &mut calibration, cancel, sender)
         {
             drop(sender.send(Event::Cancelled));
             return;
@@ -561,11 +566,7 @@ fn measure_step(
         0,
         crate::smoothing::scene_threshold("normal"),
     );
-    if let Err(error) = script
-        .parent()
-        .map_or(Ok(()), std::fs::create_dir_all)
-        .and_then(|()| std::fs::write(script, text))
-    {
+    if let Err(error) = crate::storage::write_unflushed(script, text.as_bytes()) {
         fell_short(
             calibration,
             format!("the script cannot be written: {error}"),

@@ -1394,8 +1394,12 @@ impl App {
         )
     }
 
-    fn smoothing_script_path(&self) -> PathBuf {
-        self.state_dir().join("vapoursynth").join("rvp-smooth.vpy")
+    /// The script mpv reads again at every start and seek: this process's
+    /// own, as each RVP plays its own file.
+    pub(crate) fn smoothing_script_path(&self) -> PathBuf {
+        self.state_dir()
+            .join("vapoursynth")
+            .join(crate::storage::process_file_name("rvp-smooth", "vpy"))
     }
 
     /// RVP's smoothing filter while a motion-compensated engine runs
@@ -1447,7 +1451,7 @@ impl App {
         let path = self.smoothing_script_path();
         let smoothing = &self.settings.smoothing;
         let scene = scene_threshold(&smoothing.scene_change);
-        crate::storage::write_atomic(
+        crate::storage::write_unflushed(
             &path,
             script(
                 engine,

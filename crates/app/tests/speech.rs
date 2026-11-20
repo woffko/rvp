@@ -190,7 +190,9 @@ fn real_time_subtitles_follow_the_playback_position() {
                 .iter()
                 .any(|request| matches!(request, UiRequest::Message(_)))
     });
-    let srt = std::fs::read_to_string(h.dir.join("state/subtitles/realtime.srt")).expect("the SRT");
+    // Each RVP's own file: this process's ID in its name.
+    let realtime = format!("state/subtitles/realtime-{}.srt", std::process::id());
+    let srt = std::fs::read_to_string(h.dir.join(realtime)).expect("the SRT");
     assert!(srt.to_lowercase().contains("hello"), "{srt}");
     assert!(
         h.app.model.double(PropertyId::Duration).unwrap_or_default() < 30.0,

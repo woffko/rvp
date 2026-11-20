@@ -2857,7 +2857,7 @@ impl qobject::Player {
             Ok(imported) => imported,
             Err(error) => return settings_result(&[], false, Some(&error)),
         };
-        let applied = core.app.apply_settings(core.engine, settings);
+        let applied = core.app.import_settings(core.engine, settings);
         notes.extend(applied.notes);
         notes.dedup();
         self.as_mut().settings_applied();
@@ -2869,9 +2869,47 @@ impl qobject::Player {
             return settings_result(&[], false, Some("not started"));
         };
         let path = PathBuf::from(path.to_string());
-        match preferences::export(&core.app.settings, &path) {
+        match core.app.export_settings(&path) {
             Ok(()) => settings_result(&[format!("Saved {}", path.display())], false, None),
             Err(error) => settings_result(&[], false, Some(&error.to_string())),
+        }
+    }
+
+    pub(crate) fn rename_preset(
+        mut self: Pin<&mut Self>,
+        old: &QString,
+        name: &QString,
+    ) -> QString {
+        let Some(core) = self.as_mut().core_mut() else {
+            return settings_result(&[], false, Some("not started"));
+        };
+        let renamed = core
+            .app
+            .rename_preset(core.engine, &old.to_string(), &name.to_string());
+        self.preset_changed(renamed)
+    }
+
+    pub(crate) fn duplicate_preset(mut self: Pin<&mut Self>, name: &QString) -> QString {
+        let Some(core) = self.as_mut().core_mut() else {
+            return settings_result(&[], false, Some("not started"));
+        };
+        let duplicated = core.app.duplicate_preset(core.engine, &name.to_string());
+        self.preset_changed(duplicated)
+    }
+
+    /// After a change of the presets: as after `set_setting`.
+    fn preset_changed(
+        mut self: Pin<&mut Self>,
+        result: Result<preferences::Applied, String>,
+    ) -> QString {
+        match result {
+            Ok(applied) => {
+                let mut notes = applied.notes;
+                notes.dedup();
+                self.as_mut().settings_applied();
+                settings_result(&notes, applied.restart, None)
+            }
+            Err(error) => settings_result(&[], false, Some(&error)),
         }
     }
 

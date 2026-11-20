@@ -194,6 +194,93 @@ fn presets_keep_their_values_across_a_restart() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
+/// The settings file as it is on disk.
+fn stored(dirs: &Dirs) -> serde_json::Value {
+    read_json(&dirs.config.join("settings.json"))
+        .expect("read")
+        .expect("saved")
+}
+
+/// The Configuration page's Rename and Duplicate (`Settings.qml`) while a
+/// preset is active: each is one change, so settings.json keeps the
+/// default's values at its top level and the preset's with the preset.
+#[test]
+fn renaming_and_duplicating_the_active_preset_keep_the_values() {
+    let dir = scratch("preset-rename");
+    let dirs = Dirs::inside(&dir);
+    let engine = Engine::new(&EngineOptions::headless()).expect("engine");
+    let mut app = App::load(&dirs).expect("load");
+    let default_step = app.settings.volume_step;
+    // The page's Add, Activate (its `p:1`) and a change while it runs.
+    let night = json!([{ "name": "Night", "conditions": {}, "values": null }]);
+    let (settings, _) = change(&app.settings, "presets.list", night).expect("list");
+    app.apply_settings(&engine, settings);
+    app.activate_preset(&engine, "Night", true);
+    let (settings, _) = change(&app.settings, "volume-step", json!(7)).expect("step");
+    app.apply_settings(&engine, settings);
+
+    // What the page wrote before, the list with the new name and then the
+    // active name, is refused at its first write: it named no preset
+    // active, and the values running went to the default's place.
+    let view = app.settings_view(&engine, false, false);
+    let mut renamed = view["settings"]["presets"]["list"].clone();
+    renamed[0]["name"] = json!("Evening");
+    assert!(change(&app.settings, "presets.list", renamed).is_err());
+    assert!(change(&app.settings, "presets.active", json!("Evening")).is_err());
+
+    // Rename: one change.
+    let applied = app
+        .rename_preset(&engine, "Night", "Evening")
+        .expect("rename");
+    assert!(applied.notes.is_empty(), "{:?}", applied.notes);
+    assert_eq!(app.settings.presets.active, "Evening");
+    assert!((app.settings.volume_step - 7.0).abs() < 1e-9);
+    assert!(app.rename_preset(&engine, "Evening", " ").is_err());
+    assert!(app.rename_preset(&engine, "Nobody", "Other").is_err());
+    app.shutdown(&engine, Instant::now()).expect("shutdown");
+    let file = stored(&dirs);
+    assert_eq!(file["volume-step"].as_f64(), Some(default_step));
+    assert_eq!(file["presets"]["active"], json!("Evening"));
+    assert_eq!(file["presets"]["list"][0]["name"], json!("Evening"));
+    assert_eq!(
+        file["presets"]["list"][0]["values"]["volume-step"].as_f64(),
+        Some(7.0)
+    );
+
+    // Duplicate after a change made since the preset was activated: the
+    // copy has the values in force.
+    let mut again = App::load(&dirs).expect("reload");
+    assert_eq!(again.settings.presets.active, "Evening");
+    assert!((again.settings.volume_step - 7.0).abs() < 1e-9);
+    let (settings, _) = change(&again.settings, "volume-step", json!(9)).expect("step");
+    again.apply_settings(&engine, settings);
+    again
+        .duplicate_preset(&engine, "Evening")
+        .expect("duplicate");
+    again
+        .duplicate_preset(&engine, "Evening")
+        .expect("duplicate again");
+    assert!(again.duplicate_preset(&engine, "Nobody").is_err());
+    again.shutdown(&engine, Instant::now()).expect("shutdown");
+    let file = stored(&dirs);
+    assert_eq!(file["volume-step"].as_f64(), Some(default_step));
+    let list = &file["presets"]["list"];
+    assert_eq!(list[1]["name"], json!("Evening (copy)"));
+    assert_eq!(list[2]["name"], json!("Evening (copy 2)"));
+    for index in 0..3 {
+        assert_eq!(list[index]["values"]["volume-step"].as_f64(), Some(9.0));
+    }
+
+    // A restart: each preset with its values, the default with its own.
+    let mut third = App::load(&dirs).expect("third start");
+    assert!((third.settings.volume_step - 9.0).abs() < 1e-9);
+    third.activate_preset(&engine, "", true);
+    assert!((third.settings.volume_step - default_step).abs() < 1e-9);
+    third.activate_preset(&engine, "Evening (copy)", true);
+    assert!((third.settings.volume_step - 9.0).abs() < 1e-9);
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
 #[test]
 fn a_settings_file_moves_between_installations() {
     let dir = scratch("import-export");
@@ -202,13 +289,39 @@ fn a_settings_file_moves_between_installations() {
     let (changed, _) = change(&first.settings, "volume-step", json!(4)).expect("change");
     first.apply_settings(&engine, changed);
     let file = dir.join("rvp-settings.json");
-    preferences::export(&first.settings, &file).expect("export");
+    first.export_settings(&file).expect("export");
 
     let mut second = App::load(&Dirs::inside(&dir.join("second"))).expect("second");
     let (imported, notes) = preferences::import(&file).expect("import");
     assert!(notes.is_empty(), "{notes:?}");
-    second.apply_settings(&engine, imported);
+    second.import_settings(&engine, imported);
     assert_eq!(second.settings, first.settings);
+
+    // With a preset active the file is settings.json as it would be: the
+    // default's values, and the preset's own with it.
+    let night = json!([{ "name": "Night", "conditions": {}, "values": null }]);
+    let (settings, _) = change(&first.settings, "presets.list", night).expect("list");
+    first.apply_settings(&engine, settings);
+    first.activate_preset(&engine, "Night", true);
+    let (settings, _) = change(&first.settings, "volume-step", json!(7)).expect("step");
+    first.apply_settings(&engine, settings);
+    first.export_settings(&file).expect("export");
+    let exported: serde_json::Value = read_json(&file).expect("read").expect("written");
+    assert_eq!(exported["volume-step"].as_f64(), Some(4.0));
+    assert_eq!(exported["presets"]["active"], json!("Night"));
+    assert_eq!(
+        exported["presets"]["list"][0]["values"]["volume-step"].as_f64(),
+        Some(7.0)
+    );
+    // Imported, it runs as a start would: the preset with its values, the
+    // default's waiting.
+    let (imported, notes) = preferences::import(&file).expect("import");
+    assert!(notes.is_empty(), "{notes:?}");
+    second.import_settings(&engine, imported);
+    assert_eq!(second.settings.presets.active, "Night");
+    assert!((second.settings.volume_step - 7.0).abs() < 1e-9);
+    second.activate_preset(&engine, "", true);
+    assert!((second.settings.volume_step - 4.0).abs() < 1e-9);
     let _ = std::fs::remove_dir_all(&dir);
 }
 

@@ -349,7 +349,21 @@ Item {
             player.run_menu_command("p:1")
             t.check("m14_preset_keeps_its_values", view().settings["volume-step"] === 7,
                     "step " + view().settings["volume-step"])
+            // The page's Rename and Duplicate of the active preset: its
+            // values stay its own, the copy gets them, the default its own.
+            const renamed = JSON.parse(player.rename_preset("Quiet", "Calm"))
+            const duplicated = JSON.parse(player.duplicate_preset("Calm"))
+            const presets = view().settings.presets
+            t.check("m14_preset_renames_while_active", renamed.error === "" && duplicated.error === ""
+                        && presets.active === "Calm" && view().settings["volume-step"] === 7
+                        && presets.list.length === 2 && !!presets.list[1].values
+                        && presets.list[1].values["volume-step"] === 7,
+                    JSON.stringify([renamed.error, duplicated.error, presets.active,
+                                    presets.list.map(preset => preset.name)]))
             player.run_menu_command("p:0")
+            t.check("m14_default_keeps_its_values_after_rename", view().settings["volume-step"] === step,
+                    "step " + view().settings["volume-step"])
+            player.rename_preset("Calm", "Quiet")
             // Auto-Preset: the tone file meets the file name condition.
             setSetting("presets.list", [{ name: "Quiet", conditions: { "file-name": "*tone*" },
                                           values: JSON.parse(JSON.stringify(view().settings.presets.list[0].values)) }])

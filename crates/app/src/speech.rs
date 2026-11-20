@@ -24,7 +24,8 @@
 //!   so, in RVP's state folder; it is added as a subtitle track.
 //! * In real time RVP makes 30 s pieces from the playback position on, two
 //!   ahead, and again from where a seek lands; their subtitles show as one
-//!   track (`subtitles/realtime.srt` in the state folder).
+//!   track (`subtitles/realtime-<pid>.srt` in the state folder, each RVP's
+//!   own).
 //! * While the GPU power budget's step is taken (D17, `crate::gpu_power`)
 //!   the next pieces and jobs run on the CPU.
 //!
@@ -1036,13 +1037,20 @@ impl App {
         requests
     }
 
+    /// Real time's subtitle file: this process's own.
+    pub(crate) fn realtime_subtitle_path(&self) -> PathBuf {
+        self.state_dir()
+            .join("subtitles")
+            .join(crate::storage::process_file_name("realtime", "srt"))
+    }
+
     /// Gives mpv real time's subtitles so far as one track.
     fn show_pieces(&mut self, engine: &Engine) -> Result<(), String> {
         let mut document = Document::new(Format::Srt);
         document.cues.clone_from(&self.speech.pieces.cues);
         document.sort();
-        let path = self.state_dir().join("subtitles").join("realtime.srt");
-        crate::subtitle_editor::write_file(&path, &document.to_bytes(Format::Srt))
+        let path = self.realtime_subtitle_path();
+        crate::storage::write_unflushed(&path, &document.to_bytes(Format::Srt))
             .map_err(|error| format!("Cannot write {}: {error}", path.display()))?;
         let old = self.speech.pieces.track;
         // The track keeps being shown when it was.
@@ -1097,7 +1105,7 @@ impl App {
             } else {
                 first
             };
-            if crate::subtitle_editor::write_file(&target, &bytes).is_ok() {
+            if crate::storage::write_unflushed(&target, &bytes).is_ok() {
                 written = Some(target);
             }
         }
@@ -1109,7 +1117,7 @@ impl App {
                 .join("subtitles")
                 .join("generated")
                 .join(&name);
-            if let Err(error) = crate::subtitle_editor::write_file(&target, &bytes) {
+            if let Err(error) = crate::storage::write_unflushed(&target, &bytes) {
                 return UiRequest::Message(format!("Cannot save {}: {error}", target.display()));
             }
             target

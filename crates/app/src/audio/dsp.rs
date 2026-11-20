@@ -344,12 +344,8 @@ pub fn write_wav<const N: usize>(path: &Path, frames: &[[f32; N]]) -> std::io::R
             bytes.extend_from_slice(&sample.to_le_bytes());
         }
     }
-    if let Some(parent) = path.parent() {
-        std::fs::create_dir_all(parent)?;
-    }
-    let temporary = path.with_extension("tmp");
-    std::fs::write(&temporary, bytes)?;
-    std::fs::rename(&temporary, path)
+    // Flushed: a response file is written once and then used as it is.
+    crate::storage::write_atomic(path, &bytes)
 }
 
 /// A response file for `afir` and the level of each of its channels, which
