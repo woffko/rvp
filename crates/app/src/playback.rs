@@ -172,11 +172,11 @@ pub struct Playback {
     pub seek_markers: bool,
     /// Playback pauses while the mouse holds the seek bar.
     pub pause_while_seeking: bool,
-    /// Exact seeks drop the frames before the target before the video
-    /// filters (mpv's `hr-seek-framedrop`; the owner, 2026-11-10: with
-    /// RIFE a seek took up to 4.5 s, every frame from the keyframe on going
-    /// through it). Not in SVP mode unless RVP's own smoothing filter runs:
-    /// SVP's filter needs them (`App::apply_seek_framedrop`).
+    /// Exact seeks let the decoder leave out frames before the target
+    /// (mpv's `hr-seek-framedrop`), except beside a VapourSynth filter
+    /// (RVP's smoothing with MVTools or RIFE, its script slot, SVP's):
+    /// that filter counts its frames, and the picture would run ahead of
+    /// the sound (`App::apply_seek_framedrop`).
     pub seek_skip_before_target: bool,
     /// After a seek while a smoothing filter runs, the target's frame from
     /// the thumbnail core shows over the video until the smoothed picture

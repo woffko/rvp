@@ -1586,16 +1586,27 @@ impl App {
         }
     }
 
-    /// Exact seeks skip the frames before the target, before the video
-    /// filters, while the Playback page allows it
-    /// (`Playback::seek_skip_before_target`) and SVP's filter cannot be
-    /// there: RVP's smoothing filter runs (which the plan never runs beside
-    /// SVP's), or SVP mode is off. Every frame from the keyframe on went
-    /// through the engine, up to 4.5 s with RIFE. The engine starts mpv
-    /// with "no" for SVP's filter, which needs them.
+    /// Exact seeks let mpv's decoder leave out frames before the target
+    /// (`hr-seek-framedrop`) while the Playback page allows it
+    /// (`Playback::seek_skip_before_target`) and no VapourSynth filter can
+    /// be in the chain. The decoder then decodes none of the non-reference
+    /// frames before the target, and the others still go through the
+    /// filters. mpv's `vapoursynth` filter times its frames by counting
+    /// them from the first it gets, so after such a seek its picture is as
+    /// many frames ahead of its timestamps, and of the sound, as were left
+    /// out, until the next seek (the owner's film, 2026-11-21, 2.8 s past a
+    /// keyframe; from 2026-11-10 until then this was on beside RVP's own
+    /// smoothing). So never beside RVP's smoothing through VapourSynth
+    /// (MVTools, RIFE), RVP's script slot or SVP's filter (SVP mode):
+    /// every frame from the keyframe on goes through them. `fruc_vulkan`
+    /// and mpv's own filters keep each frame's timestamp. The engine starts
+    /// mpv with "no".
     pub(crate) fn apply_seek_framedrop(&mut self, engine: &Mpv, plan: &Plan) {
-        let skip = self.settings.playback.seek_skip_before_target
-            && (matches!(plan, Plan::Filter { .. }) || !crate::svp::svp_mode(&self.settings));
+        let scripts = &self.settings.vapoursynth;
+        let counted = matches!(plan, Plan::Filter { engine, .. } if *engine != Engine::FrucVulkan)
+            || (scripts.enabled && scripts.script.is_some())
+            || crate::svp::svp_mode(&self.settings);
+        let skip = self.settings.playback.seek_skip_before_target && !counted;
         if self.smoothing.framedrop.unwrap_or(false) != skip {
             self.smoothing.framedrop = Some(skip);
             drop(engine.set_text("hr-seek-framedrop", if skip { "yes" } else { "no" }));

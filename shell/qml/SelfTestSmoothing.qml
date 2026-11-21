@@ -71,11 +71,13 @@ Item {
         case 5: {
             // SVP's way: mpv loads the script again after a seek, whose
             // first second shows the original (`original-first`); the
-            // filter stays in, and the rate rises again. The frames before
-            // the target skip the filter, and the thumbnail core renders
+            // filter stays in, and the rate rises again. Every frame from
+            // the keyframe on goes through the filter, which counts its
+            // frames (with mpv's hr-seek-framedrop the picture ran ahead
+            // of the sound after a seek), and the thumbnail core renders
             // the target for the window meanwhile.
             if (mvtools) {
-                t.check("seeks_skip_frames_before_the_target", diagnostics().hr_seek_framedrop === "yes",
+                t.check("seeks_keep_every_frame_for_the_filter", diagnostics().hr_seek_framedrop === "no",
                         diagnostics().hr_seek_framedrop)
                 const stats = s.thumbnail_stats
                 smoothing.thumbnailsBefore = stats.rendered + stats.cancelled

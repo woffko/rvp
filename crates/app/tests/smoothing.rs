@@ -2,8 +2,9 @@
 //! options, and where a VapourSynth runtime with MVTools is (`VSSCRIPT_PATH`
 //! or a system install; skipped elsewhere) the smoothed moving square of
 //! `fixture-square.mkv` (twice the frames, the square halfway in the frames
-//! between), toggles during playback, SVP's `@svp` untouched and RVP's own
-//! script slot taking smoothing's place.
+//! between), the picture after exact seeks in `fixture-square-b.mkv`
+//! (non-reference B-frames), toggles during playback, SVP's `@svp`
+//! untouched and RVP's own script slot taking smoothing's place.
 //!
 //! `RVP_TESTDATA` points at `testdata/media` when the test runs elsewhere
 //! (the Windows VM).
@@ -188,6 +189,67 @@ fn mvtools_doubles_the_frames_and_puts_the_square_halfway() {
         assert!(
             e1 > e0 && (e1 - e0).abs_diff(4) <= 1,
             "the square moves 4 pixels a frame (halfway between the source's 8): {frames:?}"
+        );
+    }
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// The square's left edge at `time` of the source (make-m18-fixtures.sh:
+/// its frame `n`, counted from 1, has it at `abs(mod(8 n + 240, 480) -
+/// 240) + 20`; between two frames, in between).
+fn square_at(time: f64) -> f64 {
+    let n = time * 24.0 + 1.0;
+    ((8.0 * n + 240.0).rem_euclid(480.0) - 240.0).abs() + 20.0
+}
+
+/// An exact seek into the middle of a group of pictures. mpv decodes from
+/// the keyframe on, and with `hr-seek-framedrop` none of the non-reference
+/// frames before the target, while the others still go through the
+/// filters. mpv's `vapoursynth` filter times its frames by counting them,
+/// so the picture then is as many frames ahead of its timestamps, and of
+/// the sound, as were left out (the owner's film, 2026-11-21: a seek 2.8 s
+/// past a keyframe). `fixture-square-b.mkv` is one group with three such
+/// frames in four: the picture after a seek must be its own time's.
+#[test]
+fn an_exact_seek_shows_the_picture_of_its_time() {
+    if vsscript().is_none() {
+        eprintln!("skipped: no VapourSynth runtime (set VSSCRIPT_PATH to run this test)");
+        return;
+    }
+    let dir = scratch("seek");
+    let (engine, mut app) = playing(
+        &dir,
+        &fixture("fixture-square-b.mkv"),
+        SmoothingEngine::MvTools,
+    );
+    assert_eq!(labels(&engine), ["rvpsmooth"]);
+    engine.set_pause(true).expect("pause");
+    // Away from where the square turns (every 1.25 s from 1.208 s on), and
+    // back again: every seek starts at the file's one keyframe.
+    for target in [4.2, 1.9, 7.9] {
+        engine
+            .command("seek", &[&target.to_string(), "absolute+exact"])
+            .expect("seek");
+        let deadline = Instant::now() + Duration::from_secs(60);
+        let mut settled = 0;
+        while settled < 10 {
+            assert!(Instant::now() < deadline, "the seek to {target} ends");
+            pump(&mut app, &engine, 30);
+            let near = engine
+                .get_double("time-pos")
+                .is_some_and(|time| (time - target).abs() < 0.1);
+            let seeking = engine.get_text("seeking").as_deref() != Some("no");
+            settled = if near && !seeking { settled + 1 } else { 0 };
+        }
+        let time = engine.get_double("time-pos").expect("time");
+        let image = engine.screenshot_raw("video").expect("screenshot");
+        // A column of a 320-pixel picture: exact as a float.
+        let edge = square_edge(&image).and_then(|edge| u32::try_from(edge).ok());
+        let expected = square_at(time);
+        assert!(
+            edge.is_some_and(|edge| (f64::from(edge) - expected).abs() <= 3.0),
+            "after a seek to {target} the picture at {time} is that time's: \
+             the square's edge at {edge:?}, that time's at {expected:.1}"
         );
     }
     let _ = std::fs::remove_dir_all(&dir);

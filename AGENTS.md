@@ -361,11 +361,18 @@ smoothing for users without SVP, after a study of the engines.
   (`std.PlaneStats`; R73 has no `misc`) is a scene's last, and the
   engine's frames up to the next scene's first repeat it instead of
   morphing one scene into the other; that part ends in `AssumeFPS`, since
-  mpv times each frame by its `_DurationNum`/`_DurationDen`. Seeks (the
-  owner, 2026-11-10): while RVP's filter runs, exact seeks skip the frames
-  before the target (`hr-seek-framedrop`, `playback.seek-skip-before-target`,
-  `App::apply_seek_framedrop`, and without a filter while SVP mode is off;
-  the engine starts mpv with "no" for SVP's `@svp`), and the thumbnail
+  mpv times each frame by its `_DurationNum`/`_DurationDen`. Seeks: mpv's
+  `vapoursynth` filter times its frames by counting them from the first
+  it gets, so every frame from the keyframe on must reach it:
+  `hr-seek-framedrop` (which decodes none of the non-reference frames
+  before an exact seek's target, while the others still pass the filters)
+  stays "no" beside RVP's smoothing through VapourSynth, its script slot
+  and SVP's filter, or the picture runs ahead of the sound by the frames
+  left out until the next seek (2026-11-10 to 2026-11-21 it was on beside
+  RVP's filter; `App::apply_seek_framedrop`,
+  `playback.seek-skip-before-target`, `fixture-square-b.mkv` and
+  `tests/smoothing.rs` check it; test clips without non-reference
+  B-frames never show this). The thumbnail
   core's frame of the target (`Group::Seek`)
   shows over the video at its `osd-dimensions` place until mpv's playback
   restarts (`playback.seek-picture`, `crate::thumbs`; only with filters
