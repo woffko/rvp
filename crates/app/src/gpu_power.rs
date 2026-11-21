@@ -576,10 +576,7 @@ impl App {
                 drop(engine.set_text("scale", &scale));
                 self.apply_render(engine);
             }
-            Step::Processor | Step::Script => {
-                self.apply_decoding(engine);
-                drop(self.apply_video_filters(engine));
-            }
+            Step::Processor | Step::Script => drop(self.apply_video_filters(engine)),
             Step::Shaders => drop(self.apply_shaders(engine)),
             Step::Speech => self.speech_cpu_only(self.gpu_step_taken(Step::Speech)),
         }

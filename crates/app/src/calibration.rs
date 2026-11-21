@@ -20,6 +20,9 @@
 //! * The results go to `calibration.json` in the state folder with the
 //!   machine's key: the processors, the graphics cards and their drivers,
 //!   libmpv, the engines' files and [`VERSION`]. Another key measures again.
+//!   An engine the results left out because it could not run then (RIFE
+//!   (TensorRT) while its card slept, `crate::tensorrt`) is measured alone
+//!   later ([`missing`]), the others' measurements kept.
 //! * NVIDIA Optical Flow (`fruc_vulkan`) needs mpv's Vulkan output and is
 //!   not measured: the drop watch decides for it, as before.
 
@@ -306,6 +309,20 @@ pub fn most_left(done: &[Point], available: &[Engine], failed: &[Engine]) -> usi
         .filter(|engine| available.contains(engine) && !failed.contains(engine))
         .count();
     (engines * Preset::ALL.len() * SIZES.len()).saturating_sub(done.len())
+}
+
+/// The engines of `available` that `results` neither measured nor found
+/// failing: they could not be measured when it was made.
+#[must_use]
+pub fn missing(results: &Calibration, available: &[Engine]) -> Vec<Engine> {
+    available
+        .iter()
+        .copied()
+        .filter(|engine| {
+            !results.failed.contains(engine)
+                && !results.points.iter().any(|point| point.engine == *engine)
+        })
+        .collect()
 }
 
 /// The machine's key: `hardware` (the processors, the graphics cards and
@@ -734,18 +751,34 @@ impl App {
     }
 
     /// Whether a calibration is to run: smoothing is on, an engine can be
-    /// measured, and this machine has none (or the settings window asked).
+    /// measured, and this machine has none, or its calibration left out an
+    /// engine that can be measured now (or the settings window asked).
     fn calibration_due(&self) -> bool {
         let state = &self.calibration;
         // An installation of TensorRT under way adds an engine to measure:
         // it asks for its run when it ends. Whether the installation is
-        // this card's is known a moment after the start.
+        // this card's is known a moment after the start, or once a card
+        // that sleeps wakes (the others are measured meanwhile).
         state.hardware.is_some()
             && !self.tensorrt_installing()
             && !self.tensorrt_checking()
             && self.settings.smoothing.enabled
             && !self.calibration_engines().is_empty()
-            && (state.asked || (!state.manual && !state.declined && state.results.is_none()))
+            && (state.asked
+                || (!state.manual
+                    && !state.declined
+                    && (state.results.is_none() || !self.calibration_missing().is_empty())))
+    }
+
+    /// The engines that can be measured here and the calibration in force
+    /// neither measured nor found failing: RIFE (TensorRT) while its card
+    /// slept (the key names its files whether the card answered or not).
+    fn calibration_missing(&self) -> Vec<Engine> {
+        self.calibration
+            .results
+            .as_ref()
+            .map(|results| missing(results, &self.calibration_engines()))
+            .unwrap_or_default()
     }
 
     /// Whether the calibration in force measured `engine` (RIFE
@@ -843,29 +876,44 @@ impl App {
         self.start_calibration()
     }
 
+    /// The engines the next run measures alone, keeping the others'
+    /// measurements: an engine just installed, or, in a run that starts on
+    /// its own, those the calibration in force left out. Empty: all.
+    fn calibration_alone(&mut self) -> Vec<Engine> {
+        let only = match self.calibration.only.take() {
+            Some(engine) => vec![engine],
+            None if !self.calibration.asked => self.calibration_missing(),
+            None => Vec::new(),
+        };
+        let available = self.calibration_engines();
+        only.into_iter()
+            .filter(|engine| available.contains(engine))
+            .collect()
+    }
+
     /// Starts the runner; a notice when it cannot start.
     fn start_calibration(&mut self) -> Option<UiRequest> {
         let key = self.calibration_key()?;
-        let runtime = &self.smoothing.runtime;
         let mut available = self.calibration_engines();
+        let only = self.calibration_alone();
+        let runtime = &self.smoothing.runtime;
         let (mut kept, mut kept_failed) = (Vec::new(), Vec::new());
-        if let (Some(only), Some(results)) =
-            (self.calibration.only.take(), &self.calibration.results)
-            && available.contains(&only)
+        if let Some(results) = &self.calibration.results
+            && !only.is_empty()
         {
             kept = results
                 .points
                 .iter()
-                .filter(|point| point.engine != only)
+                .filter(|point| !only.contains(&point.engine))
                 .cloned()
                 .collect();
             kept_failed = results
                 .failed
                 .iter()
                 .copied()
-                .filter(|engine| *engine != only)
+                .filter(|engine| !only.contains(engine))
                 .collect();
-            available = vec![only];
+            available = only;
         }
         let job = Job {
             key,
@@ -1169,6 +1217,87 @@ mod tests {
         ];
         let (engine, _, size) = next(&kept, &[Engine::RifeTrt], &[]).expect("a step");
         assert_eq!((engine, size), (Engine::RifeTrt, (854, 480)));
+    }
+
+    #[test]
+    fn engines_neither_measured_nor_failed_are_missing() {
+        let results = Calibration {
+            version: VERSION,
+            key: String::new(),
+            date: String::new(),
+            points: vec![point(Engine::MvTools, Preset::Fast, (854, 480), 480.0)],
+            failed: vec![Engine::Rife],
+        };
+        let all = [Engine::MvTools, Engine::Rife, Engine::RifeTrt];
+        assert_eq!(missing(&results, &all), [Engine::RifeTrt]);
+        assert!(missing(&results, &[Engine::MvTools]).is_empty());
+    }
+
+    /// The calibration with TensorRT installed, on a laptop whose NVIDIA
+    /// card sleeps when RVP starts: MVTools is measured at once, RIFE
+    /// (TensorRT) alone once the card woke and said the installation is
+    /// its own.
+    #[test]
+    fn a_sleeping_card_holds_only_rife_through_tensorrt() {
+        use crate::tensorrt::Answer;
+        if crate::tensorrt::archives().is_empty() {
+            return;
+        }
+        let dir =
+            std::env::temp_dir().join(format!("rvp-calibration-asleep-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        // A runtime with MVTools and the package's vs-mlrt.
+        let runtime = dir.join("runtime");
+        let vs_mlrt = runtime.join("vs-mlrt");
+        for (file, _) in crate::tensorrt::PACKAGE_FILES
+            .iter()
+            .chain([&("vsmlrt.py", "")])
+        {
+            let path = vs_mlrt.join(file);
+            std::fs::create_dir_all(path.parent().expect("parent")).expect("folder");
+            std::fs::write(&path, file).expect("file");
+        }
+        let mut settings = crate::Settings::default();
+        settings.smoothing.enabled = true;
+        let mut app = App::new(settings, &dir.join("state")).expect("app");
+        app.smoothing.runtime =
+            crate::smoothing::Runtime::probe(Some(&runtime.join("vsscript.dll")));
+        app.set_hardware("cpu; cards".to_owned());
+        let card = app.tensorrt_asked_for_tests("sm86");
+        // While nvidia-smi answers (a moment), the calibration waits.
+        assert!(app.tensorrt_checking());
+        assert!(!app.calibration_due());
+        // The card sleeps: the other engines are measured meanwhile.
+        card.send(Answer::Asleep).expect("send");
+        assert!(!app.tensorrt_answer());
+        assert!(!app.tensorrt_checking());
+        assert_eq!(app.calibration_engines(), [Engine::MvTools]);
+        assert!(app.calibration_due());
+        app.calibration.results = Some(Calibration {
+            version: VERSION,
+            key: app.calibration_key().expect("key"),
+            date: "2026-11-21".to_owned(),
+            points: vec![point(Engine::MvTools, Preset::Fast, (854, 480), 480.0)],
+            failed: Vec::new(),
+        });
+        assert!(!app.calibration_due());
+        // It woke and answered: RIFE (TensorRT) is due, measured alone.
+        card.send(Answer::Card(Some("sm86".to_owned())))
+            .expect("send");
+        assert!(app.tensorrt_answer());
+        assert!(app.tensorrt_installed());
+        assert!(app.calibration_due());
+        assert_eq!(app.calibration_alone(), [Engine::RifeTrt]);
+        // Not after the calibration window's Cancel, nor in a self-test.
+        app.calibration.declined = true;
+        assert!(!app.calibration_due());
+        app.calibration.declined = false;
+        app.calibration.manual = true;
+        assert!(!app.calibration_due());
+        // Asked for: every engine again.
+        app.calibration.asked = true;
+        assert!(app.calibration_alone().is_empty());
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]

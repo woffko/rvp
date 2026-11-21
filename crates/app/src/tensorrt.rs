@@ -18,10 +18,14 @@
 //!   [`INSTALLED`].
 //!
 //! The downloads go through the system's `curl` (Windows 10 and later have
-//! it), resume after a cancel, and are deleted once unpacked.
+//! it), without the user's curl configuration, over HTTPS only, and never
+//! past the pinned size; they resume after a cancel, and are deleted once
+//! unpacked.
 //!
 //! When RVP starts with TensorRT installed, a thread of its own asks
-//! `nvidia-smi` which builder resource the card needs: after a change of
+//! `nvidia-smi` (for 10 s at most) which builder resource the card needs;
+//! a card the system put to sleep is asked once something else wakes it,
+//! and the calibration measures the other engines meanwhile. After a change of
 //! card (the host's RTX 30-series card, `sm86`, gave way to an RTX 50-series card,
 //! `sm120`, on 2026-11-07) the installation is another card's, RIFE
 //! (TensorRT) does not run, and the Motion Smoothing page offers the
@@ -276,10 +280,22 @@ pub struct Installed {
     pub files: Vec<String>,
 }
 
-/// What [`INSTALLED`] in `folder` says, complete or not.
+/// What [`INSTALLED`] in `folder` says, complete or not. Its files are
+/// checked and deleted by these names, so a record that names one outside
+/// the folder (an absolute path, `..`) is none of RVP's.
 fn recorded(folder: &Path) -> Option<Installed> {
     let text = std::fs::read_to_string(folder.join(INSTALLED)).ok()?;
-    serde_json::from_str(&text).ok()
+    let installed: Installed = serde_json::from_str(&text).ok()?;
+    installed
+        .files
+        .iter()
+        .all(|file| {
+            !file.is_empty()
+                && Path::new(file)
+                    .components()
+                    .all(|part| matches!(part, std::path::Component::Normal(_)))
+        })
+        .then_some(installed)
 }
 
 /// The installation in `folder`, when it is complete.
@@ -312,10 +328,20 @@ pub fn builder_for(capability: &str) -> Option<String> {
     })
 }
 
+/// How long `nvidia-smi` may take: a wedged driver can hold it up, and
+/// RVP waits for the installer's thread when it closes.
+const SMI_LIMIT: Duration = Duration::from_secs(10);
+
 /// The first card's compute capability by NVIDIA's `nvidia-smi` (it comes
-/// with the driver); `None` without an NVIDIA card.
+/// with the driver); `None` without an NVIDIA card, or when it does not
+/// answer within [`SMI_LIMIT`].
 #[must_use]
 pub fn compute_capability() -> Option<String> {
+    compute_capability_until(&AtomicBool::new(false))
+}
+
+/// [`compute_capability`], given up as soon as `cancel` is set.
+fn compute_capability_until(cancel: &AtomicBool) -> Option<String> {
     let program = if cfg!(windows) {
         std::env::var_os("SystemRoot").map_or_else(
             || PathBuf::from("nvidia-smi"),
@@ -326,14 +352,47 @@ pub fn compute_capability() -> Option<String> {
     };
     let mut command = std::process::Command::new(program);
     command.args(["--query-gpu=compute_cap", "--format=csv,noheader"]);
-    hide_console(&mut command);
-    let output = command.output().ok()?;
-    let text = String::from_utf8_lossy(&output.stdout);
-    output
-        .status
-        .success()
+    let (success, stdout) = output_within(&mut command, SMI_LIMIT, cancel)?;
+    let text = String::from_utf8_lossy(&stdout);
+    success
         .then(|| text.lines().next().unwrap_or_default().trim().to_owned())
         .filter(|line| !line.is_empty())
+}
+
+/// Runs `command` (no console, no input) for at most `limit`, or until
+/// `cancel` is set: whether it succeeded and its output, `None` when it
+/// could not start or was ended. The output, a line per card, fits the
+/// pipe, so it is read once the program has ended.
+fn output_within(
+    command: &mut std::process::Command,
+    limit: Duration,
+    cancel: &AtomicBool,
+) -> Option<(bool, Vec<u8>)> {
+    command
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::null());
+    hide_console(command);
+    let mut child = command.spawn().ok()?;
+    let started = std::time::Instant::now();
+    let status = loop {
+        match child.try_wait() {
+            Ok(Some(status)) => break status,
+            Ok(None) if started.elapsed() < limit && !cancel.load(Ordering::Relaxed) => {
+                std::thread::sleep(Duration::from_millis(20));
+            }
+            _ => {
+                drop(child.kill());
+                drop(child.wait());
+                return None;
+            }
+        }
+    };
+    let mut stdout = Vec::new();
+    if let Some(mut pipe) = child.stdout.take() {
+        drop(pipe.read_to_end(&mut stdout));
+    }
+    Some((status.success(), stdout))
 }
 
 /// No console window over the video for a program RVP starts (Windows'
@@ -413,12 +472,17 @@ impl Installer {
             .name("rvp-tensorrt".to_owned())
             .spawn(move || {
                 let builder = job.builder.clone().or_else(|| {
-                    compute_capability().and_then(|capability| builder_for(&capability))
+                    compute_capability_until(&stop).and_then(|capability| builder_for(&capability))
                 });
                 let Some(builder) = builder else {
-                    drop(sender.send(Event::Finished(Err(
-                        "no NVIDIA card of Turing (GeForce RTX 20) or later was found".to_owned(),
-                    ))));
+                    drop(sender.send(if stop.load(Ordering::Relaxed) {
+                        Event::Cancelled
+                    } else {
+                        Event::Finished(Err(
+                            "no NVIDIA card of Turing (GeForce RTX 20) or later was found"
+                                .to_owned(),
+                        ))
+                    }));
                     return;
                 };
                 let job = Job {
@@ -564,17 +628,30 @@ fn complete(path: &Path, size: u64) -> bool {
     std::fs::metadata(path).is_ok_and(|meta| meta.len() == size)
 }
 
-/// Downloads `url` to `target` through `curl`, going on from a `.part`
-/// left by an earlier try; `progress` gets the bytes there every quarter
-/// of a second.
-fn download(
-    url: &str,
-    target: &Path,
-    size: u64,
-    cancel: &AtomicBool,
-    progress: &mut dyn FnMut(u64),
-) -> Result<(), String> {
-    let part = target.with_extension("part");
+/// How much of curl's error output a failure keeps (its last bytes).
+const ERROR_TAIL: usize = 4096;
+
+/// The protocol `curl` may use for `url`, also after a redirect: the
+/// address's own, HTTPS for NVIDIA's servers (a mirror may be a folder,
+/// `file://`, or a local server).
+fn protocol(url: &str) -> &'static str {
+    let starts = |scheme: &str| {
+        url.get(..scheme.len())
+            .is_some_and(|start| start.eq_ignore_ascii_case(scheme))
+    };
+    if starts("file://") {
+        "=file"
+    } else if starts("http://") {
+        "=http"
+    } else {
+        "=https"
+    }
+}
+
+/// The system's `curl` for `url` into `part`, going on from what is there,
+/// for at most `left` more bytes. `-q` first: no `.curlrc` of the user's;
+/// `--` before the address.
+fn curl(url: &str, part: &Path, left: u64) -> std::process::Command {
     let program = if cfg!(windows) {
         std::env::var_os("SystemRoot").map_or_else(
             || PathBuf::from("curl"),
@@ -586,6 +663,7 @@ fn download(
     let mut command = std::process::Command::new(program);
     command
         .args([
+            "-q",
             "--fail",
             "--location",
             "--silent",
@@ -593,13 +671,43 @@ fn download(
             "--retry",
             "3",
         ])
+        .args(["--proto", protocol(url), "--proto-redir", protocol(url)])
+        // A connection that stalls ends: 30 s to connect, and under 1 KiB
+        // a second for a minute.
+        .args(["--connect-timeout", "30", "--speed-limit", "1024"])
+        .args(["--speed-time", "60", "--max-filesize", &left.to_string()])
         .args(["--continue-at", "-", "--output"])
-        .arg(&part)
+        .arg(part)
+        .arg("--")
         .arg(url)
         .stdin(std::process::Stdio::null())
         .stdout(std::process::Stdio::null())
         .stderr(std::process::Stdio::piped());
     hide_console(&mut command);
+    command
+}
+
+/// Downloads `url` to `target` through `curl`, going on from a `.part`
+/// left by an earlier try; `progress` gets the bytes there every quarter
+/// of a second. curl reads no configuration of the user's, gives up on a
+/// connection that stalls, and takes no more than `size` bytes in all.
+fn download(
+    url: &str,
+    target: &Path,
+    size: u64,
+    cancel: &AtomicBool,
+    progress: &mut dyn FnMut(u64),
+) -> Result<(), String> {
+    let part = target.with_extension("part");
+    let had = std::fs::metadata(&part).map_or(0, |meta| meta.len());
+    if had > size {
+        drop(std::fs::remove_file(&part));
+    } else if had == size {
+        // The whole file came before: its SHA-256 is checked next.
+        return std::fs::rename(&part, target).map_err(|error| error.to_string());
+    }
+    let left = size - std::fs::metadata(&part).map_or(0, |meta| meta.len());
+    let mut command = curl(url, &part, left);
     let mut child = command.spawn().map_err(|error| {
         // Linux's packages only recommend curl (the Linux audit's L23).
         if error.kind() == std::io::ErrorKind::NotFound {
@@ -608,24 +716,51 @@ fn download(
             format!("curl cannot start: {error}")
         }
     })?;
+    // Read while curl runs, so that it never waits on a full pipe; its
+    // last words say why it failed.
+    let errors = child.stderr.take().map(|stderr| {
+        std::thread::spawn(move || {
+            let mut tail = Vec::new();
+            for byte in std::io::BufReader::new(stderr).bytes() {
+                let Ok(byte) = byte else { break };
+                tail.push(byte);
+                if tail.len() > 2 * ERROR_TAIL {
+                    tail.drain(..ERROR_TAIL);
+                }
+            }
+            String::from_utf8_lossy(&tail).into_owned()
+        })
+    });
+    let why = || {
+        errors
+            .map(|thread| thread.join().unwrap_or_default())
+            .unwrap_or_default()
+    };
     let status = loop {
-        if cancel.load(Ordering::Relaxed) {
+        let got = std::fs::metadata(&part).map_or(0, |meta| meta.len());
+        if cancel.load(Ordering::Relaxed) || got > size {
             drop(child.kill());
             drop(child.wait());
+            drop(why());
+            if got > size {
+                drop(std::fs::remove_file(&part));
+                return Err(format!("{url}: more than {size} bytes"));
+            }
             return Err("cancelled".to_owned());
         }
-        progress(std::fs::metadata(&part).map_or(0, |meta| meta.len()));
+        progress(got);
         match child.try_wait() {
             Ok(Some(status)) => break status,
             Ok(None) => std::thread::sleep(Duration::from_millis(250)),
-            Err(error) => return Err(error.to_string()),
+            Err(error) => {
+                drop(child.kill());
+                drop(child.wait());
+                return Err(error.to_string());
+            }
         }
     };
+    let why = why();
     if !status.success() {
-        let mut why = String::new();
-        if let Some(mut stderr) = child.stderr.take() {
-            drop(stderr.read_to_string(&mut why));
-        }
         return Err(format!("{url}: {}", why.trim()));
     }
     if !complete(&part, size) {
@@ -721,8 +856,47 @@ pub const KEPT_BYTES: u64 = 700_000_000;
 enum Card {
     #[default]
     Unasked,
-    Asking(Receiver<Option<String>>),
+    /// `nvidia-smi` is asked (for [`SMI_LIMIT`] at most): the calibration
+    /// waits for the answer.
+    Asking(Receiver<Answer>),
+    /// The system put the card to sleep, and RVP does not wake it for the
+    /// question (D17): asked once something else wakes it. The calibration
+    /// does not wait: the other engines are measured, RIFE (TensorRT) once
+    /// the answer came.
+    Asleep(Receiver<Answer>),
     Known(Option<String>),
+}
+
+/// What the question's thread tells.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) enum Answer {
+    Asleep,
+    Card(Option<String>),
+}
+
+/// How often the question's thread looks whether a sleeping card woke.
+const WAKE_POLL: Duration = Duration::from_secs(5);
+
+/// The question's thread: asks `ask` (`nvidia-smi`) which builder the card
+/// needs, once NVIDIA's cards under `pci` are awake (Linux's
+/// `/sys/bus/pci/devices`), saying first when they sleep.
+fn ask_card(
+    pci: Option<&Path>,
+    poll: Duration,
+    ask: impl FnOnce() -> Option<String>,
+    answers: &Sender<Answer>,
+) {
+    if let Some(pci) = pci
+        && !crate::gpu_power::nvidia_awake(pci)
+    {
+        if answers.send(Answer::Asleep).is_err() {
+            return;
+        }
+        while !crate::gpu_power::nvidia_awake(pci) {
+            std::thread::sleep(poll);
+        }
+    }
+    drop(answers.send(Answer::Card(ask())));
 }
 
 /// The TensorRT installation's state in the [`App`].
@@ -761,11 +935,13 @@ impl App {
                 // A card the system put to sleep is not woken for the
                 // question (D17): asked once something wakes it (the Linux
                 // audit's L2).
-                #[cfg(target_os = "linux")]
-                while !crate::gpu_power::nvidia_awake(Path::new("/sys/bus/pci/devices")) {
-                    std::thread::sleep(Duration::from_secs(5));
-                }
-                drop(sender.send(compute_capability().and_then(|cap| builder_for(&cap))));
+                let pci = cfg!(target_os = "linux").then(|| Path::new("/sys/bus/pci/devices"));
+                ask_card(
+                    pci,
+                    WAKE_POLL,
+                    || compute_capability().and_then(|cap| builder_for(&cap)),
+                    &sender,
+                );
             });
         trt.card = match asked {
             Ok(_) => Card::Asking(receiver),
@@ -775,10 +951,42 @@ impl App {
     }
 
     /// Whether RVP is still asking which builder resource the card needs
-    /// (the calibration waits for the answer).
+    /// (the calibration waits for the answer, but not for a card that
+    /// sleeps).
     #[must_use]
     pub(crate) fn tensorrt_checking(&self) -> bool {
         matches!(self.tensorrt.card, Card::Asking(_))
+    }
+
+    /// Takes the question's news; true when the card's answer came.
+    pub(crate) fn tensorrt_answer(&mut self) -> bool {
+        let (Card::Asking(receiver) | Card::Asleep(receiver)) = &self.tensorrt.card else {
+            return false;
+        };
+        let mut asleep = false;
+        let answer = loop {
+            match receiver.try_recv() {
+                Ok(Answer::Asleep) => asleep = true,
+                Ok(Answer::Card(card)) => break Some(card),
+                Err(std::sync::mpsc::TryRecvError::Empty) => break None,
+                Err(std::sync::mpsc::TryRecvError::Disconnected) => break Some(None),
+            }
+        };
+        if let Some(card) = answer {
+            self.tensorrt.card = Card::Known(card);
+            return true;
+        }
+        if asleep
+            && matches!(self.tensorrt.card, Card::Asking(_))
+            && let Card::Asking(receiver) = std::mem::take(&mut self.tensorrt.card)
+        {
+            crate::log::write(
+                crate::log::Level::Info,
+                "tensorrt: the NVIDIA card sleeps: RIFE (TensorRT) is measured once it is awake",
+            );
+            self.tensorrt.card = Card::Asleep(receiver);
+        }
+        false
     }
 
     /// The installation, when it is this card's.
@@ -912,33 +1120,25 @@ impl App {
     /// finished installation asks the calibration to build and measure
     /// RIFE (TensorRT)'s engine.
     pub fn tensorrt_tick(&mut self, engine: &Mpv) -> Option<UiRequest> {
-        if let Card::Asking(receiver) = &self.tensorrt.card {
-            let answer = match receiver.try_recv() {
-                Ok(card) => Some(card),
-                Err(std::sync::mpsc::TryRecvError::Empty) => None,
-                Err(std::sync::mpsc::TryRecvError::Disconnected) => Some(None),
-            };
-            if let Some(card) = answer {
-                self.tensorrt.card = Card::Known(card);
-                if let Some(installed) = self
-                    .tensorrt
-                    .installed
-                    .as_ref()
-                    .filter(|_| self.tensorrt_for_another_card())
-                {
-                    crate::log::report(
-                        crate::log::Level::Warning,
-                        &format!(
-                            "tensorrt: installed for {}, and this card needs {}: RIFE (TensorRT) \
-                             waits for its download again (the Motion Smoothing page)",
-                            installed.builder,
-                            self.tensorrt_card()
-                                .unwrap_or("an NVIDIA card of Turing or later")
-                        ),
-                    );
-                }
-                self.apply_smoothing(engine);
+        if self.tensorrt_answer() {
+            if let Some(installed) = self
+                .tensorrt
+                .installed
+                .as_ref()
+                .filter(|_| self.tensorrt_for_another_card())
+            {
+                crate::log::report(
+                    crate::log::Level::Warning,
+                    &format!(
+                        "tensorrt: installed for {}, and this card needs {}: RIFE (TensorRT) \
+                         waits for its download again (the Motion Smoothing page)",
+                        installed.builder,
+                        self.tensorrt_card()
+                            .unwrap_or("an NVIDIA card of Turing or later")
+                    ),
+                );
             }
+            self.apply_smoothing(engine);
         }
         let events = self
             .tensorrt
@@ -1028,6 +1228,22 @@ impl App {
             "error": trt.error,
             "ready": self.rife_trt_ready(),
         })
+    }
+}
+
+#[cfg(test)]
+impl App {
+    /// Tests: an installation for `builder`, its card being asked; the
+    /// question's answers go through the sender.
+    pub(crate) fn tensorrt_asked_for_tests(&mut self, builder: &str) -> Sender<Answer> {
+        let (sender, receiver) = channel();
+        self.tensorrt.installed = Some(Installed {
+            version: VERSION.to_owned(),
+            builder: builder.to_owned(),
+            files: Vec::new(),
+        });
+        self.tensorrt.card = Card::Asking(receiver);
+        sender
     }
 }
 
@@ -1254,6 +1470,148 @@ mod tests {
         assert!(folder.join("engines").is_dir());
         assert!(!folder.join("engines/rife.sm86.engine").exists());
         assert_eq!(installed(&folder), Some(done));
+        drop(std::fs::remove_dir_all(&root));
+    }
+
+    #[test]
+    fn an_installation_deletes_nothing_outside_its_folder() {
+        let Some((root, job, _)) = test_installation("outside") else {
+            return;
+        };
+        let victim = root.join("victim.txt");
+        std::fs::write(&victim, b"kept").expect("victim");
+        std::fs::create_dir_all(&job.folder).expect("folder");
+        let before = Installed {
+            version: VERSION.to_owned(),
+            builder: "sm89".to_owned(),
+            files: vec!["../victim.txt".to_owned(), victim.display().to_string()],
+        };
+        let text = serde_json::to_string(&before).expect("json");
+        std::fs::write(job.folder.join(INSTALLED), text).expect("record");
+        assert_eq!(recorded(&job.folder), None);
+        let (sender, _events) = channel();
+        let done = install(&job, &AtomicBool::new(false), &sender).expect("install");
+        assert!(victim.is_file(), "a file outside the folder stays");
+        assert_eq!(recorded(&job.folder), Some(done));
+        drop(std::fs::remove_dir_all(&root));
+    }
+
+    #[test]
+    fn curl_reads_no_configuration_and_keeps_to_the_address_and_the_size() {
+        let url = "https://developer.download.nvidia.com/compute/x.zip";
+        let command = curl(url, Path::new("x.part"), 1234);
+        let args: Vec<String> = command
+            .get_args()
+            .map(|arg| arg.to_string_lossy().into_owned())
+            .collect();
+        assert_eq!(args[0], "-q");
+        let value = |flag: &str| {
+            args.iter()
+                .position(|arg| arg == flag)
+                .map(|at| args[at + 1].as_str())
+        };
+        assert_eq!(value("--proto"), Some("=https"));
+        assert_eq!(value("--proto-redir"), Some("=https"));
+        assert_eq!(value("--max-filesize"), Some("1234"));
+        assert_eq!(value("--connect-timeout"), Some("30"));
+        assert_eq!(value("--speed-limit"), Some("1024"));
+        assert_eq!(value("--speed-time"), Some("60"));
+        assert_eq!(&args[args.len() - 2..], ["--", url]);
+        // A mirror keeps to its own protocol.
+        assert_eq!(protocol("file:///C:/mirror/x.zip"), "=file");
+        assert_eq!(protocol("FILE:///mirror/x.zip"), "=file");
+        assert_eq!(protocol("http://mirror.example/x.zip"), "=http");
+        assert_eq!(protocol("ftp://mirror.example/x.zip"), "=https");
+    }
+
+    #[test]
+    fn a_program_that_does_not_answer_is_ended() {
+        let waiting = || {
+            if cfg!(windows) {
+                let mut command = std::process::Command::new("ping");
+                command.args(["-n", "30", "127.0.0.1"]);
+                command
+            } else {
+                let mut command = std::process::Command::new("sleep");
+                command.arg("30");
+                command
+            }
+        };
+        let started = std::time::Instant::now();
+        let limit = Duration::from_millis(300);
+        assert_eq!(
+            output_within(&mut waiting(), limit, &AtomicBool::new(false)),
+            None
+        );
+        let cancelled = AtomicBool::new(true);
+        assert_eq!(
+            output_within(&mut waiting(), Duration::from_secs(30), &cancelled),
+            None
+        );
+        assert!(started.elapsed() < Duration::from_secs(10));
+        let mut answer = if cfg!(windows) {
+            let mut command = std::process::Command::new("cmd");
+            command.args(["/C", "echo 8.6"]);
+            command
+        } else {
+            let mut command = std::process::Command::new("echo");
+            command.arg("8.6");
+            command
+        };
+        let (success, out) = output_within(
+            &mut answer,
+            Duration::from_secs(10),
+            &AtomicBool::new(false),
+        )
+        .expect("an answer");
+        assert!(success);
+        assert_eq!(String::from_utf8_lossy(&out).trim(), "8.6");
+    }
+
+    #[test]
+    fn a_sleeping_card_is_asked_once_it_wakes() {
+        let root = scratch("sleep");
+        let write = |path: &str, text: &str| {
+            let path = root.join(path);
+            std::fs::create_dir_all(path.parent().expect("parent")).expect("folder");
+            std::fs::write(path, text).expect("write");
+        };
+        write("0000-01-00.0/vendor", "0x10de\n");
+        write("0000-01-00.0/class", "0x030000\n");
+        write("0000-01-00.0/power/runtime_status", "suspended\n");
+        let asked = Arc::new(AtomicBool::new(false));
+        let (sender, answers) = channel();
+        let thread = {
+            let (pci, asked) = (root.clone(), Arc::clone(&asked));
+            std::thread::spawn(move || {
+                ask_card(
+                    Some(&pci),
+                    Duration::from_millis(10),
+                    || {
+                        asked.store(true, Ordering::Relaxed);
+                        Some("sm86".to_owned())
+                    },
+                    &sender,
+                );
+            })
+        };
+        let wait = Duration::from_secs(5);
+        assert_eq!(answers.recv_timeout(wait), Ok(Answer::Asleep));
+        std::thread::sleep(Duration::from_millis(100));
+        assert!(!asked.load(Ordering::Relaxed), "the question would wake it");
+        assert!(answers.try_recv().is_err());
+        write("0000-01-00.0/power/runtime_status", "active\n");
+        assert_eq!(
+            answers.recv_timeout(wait),
+            Ok(Answer::Card(Some("sm86".to_owned())))
+        );
+        thread.join().expect("the question");
+        // An awake card, or no PCI folder to look at (Windows): at once.
+        for pci in [Some(root.as_path()), None] {
+            let (sender, answers) = channel();
+            ask_card(pci, Duration::ZERO, || None, &sender);
+            assert_eq!(answers.try_iter().collect::<Vec<_>>(), [Answer::Card(None)]);
+        }
         drop(std::fs::remove_dir_all(&root));
     }
 }

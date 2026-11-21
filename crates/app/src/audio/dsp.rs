@@ -344,8 +344,25 @@ pub fn write_wav<const N: usize>(path: &Path, frames: &[[f32; N]]) -> std::io::R
             bytes.extend_from_slice(&sample.to_le_bytes());
         }
     }
-    // Flushed: a response file is written once and then used as it is.
-    crate::storage::write_atomic(path, &bytes)
+    // Without a flush: this runs on the window's thread when an effect
+    // is first switched on, and a busy disk can hold a flush for seconds.
+    // A file cut short by a crash is not taken ([`kept`]).
+    crate::storage::write_unflushed(path, &bytes)
+}
+
+/// The bytes of a WAV file of `frames` frames of `N` channels as
+/// [`write_wav`] writes it.
+fn wav_len<const N: usize>(frames: usize) -> u64 {
+    let header: u64 = if N == 4 { 28 + 40 } else { 28 + 16 };
+    header + (frames * N * 4) as u64
+}
+
+/// Whether `path` already holds the whole file of these frames: a file of
+/// another length (cut short when the machine went down, or of an older
+/// way of computing it) is written again.
+fn kept<const N: usize>(path: &Path, frames: &[[f32; N]]) -> bool {
+    std::fs::metadata(path)
+        .is_ok_and(|file| file.is_file() && file.len() == wav_len::<N>(frames.len()))
 }
 
 /// A response file for `afir` and the level of each of its channels, which
@@ -403,7 +420,7 @@ pub fn freeverb_file(
     let mut frames = freeverb(room_size, damping, width);
     let levels = normalize(&mut frames);
     let path = freeverb_path(folder, room_size, damping, width);
-    if !path.is_file() {
+    if !kept(&path, &frames) {
         write_wav(&path, &frames)?;
     }
     Ok(Response { path, levels })
@@ -558,7 +575,7 @@ pub fn crystality_echo_file(
     let mut frames = crystality_echo(volume, feedback);
     let levels = normalize(&mut frames);
     let path = crystality_echo_path(folder, volume, feedback);
-    if !path.is_file() {
+    if !kept(&path, &frames) {
         write_wav(&path, &frames)?;
     }
     Ok(Response { path, levels })
@@ -571,8 +588,9 @@ pub fn crystality_echo_file(
 /// Fails on I/O errors.
 pub fn head_model_file(folder: &Path, distance: f64) -> std::io::Result<PathBuf> {
     let path = folder.join(format!("head-model-d{:.0}.wav", distance.clamp(0.0, 100.0)));
-    if !path.is_file() {
-        write_wav(&path, &head_model(distance))?;
+    let frames = head_model(distance);
+    if !kept(&path, &frames) {
+        write_wav(&path, &frames)?;
     }
     Ok(path)
 }
@@ -647,6 +665,10 @@ mod tests {
         );
         let again = head_model_file(&dir, 0.0).expect("again");
         assert_eq!(again, path);
+        // A file cut short is written again.
+        std::fs::write(&path, &bytes[..bytes.len() / 2]).expect("cut");
+        head_model_file(&dir, 0.0).expect("rewritten");
+        assert_eq!(std::fs::read(&path).expect("read"), bytes);
         let _ = std::fs::remove_dir_all(&dir);
     }
 }

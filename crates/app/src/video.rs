@@ -847,21 +847,23 @@ impl App {
     }
 
     /// Puts RVP's video filters in front of mpv's chain, in their order,
-    /// leaving every other filter where it is. In the last moments of a
-    /// file they wait for the next one or for playback to leave the end:
-    /// a `vf` change there can leave mpv stuck before the end (seen with
-    /// libmpv 0.37: the time stops, `eof-reached` never comes), as an audio
-    /// chain change can (`App::defer_chain_change`).
+    /// leaving every other filter where it is, and sets the decoder they
+    /// need ([`App::apply_decoding`]). In the last moments of a file both
+    /// wait for the next one or for playback to leave the end
+    /// (`App::video_change_waits`): a `vf` change there can leave mpv
+    /// stuck before the end (seen with libmpv 0.37: the time stops,
+    /// `eof-reached` never comes), as an audio chain change can
+    /// (`App::defer_chain_change`).
     ///
     /// # Errors
     /// Fails when the VapourSynth wrapper cannot be written or libmpv
     /// rejects a filter.
     pub fn apply_video_filters(&self, engine: &Engine) -> Result<(), String> {
-        if self.near_end() {
-            self.video_pending.set(true);
+        if self.video_change_waits() {
             return Ok(());
         }
         self.video_pending.set(false);
+        self.set_decoding(engine);
         let vs = &self.settings.vapoursynth;
         if vs.enabled
             && let Some(script) = &vs.script
@@ -1080,7 +1082,6 @@ impl App {
             self.settings.effects.remove(&effect);
         }
         self.save_settings();
-        self.apply_decoding(engine);
         match self.apply_video_filters(engine) {
             Ok(()) => on_off(effect.text(), on),
             Err(error) => UiRequest::Message(format!("{}: {error}", effect.text())),
@@ -1108,7 +1109,6 @@ impl App {
         vs.script = Some(script);
         vs.enabled = true;
         self.save_settings();
-        self.apply_decoding(engine);
         let applied = self.apply_video_filters(engine);
         // Smoothing gives way to RVP's own script.
         self.apply_smoothing(engine);
@@ -1126,7 +1126,6 @@ impl App {
         vs.enabled = !vs.enabled;
         let on = vs.enabled;
         self.save_settings();
-        self.apply_decoding(engine);
         let applied = self.apply_video_filters(engine);
         // Smoothing gives way to RVP's own script.
         self.apply_smoothing(engine);
@@ -1150,8 +1149,18 @@ impl App {
         }
     }
 
-    /// Sets mpv's decoder when it should change.
+    /// Sets mpv's decoder when it should change. mpv answers a change with
+    /// a restart of the decoder and an exact seek, so in the last moments
+    /// of a file it waits with the video filters and comes with them
+    /// (`App::video_change_waits`); [`App::apply_video_filters`] sets it
+    /// too.
     pub fn apply_decoding(&self, engine: &Engine) {
+        if !self.video_change_waits() {
+            self.set_decoding(engine);
+        }
+    }
+
+    fn set_decoding(&self, engine: &Engine) {
         let hwdec = self.effective_hwdec();
         if engine.get_text("hwdec").as_deref() != Some(hwdec.as_str()) {
             drop(engine.set_text("hwdec", &hwdec));

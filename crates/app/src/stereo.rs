@@ -506,7 +506,6 @@ impl App {
             || self.settings.vr.mode == ModeSwitch::Auto
             || self.settings.vr.projection == Projection::Auto;
         if changed && auto {
-            self.apply_decoding(engine);
             drop(self.apply_video_filters(engine));
         }
     }
@@ -638,7 +637,6 @@ impl App {
             }
         };
         self.save_settings();
-        self.apply_decoding(engine);
         match self.apply_video_filters(engine) {
             Ok(()) => UiRequest::Osd(notice),
             Err(error) => UiRequest::Message(format!("{notice}: {error}")),
@@ -674,7 +672,6 @@ impl App {
     ) {
         self.apply_picture_settings_change(engine, old);
         if self.settings.stereo != old.stereo || self.settings.vr != old.vr {
-            self.apply_decoding(engine);
             drop(self.apply_video_filters(engine));
         }
         if self.settings.visual != old.visual {
@@ -689,8 +686,8 @@ impl App {
                 || render.super_resolution != old.render.super_resolution
                 || render.rtx_hdr != old.render.rtx_hdr;
             if filters_changed {
-                // Copy-back or Direct3D 11 frames follow the filters.
-                self.apply_decoding(engine);
+                // Copy-back or Direct3D 11 frames follow the filters
+                // (`App::apply_video_filters` sets the decoder).
                 drop(self.apply_picture_settings(engine));
                 drop(self.apply_video_filters(engine));
             }

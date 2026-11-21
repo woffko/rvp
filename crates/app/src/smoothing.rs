@@ -1551,7 +1551,6 @@ impl App {
         self.smoothing.applied = Some(plan.clone());
         self.smoothing.watch = FilterWatch::default();
         if filter_before || filter_now {
-            self.apply_decoding(engine);
             drop(self.apply_video_filters(engine));
         }
         Some(plan)

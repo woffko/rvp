@@ -608,15 +608,19 @@ impl App {
             || old.vapoursynth != new.vapoursynth
             || old.video_effects != new.video_effects;
         let svp_changed = crate::svp::svp_mode(old) != crate::svp::svp_mode(new);
-        if filters || old.hwdec != new.hwdec || old.ipc_server != new.ipc_server || svp_changed {
-            self.apply_decoding(engine);
-        }
+        let decoding = old.hwdec != new.hwdec || old.ipc_server != new.ipc_server || svp_changed;
         if svp_changed {
             let plan = self.smoothing_plan();
             self.apply_seek_framedrop(engine, &plan);
         }
-        if filters && let Err(error) = self.apply_video_filters(engine) {
-            applied.notes.push(error);
+        // The filters bring the decoder they need; both wait near a file's
+        // end (`App::video_change_waits`).
+        if filters {
+            if let Err(error) = self.apply_video_filters(engine) {
+                applied.notes.push(error);
+            }
+        } else if decoding {
+            self.apply_decoding(engine);
         }
         let new = &self.settings;
         if (old.color != new.color

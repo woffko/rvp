@@ -21,7 +21,9 @@
 //!   file is made into an SRT file next to the video
 //!   (`<name>.<language>.srt`, or `<name>.<language>.whisper.srt` when the
 //!   first exists) or, when that folder is not writable or the user chose
-//!   so, in RVP's state folder; it is added as a subtitle track.
+//!   so, in RVP's state folder; it is added as a subtitle track. A
+//!   stream's go to the state folder, named by its title or the last part
+//!   of its address, in characters every file system takes.
 //! * In real time RVP makes 30 s pieces from the playback position on, two
 //!   ahead, and again from where a seek lands; their subtitles show as one
 //!   track (`subtitles/realtime-<pid>.srt` in the state folder, each RVP's
@@ -426,6 +428,9 @@ struct Running {
     events: Receiver<Event>,
     /// The video it is for.
     video: String,
+    /// The stream's own title, when mpv knows one (not the address's name
+    /// it shows for a stream without).
+    title: Option<String>,
     gpu: bool,
     progress: u8,
 }
@@ -489,6 +494,109 @@ pub fn engine_program(
 #[must_use]
 pub fn model_file(folder: &Path, model: &str) -> PathBuf {
     folder.join(format!("ggml-{model}.bin"))
+}
+
+/// The longest name, in bytes, of the subtitles made for a stream (before
+/// `.<language>.srt`): well inside the 255 bytes file systems take.
+const STREAM_NAME_BYTES: usize = 120;
+
+/// The name of the subtitles made for `video`, before `.<language>.srt`.
+/// A local file's own name without its extension, so that players find
+/// them beside it. For an address, the stream's `title` or else the last
+/// part of the address's path, without its query and fragment (a stream's
+/// address can be long and full of characters no file system takes):
+/// those characters become `_`, and the name is cut at
+/// [`STREAM_NAME_BYTES`]. Never empty.
+fn subtitle_stem(video: &str, title: Option<&str>) -> String {
+    if !video.contains("://") {
+        return Path::new(video).file_stem().map_or_else(
+            || "subtitles".to_owned(),
+            |stem| stem.to_string_lossy().into_owned(),
+        );
+    }
+    let name = title
+        .map(str::trim)
+        .filter(|title| !title.is_empty())
+        .map_or_else(|| address_name(video), str::to_owned);
+    file_name_of(&name)
+}
+
+/// The last part of an address's path as mpv shows it (`%XX` decoded),
+/// without the query, the fragment and the extension; empty when the
+/// address has no path (its host, and any credentials there, are no name).
+fn address_name(address: &str) -> String {
+    let rest = address.split_once("://").map_or(address, |(_, rest)| rest);
+    let rest = &rest[..rest.find(['?', '#']).unwrap_or(rest.len())];
+    let path = rest.find('/').map_or("", |slash| &rest[slash..]);
+    let segment = percent_decoded(path.rsplit('/').find(|part| !part.is_empty()).unwrap_or(""));
+    match segment.rfind('.') {
+        Some(dot) if dot > 0 => segment[..dot].to_owned(),
+        _ => segment,
+    }
+}
+
+/// `text` with its `%XX` escapes decoded, when that makes UTF-8.
+fn percent_decoded(text: &str) -> String {
+    let bytes = text.as_bytes();
+    let mut out = Vec::with_capacity(bytes.len());
+    let mut at = 0;
+    while at < bytes.len() {
+        let escape = bytes
+            .get(at + 1..at + 3)
+            .filter(|hex| bytes[at] == b'%' && hex.iter().all(u8::is_ascii_hexdigit))
+            .and_then(|hex| u8::from_str_radix(std::str::from_utf8(hex).ok()?, 16).ok());
+        if let Some(byte) = escape {
+            out.push(byte);
+            at += 3;
+        } else {
+            out.push(bytes[at]);
+            at += 1;
+        }
+    }
+    String::from_utf8(out).unwrap_or_else(|_| text.to_owned())
+}
+
+/// `name` as a file name Windows and Linux both take: the characters
+/// Windows refuses and control characters as `_`, white space at the ends
+/// left out, at most [`STREAM_NAME_BYTES`] (cut between characters), `_`
+/// before a name Windows keeps for a device (`CON`, `NUL.x`), and
+/// `subtitles` for nothing.
+fn file_name_of(name: &str) -> String {
+    let replaced: String = name
+        .chars()
+        .map(|c| {
+            if c.is_control() || matches!(c, '/' | '\\' | ':' | '*' | '?' | '"' | '<' | '>' | '|') {
+                '_'
+            } else {
+                c
+            }
+        })
+        .collect();
+    let mut text = replaced.trim();
+    if text.len() > STREAM_NAME_BYTES {
+        let mut end = STREAM_NAME_BYTES;
+        while !text.is_char_boundary(end) {
+            end -= 1;
+        }
+        text = text[..end].trim_end();
+    }
+    if text.is_empty() {
+        return "subtitles".to_owned();
+    }
+    let base = text.split('.').next().unwrap_or(text).trim_end();
+    let device = ["CON", "PRN", "AUX", "NUL"]
+        .iter()
+        .any(|device| base.eq_ignore_ascii_case(device))
+        || (base.len() == 4
+            && base.get(..3).is_some_and(|prefix| {
+                prefix.eq_ignore_ascii_case("COM") || prefix.eq_ignore_ascii_case("LPT")
+            })
+            && matches!(base.as_bytes()[3], b'1'..=b'9'));
+    if device {
+        format!("_{text}")
+    } else {
+        text.to_owned()
+    }
 }
 
 /// The engine's progress in a line of its output (`-pp`).
@@ -857,6 +965,9 @@ impl App {
         let (events_end, events) = mpsc::channel();
         let gpu = recognition.gpu;
         let video = source.path.clone();
+        let title = engine
+            .get_text("media-title")
+            .filter(|title| engine.get_text("filename").as_ref() != Some(title));
         let spawned = std::thread::Builder::new()
             .name("rvp-speech".to_owned())
             .spawn(move || run_file(&source, &recognition, &control_end, &events_end));
@@ -867,6 +978,7 @@ impl App {
             control,
             events,
             video,
+            title,
             gpu,
             progress: 0,
         });
@@ -909,6 +1021,7 @@ impl App {
             control,
             events,
             video,
+            title: None,
             gpu,
             progress: 0,
         });
@@ -984,9 +1097,15 @@ impl App {
             }
             match finished {
                 Some(Ok((document, language))) => {
-                    let video = running.video.clone();
+                    let (video, title) = (running.video.clone(), running.title.clone());
                     self.speech.file = None;
-                    requests.push(self.speech_done(engine, &video, &document, &language));
+                    requests.push(self.speech_done(
+                        engine,
+                        &video,
+                        title.as_deref(),
+                        &document,
+                        &language,
+                    ));
                 }
                 Some(Err(error)) => {
                     self.speech.file = None;
@@ -1082,16 +1201,14 @@ impl App {
         &mut self,
         engine: &Engine,
         video: &str,
+        title: Option<&str>,
         document: &Document,
         language: &str,
     ) -> UiRequest {
         if document.cues.is_empty() {
             return UiRequest::Osd("Subtitles from audio: no speech found".to_owned());
         }
-        let stem = Path::new(video).file_stem().map_or_else(
-            || "subtitles".to_owned(),
-            |stem| stem.to_string_lossy().into_owned(),
-        );
+        let stem = subtitle_stem(video, title);
         let name = format!("{stem}.{language}.srt");
         let beside = Path::new(video)
             .parent()
@@ -1377,6 +1494,75 @@ mod tests {
             detected_language("whisper_full_with_state: auto-detected language: ru (p = 0.97)"),
             Some("ru".to_owned())
         );
+    }
+
+    #[test]
+    fn subtitles_of_a_stream_get_a_name_every_file_system_takes() {
+        let long = format!("a{}", "日".repeat(100));
+        let cases: [(&str, Option<&str>, &str); 9] = [
+            (
+                "https://rr3---sn-4g5e6nsz.googlevideo.com/videoplayback?expire=1763700000\
+                 &ei=Xy1a&ip=203.0.113.5&id=o-AB12&itag=22&source=youtube&mime=video%2Fmp4\
+                 &sig=AJfQdSswRAIgXq|x:y*z",
+                None,
+                "videoplayback",
+            ),
+            (
+                "https://media.example.com/talks/My%20Talk%3A%20Part%201.mp4?token=abc#t=30",
+                None,
+                "My Talk_ Part 1",
+            ),
+            (
+                "https://cdn.example.com/live/master.m3u8?hdnts=exp=1763700000~acl=/*~hmac=beef",
+                None,
+                "master",
+            ),
+            // No path: the host and its credentials are no name.
+            (
+                "https://user:secret@cdn.example.com/?v=1",
+                None,
+                "subtitles",
+            ),
+            ("rtmp://user:secret@live.example.com", None, "subtitles"),
+            // yt-dlp's entries carry the page's title.
+            (
+                "edl://%120%https://rr1---sn.googlevideo.com/videoplayback?expire=1&sig=x;",
+                Some("  AC/DC: \"Back In Black\" <Live> | 1991?\n"),
+                "AC_DC_ _Back In Black_ _Live_ _ 1991_",
+            ),
+            ("https://example.com/v.mp4", Some("Con"), "_Con"),
+            (
+                "https://example.com/v.mp4",
+                Some("nul.and.void"),
+                "_nul.and.void",
+            ),
+            (
+                "https://example.com/v.mp4",
+                Some("Console\u{7}"),
+                "Console_",
+            ),
+        ];
+        let dir = std::env::temp_dir().join(format!("rvp-speech-names-{}", std::process::id()));
+        drop(std::fs::remove_dir_all(&dir));
+        std::fs::create_dir_all(&dir).expect("dir");
+        for (video, title, wanted) in cases {
+            let stem = subtitle_stem(video, title);
+            assert_eq!(stem, wanted, "{video}");
+            // The name a stream's subtitles are saved under.
+            std::fs::write(dir.join(format!("{stem}.en.srt")), b"").expect("a file of that name");
+        }
+        let cut = subtitle_stem("https://example.com/v.mp4", Some(&long));
+        assert!(
+            cut.len() <= STREAM_NAME_BYTES && long.starts_with(&cut),
+            "{cut}"
+        );
+        assert_eq!(cut.len(), 118);
+        // A local file keeps its own name, for players to find them beside it.
+        assert_eq!(
+            subtitle_stem("/home/user/Videos/film.part1.mkv", Some("Title")),
+            "film.part1"
+        );
+        drop(std::fs::remove_dir_all(&dir));
     }
 
     #[test]

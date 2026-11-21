@@ -1239,7 +1239,6 @@ impl App {
         self.save_settings();
         drop(self.apply_picture(engine));
         drop(self.apply_video_filters(engine));
-        self.apply_decoding(engine);
         Some(notice)
     }
 
@@ -1460,7 +1459,6 @@ impl App {
                 picture.extend_size = size;
                 picture.extend = ExtendMethod::Pixels;
                 self.save_settings();
-                self.apply_decoding(engine);
                 drop(self.apply_video_filters(engine));
                 Some(UiRequest::Osd(format!(
                     "Extend/Crop to {}x{}",
@@ -1567,7 +1565,6 @@ impl App {
         self.update_auto_rotation();
         drop(self.apply_picture(engine));
         if filters {
-            self.apply_decoding(engine);
             drop(self.apply_video_filters(engine));
         }
     }

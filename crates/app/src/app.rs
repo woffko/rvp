@@ -326,9 +326,9 @@ pub struct App {
     /// and wait for the next file or for playback to leave the end
     /// (`App::defer_chain_change`).
     pub(crate) chain_pending: bool,
-    /// RVP's video filters wait the same way (`App::apply_video_filters`):
-    /// a `vf` change in the last moments of a file can leave mpv stuck
-    /// before its end (M12).
+    /// RVP's video filters and the decoder wait the same way
+    /// (`App::video_change_waits`): a `vf` change in the last moments of
+    /// a file can leave mpv stuck before its end (M12).
     pub(crate) video_pending: std::cell::Cell<bool>,
     /// The entry being loaded is to play: mpv may still carry the pause
     /// keep-open set at the end of the one before (seen on the Windows VM),
@@ -1804,6 +1804,22 @@ impl App {
         self.chain_pending
     }
 
+    /// Whether a change of RVP's video filters or of the decoder waits
+    /// (`App::apply_video_filters`, `App::apply_decoding`): in the last
+    /// moments of a file that plays, where a `vf` change can leave mpv
+    /// stuck before the end, and a decoder change makes mpv restart the
+    /// decoder and seek. Both then reach mpv together when the next file
+    /// starts or playback leaves the end. Never while a file starts: the
+    /// model may still hold the last file's end, and on a clip shorter
+    /// than [`NEAR_END`] the change would wait at every start.
+    pub(crate) fn video_change_waits(&self) -> bool {
+        let waits = self.tracking != Tracking::Loading && self.near_end();
+        if waits {
+            self.video_pending.set(true);
+        }
+        waits
+    }
+
     /// Applies the audio filters a change left waiting; `resync` plays on
     /// from the current position (not needed when a file starts).
     fn apply_pending_chain(&mut self, engine: &Engine, resync: bool) {
@@ -2220,6 +2236,8 @@ impl App {
         self.capture_file_loaded();
         self.apply_visual(engine);
         self.apply_pending_chain(engine, false);
+        // What waited at the last file's end: a file's start does not wait
+        // (`App::video_change_waits`).
         if self.video_pending.get() {
             drop(self.apply_video_filters(engine));
         }

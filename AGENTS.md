@@ -214,7 +214,10 @@ smoothing for users without SVP, after a study of the engines.
   audio chain's, a `vf` change in the last `NEAR_END` of a file can leave
   mpv stuck before the end (libmpv 0.37: the time stops, `eof-reached`
   never comes), so `App::apply_video_filters` lets it wait for the next
-  file or for playback to leave the end; test clips for filters need
+  file or for playback to leave the end, and the decoder (`hwdec`) with
+  it: mpv answers a decoder change with a restart and an exact seek. One
+  function decides (`App::video_change_waits`), and nothing waits while a
+  file is starting, where a change is safe; test clips for filters need
   room (M12's fixtures are 12 s).
 - Audio filters: RVP's part of mpv's `af` is built at once by
   `crates/app/src/audio/chain.rs` in one order (downmix, channel, preamp,
@@ -240,6 +243,8 @@ smoothing for users without SVP, after a study of the engines.
   computes (`audio/dsp.rs`) into the state folder, named by their
   parameters: a change to how one is computed needs a new file name.
   Audio Stretching puts rubberband (`pitch-scale`) in `@rvptempo`'s place.
+  A response is written without a flush (the window's thread writes it)
+  and one whose length is not what its frames make is written again.
 - The second audio device (`crates/app/src/audio/second.rs`) is a second
   core that follows the main one; it is started after the main core (so
   ffmpeg's log stays with the main core) and its chain has
@@ -397,7 +402,9 @@ smoothing for users without SVP, after a study of the engines.
   process of its own. The engine runs only once the calibration has built
   (two minutes on the host) and measured it; until then RIFE on ncnn
   stands in. At start a thread asks `nvidia-smi` which builder the card
-  needs (the calibration waits for it): another card's installation
+  needs (the calibration waits for it, but not for a card that sleeps:
+  the other engines are measured then, and RIFE (TensorRT) once the card
+  has woken and answered): another card's installation
   (`other-card`) does not run and the page offers Download… again; a new
   installation removes the files and engines of the one before. Not
   TensorRT 10.16: it computed RIFE wrongly on the host's RTX 50-series card, a fine

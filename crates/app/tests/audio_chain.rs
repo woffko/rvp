@@ -329,6 +329,41 @@ fn freeverb_rings_after_the_sound() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
+/// The responses load from a state folder whose path has apostrophes,
+/// colons or spaces (an account named O'Brien, a portable folder):
+/// FFmpeg reads a graph's `amovie` file name through the graph's quoting
+/// and then the filter options' own.
+#[test]
+fn responses_load_from_folders_with_apostrophes_colons_and_spaces() {
+    let dir = scratch("quoted");
+    let input = dir.join("burst.wav");
+    write_wav(&input, 2, RATE * 2, |n, _| {
+        if n < RATE / 10 {
+            tone(800.0, 0.5, n)
+        } else {
+            0.0
+        }
+    });
+    // Windows takes no colon in a file name.
+    let folders: &[&str] = if cfg!(windows) {
+        &["it's", "a b's 'x'"]
+    } else {
+        &["it's", "a: b's 'x':"]
+    };
+    for (index, name) in folders.iter().enumerate() {
+        let state = dir.join(name);
+        std::fs::create_dir_all(&state).expect("the state folder");
+        let mut case = Case::new("stereo", vec!["FL", "FR"]);
+        case.audio.freeverb.enabled = true;
+        case.responses.freeverb =
+            Some(dsp::freeverb_file(&state, 0.5, 0.25, 1.0).expect("Freeverb's response"));
+        let wet = case.render(&dir, &input, &format!("quoted-{index}"));
+        let tail = level(&wet, 0, 0.3, 0.8);
+        assert!(tail > -60.0, "{name}: a reverb tail: {tail}");
+    }
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
 /// A 5.1 source with a tone in channel `which` (FL FR FC LFE SL SR).
 fn surround(path: &Path, which: u16, frequency: f64) {
     write_wav(path, 6, RATE * 2, |n, c| {

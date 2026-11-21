@@ -99,13 +99,27 @@ pub fn lavfi(label: &str, graph: &str) -> String {
     format!("@{label}:lavfi=graph=%{}%{graph}", graph.len())
 }
 
-/// A file name for a graph's `amovie`: forward slashes, `:` escaped for the
-/// filter's options, quoted for the graph.
+/// A file name for a graph's `amovie`. FFmpeg takes it apart twice: the
+/// graph's parser takes its quotes and escapes off the filter's options,
+/// then the options' parser takes its own off the value, where `:`
+/// separates options. So `\`, `'` and `:` are escaped for the options
+/// first, and the result is quoted for the graph, inside which `[`, `]`,
+/// `,` and `;` are plain. On Windows the name has forward slashes, which
+/// FFmpeg takes there as well.
 #[must_use]
 pub fn graph_path(path: &Path) -> String {
-    let text = path.display().to_string().replace('\\', "/");
-    let escaped = text.replace(':', "\\:");
-    format!("'{}'", escaped.replace('\'', "'\\''"))
+    let mut text = path.display().to_string();
+    if cfg!(windows) {
+        text = text.replace('\\', "/");
+    }
+    let mut option = String::with_capacity(text.len() + 8);
+    for c in text.chars() {
+        if matches!(c, '\\' | '\'' | ':') {
+            option.push('\\');
+        }
+        option.push(c);
+    }
+    format!("'{}'", option.replace('\'', "'\\''"))
 }
 
 fn db(value: f64) -> f64 {
@@ -618,7 +632,8 @@ pub fn build(inputs: &Inputs) -> (Vec<Entry>, Vec<Entry>) {
 
 /// The filters of an mpv `af` or `vf` value (`@label:name=...,...`), each
 /// with its label and its text. Values may be quoted as `%N%` followed by
-/// N bytes, or in brackets.
+/// N bytes, or in brackets; a count past the end ends the text (it may come
+/// from a label, which mpv prints as it was given).
 #[must_use]
 pub fn split(text: &str) -> Vec<(Option<&str>, &str)> {
     let bytes = text.as_bytes();
@@ -640,7 +655,10 @@ pub fn split(text: &str) -> Vec<(Option<&str>, &str)> {
             && let Some(len) = text[i + 1..].find('%')
             && let Ok(count) = text[i + 1..i + 1 + len].parse::<usize>()
         {
-            i = (i + len + 2 + count).min(bytes.len());
+            i = i
+                .saturating_add(len + 2)
+                .saturating_add(count)
+                .min(bytes.len());
         } else if bytes[i] == b'[' {
             i = text[i..].find(']').map_or(bytes.len(), |end| i + end + 1);
         } else {
@@ -809,13 +827,18 @@ mod tests {
         assert_eq!(graph("same", &none), "");
         // The virtual speakers need their responses.
         assert_eq!(graph("virtual-headphone", &none), "");
+        let (path, quoted) = if cfg!(windows) {
+            ("C:\\Users\\a b\\head.wav", "'C\\:/Users/a b/head.wav'")
+        } else {
+            ("/home/a b/head.wav", "'/home/a b/head.wav'")
+        };
         let responses = Responses {
             freeverb: None,
             crystality: None,
-            head_model: Some(PathBuf::from("C:\\Users\\a b\\head.wav")),
+            head_model: Some(PathBuf::from(path)),
         };
         let virtual_graph = graph("virtual-headphone", &responses);
-        assert!(virtual_graph.contains("amovie=filename='C\\:/Users/a b/head.wav'"));
+        assert!(virtual_graph.contains(&format!("amovie=filename={quoted}[h]")));
         assert!(virtual_graph.contains("headphone=map=FL|FR|FC|LFE|BL|BR|SL|SR:hrir=multich"));
     }
 
@@ -885,6 +908,81 @@ mod tests {
             "@rvpeq:lavfi=graph=%1%x,@mine:lavfi=graph=%8%volume=2,@other:scaletempo,\
              @rvpnorm:lavfi=graph=%1%y"
         );
+    }
+
+    /// FFmpeg's `av_get_token` (libavutil/avstring.c), which both the
+    /// graph's parser and the filter options' use: white space skipped
+    /// before, `\` takes the next character as it is, `'` quotes up to the
+    /// next `'`, unquoted white space dropped at the end; it stops at a
+    /// character of `term`. Returns the token and the text after it.
+    fn get_token<'a>(text: &'a str, term: &str) -> (String, &'a str) {
+        const WHITE: [char; 4] = [' ', '\n', '\t', '\r'];
+        let text = text.trim_start_matches(WHITE);
+        let mut chars = text.char_indices().peekable();
+        let (mut out, mut kept) = (Vec::new(), 0);
+        let mut rest = text.len();
+        while let Some((at, c)) = chars.next() {
+            if term.contains(c) {
+                rest = at;
+                break;
+            }
+            if c == '\\' && chars.peek().is_some() {
+                out.extend(chars.next().map(|(_, c)| c));
+                kept = out.len();
+            } else if c == '\'' {
+                let mut closed = false;
+                for (_, c) in chars.by_ref() {
+                    if c == '\'' {
+                        closed = true;
+                        break;
+                    }
+                    out.push(c);
+                }
+                if closed {
+                    kept = out.len();
+                }
+            } else {
+                out.push(c);
+            }
+        }
+        while out.len() > kept && out.last().is_some_and(|c| WHITE.contains(c)) {
+            out.pop();
+        }
+        (out.into_iter().collect(), &text[rest..])
+    }
+
+    #[test]
+    fn graph_paths_come_through_both_of_ffmpegs_parsers() {
+        for path in [
+            "/home/it's/freeverb.wav",
+            "/home/a: b's 'x':/freeverb.wav",
+            "/home/''/[x],y;z/freeverb.wav",
+            "/home/back\\slash\\'/freeverb.wav",
+            "C:\\Users\\O'Brien\\AppData\\Local\\RVP\\audio\\freeverb.wav",
+        ] {
+            let graph = format!("filename={}[ir];[m][ir]afir", graph_path(Path::new(path)));
+            // The graph's parser: the filter's options, up to its outputs.
+            let (options, after) = get_token(&graph, "[],;");
+            assert_eq!(after, "[ir];[m][ir]afir", "{path}");
+            // The options' parser: one value, the whole name.
+            let value = options.strip_prefix("filename=").expect("the option");
+            let (name, after) = get_token(value, ":");
+            let wanted = if cfg!(windows) {
+                path.replace('\\', "/")
+            } else {
+                path.to_owned()
+            };
+            assert_eq!(name, wanted, "{graph}");
+            assert_eq!(after, "", "{path}: one option");
+        }
+    }
+
+    #[test]
+    fn a_count_past_the_end_ends_the_text() {
+        // mpv prints a label as it was given, `%` and all.
+        let entries = split("@%18446744073709551594%:lavfi=[anull],@b:x");
+        assert_eq!(entries.len(), 1, "{entries:?}");
+        assert_eq!(split("%99%abc"), [(None, "%99%abc")]);
     }
 
     #[test]
