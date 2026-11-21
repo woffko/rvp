@@ -128,6 +128,11 @@ PSID sidOf(std::vector<BYTE> &user)
 
 enum class Pipe { Own, None, Foreign };
 
+// The channel whose pipe was last found in another owner's hands: what
+// rvp_instance_foreign answers for it without asking again (the other
+// program may be between two instances of its pipe just then).
+QString foreignChannel;
+
 // Opens the channel's pipe as a client and keeps it only when the current
 // user owns it; another owner, or a pipe the user may not open, is
 // Foreign. The server may identify this process, not act as it. Waits up
@@ -157,11 +162,14 @@ Pipe openPipe(const QString &name, int ms, HANDLE *opened)
                 return Pipe::Own;
             }
             CloseHandle(pipe);
+            foreignChannel = name;
             return Pipe::Foreign;
         }
         const DWORD error = GetLastError();
-        if (error == ERROR_ACCESS_DENIED)
+        if (error == ERROR_ACCESS_DENIED) {
+            foreignChannel = name;
             return Pipe::Foreign;
+        }
         const qint64 left = deadline.remainingTime();
         if (error != ERROR_PIPE_BUSY || left <= 0 || !WaitNamedPipeW(path.c_str(), static_cast<DWORD>(left)))
             return Pipe::None;
@@ -392,8 +400,11 @@ bool rvp_instance_running(rust::Str name)
 bool rvp_instance_foreign(rust::Str name)
 {
 #ifdef Q_OS_WIN
+    const QString channel = fromStr(name);
+    if (foreignChannel == channel)
+        return true;
     HANDLE pipe = INVALID_HANDLE_VALUE;
-    const Pipe found = openPipe(fromStr(name), 500, &pipe);
+    const Pipe found = openPipe(channel, 500, &pipe);
     if (found == Pipe::Own)
         CloseHandle(pipe);
     return found == Pipe::Foreign;

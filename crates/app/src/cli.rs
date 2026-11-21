@@ -185,11 +185,14 @@ impl Cli {
 
 /// A file argument as RVP opens it: on Windows (`windows`) a trailing
 /// `"` that stands for a backslash is one again (the module comment).
+/// White space after it goes too: the quote that was eaten left the
+/// argument open to the command line's end, and no Windows name ends in
+/// a space.
 fn file_argument(arg: String, windows: bool) -> String {
     if !windows || crate::playlist::is_url(&arg) {
         return arg;
     }
-    match arg.strip_suffix('"') {
+    match arg.trim_end().strip_suffix('"') {
         Some(path) if !path.contains('"') => format!("{path}\\"),
         _ => arg,
     }
@@ -334,6 +337,8 @@ mod tests {
         // `"rvp.exe" -- "E:\"` and `"rvp.exe" "C:\films\"` as Windows
         // splits them.
         assert_eq!(windows(&["--", "E:\""]).files, ["E:\\"]);
+        // A launcher that leaves a space after the eaten quote.
+        assert_eq!(windows(&["--", "C:\\films\" "]).files, ["C:\\films\\"]);
         assert_eq!(windows(&["C:\\films\""]).files, ["C:\\films\\"]);
         assert_eq!(windows(&["C:\\a.mkv"]).files, ["C:\\a.mkv"]);
         // A URL, and an argument with another quote, stay as they came.
