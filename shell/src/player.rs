@@ -1025,14 +1025,17 @@ fn load_app() -> Result<(App, bool, Option<String>), String> {
         Ok((app, portable)) => (app, portable, None),
         Err(message) => {
             // The user's runtime folder (their own; a shared /tmp/rvp-state
-            // could be another user's), else one of this process's.
-            let fallback = std::env::var_os("XDG_RUNTIME_DIR")
+            // could be another user's), else a new one of this process's
+            // in the temporary folder, made here and never one that was
+            // there (another user may write there).
+            let runtime = std::env::var_os("XDG_RUNTIME_DIR")
                 .map(PathBuf::from)
-                .filter(|dir| cfg!(unix) && dir.is_absolute() && dir.is_dir())
-                .map_or_else(
-                    || std::env::temp_dir().join(format!("rvp-state-{}", std::process::id())),
-                    |dir| dir.join("rvp-state"),
-                );
+                .filter(|dir| cfg!(unix) && dir.is_absolute() && dir.is_dir());
+            let fallback = match runtime {
+                Some(dir) => dir.join("rvp-state"),
+                None => rvp_app::create_new_dir(&std::env::temp_dir(), "rvp-state")
+                    .map_err(|e| format!("{message}; no temporary state folder: {e}"))?,
+            };
             let app = App::new(Settings::default(), &fallback).map_err(|e| e.to_string())?;
             (app, false, Some(message))
         }
@@ -3675,6 +3678,7 @@ impl qobject::Player {
 
     pub(crate) fn shutdown(mut self: Pin<&mut Self>) {
         crate::video::CLOSING.store(true, Ordering::Release);
+        crate::crash::leaving(crate::crash::CLOSING);
         let Some(core) = self.as_mut().core_mut() else {
             return;
         };

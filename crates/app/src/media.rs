@@ -3,7 +3,14 @@
 //! shell). Both read [`MediaState`] and send [`MediaCommand`]s, which run
 //! as RVP's own actions do (Stop is "Close Playback", as the skin's stop
 //! button).
+//!
+//! Every program on the session bus reads what MPRIS shows, so a stream's
+//! address there carries no user name or password
+//! ([`without_credentials`]), and a title made from an address
+//! ([`url_name`], `view::file_name`) has no query or fragment either: a
+//! signed stream's token sits in its query.
 
+use std::borrow::Cow;
 use std::fmt::Write as _;
 
 use rvp_engine::{Engine, PropertyId, Seek};
@@ -109,14 +116,14 @@ impl App {
             status,
             track: self.media_track,
             title: if loaded {
-                crate::view::title(&self.model, lists)
+                crate::view::published_title(&self.model, lists)
             } else {
                 String::new()
             },
             url: loaded
                 .then(|| self.model.text(PropertyId::Path))
                 .flatten()
-                .map(file_url),
+                .map(|path| without_credentials(&file_url(path)).into_owned()),
             length,
             position: if loaded {
                 self.model.double(PropertyId::TimePos).unwrap_or(0.0)
@@ -232,6 +239,70 @@ pub fn file_url(path: &str) -> String {
     url
 }
 
+/// Whether `c` ends an address's authority: its path, query or fragment
+/// begins, or the text around the address goes on (white space, quotes,
+/// brackets no address holds unescaped).
+fn ends_authority(c: char) -> bool {
+    matches!(c, '/' | '?' | '#' | '"' | '<' | '>' | '\\') || c.is_whitespace()
+}
+
+/// `text` with every address's user name and password left out: after
+/// each `://`, what comes before the last `@` of the authority
+/// (`https://user:password@host/a` is `https://host/a`). The rest, the
+/// query too, stays. For what RVP publishes (MPRIS) and logs.
+#[must_use]
+pub fn without_credentials(text: &str) -> Cow<'_, str> {
+    let mut out = String::new();
+    let mut copied = 0;
+    for (at, _) in text.match_indices("://") {
+        let start = at + 3;
+        // An authority ends before the next `://`'s slashes, so the parts
+        // left out never overlap.
+        if start < copied {
+            continue;
+        }
+        let authority = &text[start..];
+        let end = authority.find(ends_authority).unwrap_or(authority.len());
+        if let Some(sign) = authority[..end].rfind('@') {
+            out.push_str(&text[copied..start]);
+            copied = start + sign + 1;
+        }
+    }
+    if copied == 0 {
+        return Cow::Borrowed(text);
+    }
+    out.push_str(&text[copied..]);
+    Cow::Owned(out)
+}
+
+/// What names an address in a title: the last part of its path, without
+/// the query and the fragment, else its host without credentials
+/// (`https://user:password@example.org/?v=1` is `example.org`).
+#[must_use]
+pub fn url_name(url: &str) -> &str {
+    let rest = url.split_once("://").map_or(url, |(_, rest)| rest);
+    let rest = &rest[..rest.find(['?', '#']).unwrap_or(rest.len())];
+    let rest = rest.trim_end_matches('/');
+    match rest.split_once('/') {
+        Some((_, path)) => path.rsplit('/').next().unwrap_or(path),
+        None => rest.rsplit_once('@').map_or(rest, |(_, host)| host),
+    }
+}
+
+/// What names an address in RVP's own lists: the last part of its path
+/// with its query (the entries of one site differ only there), else its
+/// host; never the credentials (`https://u:p@host/watch?v=1` is
+/// `watch?v=1`). What goes outside RVP takes [`url_name`].
+#[must_use]
+pub fn url_label(url: &str) -> &str {
+    let rest = url.split_once("://").map_or(url, |(_, rest)| rest);
+    let path = &rest[..rest.find(['?', '#']).unwrap_or(rest.len())];
+    match path.trim_end_matches('/').rsplit_once('/') {
+        Some((before, _)) => rest[before.len() + 1..].trim_end_matches('/'),
+        None => url_name(url),
+    }
+}
+
 /// A `file://` URL as a path; other URLs (streams) stay as they are.
 #[must_use]
 pub fn file_path(uri: &str) -> String {
@@ -298,5 +369,67 @@ mod tests {
         }
         assert_eq!(file_path("file://localhost/tmp/a.mkv"), "/tmp/a.mkv");
         assert_eq!(file_path("https://example.org/a"), "https://example.org/a");
+    }
+
+    #[test]
+    fn addresses_lose_their_credentials() {
+        for (text, clean) in [
+            (
+                "https://user:pass@example.org/a.mkv?sig=1#t=2",
+                "https://example.org/a.mkv?sig=1#t=2",
+            ),
+            (
+                "mpv [cplayer] Playing: rtsp://cam@10.0.0.2:554/live.",
+                "mpv [cplayer] Playing: rtsp://10.0.0.2:554/live.",
+            ),
+            ("https://user:pass@example.org", "https://example.org"),
+            // The last `@` of the authority; one in the path stays.
+            (
+                "ftp://a@b:c@example.org/x@y.mkv",
+                "ftp://example.org/x@y.mkv",
+            ),
+            // Every address of a line, nested ones too.
+            (
+                "edl://%30%https://u:p@a.example/v;%30%https://u:p@b.example/a",
+                "edl://%30%https://a.example/v;%30%https://b.example/a",
+            ),
+            (
+                "\"url\": \"https://u:p@example.org\", next https://x@y/",
+                "\"url\": \"https://example.org\", next https://y/",
+            ),
+            (
+                "https://example.org/?to=https://u:p@inner.example/a",
+                "https://example.org/?to=https://inner.example/a",
+            ),
+        ] {
+            assert_eq!(without_credentials(text), clean, "{text}");
+        }
+        // Nothing to leave out: the text itself.
+        for text in [
+            "file:///home/u/a@b.mkv",
+            "mail user@example.org",
+            "https://example.org/a@b",
+            "",
+        ] {
+            assert!(
+                matches!(without_credentials(text), Cow::Borrowed(same) if same == text),
+                "{text}"
+            );
+        }
+    }
+
+    #[test]
+    fn addresses_are_named_without_query_or_credentials() {
+        for (url, name) in [
+            ("https://example.org/films/a.mkv?token=secret#t=3", "a.mkv"),
+            ("https://example.org/dir/", "dir"),
+            ("https://user:secret@example.org/?v=1", "example.org"),
+            ("https://user:secret@example.org:8443", "example.org:8443"),
+            ("https://example.org/watch?v=abc", "watch"),
+            ("dvd://longest//dev/sr0", "sr0"),
+            ("rvpdisc://3", "3"),
+        ] {
+            assert_eq!(url_name(url), name, "{url}");
+        }
     }
 }

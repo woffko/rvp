@@ -1,7 +1,9 @@
 //! The control API's token: 32 random bytes from the system (as 64 hex
-//! digits), made once per installation and kept in the state folder,
-//! readable by the user only where the system has such modes. It never
-//! goes into logs; the Remote page shows it and can renew it.
+//! digits), made once per installation and kept in the state folder for
+//! the user alone: 0600 on Unix, and on Windows access rules of its own
+//! for the user and SYSTEM, which the shell sets (a portable state folder
+//! would give it the program folder's). It never goes into logs; the
+//! Remote page shows it and can renew it.
 
 use std::fmt::Write as _;
 use std::io;
@@ -55,9 +57,10 @@ pub fn renew(state_dir: &Path) -> io::Result<String> {
             let _ = write!(text, "{byte:02x}");
             text
         });
-    // Only its owner may read it where the system has such modes (on
-    // Windows the state folder is the user's own).
-    crate::storage::write_private(&path(state_dir), token.as_bytes())?;
+    // Only its owner may read it where the system has such modes, as all
+    // of RVP's own files (on Windows the shell gives it access rules of its
+    // own: a portable state folder takes the program folder's).
+    crate::storage::write_atomic(&path(state_dir), token.as_bytes())?;
     Ok(token)
 }
 

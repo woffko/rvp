@@ -3,10 +3,10 @@
 //! before Rust's own report. The shell adds native crashes to the same
 //! folder: a fatal signal on Linux, an unhandled exception with a minidump
 //! on Windows (`shell/src/crash.rs`), in files named after the time RVP
-//! started ([`report_path`]).
+//! started ([`report_path`]). Like RVP's other files, they are the
+//! user's alone where the system has such modes (`crate::storage`).
 
 use std::backtrace::Backtrace;
-use std::fs::OpenOptions;
 use std::io::{self, Write};
 use std::panic::PanicHookInfo;
 use std::path::{Path, PathBuf};
@@ -58,8 +58,6 @@ pub fn install_panic_hook(dir: &Path) {
 }
 
 fn write_panic_report(dir: &Path, info: &PanicHookInfo<'_>) -> io::Result<PathBuf> {
-    std::fs::create_dir_all(dir)?;
-    let path = report_path(dir, SystemTime::now(), ".log");
     let payload = info.payload();
     let message = payload
         .downcast_ref::<&str>()
@@ -79,8 +77,16 @@ fn write_panic_report(dir: &Path, info: &PanicHookInfo<'_>) -> io::Result<PathBu
         std::env::consts::ARCH,
         Backtrace::force_capture()
     );
-    // Appended: two threads may panic within the same second.
-    let mut file = OpenOptions::new().create(true).append(true).open(&path)?;
+    append_report(dir, SystemTime::now(), &text)
+}
+
+/// Appends `text` to the report of `time` in `dir` (both made when
+/// missing, for the user alone): two threads may panic within the same
+/// second.
+fn append_report(dir: &Path, time: SystemTime, text: &str) -> io::Result<PathBuf> {
+    crate::storage::create_private_dir(dir)?;
+    let path = report_path(dir, time, ".log");
+    let mut file = crate::storage::open_private_append(&path)?;
     file.write_all(text.as_bytes())?;
     Ok(path)
 }
@@ -109,6 +115,34 @@ mod tests {
             report_path(dir, time, ".dmp"),
             dir.join("crash-20240229-000000.dmp")
         );
+    }
+
+    #[test]
+    fn reports_are_appended_for_the_user_alone() {
+        let dir = std::env::temp_dir().join(format!("rvp-crash-{}", std::process::id()));
+        drop(std::fs::remove_dir_all(&dir));
+        let folder = dir.join("state");
+        let path = append_report(&folder, UNIX_EPOCH, "one\n").expect("first");
+        assert_eq!(
+            append_report(&folder, UNIX_EPOCH, "two\n").ok(),
+            Some(path.clone())
+        );
+        assert_eq!(
+            std::fs::read_to_string(&path).ok().as_deref(),
+            Some("one\ntwo\n")
+        );
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt as _;
+            let mode = |path: &Path| {
+                std::fs::metadata(path)
+                    .map(|meta| meta.permissions().mode() & 0o777)
+                    .unwrap_or_default()
+            };
+            assert_eq!(mode(&path), 0o600);
+            assert_eq!(mode(&folder), 0o700);
+        }
+        drop(std::fs::remove_dir_all(&dir));
     }
 
     #[test]

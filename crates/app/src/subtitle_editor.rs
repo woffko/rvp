@@ -23,7 +23,9 @@
 //!   is never written over, so the first one keeps the original. Files are
 //!   written to a temporary file of their own and renamed, without a flush
 //!   (the window's thread waits for no disk); a subtitle that is a symbolic
-//!   link stays one ([`crate::storage::write_unflushed`]).
+//!   link stays one ([`crate::storage::write_user_file_unflushed`]). The
+//!   backups, working copies and unsaved edits are RVP's own files, the
+//!   user's alone (`crate::storage`).
 //! * Edits not saved when another file starts or RVP closes are kept in
 //!   `subtitles/unsaved-<name>` (a free name, as the backups'), with a
 //!   message saying so.
@@ -204,8 +206,8 @@ fn create_free(
     stem: &str,
     extension: &str,
 ) -> std::io::Result<(PathBuf, std::fs::File)> {
-    std::fs::create_dir_all(dir)?;
-    let mut options = std::fs::OpenOptions::new();
+    crate::storage::create_private_dir(dir)?;
+    let mut options = crate::storage::private_options();
     options.write(true).create_new(true);
     let dot = if extension.is_empty() { "" } else { "." };
     for number in 1..=FREE_NAMES {
@@ -408,7 +410,9 @@ impl App {
         if let Err(error) = self.back_up(target) {
             return UiRequest::Message(error);
         }
-        if let Err(error) = crate::storage::write_unflushed(target, &document.to_bytes(format)) {
+        if let Err(error) =
+            crate::storage::write_user_file_unflushed(target, &document.to_bytes(format))
+        {
             return UiRequest::Message(format!("Cannot save {name}: {error}"));
         }
         let delay = self.model.double(PropertyId::SubDelay).unwrap_or(0.0);

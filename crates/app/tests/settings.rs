@@ -406,3 +406,38 @@ fn the_subtitle_font_reaches_mpv_and_the_control_panel() {
     assert_eq!(again.last_settings_page(), Some("audio-sync"));
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+/// A start narrows RVP's folders to the user, keeps what they hold, and
+/// writes its files for the user alone; an export gets the modes any new
+/// file gets.
+#[cfg(unix)]
+#[test]
+fn a_start_keeps_rvps_folders_and_files_to_the_user() {
+    use std::os::unix::fs::PermissionsExt as _;
+    let mode = |path: &Path| {
+        std::fs::metadata(path)
+            .map(|meta| meta.permissions().mode() & 0o777)
+            .unwrap_or_default()
+    };
+    let dir = scratch("modes");
+    let dirs = Dirs::inside(&dir);
+    for folder in [&dirs.config, &dirs.state] {
+        std::fs::create_dir_all(folder).expect("folder");
+        std::fs::set_permissions(folder, std::fs::Permissions::from_mode(0o755)).expect("chmod");
+    }
+    std::fs::write(dirs.state.join("kept.txt"), b"x").expect("a file of the user's");
+    let app = App::load(&dirs).expect("load");
+    app.save_settings();
+    drop(app);
+    assert_eq!(mode(&dirs.config), 0o700);
+    assert_eq!(mode(&dirs.state), 0o700);
+    assert!(dirs.state.join("kept.txt").is_file());
+    assert_eq!(mode(&dirs.config.join("settings.json")), 0o600);
+    let app = App::load(&dirs).expect("load again");
+    let exported = dir.join("exported.json");
+    app.export_settings(&exported).expect("export");
+    let plain = dir.join("plain");
+    std::fs::write(&plain, b"").expect("plain");
+    assert_eq!(mode(&exported), mode(&plain));
+    let _ = std::fs::remove_dir_all(&dir);
+}

@@ -1,12 +1,22 @@
 //! Native crash logs (M8), beside the panic logs of `rvp_app::crash`: a
 //! fatal signal on Unix, an unhandled exception on Windows (with a
 //! minidump) write a line to `crash-<start>-native.log` in RVP's state
-//! folder, named after the time RVP started. Everything the handlers need
-//! is prepared at start; the handlers themselves only open, write and
-//! close files (FFI points, AGENTS.md).
+//! folder, named after the time RVP started, for the user alone (0600 on
+//! Unix, as RVP's other files). Everything the handlers need is prepared
+//! at start; the handlers themselves only open, write and close files
+//! (FFI points, AGENTS.md).
+//!
+//! A crash while RVP leaves says so: after the signal or the exception,
+//! " while closing" (the window closed: playback stops, mpv quits, the
+//! windows go) or " while exiting" (the process ends: the libraries' exit
+//! handlers and static destructors run), with the smoothing plugins loaded
+//! then ([`PLUGINS`]). RIFE's ncnn tears its GPU state down at exit, which
+//! crashed on Windows (`crate::process`); this line tells whether Linux
+//! does the same.
 
 use std::path::Path;
 use std::sync::OnceLock;
+use std::sync::atomic::{AtomicU8, Ordering};
 use std::time::SystemTime;
 
 use rvp_app::crash::version_text;
@@ -14,6 +24,64 @@ use rvp_app::crash::version_text;
 /// The first words of the line a crash writes, before the signal or the
 /// exception code.
 static HEADER: OnceLock<Vec<u8>> = OnceLock::new();
+
+/// How far RVP got in leaving (0: it runs). The handlers read it: an
+/// atomic load is async-signal-safe.
+static STAGE: AtomicU8 = AtomicU8::new(0);
+/// The smoothing plugins loaded when RVP last noted a stage, as bits of
+/// [`PLUGINS`]' places.
+static LOADED: AtomicU8 = AtomicU8::new(0);
+
+/// The window closed: playback stops, mpv quits, the windows go.
+pub(crate) const CLOSING: u8 = 1;
+/// The process ends: the libraries' exit handlers and destructors run.
+pub(crate) const EXITING: u8 = 2;
+
+/// The smoothing plugins a crash line names: each library's file name on
+/// Windows and on Linux, and the name the line gives it.
+pub(crate) const PLUGINS: [(&str, &str, &[u8]); 3] = [
+    (
+        "librife_windows_x86-64.dll",
+        "librife_linux_x86-64.so",
+        b"RIFE",
+    ),
+    ("libmvtools.dll", "libmvtools.so", b"MVTools"),
+    ("vstrt.dll", "libvstrt.so", b"vs-mlrt"),
+];
+
+/// RIFE's bit among [`PLUGINS`] (Windows ends a process that loaded it
+/// without its exit handlers, `crate::process`).
+#[cfg(windows)]
+pub(crate) const RIFE: u8 = 1;
+
+/// RVP reached `stage` of leaving (it never goes back), with the plugins
+/// loaded now (`crate::process::loaded_plugins`); returns them.
+pub(crate) fn leaving(stage: u8) -> u8 {
+    let loaded = crate::process::loaded_plugins();
+    LOADED.store(loaded, Ordering::SeqCst);
+    STAGE.fetch_max(stage, Ordering::SeqCst);
+    loaded
+}
+
+/// Hands `write` the words that follow the signal or the exception: the
+/// stage and the plugins, each a static text (a handler formats nothing).
+fn context(mut write: impl FnMut(&[u8])) {
+    match STAGE.load(Ordering::SeqCst) {
+        CLOSING => write(b" while closing"),
+        EXITING => write(b" while exiting"),
+        _ => {}
+    }
+    let loaded = LOADED.load(Ordering::SeqCst);
+    if loaded != 0 {
+        write(b"; smoothing plugins loaded:");
+        for (bit, (_, _, name)) in PLUGINS.iter().enumerate() {
+            if loaded & (1 << bit) != 0 {
+                write(b" ");
+                write(name);
+            }
+        }
+    }
+}
 
 /// Writes `value` in `base` (10 or 16) into `buffer`; the digits used.
 fn digits(mut value: u64, base: u64, buffer: &mut [u8; 20]) -> &[u8] {
@@ -42,7 +110,7 @@ mod imp {
     use std::sync::OnceLock;
     use std::time::SystemTime;
 
-    use super::{HEADER, digits};
+    use super::{HEADER, context, digits};
 
     static LOG: OnceLock<CString> = OnceLock::new();
 
@@ -81,21 +149,24 @@ mod imp {
         let number = digits(u64::try_from(signal).unwrap_or(0), 10, &mut buffer);
         if let (Some(path), Some(header)) = (LOG.get(), HEADER.get()) {
             // SAFETY: FFI point. open, write and close are
-            // async-signal-safe; the path and the header were prepared
-            // before any handler could run, and every buffer outlives its
-            // call.
+            // async-signal-safe, and so are the atomic loads of `context`;
+            // the path and the header were prepared before any handler
+            // could run, and every buffer outlives its call.
             #[allow(unsafe_code)]
             unsafe {
                 let file = libc::open(
                     path.as_ptr(),
                     libc::O_WRONLY | libc::O_CREAT | libc::O_APPEND | libc::O_CLOEXEC,
-                    0o644,
+                    0o600,
                 );
                 if file >= 0 {
                     let text = b"fatal signal ";
                     libc::write(file, header.as_ptr().cast(), header.len());
                     libc::write(file, text.as_ptr().cast(), text.len());
                     libc::write(file, number.as_ptr().cast(), number.len());
+                    context(|part| {
+                        libc::write(file, part.as_ptr().cast(), part.len());
+                    });
                     libc::write(file, b"\n".as_ptr().cast(), 1);
                     libc::close(file);
                 }
@@ -131,7 +202,7 @@ mod imp {
     };
     use windows::core::PCWSTR;
 
-    use super::{HEADER, digits};
+    use super::{HEADER, context, digits};
 
     static LOG: OnceLock<Vec<u16>> = OnceLock::new();
     static DUMP: OnceLock<Vec<u16>> = OnceLock::new();
@@ -188,9 +259,13 @@ mod imp {
                 FILE_ATTRIBUTE_NORMAL,
                 None,
             ) {
-                for part in [header.as_slice(), b"unhandled exception 0x", code, b"\r\n"] {
+                for part in [header.as_slice(), b"unhandled exception 0x", code] {
                     let _ = WriteFile(file, Some(part), None, None);
                 }
+                context(|part| {
+                    let _ = WriteFile(file, Some(part), None, None);
+                });
+                let _ = WriteFile(file, Some(b"\r\n"), None, None);
                 let _ = CloseHandle(file);
             }
             if let Ok(file) = CreateFileW(
@@ -223,9 +298,10 @@ mod imp {
     }
 }
 
-/// Installs the native crash handlers, writing to `dir` (created here).
+/// Installs the native crash handlers, writing to `dir` (created here,
+/// for the user alone).
 pub(crate) fn install(dir: &Path) {
-    if std::fs::create_dir_all(dir).is_err() {
+    if rvp_app::create_private_dir(dir).is_err() {
         return;
     }
     let _ = HEADER.set(

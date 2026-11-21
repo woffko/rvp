@@ -45,7 +45,8 @@ impl<'a> PropertyData<'a> {
         assert!(!ptr.is_null());
         unsafe {
             match format {
-                mpv_format::Flag => Ok(PropertyData::Flag(*(ptr as *mut bool))),
+                // RVP patch: mpv's flag is a C `int`.
+                mpv_format::Flag => Ok(PropertyData::Flag(*(ptr as *mut ctype::c_int) != 0)),
                 mpv_format::String => {
                     let char_ptr = *(ptr as *mut *mut ctype::c_char);
                     Ok(PropertyData::Str(mpv_cstr_to_str!(char_ptr)?))
@@ -259,16 +260,23 @@ impl Mpv {
             mpv_event_id::ClientMessage => {
                 let client_message =
                     unsafe { *(event.data as *mut libmpv2_sys::mpv_event_client_message) };
-                let messages = unsafe {
-                    slice::from_raw_parts_mut(client_message.args, client_message.num_args as _)
-                };
-                Some(Ok(Event::ClientMessage(
+                // RVP patch: a message without arguments has no list at
+                // all (`args` is NULL), and an argument that is not UTF-8
+                // is an error, not a panic.
+                let count = usize::try_from(client_message.num_args).unwrap_or(0);
+                let messages: &[*const ctype::c_char] =
+                    if client_message.args.is_null() || count == 0 {
+                        &[]
+                    } else {
+                        unsafe { slice::from_raw_parts(client_message.args, count) }
+                    };
+                Some(
                     messages
                         .iter()
                         .map(|msg| unsafe { mpv_cstr_to_str!(*msg) })
                         .collect::<Result<Vec<_>>>()
-                        .unwrap(),
-                )))
+                        .map(Event::ClientMessage),
+                )
             }
             mpv_event_id::VideoReconfig => Some(Ok(Event::VideoReconfig)),
             mpv_event_id::AudioReconfig => Some(Ok(Event::AudioReconfig)),

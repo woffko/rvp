@@ -69,7 +69,8 @@ smoothing for users without SVP, after a study of the engines.
   `QPainter` pointer passed to `paint`), each with a `SAFETY:` comment.
   Clippy runs with `all` and `pedantic` denied; a local `#[allow]` needs a
   comment that justifies it.
-- `vendor/libmpv2` is libmpv2 6.0.0 with one fix (`vendor/libmpv2/RVP-PATCH.md`),
+- `vendor/libmpv2` is libmpv2 6.0.0 with RVP's fixes and wrappers, each
+  with its reason in `vendor/libmpv2/RVP-PATCH.md` (add yours there),
   used through `[patch.crates-io]`. Building needs libmpv (`MPV_LIB_DIR` for
   the linker and the loader path at run time) and, for `shell/`, Qt 6.10
   (`QMAKE`).
@@ -468,6 +469,16 @@ smoothing for users without SVP, after a study of the engines.
   module (`FolderDialog.qml`): import Qt's under a qualifier.
 - Portable mode: `rvp.portable` next to the executable keeps the settings
   there; `RVP_CONFIG_DIR` and `RVP_STATE_DIR` still win (test runs).
+- RVP's own files are the user's alone on Unix (`storage.rs`'s module
+  comment): `storage::write_atomic`, `write_unflushed`,
+  `private_options` and `open_private_append` make them 0600 and the
+  folders on the way 0700, and `Dirs::prepare` narrows the settings and
+  the state folder at start; a file the user keeps elsewhere (an export,
+  a saved playlist, a subtitle saved over theirs) goes through
+  `storage::write_user_file`. What RVP publishes (MPRIS, the window's
+  and the media controls' titles) and logs carries no `user:password@`
+  (`media::without_credentials`), and a title made from an address has
+  no query (`media::url_name`).
 - The log (`crates/app/src/log.rs`, the Log page, `log.level`, off by
   default): `rvp.log` in the page's folder (`log.folder`; unset: the state
   folder) at Critical, Warning, Info or Debug, written by a thread of its
@@ -543,8 +554,12 @@ smoothing for users without SVP, after a study of the engines.
 - Crash logs go to RVP's state folder: panics (`rvp_app::crash`), fatal
   signals and unhandled exceptions with a minidump (`shell/src/crash.rs`).
   `rvp --crash-test=panic` or `=native` (with `RVP_TEST_HOOKS=1`)
-  crashes on purpose; checks run it with a state folder of their own (it
-  writes the crash log there).
+  crashes on purpose, `=exit` as the process ends; checks run it with a
+  state folder of their own (it writes the crash log there). A crash
+  while RVP leaves says " while closing" or " while exiting" with the
+  smoothing plugins loaded (`shell/src/crash.rs`): on Linux `exit()` runs
+  RIFE's ncnn exit handlers, which crashed on Windows (`process.rs`), and
+  the kit's `m18exit` checks that exit on a GPU before `exit()` changes.
 - The Windows VM's M8 check is `tools/windows-vm/m8-all.ps1` (the
   installer, `m7-all.ps1` on the installed copy, registry before and
   after, the portable ZIP). Windows' media session manager runs only for a

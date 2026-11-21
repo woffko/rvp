@@ -80,7 +80,15 @@ unsafe impl SetData for i64 {
     }
 }
 
+// RVP patch: mpv reads and writes a flag as a C `int` (4 bytes), never as
+// a Rust `bool` (1 byte).
 unsafe impl GetData for bool {
+    fn get_from_c_void<T, F: FnMut(*mut ctype::c_void) -> Result<T>>(mut fun: F) -> Result<bool> {
+        let mut flag: ctype::c_int = 0;
+        fun(&mut flag as *mut ctype::c_int as *mut _)?;
+        Ok(flag != 0)
+    }
+
     fn get_format() -> Format {
         Format::Flag
     }
@@ -88,8 +96,8 @@ unsafe impl GetData for bool {
 
 unsafe impl SetData for bool {
     fn call_as_c_void<T, F: FnMut(*mut ctype::c_void) -> Result<T>>(self, mut fun: F) -> Result<T> {
-        let mut cpy: i64 = if self { 1 } else { 0 };
-        fun(&mut cpy as *mut i64 as *mut _)
+        let mut flag: ctype::c_int = if self { 1 } else { 0 };
+        fun(&mut flag as *mut ctype::c_int as *mut _)
     }
 
     fn get_format() -> Format {
@@ -102,9 +110,10 @@ unsafe impl GetData for String {
         let ptr = &mut ptr::null();
         fun(ptr as *mut *const ctype::c_char as _)?;
 
-        let ret = unsafe { mpv_cstr_to_str!(*ptr) }?.to_owned();
+        // RVP patch: mpv's string is freed whether or not it is UTF-8.
+        let ret = unsafe { mpv_cstr_to_str!(*ptr) }.map(str::to_owned);
         unsafe { libmpv2_sys::mpv_free(*ptr as *mut _) };
-        Ok(ret)
+        ret
     }
 
     fn get_format() -> Format {
@@ -249,12 +258,14 @@ unsafe impl Sync for Mpv {}
 
 impl Drop for Mpv {
     fn drop(&mut self) {
-        if let Some(wakeup_callback_cleanup) = self.wakeup_callback_cleanup.take() {
-            wakeup_callback_cleanup();
-        }
-
+        // RVP patch: the handle goes first, so mpv cannot call the wakeup
+        // callback after its box is freed.
         unsafe {
             libmpv2_sys::mpv_destroy(self.ctx.as_ptr());
+        }
+
+        if let Some(wakeup_callback_cleanup) = self.wakeup_callback_cleanup.take() {
+            wakeup_callback_cleanup();
         }
     }
 }
@@ -339,7 +350,12 @@ impl Mpv {
             return Err(Error::Null);
         }
 
-        initializer(MpvInitializer { ctx })?;
+        // RVP patch: a failed initializer destroys the handle (and its core)
+        // instead of leaving them.
+        if let Err(err) = initializer(MpvInitializer { ctx }) {
+            unsafe { libmpv2_sys::mpv_terminate_destroy(ctx) };
+            return Err(err);
+        }
         mpv_err((), unsafe { libmpv2_sys::mpv_initialize(ctx) }).map_err(|err| {
             unsafe { libmpv2_sys::mpv_terminate_destroy(ctx) };
             err
@@ -353,46 +369,14 @@ impl Mpv {
         })
     }
 
-    /// Create a new client handle connected to the same player core as `self`. This
-    /// context has its own event queue, its own [`enable_event`](Mpv::enable_event)
-    /// and [`disable_event`](Mpv::disable_event) states, its own
-    /// mpv_request_log_messages() state (unimplemented), its own set of observed
-    /// properties, and its own state for asynchronous operations. Otherwise,
-    /// everything is shared.
-    ///
-    /// The core will live as long as there is at least 1 handle referencing
-    /// it.
-    ///
-    /// # Arguments
-    ///
-    /// * `name` - The client name. This will be returned by mpv_client_name()
-    ///            (unimplemented). If the name is already in use, or contains
-    ///            non-alphanumeric characters (other than '_'), the name is
-    ///            modified to fit. If `None`, an arbitrary name is automatically
-    ///            chosen.
-    pub fn create_client(&self, name: Option<&str>) -> Result<Mpv> {
-        let mpv_handle = unsafe {
-            libmpv2_sys::mpv_create_client(
-                self.ctx.as_ptr(),
-                if let Some(name) = name {
-                    CString::new(name)?.as_ptr()
-                } else {
-                    ptr::null()
-                },
-            )
-        };
-
-        let ctx = unsafe { NonNull::new_unchecked(mpv_handle) };
-
-        Ok(Mpv {
-            ctx,
-            wakeup_callback_cleanup: None,
-        })
-    }
-
-    /// RVP patch: like [`create_client`](Mpv::create_client), but the handle
-    /// is a weak reference: it does not keep the core alive. When the last
-    /// other handle is destroyed, the weak one receives `Event::Shutdown`.
+    /// RVP patch: a new client handle of the same core as `self`, with its
+    /// own event queue, observed properties and log level
+    /// (`mpv_create_weak_client`). It is a weak reference: it does not keep
+    /// the core alive; when the last other handle is destroyed, the weak one
+    /// receives `Event::Shutdown`. `name` is the client's name (mpv makes
+    /// it unique and alphanumeric); `None` lets mpv choose one. (Upstream's
+    /// `create_client`, the strong kind, was removed: it passed mpv a name
+    /// already freed and took a null handle for a valid one.)
     pub fn create_weak_client(&self, name: Option<&str>) -> Result<Mpv> {
         let name = name.map(CString::new).transpose()?;
         let mpv_handle = unsafe {

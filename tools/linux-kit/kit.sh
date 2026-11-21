@@ -114,6 +114,11 @@
 #   m18     milestone M18: the smoothing and GPU budget self-tests (MVTools
 #           with a VapourSynth runtime, else Blend) and the smoothing tests;
 #           the GPU modes are the Ubuntu boot's (CHECKLIST.md)
+#   m18exit RVP closes after RIFE ran, on a GPU with RVP's VapourSynth
+#           runtime (after vapoursynth): five short runs with RIFE, each
+#           ending as RVP always ends (exit(), which runs ncnn's exit
+#           handlers); a fatal signal, a crash log or a run that does not
+#           end fails it (RVP_M18_EXIT_RUNS sets the count)
 #   m18trt  M18's RIFE (TensorRT) on an NVIDIA card, after vapoursynth:
 #           NVIDIA's runtime installed as RVP installs it (from
 #           RVP_TENSORRT_MIRROR, else NVIDIA's and PyPI's servers, 3.8 GB)
@@ -134,8 +139,8 @@
 #           m2svp m6svp report
 #   m7all   m6all with m7 after m6
 #   m8all   m7all with m8package and m8 after m7
-#   m17all  m8all with whisper, and m9 to m16, m18 and m18trt after m8
-#           (goal S)
+#   m17all  m8all with whisper, and m9 to m16, m18, m18exit and m18trt
+#           after m8 (goal S)
 #
 # environment:
 #   RVP_KIT_DIR     build and download directory (default ~/.cache/rvp-kit)
@@ -2403,6 +2408,54 @@ step_m18() {
     kit_result m18 "$bad" "vsscript=${vsscript:-none}$summary"
 }
 
+# RVP closes after RIFE ran. On Linux it ends with exit(), which runs the
+# exit handlers of the libraries still loaded, RIFE's ncnn among them; on
+# Windows that crashed (shell/src/process.rs), so RVP ends the process
+# there without them. Each run plays with RIFE and closes; its exit code
+# (kit_judge: a fatal signal is 128 and more), the crash log the native
+# handler writes into the state folder (" while exiting" and the plugins
+# loaded) and the plan it played with are checked.
+step_m18exit() {
+    local log=$LOG_DIR/m18exit.log out=$LOG_DIR/m18exit-out media vsscript run plan crashes
+    local runs=${RVP_M18_EXIT_RUNS:-5} bad=0 word summary=""
+    m2_ready m18exit || return 0
+    if ! gpu_checks; then
+        record m18exit SKIPPED "RIFE runs on a GPU"
+        return 0
+    fi
+    vsscript=${VSSCRIPT_PATH:-}
+    if [ -z "$vsscript" ] && [ -e "$(vs_runtime)/libvapoursynth-script.so.0" ]; then
+        vsscript=$(vs_runtime)/libvapoursynth-script.so.0
+    fi
+    if [ -z "$vsscript" ] || [ ! -e "$(dirname "$vsscript")/rife/librife_linux_x86-64.so" ]; then
+        record m18exit SKIPPED "no RIFE in RVP's VapourSynth runtime: run vapoursynth first"
+        return 0
+    fi
+    m2_env
+    media=$(kit_media)
+    rm -rf "$out"
+    : > "$log"
+    echo "vsscript=$vsscript" >> "$log"
+    for run in $(seq 1 "$runs"); do
+        (
+            export PYTHONDONTWRITEBYTECODE=1 VSSCRIPT_PATH=$vsscript
+            KIT_RUN_SETTINGS='"smoothing": { "enabled": true, "engine": "rife" }'
+            kit_run m18exit "run$run" --selftest=playback --play-seconds=8 "--out=$out/$run" \
+                --mpv-options=ao=null "$media/fixture-60s.mkv"
+        )
+        word=$(kit_judge m18exit "run$run") || bad=$((bad + 1))
+        summary="$summary $word"
+        plan=$(sed -n 's/^smoothing=//p' "$LOG_DIR/m18exit-run$run.out" | tail -1)
+        kit_check "$log" "m18exit_run${run}_played_rife" \
+            "$(case $plan in RIFE\ *) echo 1 ;; *) echo 0 ;; esac)" "${plan:-no plan}" || bad=$((bad + 1))
+        # kit_run empties the state folder before the next run.
+        crashes=$(find "$LOG_DIR/m18exit-state" -maxdepth 1 -name 'crash-*' 2> /dev/null)
+        kit_check "$log" "m18exit_run${run}_no_crash_log" "$([ -z "$crashes" ] && echo 1 || echo 0)" \
+            "$(for file in $crashes; do tr '\n' ' ' < "$file"; done)" || bad=$((bad + 1))
+    done
+    kit_result m18exit "$bad" "$runs runs:$summary"
+}
+
 # The card's power limit and its default in whole watts, "LIMIT DEFAULT".
 nvidia_power() {
     nvidia-smi --query-gpu=power.limit,power.default_limit --format=csv,noheader,nounits 2> /dev/null |
@@ -2503,7 +2556,7 @@ step_report() {
         echo "| Time | Step | Result | Detail |"
         echo "|------|------|--------|--------|"
         awk -F'\t' '{ printf "| %s | %s | %s | %s |\n", $1, $2, $3, $4 }' "$RESULTS" 2> /dev/null
-        for step in s2 s3 input s1 m2 m3 m4 m6 m7 m8 m9 m10 m11 m12 m13 m14 m15 m16 m18 m18trt m2input m2gpu m6gpu \
+        for step in s2 s3 input s1 m2 m3 m4 m6 m7 m8 m9 m10 m11 m12 m13 m14 m15 m16 m18 m18exit m18trt m2input m2gpu m6gpu \
             m2svp m6svp; do
             [ -s "$LOG_DIR/$step.log" ] || continue
             echo
@@ -2535,13 +2588,13 @@ for step in "$@"; do
         m7all) set -- check deps mpv mvtools m2build m2 m3 m4 m6 m7 m2input m2gpu m6gpu m2svp m6svp report ;;
         m8all) set -- check deps mpv mvtools m2build m2 m3 m4 m6 m7 m8package m8 m2input m2gpu m6gpu m2svp m6svp report ;;
         m17all) set -- check deps mpv mvtools whisper vapoursynth m2build m2 m3 m4 m6 m7 m8package m8 m9 m10 m11 m12 m13 m14 m15 m16 \
-            m18 m18trt m2input m2gpu m6gpu m2svp m6svp report ;;
+            m18 m18exit m18trt m2input m2gpu m6gpu m2svp m6svp report ;;
     esac
 done
 overall=0
 for step in "$@"; do
     case $step in
-        check | deps | mpv | mvtools | whisper | vapoursynth | build | s1 | s2 | s3 | input | m2build | m2 | m2input | m2gpu | m2svp | m3 | m4 | m6 | m7 | m8package | m8 | m8removed | m9 | m10 | m11 | m12 | m13 | m14 | m15 | m16 | m18 | m18trt | m6svp | m6gpu | m3desktop | report)
+        check | deps | mpv | mvtools | whisper | vapoursynth | build | s1 | s2 | s3 | input | m2build | m2 | m2input | m2gpu | m2svp | m3 | m4 | m6 | m7 | m8package | m8 | m8removed | m9 | m10 | m11 | m12 | m13 | m14 | m15 | m16 | m18 | m18exit | m18trt | m6svp | m6gpu | m3desktop | report)
             "step_$step" || overall=1
             ;;
         all | m2all | m3all | m4all | m6all | m7all | m8all | m17all) ;;

@@ -582,10 +582,12 @@ impl App {
                     )));
                 };
                 let body = crate::playlist_files::write(format, &self.library().shown().entries);
-                Some(match crate::storage::write_atomic(path, body.as_bytes()) {
-                    Ok(()) => UiRequest::Osd(format!("Saved {}", crate::view::file_name(text))),
-                    Err(error) => UiRequest::Message(format!("Cannot save {text}: {error}")),
-                })
+                Some(
+                    match crate::storage::write_user_file(path, body.as_bytes()) {
+                        Ok(()) => UiRequest::Osd(format!("Saved {}", crate::view::file_name(text))),
+                        Err(error) => UiRequest::Message(format!("Cannot save {text}: {error}")),
+                    },
+                )
             }
             "move" | "move-related" | "copy" | "copy-related" => {
                 let operation = if kind.starts_with("move") {

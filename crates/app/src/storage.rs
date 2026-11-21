@@ -19,6 +19,26 @@
 //!   the subtitle working copies) carry the process's ID in their names
 //!   ([`process_file_name`]) and are removed when RVP closes.
 //!
+//! # Who may read RVP's files
+//!
+//! RVP's own files hold the user's history, albums, stream addresses and
+//! settings, so on Unix they are the user's alone, whatever the umask:
+//! each is created 0600 and each folder RVP makes on the way 0700 (as the
+//! XDG Base Directory specification asks of the folders a program makes).
+//! That covers everything in the settings and the state folder
+//! ([`write_atomic`], [`write_unflushed`], [`private_options`]: the
+//! settings, the state, the albums, the marks, the token, the scripts and
+//! responses mpv reads, the subtitles' copies and backups), the log and
+//! the crash logs ([`open_private_append`]). [`Dirs::prepare`] narrows the
+//! settings and the state folder themselves to 0700 at start; what they
+//! hold stays as it is, and each file gets 0600 at its next write. A file
+//! the user keeps elsewhere (an export, a saved playlist, subtitles saved
+//! over the user's file or beside the video) gets the modes any program's
+//! new file gets ([`write_user_file`]), and a folder the user chose (the
+//! log's, the captures') is never narrowed. On Windows the profile's
+//! access rules apply (the control API's token gets its own,
+//! `shell/src/player/m15.rs`).
+//!
 //! # Several RVPs on one folder
 //!
 //! Several RVP processes may run on one settings and state folder
@@ -180,24 +200,141 @@ impl Dirs {
             portable: false,
         }
     }
+
+    /// Makes the settings and the state folder when they are missing and,
+    /// on Unix, narrows each to its owner (0700) when others may enter it
+    /// (module comment). The portable settings folder is the program's own
+    /// folder, with its libraries, and keeps its modes.
+    ///
+    /// # Errors
+    /// Fails when a folder cannot be made.
+    pub fn prepare(&self) -> io::Result<()> {
+        create_private_dir(&self.config)?;
+        create_private_dir(&self.state)?;
+        if !self.portable {
+            narrow_dir(&self.config);
+        }
+        narrow_dir(&self.state);
+        Ok(())
+    }
+}
+
+/// Narrows a folder others may enter to its owner (Unix). A folder RVP
+/// may not change (another user's) stays as it is.
+fn narrow_dir(dir: &Path) {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt as _;
+        if let Ok(meta) = fs::metadata(dir)
+            && meta.is_dir()
+            && meta.permissions().mode() & 0o077 != 0
+        {
+            let mode = meta.permissions().mode() & 0o700;
+            drop(fs::set_permissions(dir, fs::Permissions::from_mode(mode)));
+        }
+    }
+    #[cfg(not(unix))]
+    let _ = dir;
+}
+
+/// Makes `dir` and the folders above it that are missing, each for its
+/// owner alone on Unix (0700); a folder that is there keeps its modes.
+///
+/// # Errors
+/// Fails as [`fs::create_dir_all`] does.
+pub fn create_private_dir(dir: &Path) -> io::Result<()> {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::DirBuilderExt as _;
+        fs::DirBuilder::new()
+            .recursive(true)
+            .mode(0o700)
+            .create(dir)
+    }
+    #[cfg(not(unix))]
+    fs::create_dir_all(dir)
+}
+
+/// Options that create a file for its owner alone on Unix (0600; on
+/// Windows a new file takes its folder's access rules).
+#[must_use]
+pub fn private_options() -> fs::OpenOptions {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt as _;
+        let mut options = fs::OpenOptions::new();
+        options.mode(0o600);
+        options
+    }
+    #[cfg(not(unix))]
+    fs::OpenOptions::new()
+}
+
+/// Opens `path` to append to it, made when missing ([`private_options`]);
+/// a file others could read before is narrowed to its owner (Unix). For
+/// the log and the crash logs.
+///
+/// # Errors
+/// Fails when the file cannot be opened.
+pub fn open_private_append(path: &Path) -> io::Result<fs::File> {
+    let file = private_options().create(true).append(true).open(path)?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt as _;
+        if let Ok(meta) = file.metadata()
+            && meta.permissions().mode() & 0o077 != 0
+        {
+            let mode = meta.permissions().mode() & 0o700;
+            drop(file.set_permissions(fs::Permissions::from_mode(mode)));
+        }
+    }
+    Ok(file)
+}
+
+/// How many names [`create_new_dir`] tries.
+const NEW_DIR_NAMES: u32 = 16;
+
+/// Makes a new folder for this process in `parent`,
+/// `<stem>-<pid>-<random>`, for its owner alone on Unix (0700). It is
+/// always made here, never one that was there: in a folder others may
+/// write (the temporary folder), another user could have prepared one of
+/// a name RVP would choose.
+///
+/// # Errors
+/// Fails when `parent` takes no new folder.
+pub fn create_new_dir(parent: &Path, stem: &str) -> io::Result<PathBuf> {
+    #[cfg(unix)]
+    let builder = {
+        use std::os::unix::fs::DirBuilderExt as _;
+        let mut builder = fs::DirBuilder::new();
+        builder.mode(0o700);
+        builder
+    };
+    #[cfg(not(unix))]
+    let builder = fs::DirBuilder::new();
+    let mut taken = None;
+    for number in 0..NEW_DIR_NAMES {
+        let mut random = [0u8; 4];
+        // Without the system's random bytes the numbers alone still give
+        // new names.
+        let random = getrandom::fill(&mut random).map_or(number, |()| u32::from_le_bytes(random));
+        let dir = parent.join(format!("{stem}-{}-{random:08x}", std::process::id()));
+        match builder.create(&dir) {
+            Ok(()) => return Ok(dir),
+            Err(error) if error.kind() == io::ErrorKind::AlreadyExists => taken = Some(error),
+            Err(error) => return Err(error),
+        }
+    }
+    Err(taken.unwrap_or_else(|| io::ErrorKind::AlreadyExists.into()))
 }
 
 /// Writes `bytes` to `path` atomically: temporary file, flush to disk,
-/// rename over the old file, then flush the directory entry (Linux).
+/// rename over the old file, then flush the directory entry (Linux). For
+/// RVP's own files: the user's alone (module comment).
 ///
 /// # Errors
 /// Fails on any I/O error; the old file is then left as it was.
 pub fn write_atomic(path: &Path, bytes: &[u8]) -> io::Result<()> {
-    replace(path, bytes, true, false)
-}
-
-/// [`write_atomic`] for a file only its owner may read where the system
-/// has such modes (Unix: 0600; on Windows the state folder is the user's
-/// own).
-///
-/// # Errors
-/// As [`write_atomic`].
-pub fn write_private(path: &Path, bytes: &[u8]) -> io::Result<()> {
     replace(path, bytes, true, true)
 }
 
@@ -209,6 +346,24 @@ pub fn write_private(path: &Path, bytes: &[u8]) -> io::Result<()> {
 /// # Errors
 /// As [`write_atomic`].
 pub fn write_unflushed(path: &Path, bytes: &[u8]) -> io::Result<()> {
+    replace(path, bytes, false, true)
+}
+
+/// [`write_atomic`] for a file the user keeps outside RVP's folders (an
+/// export, a saved playlist): with the modes any program's new file gets.
+///
+/// # Errors
+/// As [`write_atomic`].
+pub fn write_user_file(path: &Path, bytes: &[u8]) -> io::Result<()> {
+    replace(path, bytes, true, false)
+}
+
+/// [`write_unflushed`] for a file the user keeps outside RVP's folders
+/// (subtitles saved over the user's file or beside the video).
+///
+/// # Errors
+/// As [`write_atomic`].
+pub fn write_user_file_unflushed(path: &Path, bytes: &[u8]) -> io::Result<()> {
     replace(path, bytes, false, false)
 }
 
@@ -231,14 +386,19 @@ const RENAME_WAIT: Duration = Duration::from_millis(10);
 /// The temporary files' numbers in this process.
 static TEMPORARY_NUMBER: AtomicU64 = AtomicU64::new(0);
 
-fn replace(path: &Path, bytes: &[u8], flush: bool, private: bool) -> io::Result<()> {
+/// `own`: one of RVP's own files, the user's alone (module comment).
+fn replace(path: &Path, bytes: &[u8], flush: bool, own: bool) -> io::Result<()> {
     let path = link_target(path);
     let dir = match path.parent() {
         Some(dir) if !dir.as_os_str().is_empty() => dir,
         _ => Path::new("."),
     };
-    fs::create_dir_all(dir)?;
-    let (temporary, mut file) = create_temporary(dir, &path, private)?;
+    if own {
+        create_private_dir(dir)?;
+    } else {
+        fs::create_dir_all(dir)?;
+    }
+    let (temporary, mut file) = create_temporary(dir, &path, own)?;
     let written = file
         .write_all(bytes)
         .and_then(|()| if flush { file.sync_all() } else { Ok(()) });
@@ -279,17 +439,12 @@ fn create_temporary(dir: &Path, path: &Path, private: bool) -> io::Result<(PathB
     while !name.is_char_boundary(end) {
         end -= 1;
     }
-    let mut options = fs::OpenOptions::new();
+    let mut options = if private {
+        private_options()
+    } else {
+        fs::OpenOptions::new()
+    };
     options.write(true).create_new(true);
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::OpenOptionsExt as _;
-        if private {
-            options.mode(0o600);
-        }
-    }
-    #[cfg(not(unix))]
-    let _ = private;
     let mut taken = None;
     for _ in 0..TEMPORARY_NAMES {
         let number = TEMPORARY_NUMBER.fetch_add(1, Ordering::Relaxed);
@@ -503,9 +658,9 @@ fn lock_path(path: &Path) -> PathBuf {
 fn take_lock(path: &Path) -> Option<fs::File> {
     let lock = lock_path(path);
     if let Some(dir) = lock.parent() {
-        let _ = fs::create_dir_all(dir);
+        let _ = create_private_dir(dir);
     }
-    let file = fs::OpenOptions::new()
+    let file = private_options()
         .read(true)
         .write(true)
         .create(true)
@@ -932,13 +1087,127 @@ mod tests {
         assert_eq!(fs::read(real.join("settings.json")).expect("read"), b"new");
         assert_eq!(names(&dir), ["real", "settings.json"]);
         assert_eq!(names(&real), ["settings.json"]);
-        // The owner-only kind.
-        write_private(&dir.join("token"), b"secret").expect("private");
-        let mode = fs::metadata(dir.join("token"))
+        let mode = fs::metadata(real.join("settings.json"))
             .expect("meta")
             .permissions()
             .mode();
         assert_eq!(mode & 0o777, 0o600);
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[cfg(unix)]
+    fn mode(path: &Path) -> u32 {
+        use std::os::unix::fs::PermissionsExt as _;
+        fs::metadata(path).expect("meta").permissions().mode() & 0o777
+    }
+
+    /// RVP's own files and the folders it makes for them are the user's
+    /// alone, whatever the umask; a file the user keeps elsewhere is not
+    /// narrowed (with the usual umask it is readable by others).
+    #[cfg(unix)]
+    #[test]
+    fn own_files_and_folders_are_the_users_alone() {
+        use std::os::unix::fs::PermissionsExt as _;
+        let dir = scratch("modes");
+        let deep = dir.join("state").join("subtitles");
+        write_atomic(&deep.join("backup").join("a.srt"), b"1").expect("write");
+        write_unflushed(&deep.join("editing-1.srt"), b"2").expect("write");
+        for folder in [
+            dir.clone(),
+            dir.join("state"),
+            deep.clone(),
+            deep.join("backup"),
+        ] {
+            assert_eq!(mode(&folder), 0o700, "{}", folder.display());
+        }
+        assert_eq!(mode(&deep.join("backup").join("a.srt")), 0o600);
+        assert_eq!(mode(&deep.join("editing-1.srt")), 0o600);
+        // A file made readable for others gets its owner's mode back at
+        // the next write.
+        let settings = dir.join("settings.json");
+        write_atomic(&settings, b"{}").expect("write");
+        fs::set_permissions(&settings, fs::Permissions::from_mode(0o644)).expect("chmod");
+        write_atomic(&settings, b"{ }").expect("write again");
+        assert_eq!(mode(&settings), 0o600);
+        // The lock file of a merged file too.
+        drop(take_lock(&settings));
+        assert_eq!(mode(&lock_path(&settings)), 0o600);
+        // The log's way: made 0600, an existing wider one narrowed.
+        let log = dir.join("rvp.log");
+        drop(open_private_append(&log).expect("log"));
+        assert_eq!(mode(&log), 0o600);
+        fs::set_permissions(&log, fs::Permissions::from_mode(0o644)).expect("chmod");
+        drop(open_private_append(&log).expect("log again"));
+        assert_eq!(mode(&log), 0o600);
+        // An export gets what a new file of any program gets.
+        let exported = dir.join("exported.json");
+        write_user_file(&exported, b"{}").expect("export");
+        let plain = dir.join("plain");
+        fs::write(&plain, b"").expect("plain file");
+        assert_eq!(mode(&exported), mode(&plain), "an export is not narrowed");
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    /// At start the settings and the state folder are narrowed (what they
+    /// hold stays); the portable settings folder, the program's own, is
+    /// not.
+    #[cfg(unix)]
+    #[test]
+    fn prepare_narrows_rvps_own_folders() {
+        use std::os::unix::fs::PermissionsExt as _;
+        let dir = scratch("prepare");
+        let dirs = Dirs::inside(&dir);
+        for folder in [&dirs.config, &dirs.state] {
+            fs::create_dir_all(folder).expect("folder");
+            fs::set_permissions(folder, fs::Permissions::from_mode(0o755)).expect("chmod");
+            fs::write(folder.join("kept"), b"x").expect("file");
+        }
+        dirs.prepare().expect("prepare");
+        assert_eq!(mode(&dirs.config), 0o700);
+        assert_eq!(mode(&dirs.state), 0o700);
+        assert!(dirs.config.join("kept").is_file() && dirs.state.join("kept").is_file());
+        // Missing folders are made so.
+        let fresh = Dirs::inside(&dir.join("fresh"));
+        fresh.prepare().expect("prepare");
+        assert_eq!(mode(&fresh.config), 0o700);
+        assert_eq!(mode(&dir.join("fresh")), 0o700);
+        // Portable: the program's folder keeps its modes, its state is
+        // narrowed.
+        let program = dir.join("program");
+        fs::create_dir_all(program.join("state")).expect("folders");
+        for folder in [program.clone(), program.join("state")] {
+            fs::set_permissions(&folder, fs::Permissions::from_mode(0o755)).expect("chmod");
+        }
+        let portable = Dirs {
+            config: program.clone(),
+            state: program.join("state"),
+            portable: true,
+        };
+        portable.prepare().expect("prepare");
+        assert_eq!(mode(&program), 0o755);
+        assert_eq!(mode(&program.join("state")), 0o700);
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    /// A new folder is always made, never one that was there; on Unix for
+    /// its owner alone.
+    #[test]
+    fn new_folders_are_made_never_taken() {
+        let dir = scratch("new-dir");
+        fs::create_dir_all(&dir).expect("parent");
+        let first = create_new_dir(&dir, "rvp-state").expect("first");
+        let second = create_new_dir(&dir, "rvp-state").expect("second");
+        assert_ne!(first, second);
+        assert!(first.is_dir() && second.is_dir());
+        let name = first.file_name().unwrap_or_default().to_string_lossy();
+        assert!(
+            name.starts_with(&format!("rvp-state-{}-", std::process::id())),
+            "{name}"
+        );
+        #[cfg(unix)]
+        assert_eq!(mode(&first), 0o700);
+        // A parent that is missing makes nothing.
+        assert!(create_new_dir(&dir.join("missing"), "rvp-state").is_err());
         let _ = fs::remove_dir_all(&dir);
     }
 

@@ -94,4 +94,6 @@ pub use commands::Session;
 pub use input::{Bindings, Key, KeyChord, MouseGesture};
 pub use resume::{EDGE_SECONDS, Position, ResumeState, ResumeStore, SAVE_INTERVAL, WindowGeometry};
 pub use settings::Settings;
-pub use storage::{Dirs, PORTABLE_MARKER, read_json, write_atomic, write_json};
+pub use storage::{
+    Dirs, PORTABLE_MARKER, create_new_dir, create_private_dir, read_json, write_atomic, write_json,
+};

@@ -95,6 +95,7 @@ fn main() {
         std::process::exit(2);
     }
     let code = app.as_mut().map_or(1, |app| app.exec());
+    crash::leaving(crash::CLOSING);
     if video::in_window() {
         // mpv's window is a child of RVP's video window: mpv lets it go
         // before the windows close.
@@ -113,16 +114,22 @@ fn main() {
 
 /// Crash logs in RVP's state folder (M8): panics, then fatal signals or
 /// unhandled exceptions. `--crash-test=panic` or `=native` crashes on
-/// purpose once they are in place, for the package checks (a test hook:
-/// with `RVP_TEST_HOOKS=1`).
+/// purpose once they are in place, `=exit` as the process ends (after the
+/// window closed or a self-test ended), for the package checks (a test
+/// hook: with `RVP_TEST_HOOKS=1`).
 fn install_crash_logs(cli: &Cli) {
     if let Ok(dirs) = rvp_app::Dirs::from_env() {
+        // RVP's folders are the user's alone from the start, before a crash
+        // log or a start that hands its files over writes there (the
+        // settings' loading says so when they cannot be made).
+        drop(dirs.prepare());
         rvp_app::crash::install_panic_hook(&dirs.state);
         crash::install(&dirs.state);
     }
     match cli.options.get("crash-test").map(String::as_str) {
         Some("panic") => panic!("crash test (--crash-test=panic)"),
         Some("native") => ffi::bridge::rvp_crash_test(),
+        Some("exit") => process::CRASH_AT_EXIT.store(true, std::sync::atomic::Ordering::Relaxed),
         _ => {}
     }
 }

@@ -5,6 +5,7 @@
 //! Remote page (`Settings.qml`) turns it on and shows its address and
 //! token.
 
+use std::path::Path;
 use std::pin::Pin;
 use std::sync::Arc;
 
@@ -102,7 +103,7 @@ impl qobject::Player {
         // The old server lets its port go first.
         remote.server = None;
         remote.port = settings.port;
-        let token = match control::token::load_or_create(core.app.state_dir()) {
+        let token = match load_token(core.app.state_dir()) {
             Ok(token) => token,
             Err(error) => {
                 remote.error = Some(format!("no token: {error}"));
@@ -204,7 +205,7 @@ impl qobject::Player {
     /// The installation's token for the Remote page (made on first use).
     pub(crate) fn control_token(&self) -> QString {
         self.core()
-            .and_then(|core| control::token::load_or_create(core.app.state_dir()).ok())
+            .and_then(|core| load_token(core.app.state_dir()).ok())
             .map_or_else(QString::default, |token| QString::from(&token))
     }
 
@@ -257,8 +258,145 @@ impl qobject::Player {
         let Ok(token) = control::token::renew(core.app.state_dir()) else {
             return QString::default();
         };
+        keep_token_private(core.app.state_dir());
         core.remote.server = None;
         self.as_mut().apply_remote();
         QString::from(&token)
+    }
+}
+
+/// The installation's token (made on first use), its file kept for the
+/// user alone ([`keep_token_private`]).
+fn load_token(state_dir: &Path) -> std::io::Result<String> {
+    let token = control::token::load_or_create(state_dir)?;
+    keep_token_private(state_dir);
+    Ok(token)
+}
+
+/// Windows: gives the token's file access rules of its own, the user and
+/// the system alone, not taken from its folder. A portable RVP's state
+/// folder is beside the program, whose folder others may read; in the
+/// profile the rules come out the same. On Unix the file is 0600 already
+/// (`rvp_app::control::token`).
+fn keep_token_private(state_dir: &Path) {
+    #[cfg(windows)]
+    if let Err(error) = owner_only(&state_dir.join(control::token::FILE)) {
+        rvp_app::log::report(
+            rvp_app::log::Level::Warning,
+            &format!("the control API's token keeps its folder's access rules: {error}"),
+        );
+    }
+    #[cfg(not(windows))]
+    let _ = state_dir;
+}
+
+/// Replaces `path`'s access rules by full access for the current user and
+/// SYSTEM, protected from the folder's inherited ones.
+#[cfg(windows)]
+fn owner_only(path: &Path) -> Result<(), String> {
+    use std::os::windows::ffi::OsStrExt as _;
+    use windows::Win32::Foundation::{CloseHandle, HANDLE};
+    use windows::Win32::Security::Authorization::{SE_FILE_OBJECT, SetNamedSecurityInfoW};
+    use windows::Win32::Security::{
+        ACCESS_ALLOWED_ACE, ACL, ACL_REVISION, AddAccessAllowedAce, CreateWellKnownSid,
+        DACL_SECURITY_INFORMATION, GetLengthSid, GetTokenInformation, InitializeAcl,
+        PROTECTED_DACL_SECURITY_INFORMATION, PSID, TOKEN_QUERY, TOKEN_USER, TokenUser,
+        WinLocalSystemSid,
+    };
+    use windows::Win32::Storage::FileSystem::FILE_ALL_ACCESS;
+    use windows::Win32::System::Threading::{GetCurrentProcess, OpenProcessToken};
+
+    // The process token's user: TOKEN_USER with its SID after it, in a
+    // buffer of u64s so the structure's pointer is aligned.
+    let mut token = HANDLE::default();
+    // SAFETY: FFI point. GetCurrentProcess returns a pseudo handle;
+    // OpenProcessToken writes a token handle into `token`, closed below.
+    #[allow(unsafe_code)]
+    let opened = unsafe { OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &raw mut token) };
+    opened.map_err(|error| format!("no process token: {error}"))?;
+    let mut size = 0u32;
+    // SAFETY: FFI point. The first call only asks for the size (no buffer);
+    // the second fills a buffer of at least that many bytes, which
+    // outlives every use of the SID inside it; the token is closed once.
+    #[allow(unsafe_code)]
+    let user = unsafe {
+        let _ = GetTokenInformation(token, TokenUser, None, 0, &raw mut size);
+        let mut buffer = vec![0u64; usize::try_from(size).unwrap_or(0).div_ceil(8)];
+        let read = GetTokenInformation(
+            token,
+            TokenUser,
+            Some(buffer.as_mut_ptr().cast()),
+            size,
+            &raw mut size,
+        );
+        drop(CloseHandle(token));
+        read.map(|()| buffer)
+    };
+    let user = user.map_err(|error| format!("no user in the process token: {error}"))?;
+    if user.len() * 8 < std::mem::size_of::<TOKEN_USER>() {
+        return Err("no user in the process token".to_owned());
+    }
+    // SAFETY: the buffer holds a TOKEN_USER Windows wrote, aligned for it;
+    // the SID it points to is inside the buffer, which lives until the end
+    // of this function.
+    #[allow(unsafe_code)]
+    let user_sid = unsafe { (*user.as_ptr().cast::<TOKEN_USER>()).User.Sid };
+    // SYSTEM's SID: at most SECURITY_MAX_SID_SIZE (68) bytes.
+    let mut system = [0u64; 9];
+    let mut system_size = u32::try_from(std::mem::size_of_val(&system)).unwrap_or(0);
+    let system_sid = PSID(system.as_mut_ptr().cast());
+    // SAFETY: FFI point. `system` holds `system_size` bytes, more than any
+    // SID takes.
+    #[allow(unsafe_code)]
+    let made = unsafe {
+        CreateWellKnownSid(
+            WinLocalSystemSid,
+            None,
+            Some(system_sid),
+            &raw mut system_size,
+        )
+    };
+    made.map_err(|error| format!("no SYSTEM SID: {error}"))?;
+    // SAFETY: FFI point. Both SIDs are valid: Windows wrote them above.
+    #[allow(unsafe_code)]
+    let sids = unsafe { GetLengthSid(user_sid) + GetLengthSid(system_sid) };
+    // The list's header and two ACEs, each the structure less its first
+    // SID word, then its SID.
+    let ace = std::mem::size_of::<ACCESS_ALLOWED_ACE>() - std::mem::size_of::<u32>();
+    let acl_size = std::mem::size_of::<ACL>()
+        + 2 * ace
+        + usize::try_from(sids).map_err(|error| error.to_string())?;
+    let mut acl = vec![0u32; acl_size.div_ceil(4)];
+    let acl_ptr = acl.as_mut_ptr().cast::<ACL>();
+    let length = u32::try_from(acl.len() * 4).map_err(|error| error.to_string())?;
+    let wide: Vec<u16> = path.as_os_str().encode_wide().chain([0]).collect();
+    // SAFETY: FFI point. `acl` is a DWORD-aligned buffer of `length`
+    // bytes, enough for the header and both ACEs; the SIDs are valid;
+    // `wide` is the NUL-terminated path. Windows copies the list into the
+    // file's security descriptor and keeps no pointer to it.
+    #[allow(unsafe_code)]
+    let set = unsafe {
+        InitializeAcl(acl_ptr, length, ACL_REVISION)
+            .and_then(|()| AddAccessAllowedAce(acl_ptr, ACL_REVISION, FILE_ALL_ACCESS.0, user_sid))
+            .and_then(|()| {
+                AddAccessAllowedAce(acl_ptr, ACL_REVISION, FILE_ALL_ACCESS.0, system_sid)
+            })
+            .map(|()| {
+                SetNamedSecurityInfoW(
+                    windows::core::PCWSTR(wide.as_ptr()),
+                    SE_FILE_OBJECT,
+                    DACL_SECURITY_INFORMATION | PROTECTED_DACL_SECURITY_INFORMATION,
+                    None,
+                    None,
+                    Some(acl_ptr.cast_const()),
+                    None,
+                )
+            })
+    };
+    let set = set.map_err(|error| error.to_string())?;
+    if set.0 == 0 {
+        Ok(())
+    } else {
+        Err(format!("Windows error {}", set.0))
     }
 }

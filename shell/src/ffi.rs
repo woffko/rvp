@@ -68,8 +68,8 @@ pub mod bridge {
         /// Keeps the mouse pointer on the main window's display (`true`) or
         /// lets it go (Windows' ClipCursor; nothing elsewhere).
         fn rvp_confine_cursor(on: bool);
-        /// Crashes on purpose (`--crash-test=native`): a write through a
-        /// null pointer, which the native crash handler reports.
+        /// Crashes on purpose (`--crash-test=native`, `=exit`): a write
+        /// through a null pointer, which the native crash handler reports.
         fn rvp_crash_test();
         /// Sets an environment variable (`qputenv`); only while no other
         /// thread runs.

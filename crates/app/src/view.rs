@@ -39,9 +39,15 @@ pub fn thumbnail_key(path: &str) -> String {
     format!("thumb/entry/{path}")
 }
 
-/// The last component of a path or URL.
+/// The last component of a path; for a URL the last part of its path with
+/// its query, else its host, never its credentials
+/// ([`crate::media::url_label`]): what the playlist shows of a stream
+/// without a title.
 #[must_use]
 pub fn file_name(path: &str) -> &str {
+    if crate::playlist::is_url(path) {
+        return crate::media::url_label(path);
+    }
     let trimmed = path.trim_end_matches(['/', '\\']);
     trimmed.rsplit(['/', '\\']).next().unwrap_or(trimmed)
 }
@@ -50,6 +56,25 @@ pub fn file_name(path: &str) -> &str {
 /// album of several, the name alone otherwise, empty when idle.
 #[must_use]
 pub fn title(model: &PlayerModel, lists: &Playlists) -> String {
+    title_for(model, lists, false)
+}
+
+/// The title as it leaves RVP (the desktop's media controls): an address
+/// that has no title of its own is named without its query
+/// ([`crate::media::url_name`]), which may carry a key.
+#[must_use]
+pub fn published_title(model: &PlayerModel, lists: &Playlists) -> String {
+    title_for(model, lists, true)
+}
+
+fn title_for(model: &PlayerModel, lists: &Playlists, published: bool) -> String {
+    let name = |path: &'_ str| -> String {
+        if published && crate::playlist::is_url(path) {
+            crate::media::url_name(path).to_owned()
+        } else {
+            file_name(path).to_owned()
+        }
+    };
     let Some(path) = model.loaded_path().or_else(|| model.text(PropertyId::Path)) else {
         return String::new();
     };
@@ -61,13 +86,13 @@ pub fn title(model: &PlayerModel, lists: &Playlists) -> String {
         (entry.path == path || crate::disc::play::is_segment(path)).then_some((
             index,
             album.entries.len(),
-            entry.label(),
+            entry.title.clone().unwrap_or_else(|| name(&entry.path)),
         ))
     });
     match playing {
         Some((index, count, label)) if count > 1 => format!("[{}/{count}] {label}", index + 1),
-        Some((_, _, label)) => label.to_owned(),
-        None => file_name(path).to_owned(),
+        Some((_, _, label)) => label,
+        None => name(path),
     }
 }
 
@@ -542,6 +567,12 @@ mod tests {
         assert_eq!(file_name("/a/b/c.mkv"), "c.mkv");
         assert_eq!(file_name(r"V:\films\c.mkv"), "c.mkv");
         assert_eq!(file_name("https://host/dir/"), "dir");
+        assert_eq!(file_name("https://u:p@host/a.mkv?token=1"), "a.mkv?token=1");
+        assert_eq!(file_name("https://host/watch?v=1"), "watch?v=1");
+        assert_eq!(file_name("https://host/dir/?page=2"), "dir/?page=2");
+        assert_eq!(file_name("https://u:p@host"), "host");
+        // A local name may hold `?` and `#`.
+        assert_eq!(file_name("/films/what?#1.mkv"), "what?#1.mkv");
         assert_eq!(format_rate(23.976_023, 3), "23.976");
         assert_eq!(format_rate(24.0, 3), "24");
         assert_eq!(format_rate(59.0632, 2), "59.06");

@@ -137,6 +137,108 @@ fn a_held_file_waits_before_its_first_frame() {
     });
 }
 
+/// RVP closes while mpv holds a file at its hook, the event still waiting
+/// in the queue: once the hooks are released, the drains of the shutdown
+/// let the file go and mpv stops at once (it waits for a held file
+/// whatever `stop` says).
+#[test]
+fn closing_lets_a_held_file_go() {
+    let mut player = Player::new();
+    player.engine.hold_preloaded().expect("hook");
+    player.wait("idle at start", |model, _| {
+        model.flag(PropertyId::IdleActive) == Some(true)
+    });
+    player.events.clear();
+    player.engine.load(LONG, false).expect("loadfile");
+    // mpv reaches the hook meanwhile; nothing drains its event.
+    std::thread::sleep(Duration::from_millis(300));
+    player.engine.release_hooks();
+    player.engine.stop().expect("stop");
+    let started = Instant::now();
+    let stopped = |player: &Player| {
+        player.model.flag(PropertyId::IdleActive) == Some(true)
+            && player
+                .events
+                .iter()
+                .any(|event| matches!(event, EngineEvent::EndFile { .. }))
+    };
+    while !stopped(&player) && started.elapsed() < Duration::from_secs(3) {
+        player
+            .engine
+            .wait_and_drain(0.1, &mut player.model, &mut player.events);
+    }
+    let elapsed = started.elapsed();
+    // A hook that came through anyway is let go before the asserts, so a
+    // failure ends the test instead of holding mpv's core for good.
+    let held: Vec<u64> = player
+        .events
+        .iter()
+        .filter_map(|event| match event {
+            EngineEvent::Preloaded { hook, .. } => Some(*hook),
+            _ => None,
+        })
+        .collect();
+    for hook in &held {
+        drop(player.engine.continue_preloaded(*hook));
+    }
+    assert!(held.is_empty(), "the held file was reported: {held:?}");
+    assert!(
+        stopped(&player) && elapsed < Duration::from_secs(1),
+        "idle after {elapsed:?}: {:?}",
+        player.events
+    );
+}
+
+/// Messages to RVP's client (a controller script's, M9): one without
+/// arguments gives an empty list, one whose argument is not UTF-8 an
+/// error, and the next one still comes.
+#[test]
+fn client_messages_without_arguments_or_utf8_arrive_safely() {
+    let mut player = Player::new();
+    player.events.clear();
+    player
+        .engine
+        .command("script-message", &[])
+        .expect("a message without arguments");
+    // `osd-ass-cc/0` is mpv's OSD escape, the single byte 0xFD.
+    player
+        .engine
+        .command("expand-properties", &["script-message", "${osd-ass-cc/0}"])
+        .expect("a message that is not UTF-8");
+    player
+        .engine
+        .command("script-message", &["after"])
+        .expect("a message");
+    let after = EngineEvent::ClientMessage(vec!["after".to_owned()]);
+    player.wait("the last message", |_, events| events.contains(&after));
+    let messages: Vec<&EngineEvent> = player
+        .events
+        .iter()
+        .filter(|event| matches!(event, EngineEvent::ClientMessage(_) | EngineEvent::Error(_)))
+        .collect();
+    assert_eq!(
+        messages,
+        [
+            &EngineEvent::ClientMessage(Vec::new()),
+            &EngineEvent::Error("InvalidUtf8".to_owned()),
+            &after
+        ]
+    );
+}
+
+/// Flags go to mpv and come back as its C `int` (not a one-byte `bool`).
+#[test]
+fn flags_are_read_and_written_whole() {
+    let player = Player::new();
+    let mpv = player.engine.mpv();
+    for value in [true, false, true] {
+        mpv.set_property("pause", value).expect("set");
+        assert_eq!(mpv.get_property::<bool>("pause"), Ok(value));
+        let text = mpv.get_property::<String>("pause");
+        assert_eq!(text.as_deref(), Ok(if value { "yes" } else { "no" }));
+    }
+}
+
 #[test]
 fn pause_seek_and_time() {
     let mut player = Player::new();

@@ -33,3 +33,30 @@ RVP through `[patch.crates-io]` in the workspace manifest. Changes:
   (`mpv_hook_add`), `Mpv::hook_continue` (`mpv_hook_continue`) and
   `Event::Hook { name, id, reply_userdata }` (`MPV_EVENT_HOOK`, which
   upstream reports as `Event::Deprecated`).
+- Teardown order (2026-11-21): `Mpv::drop` destroys the handle before it
+  frees the wakeup callback's box, and `RenderContext::drop` frees the
+  context before the update callback's box, as `SoftwareRenderContext`
+  does: mpv may call a callback while its handle or context goes. RVP's
+  callbacks owned no memory (a function item; the player's engine is never
+  dropped), so nothing RVP ran was affected.
+- Flags (2026-11-21) go to mpv and come back as a C `int`, as mpv keeps
+  them: `GetData for bool` let mpv write 4 bytes into a 1-byte `bool`,
+  `SetData for bool` passed an `i64`, and an observed flag's event read
+  the first byte of mpv's `int`.
+- `Event::ClientMessage` (2026-11-21): a message without arguments (mpv
+  leaves `args` NULL) gives an empty list, not a slice made from a null
+  pointer, and an argument that is not UTF-8 gives `Err(InvalidUtf8)`
+  instead of a panic (`crates/engine/tests/headless.rs`).
+- `create_client` removed (2026-11-21): it passed mpv a name freed before
+  the call and took a null handle for a valid one. RVP uses
+  `create_weak_client`.
+- Leaks (2026-11-21): `with_initializer` destroys the handle, and with it
+  the core's thread, when the initializer fails (a refused option;
+  `crates/engine/tests/refused_start.rs`), and `GetData for String` frees
+  mpv's string when it is not UTF-8.
+- Left as upstream has them, unused by RVP:
+  - `GetData for MpvStr` keeps mpv's string when it is not UTF-8 (a leak).
+  - `protocol.rs` (custom stream protocols; RVP's disc stream is its own,
+    `shell/src/disc/stream.rs`): not checked.
+  - `RenderParam::ICCProfile`, `NextFrameInfo` and `AdvancedControl`'s
+    conversions in `render.rs`: not checked.

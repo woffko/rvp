@@ -478,6 +478,8 @@ impl App {
     /// # Errors
     /// Fails on I/O errors other than missing files.
     pub fn load(dirs: &Dirs) -> io::Result<Self> {
+        // RVP's folders are the user's alone (`crate::storage`).
+        dirs.prepare()?;
         let settings_path = dirs.config.join("settings.json");
         let (settings, read) = if let Some(loaded) = storage::load_json(&settings_path)? {
             loaded
@@ -2448,6 +2450,10 @@ impl App {
         self.cancel_resolution();
         self.stop_speech(true, true);
         self.stop_second();
+        // A file mpv holds for the smoothing's plan goes on by itself
+        // from now on: the shell's last drains no longer handle it, and
+        // mpv would wait for it instead of stopping.
+        engine.release_hooks();
         drop(engine.stop());
         self.remove_process_files();
         self.writer.flush();

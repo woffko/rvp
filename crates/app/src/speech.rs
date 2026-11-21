@@ -770,7 +770,7 @@ fn run_file(
     events: &Sender<Event>,
 ) {
     let result = (|| {
-        std::fs::create_dir_all(&source.work).map_err(|error| error.to_string())?;
+        crate::storage::create_private_dir(&source.work).map_err(|error| error.to_string())?;
         let wav = source.work.join("audio.wav");
         extract(source, &wav, 0.0, source.duration)?;
         let mut position = 0.0;
@@ -802,7 +802,7 @@ fn run_realtime(
     control: &Receiver<Control>,
     events: &Sender<Event>,
 ) {
-    if let Err(error) = std::fs::create_dir_all(&source.work) {
+    if let Err(error) = crate::storage::create_private_dir(&source.work) {
         drop(events.send(Event::Failed(error.to_string())));
         return;
     }
@@ -1222,7 +1222,7 @@ impl App {
             } else {
                 first
             };
-            if crate::storage::write_unflushed(&target, &bytes).is_ok() {
+            if crate::storage::write_user_file_unflushed(&target, &bytes).is_ok() {
                 written = Some(target);
             }
         }

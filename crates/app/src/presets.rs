@@ -371,7 +371,7 @@ impl App {
     /// # Errors
     /// Fails on I/O errors.
     pub fn export_settings(&self, path: &std::path::Path) -> std::io::Result<()> {
-        crate::storage::write_json(path, &self.stored_settings())
+        crate::storage::write_user_file(path, &crate::storage::json_bytes(&self.stored_settings())?)
     }
 
     /// Renames the preset `old` to `new` (the page's Rename): the list,

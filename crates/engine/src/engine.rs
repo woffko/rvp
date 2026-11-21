@@ -8,6 +8,8 @@
 //! libmpv reads no `mpv.conf` and loads no scripts here: every option RVP
 //! relies on is set through the API.
 
+use std::sync::atomic::{AtomicBool, Ordering};
+
 use libmpv2::events::{Event, PropertyData};
 use libmpv2::{EndFileReason, Format, Mpv, mpv_end_file_reason};
 
@@ -152,7 +154,8 @@ pub enum EngineEvent {
     Shutdown,
     /// A file is open and its streams known, before any is decoded (mpv's
     /// `on_preloaded` hook, after [`Engine::hold_preloaded`]): mpv waits
-    /// until [`Engine::continue_preloaded`] with `hook`. `video` is the
+    /// until [`Engine::continue_preloaded`] with `hook`. Not reported after
+    /// [`Engine::release_hooks`]: the engine lets the file go on itself. `video` is the
     /// video track mpv will choose, as the demuxer describes it.
     Preloaded {
         hook: u64,
@@ -271,6 +274,8 @@ pub struct Chapter {
 /// The libmpv player.
 pub struct Engine {
     mpv: Mpv,
+    /// RVP closes: held files go on at once ([`Engine::release_hooks`]).
+    released: AtomicBool,
 }
 
 impl Engine {
@@ -338,7 +343,10 @@ impl Engine {
             mpv.observe_property(id.name(), format, id as u64)
                 .map_err(|e| error(id.name(), &e))?;
         }
-        Ok(Self { mpv })
+        Ok(Self {
+            mpv,
+            released: AtomicBool::new(false),
+        })
     }
 
     /// The libmpv handle, for the render context and for diagnostics.
@@ -445,7 +453,7 @@ impl Engine {
             Ok(Event::Hook {
                 id, reply_userdata, ..
             }) => {
-                if reply_userdata == PRELOADED_HOOK {
+                if reply_userdata == PRELOADED_HOOK && !self.released.load(Ordering::Acquire) {
                     events.push(EngineEvent::Preloaded {
                         hook: id,
                         video: self.demux_video(),
@@ -668,8 +676,8 @@ impl Engine {
 
     /// Holds each file after it is opened, before its streams are
     /// decoded, until [`Engine::continue_preloaded`]: reported as
-    /// [`EngineEvent::Preloaded`]. Once added, the hold stays for the
-    /// core's life.
+    /// [`EngineEvent::Preloaded`] (until [`Engine::release_hooks`]). Once
+    /// added, the hold stays for the core's life.
     ///
     /// # Errors
     /// Fails when libmpv refuses the hook.
@@ -677,6 +685,15 @@ impl Engine {
         self.mpv
             .hook_add("on_preloaded", 0, PRELOADED_HOOK)
             .map_err(|e| error("on_preloaded", &e))
+    }
+
+    /// From now on a file mpv holds ([`Engine::hold_preloaded`]) goes on at
+    /// once, unreported: for closing, when the events drained after this
+    /// are no longer handled. mpv waits for a held file whatever `stop` or
+    /// `quit` say, so one caught as RVP closes would keep mpv from going
+    /// idle and from ending.
+    pub fn release_hooks(&self) {
+        self.released.store(true, Ordering::Release);
     }
 
     /// Lets mpv go on with the file held by [`EngineEvent::Preloaded`].

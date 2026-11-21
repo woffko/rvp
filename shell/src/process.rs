@@ -1,4 +1,4 @@
-//! How the process loads libraries and ends (Windows).
+//! How the process loads libraries and ends.
 //!
 //! * Libraries come from RVP's folder, System32 and RVP's VapourSynth
 //!   runtime only, never from the PATH or the current folder: SVP's
@@ -9,6 +9,13 @@
 //!   and jump to address 0: the plugin never gets ncnn's
 //!   `destroy_gpu_instance()`. Once RVP has saved everything, a process
 //!   that loaded the plugin ends without unloading its libraries.
+//! * On Linux the process ends with `exit()`, which runs the exit handlers
+//!   of the libraries still loaded, ncnn's among them after RIFE ran; no
+//!   crash there has been seen. A crash while leaving says so in the crash
+//!   log, with the plugins loaded (`crate::crash`), and the Linux kit's
+//!   `m18exit` closes RVP after RIFE ran to find out.
+
+use std::sync::atomic::{AtomicBool, Ordering};
 
 /// Restricts where libraries are looked for (see the module's
 /// documentation); first thing in `main`, before any library loads.
@@ -56,12 +63,20 @@ pub(crate) fn restrict_library_search() {
     }
 }
 
+/// `--crash-test=exit` (a test hook): crash natively in [`leave`], once the
+/// crash log would say RVP was exiting.
+pub(crate) static CRASH_AT_EXIT: AtomicBool = AtomicBool::new(false);
+
 /// Ends the process with `code` (see the module's documentation).
 pub(crate) fn leave(code: i32) -> ! {
+    let loaded = crate::crash::leaving(crate::crash::EXITING);
+    if CRASH_AT_EXIT.load(Ordering::Relaxed) {
+        crate::ffi::bridge::rvp_crash_test();
+    }
     // A clean exit: the skin marker goes (`rvp_app::skin_marker`).
     crate::player::marker_exit();
     #[cfg(windows)]
-    if rife_loaded() {
+    if loaded & crate::crash::RIFE != 0 {
         use std::io::Write as _;
         use windows::Win32::System::Threading::{GetCurrentProcess, TerminateProcess};
         drop(std::io::stdout().flush());
@@ -77,16 +92,36 @@ pub(crate) fn leave(code: i32) -> ! {
             drop(TerminateProcess(GetCurrentProcess(), exit));
         }
     }
+    #[cfg(not(windows))]
+    let _ = loaded;
     std::process::exit(code)
 }
 
-/// True when RIFE's plugin is loaded.
-#[cfg(windows)]
-fn rife_loaded() -> bool {
-    use windows::Win32::System::LibraryLoader::GetModuleHandleW;
-    // SAFETY: FFI point. GetModuleHandleW only looks a static, NUL-terminated
-    // name up among the loaded modules; the handle is not kept or used.
-    #[allow(unsafe_code)]
-    let handle = unsafe { GetModuleHandleW(windows::core::w!("librife_windows_x86-64.dll")) };
-    handle.is_ok()
+/// The smoothing plugins whose libraries are loaded now, as bits of
+/// `crate::crash::PLUGINS`' places.
+pub(crate) fn loaded_plugins() -> u8 {
+    let mut loaded = 0;
+    #[cfg(windows)]
+    for (bit, (name, _, _)) in crate::crash::PLUGINS.iter().enumerate() {
+        use windows::Win32::System::LibraryLoader::GetModuleHandleW;
+        let wide: Vec<u16> = name.encode_utf16().chain([0]).collect();
+        // SAFETY: FFI point. GetModuleHandleW only looks a NUL-terminated
+        // name that outlives the call up among the loaded modules; the
+        // handle is not kept or used.
+        #[allow(unsafe_code)]
+        let handle = unsafe { GetModuleHandleW(windows::core::PCWSTR(wide.as_ptr())) };
+        if handle.is_ok() {
+            loaded |= 1 << bit;
+        }
+    }
+    #[cfg(target_os = "linux")]
+    if let Ok(maps) = std::fs::read("/proc/self/maps") {
+        for (bit, (_, name, _)) in crate::crash::PLUGINS.iter().enumerate() {
+            let path = format!("/{name}");
+            if maps.windows(path.len()).any(|part| part == path.as_bytes()) {
+                loaded |= 1 << bit;
+            }
+        }
+    }
+    loaded
 }

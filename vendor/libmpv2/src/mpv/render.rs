@@ -451,11 +451,14 @@ impl<'a> RenderContext<'a> {
 
 impl Drop for RenderContext<'_> {
     fn drop(&mut self) {
-        if let Some(update_callback_cleanup) = self.update_callback_cleanup.take() {
-            update_callback_cleanup();
-        }
+        // RVP patch: freeing the context first stops further update
+        // callbacks (mpv may call one while the video output goes), so the
+        // callback box can go after it.
         unsafe {
             libmpv2_sys::mpv_render_context_free(self.ctx);
+        }
+        if let Some(update_callback_cleanup) = self.update_callback_cleanup.take() {
+            update_callback_cleanup();
         }
     }
 }

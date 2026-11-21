@@ -146,9 +146,9 @@ impl Marker {
     /// Fails when the folder cannot hold the file or its file system gives
     /// no lock; no marker is left then.
     pub fn create(state: &Path, pid: u32, alone: bool) -> io::Result<Self> {
-        fs::create_dir_all(state)?;
+        crate::storage::create_private_dir(state)?;
         let path = state.join(format!("{PREFIX}{pid}{SUFFIX}"));
-        let file = fs::OpenOptions::new()
+        let file = crate::storage::private_options()
             .read(true)
             .write(true)
             .create(true)

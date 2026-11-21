@@ -6,7 +6,7 @@ use std::time::{Duration, Instant};
 
 use rvp_app::media::{MediaCommand, Status};
 use rvp_app::{Action, App, Settings, UiRequest};
-use rvp_engine::{Engine, EngineOptions, PropertyId};
+use rvp_engine::{Engine, EngineOptions, PropertyId, Value};
 
 const LONG: &str = concat!(
     env!("CARGO_MANIFEST_DIR"),
@@ -130,6 +130,37 @@ fn the_media_controls_see_and_steer_playback() {
             && app.model.double(PropertyId::TimePos).is_some()
     });
     assert_eq!(app.media_state().track, 2);
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// What the media controls show of a stream: its address without the
+/// user name and password, a title from it without them and without the
+/// query (every program on the session bus reads MPRIS).
+#[test]
+fn a_streams_credentials_and_query_stay_out_of_the_media_controls() {
+    let dir = std::env::temp_dir().join(format!("rvp-media-private-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    let mut app = App::new(Settings::default(), &dir).expect("app");
+    for (address, url, title) in [
+        (
+            "https://user:secret@example.org/live/film.mkv?token=abc#t=1",
+            "https://example.org/live/film.mkv?token=abc#t=1",
+            "film.mkv",
+        ),
+        (
+            "https://user:secret@example.org/?v=1",
+            "https://example.org/?v=1",
+            "example.org",
+        ),
+    ] {
+        app.model
+            .set(PropertyId::IdleActive, Some(Value::Flag(false)));
+        app.model
+            .set(PropertyId::Path, Some(Value::Text(address.to_owned())));
+        let state = app.media_state();
+        assert_eq!(state.url.as_deref(), Some(url), "{address}");
+        assert_eq!(state.title, title, "{address}");
+    }
     let _ = std::fs::remove_dir_all(&dir);
 }
 

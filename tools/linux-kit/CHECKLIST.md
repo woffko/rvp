@@ -456,7 +456,7 @@ cd ~/rvp && git pull
 tools/linux-kit/kit.sh m17all
 ```
 
-`m17all` is `m8all` with `m9` to `m16`, `m18` and `m18trt` after `m8`;
+`m17all` is `m8all` with `m9` to `m16`, `m18`, `m18exit` and `m18trt` after `m8`;
 each step also runs alone (`kit.sh m11 report`). What appears on screen:
 
 - `m9`: RVP's window several times with mpv's controller over the video,
@@ -472,8 +472,18 @@ each step also runs alone (`kit.sh m11 report`). What appears on screen:
   skipped), `m16` shows the synthetic discs' menus.
 - `m15` with `RVP_URSERVER`: Unified Remote's manager listens on port
   9510 for the step's duration.
+- `m18exit`: RVP's window five times for about 15 seconds each, without
+  sound, RIFE smoothing the video before RVP closes.
 - `m18trt`: no window; the card works hard for a few minutes while
   TensorRT builds RIFE's engine and the script is measured.
+
+- [ ] **The exit after RIFE** (`m18exit`, on the GPU machine, after
+      `vapoursynth`): RVP ends with `exit()` on Linux, which runs RIFE's
+      ncnn exit handlers (on Windows they crashed, so RVP ends the
+      process there without them). Run it on the next GPU session and
+      keep its result: a crash log naming " while exiting" with RIFE
+      loaded, or a run that ends by a signal, means Linux needs Windows'
+      rule; five clean runs mean `exit()` stays.
 
 Then try by hand (the parts only a desktop and its hardware can check):
 
@@ -572,6 +582,7 @@ Then try by hand (the parts only a desktop and its hardware can check):
 | `m15` | graphical session, cargo; `RVP_URSERVER` optional | the M15 self-test passes; with Unified Remote Server: it runs, its web client connects, the remote's actions reach RVP, the token is not in RVP's log, the server's log has no errors; the control API's and the remote's tests pass |
 | `m16` | graphical session, cargo, dvdauthor | the system has libdvdnav and libbluray, the M16 self-test shows and works both discs' menus, and the shell's navigation tests ran on them |
 | `m18` | graphical session, cargo | the smoothing and GPU budget self-tests pass (MVTools with a VapourSynth runtime, else Blend; seeks skip the frames before the target and ask for the target's picture) and the smoothing tests pass |
+| `m18exit` | graphical session, GPU, `vapoursynth` | five runs that play with RIFE end with exit code 0, without a crash log in the state folder, and each played with RIFE |
 | `m18trt` | NVIDIA card, `vapoursynth`, cargo; `RVP_TENSORRT_MIRROR` optional | TensorRT is installed for the card as RVP installs it, RVP's RIFE (TensorRT) script makes 1080p at 60 frames a second or more (720p and 1440p are in the detail), and `nvidia-smi` answers afterwards |
 | `m3desktop` | `m2build` | the desktop entry was written |
 | `report` | — | the Markdown report was written |

@@ -14,19 +14,29 @@
 //!   the frames drawn, the processors' load) and mpv's verbose messages.
 //!
 //! Lines are made where things happen, with the local time then, and a
-//! thread of the log's own writes them: no caller waits for the disk.
-//! mpv's messages come on a weak client handle of the player's core, read
-//! on another thread ([`MpvLog`]), never through the window's thread. At
-//! [`ROTATE_AT`] the file moves to [`OLD_FILE_NAME`], when it opens and
-//! while it is written.
+//! thread of the log's own writes them: no caller waits for the disk. It
+//! takes up to [`QUEUE`] lines ahead; while a disk holds its writes up
+//! longer, further lines are dropped and counted, and the count is written
+//! as soon as the queue takes lines again. mpv's messages come on a weak
+//! client handle of the player's core, read on another thread
+//! ([`MpvLog`]), never through the window's thread. At [`ROTATE_AT`] the
+//! file moves to [`OLD_FILE_NAME`], when it opens and while it is written.
+//!
+//! The file is the user's alone (0600 on Unix, `crate::storage`), and no
+//! line carries an address's user name and password: every line, mpv's
+//! too, loses what comes before `@` in each address's authority
+//! ([`crate::media::without_credentials`]). An address keeps its query: a
+//! stream often fails for what its query says (an expired signature, a
+//! parameter), and the log is for finding that out; whoever passes a log
+//! on should know it names what played.
 
 use std::collections::VecDeque;
 use std::fmt::Write as _;
-use std::fs::{File, OpenOptions};
+use std::fs::File;
 use std::io::{BufWriter, Write as _};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, AtomicI32, AtomicU8, AtomicU64, Ordering};
-use std::sync::mpsc::{Receiver, Sender};
+use std::sync::mpsc::{Receiver, SyncSender, TrySendError};
 use std::sync::{Arc, Mutex, PoisonError};
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -45,6 +55,9 @@ pub const OLD_FILE_NAME: &str = "rvp.old.log";
 const ROTATE_AT: u64 = 16 * 1024 * 1024;
 /// Lines kept for the Log page and self-tests.
 const RECENT: usize = 1000;
+/// Lines the writing thread may have ahead, some hundred kilobytes: a
+/// disk that holds its writes up longer costs lines, not memory.
+const QUEUE: usize = 4096;
 /// How long [`MpvLog`]'s thread waits for an event before it looks
 /// whether it is to stop.
 const WAIT: f64 = 0.25;
@@ -159,9 +172,42 @@ static SINK: Mutex<Option<Sink>> = Mutex::new(None);
 static RECENT_LINES: Mutex<VecDeque<String>> = Mutex::new(VecDeque::new());
 
 struct Sink {
-    sender: Option<Sender<String>>,
+    sender: Option<SyncSender<String>>,
     thread: Option<std::thread::JoinHandle<()>>,
     path: PathBuf,
+    /// Lines dropped since the queue last took one: the queue was full.
+    lost: u64,
+}
+
+impl Sink {
+    /// Hands `line` to the writing thread, unless its queue is full: then
+    /// the line is counted as lost, and the count goes first once the
+    /// queue takes lines again.
+    fn send(&mut self, line: String) {
+        let Some(sender) = self.sender.as_ref() else {
+            return;
+        };
+        if self.lost > 0 {
+            let note = format!(
+                "{} {} {} lines were dropped: the log's file did not take them in time\n",
+                local_time(),
+                Level::Warning.tag(),
+                self.lost
+            );
+            match sender.try_send(note) {
+                Ok(()) => self.lost = 0,
+                Err(TrySendError::Full(_)) => {
+                    self.lost += 1;
+                    return;
+                }
+                Err(TrySendError::Disconnected(_)) => return,
+            }
+        }
+        // A thread that stopped (a full disk) leaves the line unwritten.
+        if let Err(TrySendError::Full(_)) = sender.try_send(line) {
+            self.lost += 1;
+        }
+    }
 }
 
 impl Drop for Sink {
@@ -186,7 +232,8 @@ pub fn write(level: Level, text: &str) {
     if !enabled(level) {
         return;
     }
-    let line = format!("{} {} {}\n", local_time(), level.tag(), text.trim_end());
+    let text = crate::media::without_credentials(text.trim_end());
+    let line = format!("{} {} {text}\n", local_time(), level.tag());
     LINES.fetch_add(1, Ordering::Relaxed);
     {
         let mut recent = RECENT_LINES.lock().unwrap_or_else(PoisonError::into_inner);
@@ -195,17 +242,16 @@ pub fn write(level: Level, text: &str) {
         }
         recent.push_back(line.trim_end().to_owned());
     }
-    let sink = SINK.lock().unwrap_or_else(PoisonError::into_inner);
-    if let Some(sender) = sink.as_ref().and_then(|sink| sink.sender.as_ref()) {
-        // A thread that stopped (a full disk) leaves the line unwritten.
-        drop(sender.send(line));
+    let mut sink = SINK.lock().unwrap_or_else(PoisonError::into_inner);
+    if let Some(sink) = sink.as_mut() {
+        sink.send(line);
     }
 }
 
 /// One of RVP's own messages: to the standard error, as always, and to
-/// the log.
+/// the log (neither with an address's credentials).
 pub fn report(level: Level, text: &str) {
-    eprintln!("rvp: {text}");
+    eprintln!("rvp: {}", crate::media::without_credentials(text));
     write(level, text);
 }
 
@@ -275,14 +321,17 @@ pub fn configure(level: Option<Level>, path: &Path) -> Result<bool, String> {
 
 fn open(path: &Path) -> Result<Sink, String> {
     if let Some(folder) = path.parent() {
-        std::fs::create_dir_all(folder).map_err(|e| format!("{}: {e}", folder.display()))?;
+        // A folder the user chose keeps its modes; one made here (the
+        // state folder's) is the user's alone.
+        crate::storage::create_private_dir(folder)
+            .map_err(|e| format!("{}: {e}", folder.display()))?;
     }
     if std::fs::metadata(path).is_ok_and(|meta| meta.len() >= ROTATE_AT) {
         move_aside(path);
     }
     let file = append(path)?;
     let size = file.metadata().map_or(0, |meta| meta.len());
-    let (sender, receiver) = std::sync::mpsc::channel();
+    let (sender, receiver) = std::sync::mpsc::sync_channel(QUEUE);
     let thread_path = path.to_path_buf();
     let thread = std::thread::Builder::new()
         .name("rvp-log".to_owned())
@@ -292,15 +341,13 @@ fn open(path: &Path) -> Result<Sink, String> {
         sender: Some(sender),
         thread: Some(thread),
         path: path.to_path_buf(),
+        lost: 0,
     })
 }
 
+/// The log's file, for its owner alone (`crate::storage`).
 fn append(path: &Path) -> Result<File, String> {
-    OpenOptions::new()
-        .create(true)
-        .append(true)
-        .open(path)
-        .map_err(|e| format!("{}: {e}", path.display()))
+    crate::storage::open_private_append(path).map_err(|e| format!("{}: {e}", path.display()))
 }
 
 /// Moves the file to [`OLD_FILE_NAME`] beside it, over the older one.
@@ -838,6 +885,49 @@ mod tests {
         );
     }
 
+    /// A writing thread that does not keep up: the queue takes what it
+    /// holds, the rest is counted, and the count goes first once it takes
+    /// lines again.
+    #[test]
+    fn a_full_queue_counts_the_lines_it_drops() {
+        let (sender, receiver) = std::sync::mpsc::sync_channel(2);
+        let mut sink = Sink {
+            sender: Some(sender),
+            thread: None,
+            path: PathBuf::new(),
+            lost: 0,
+        };
+        for line in ["one", "two", "three", "four", "five"] {
+            sink.send(line.to_owned());
+        }
+        assert_eq!(sink.lost, 3);
+        assert_eq!(receiver.try_iter().collect::<Vec<_>>(), ["one", "two"]);
+        sink.send("six".to_owned());
+        let lines: Vec<String> = receiver.try_iter().collect();
+        assert_eq!(lines.len(), 2, "{lines:?}");
+        assert!(
+            lines[0].contains(" WARN  3 lines were dropped"),
+            "{lines:?}"
+        );
+        assert_eq!(lines[1], "six");
+        assert_eq!(sink.lost, 0);
+        // A queue still full when the note is due: the line is lost too,
+        // and counted with the others.
+        for line in ["seven", "eight", "nine", "ten"] {
+            sink.send(line.to_owned());
+        }
+        assert_eq!(sink.lost, 2);
+        assert_eq!(receiver.try_iter().count(), 2);
+        sink.send("eleven".to_owned());
+        let lines: Vec<String> = receiver.try_iter().collect();
+        assert!(lines[0].contains(" 2 lines were dropped"), "{lines:?}");
+        assert_eq!(lines[1], "eleven");
+        // A thread that ended takes nothing and counts nothing.
+        drop(receiver);
+        sink.send("twelve".to_owned());
+        assert_eq!(sink.lost, 0);
+    }
+
     /// The file, its levels and its rotation, in one test: the log is one
     /// per process.
     #[test]
@@ -848,6 +938,23 @@ mod tests {
         assert_eq!(configure(Some(Level::Warning), &path), Ok(true));
         assert_eq!(configure(Some(Level::Warning), &path), Ok(false));
         assert_eq!(super::path(), Some(path.clone()));
+        // The file and the folder made for it are the user's alone.
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt as _;
+            let mode = |path: &Path| {
+                std::fs::metadata(path)
+                    .map(|meta| meta.permissions().mode() & 0o777)
+                    .unwrap_or_default()
+            };
+            assert_eq!(mode(&path), 0o600);
+            assert_eq!(mode(&folder), 0o700);
+        }
+        // mpv's lines too lose an address's credentials, not its query.
+        write(
+            Level::Warning,
+            "mpv [cplayer] Playing: https://user:secret@example.org/a.mkv?sig=1",
+        );
         write(Level::Warning, "kept");
         write(Level::Info, "not at warning");
         assert!(enabled(Level::Critical) && !enabled(Level::Info));
@@ -858,6 +965,11 @@ mod tests {
         assert!(text.contains(" WARN  kept\n"), "{text}");
         assert!(!text.contains("not at warning") && !text.contains("after off"));
         assert!(recent().ends_with("WARN  kept"));
+        assert!(
+            text.contains("Playing: https://example.org/a.mkv?sig=1\n") && !text.contains("secret"),
+            "{text}"
+        );
+        assert!(!recent().contains("secret"));
         // A file at the size moves aside when it opens (Windows sets no
         // length through a handle that only appends).
         let file = File::options().write(true).open(&path).expect("log");

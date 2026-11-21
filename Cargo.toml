@@ -66,7 +66,9 @@ sha2 = "=0.11.1"
 # already in the tree.
 libc = "=0.2.190"
 # Microsoft's bindings for Windows' media controls and the crash minidump
-# (M8, shell/src/media_controls.rs and crash.rs); MIT or Apache-2.0.
+# (M8, shell/src/media_controls.rs and crash.rs), and the rest of the
+# shell's Windows calls (the control API's token's access rules among
+# them); MIT or Apache-2.0.
 # The COM objects RVP implements (windows' `implement` macro names it).
 windows-core = "=0.62.2"
 windows = { version = "=0.62.2", features = [
@@ -77,6 +79,7 @@ windows = { version = "=0.62.2", features = [
     "Win32_Media_Audio",
     "Win32_Media_Audio_Endpoints",
     "Win32_Security",
+    "Win32_Security_Authorization",
     "Win32_Storage_FileSystem",
     "Win32_System_Com",
     "Win32_System_Com_StructuredStorage",
@@ -96,7 +99,7 @@ windows = { version = "=0.62.2", features = [
 ] }
 
 [patch.crates-io]
-# One fix in the event conversion; see vendor/libmpv2/RVP-PATCH.md.
+# RVP's fixes and wrappers, each listed in vendor/libmpv2/RVP-PATCH.md.
 libmpv2 = { path = "vendor/libmpv2" }
 
 [workspace.lints.rust]
