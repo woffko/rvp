@@ -330,6 +330,34 @@ impl Playback {
 /// Windows' process priorities mpv takes (`priority`).
 pub const PRIORITIES: &[&str] = &["idle", "belownormal", "normal", "abovenormal", "high"];
 
+/// The system's separator in mpv's path lists.
+const PATH_LIST_SEPARATOR: char = if cfg!(windows) { ';' } else { ':' };
+
+/// Paths as one value of an mpv path list (`sub-file-paths`, `scripts`):
+/// joined with the system's separator (`;` on Windows, `:` elsewhere),
+/// with a backslash before a separator inside a path, which mpv reads as
+/// that character. A path that ends with a backslash gets a `/` after
+/// it, or the backslash would take the separator that follows for its own.
+pub(crate) fn mpv_path_list<S: AsRef<str>>(paths: &[S]) -> String {
+    let mut list = String::new();
+    for (index, path) in paths.iter().enumerate() {
+        let path = path.as_ref();
+        if index > 0 {
+            list.push(PATH_LIST_SEPARATOR);
+        }
+        for c in path.chars() {
+            if c == PATH_LIST_SEPARATOR {
+                list.push('\\');
+            }
+            list.push(c);
+        }
+        if path.ends_with('\\') && index + 1 < paths.len() {
+            list.push('/');
+        }
+    }
+    list
+}
+
 /// Sets mpv's `audio-file-paths` to `folders`, one entry at a time: a path
 /// list joined with the system's separator splits a folder whose name
 /// holds it (`:` on Linux, the Linux audit's M1), and libmpv's options at
@@ -1364,6 +1392,24 @@ impl App {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn path_lists_keep_each_path_whole() {
+        let s = PATH_LIST_SEPARATOR;
+        assert_eq!(mpv_path_list::<&str>(&[]), "");
+        assert_eq!(mpv_path_list(&["a"]), "a");
+        assert_eq!(
+            mpv_path_list(&[
+                "a,b".to_owned(),
+                format!("c{s}d"),
+                "e\\".to_owned(),
+                "f\\".to_owned()
+            ]),
+            format!("a,b{s}c\\{s}d{s}e\\/{s}f\\")
+        );
+        // A backslash already before a separator in a name stays.
+        assert_eq!(mpv_path_list(&[format!("x\\{s}y")]), format!("x\\\\{s}y"));
+    }
 
     #[test]
     fn times_parse_as_the_jump_dialog_takes_them() {

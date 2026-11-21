@@ -406,10 +406,11 @@ impl SubtitleSettings {
             .filter(|_| self.fonts_folder)
             .map(|dir| dir.join("fonts").to_string_lossy().into_owned())
             .unwrap_or_default();
-        let paths: Vec<String> = self
+        let paths: Vec<&str> = self
             .folders
             .iter()
-            .map(|folder| folder.trim().replace(',', "\\,"))
+            .map(|folder| folder.trim())
+            .filter(|folder| !folder.is_empty())
             .collect();
         vec![
             (&["sub-ass-override"], self.ass_override.clone()),
@@ -492,7 +493,7 @@ impl SubtitleSettings {
                 &["secondary-sub-pos"],
                 number(self.second_position, &defaults.second_position),
             ),
-            (&["sub-file-paths"], paths.join(",")),
+            (&["sub-file-paths"], crate::playback::mpv_path_list(&paths)),
             (&["sub-codepage"], self.encoding.clone()),
         ]
     }
@@ -1305,7 +1306,9 @@ mod tests {
             value("sub-fonts-dir"),
             Some(Path::new("/c").join("fonts").to_string_lossy().into_owned())
         );
-        assert_eq!(value("sub-file-paths").as_deref(), Some("subs,a\\,b"));
+        // A path list: the system's separator between the folders.
+        let separator = if cfg!(windows) { ";" } else { ":" };
+        assert_eq!(value("sub-file-paths"), Some(format!("subs{separator}a,b")));
         // Under the video: margins on, forced, at the bottom.
         let under = SubtitleSettings {
             text_inside: true,

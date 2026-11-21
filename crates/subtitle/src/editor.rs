@@ -108,7 +108,11 @@ impl Editor {
         let start_ms = index
             .and_then(|at| self.cues().get(at))
             .map_or(0, |cue| cue.end_ms);
-        let cue = Cue::new(start_ms, start_ms + length_ms.max(0), String::new());
+        let cue = Cue::new(
+            start_ms,
+            start_ms.saturating_add(length_ms.max(0)),
+            String::new(),
+        );
         self.insert(cue)
     }
 
@@ -176,9 +180,10 @@ impl Editor {
         self.edit(|cues| {
             for &at in indices.iter().filter(|at| **at < count) {
                 let cue = &mut cues[at];
-                let length = cue.end_ms - cue.start_ms;
-                cue.start_ms = (cue.start_ms + delay_ms).max(0);
-                cue.end_ms = cue.start_ms + length;
+                // Times at the far end of the clock stay there.
+                let length = cue.end_ms.saturating_sub(cue.start_ms);
+                cue.start_ms = cue.start_ms.saturating_add(delay_ms).max(0);
+                cue.end_ms = cue.start_ms.saturating_add(length);
             }
             cues.sort_by_key(|cue| cue.start_ms);
         });

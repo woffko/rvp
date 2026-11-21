@@ -682,18 +682,7 @@ fn original_script(text: &mut String, source: (u64, u64), rate: (u64, u64), firs
 
 /// A Python string literal for a path.
 fn python_path(path: &Path) -> String {
-    let text = path.to_string_lossy();
-    let mut out = String::with_capacity(text.len() + 2);
-    out.push('\'');
-    for c in text.chars() {
-        match c {
-            '\\' => out.push_str("\\\\"),
-            '\'' => out.push_str("\\'"),
-            c => out.push(c),
-        }
-    }
-    out.push('\'');
-    out
+    crate::video::python_string(&path.to_string_lossy())
 }
 
 /// The VapourSynth script of a motion-compensated engine that runs in
@@ -1826,6 +1815,14 @@ impl App {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn script_paths_stay_one_python_literal() {
+        // A folder whose name has a line break and a quote.
+        let path = python_path(Path::new("/state/odd\nname's/vs-mlrt"));
+        assert_eq!(path, "'/state/odd\\nname\\'s/vs-mlrt'");
+        assert!(!path.contains('\n'));
+    }
 
     #[test]
     fn the_lighter_step_takes_both_rifes_to_mvtools() {

@@ -6,7 +6,7 @@ use crate::Cue;
 /// A clock time in milliseconds: `[h:]mm:ss` with a fraction after `.` or
 /// `,` (SRT's `00:01:02,500`, `WebVTT`'s `01:02.500`, ASS's `0:01:02.50`).
 /// The fraction is decimal: `.5` and `.50` are 500 ms; digits after the
-/// third are ignored.
+/// third are ignored. A clock too large for a millisecond count is no time.
 #[must_use]
 pub fn parse_clock(text: &str) -> Option<i64> {
     let text = text.trim();
@@ -42,7 +42,13 @@ pub fn parse_clock(text: &str) -> Option<i64> {
             scale /= 10;
         }
     }
-    Some(((hours * 60 + minutes) * 60 + seconds) * 1000 + millis)
+    hours
+        .checked_mul(60)?
+        .checked_add(minutes)?
+        .checked_mul(60)?
+        .checked_add(seconds)?
+        .checked_mul(1000)?
+        .checked_add(millis)
 }
 
 /// A clock time as SRT (`separator` `,`) or `WebVTT` (`.`) writes it:
@@ -62,7 +68,7 @@ pub fn format_clock(ms: i64, separator: char) -> String {
 /// A clock time as ASS writes it: `h:mm:ss.cc`, rounded to the nearest
 /// centisecond. Negative times are 0.
 pub(crate) fn format_ass(ms: i64) -> String {
-    let cs = (ms.max(0) + 5) / 10;
+    let cs = ms.max(0).saturating_add(5) / 10;
     let (hours, rest) = (cs / 360_000, cs % 360_000);
     format!(
         "{hours}:{:02}:{:02}.{:02}",
@@ -117,5 +123,19 @@ mod tests {
         assert_eq!(format_ass(62_504), "0:01:02.50");
         assert_eq!(format_ass(62_505), "0:01:02.51");
         assert_eq!(format_ass(36_000_000), "10:00:00.00");
+    }
+
+    #[test]
+    fn a_clock_too_large_is_no_time() {
+        // The largest clock a millisecond count holds, and the next ones.
+        let hours = i64::MAX / 3_600_000;
+        assert_eq!(parse_clock(&format!("{hours}:12:55.807")), Some(i64::MAX));
+        assert_eq!(parse_clock(&format!("{hours}:12:55.808")), None);
+        assert_eq!(parse_clock(&format!("{}:00:00.000", hours + 1)), None);
+        assert_eq!(parse_clock("9999999999999:00:00,000"), None);
+        assert_eq!(parse_clock("99999999999999999999:00:00,000"), None);
+        // Writing the largest time does not wrap.
+        assert!(format_ass(i64::MAX).starts_with(&(i64::MAX / 10 / 360_000).to_string()));
+        assert!(format_clock(i64::MAX, ',').ends_with(",807"));
     }
 }

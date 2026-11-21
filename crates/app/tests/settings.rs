@@ -385,6 +385,14 @@ fn the_subtitle_font_reaches_mpv_and_the_control_panel() {
         engine.get_text("sub-font"),
         engine.get_text("option-info/sub-font/default-value")
     );
+    // Nor a name with a comma, which would end its item of mpv's style
+    // list.
+    app.set_subtitle_font(&engine, "DejaVu Sans");
+    assert!(matches!(
+        app.set_subtitle_font(&engine, "Arial,ScaleX=300"),
+        rvp_app::UiRequest::Message(_)
+    ));
+    assert_eq!(app.settings.subtitle_font, "");
     // The control panel's place and the settings window's last page
     // survive a restart.
     app.set_subtitle_font(&engine, "DejaVu Sans");

@@ -256,9 +256,12 @@ enum Drag {
         file: Option<&'static str>,
         page: Option<i32>,
     },
+    /// A slider held, by its element (a layout made again under the drag
+    /// numbers its nodes anew), at `fraction` last.
     Slider {
-        node: usize,
+        element: usize,
         command: &'static str,
+        fraction: f64,
     },
     /// A press in the video area (`click`), on the title bar (`title`) or
     /// on an empty skin area; it moves the window once the pointer travels.
@@ -386,7 +389,8 @@ fn seek_hover(
     };
     Some(crate::playback::SeekHover {
         fraction,
-        x: x.clamp(rect.x, rect.right() - 1),
+        // A bar laid out with no room has no last pixel: its left end.
+        x: x.clamp(rect.x, (rect.right() - 1).max(rect.x)),
         top: rect.y,
         held,
     })
@@ -511,17 +515,21 @@ fn target(chrome: &Chrome, ctx: Context, x: i32, y: i32) -> Target {
     }
 }
 
-fn slider_effect(
-    chrome: &Chrome,
-    node: usize,
-    command: &'static str,
-    x: i32,
-    y: i32,
-    released: bool,
-) -> Option<Effect> {
+/// The layout node of the slider `element` now: a layout made again since
+/// the press may have moved it, or left it out.
+fn slider_node(chrome: &Chrome, element: usize) -> Option<usize> {
+    chrome
+        .layout()?
+        .nodes
+        .iter()
+        .position(|node| node.element.id == element && node.kind == rvp_skin::layout::Kind::Slider)
+}
+
+/// Where the pointer is along the slider's node.
+fn slider_fraction(chrome: &Chrome, node: usize, x: i32, y: i32) -> Option<f64> {
     let node = chrome.layout()?.nodes.get(node)?;
     let rect = node.rect;
-    let fraction = if node.element.attrs.flag("Vert") {
+    Some(if node.element.attrs.flag("Vert") {
         if rect.h > 1 {
             (f64::from(rect.bottom() - 1 - y) / f64::from(rect.h - 1)).clamp(0.0, 1.0)
         } else {
@@ -531,13 +539,22 @@ fn slider_effect(
         (f64::from(x - rect.x) / f64::from(rect.w - 1)).clamp(0.0, 1.0)
     } else {
         0.0
-    };
-    Some(match command {
+    })
+}
+
+fn slider_effect(command: &'static str, fraction: f64, released: bool) -> Effect {
+    match command {
         "CMD_TIMEBAR_CTRL" if released => Effect::SeekRelease(fraction),
         "CMD_TIMEBAR_CTRL" => Effect::SeekFraction(fraction),
         "CMD_VOLUME_CTRL" | "CMD_MASTER_VOLUME" => Effect::VolumeFraction(fraction),
         _ => Effect::Slider { command, fraction },
-    })
+    }
+}
+
+/// The held slider's place under the pointer, while the layout has it.
+fn held_slider(chrome: &Chrome, element: usize, x: i32, y: i32) -> Option<(usize, f64)> {
+    let node = slider_node(chrome, element)?;
+    Some((node, slider_fraction(chrome, node, x, y)?))
 }
 
 fn gesture(button: Button, double: bool) -> MouseGesture {
@@ -613,10 +630,13 @@ impl Pointer {
                     .and_then(|placed| placed.nodes.get(node))
                     .is_some_and(|n| n.kind == rvp_skin::layout::Kind::Slider);
                 if is_slider {
-                    self.drag = Drag::Slider { node, command };
-                    slider_effect(chrome, node, command, x, y, false)
-                        .into_iter()
-                        .collect()
+                    let fraction = slider_fraction(chrome, node, x, y).unwrap_or(0.0);
+                    self.drag = Drag::Slider {
+                        element,
+                        command,
+                        fraction,
+                    };
+                    vec![slider_effect(command, fraction, false)]
                 } else {
                     self.drag = Drag::Button {
                         element,
@@ -799,16 +819,11 @@ impl Pointer {
     /// The pointer moved (with or without a button down).
     pub fn moved(&mut self, chrome: &mut Chrome, ctx: Context, x: i32, y: i32) -> Vec<Effect> {
         match self.drag {
-            Drag::Slider { node, command } => {
-                let mut effects: Vec<Effect> = slider_effect(chrome, node, command, x, y, false)
-                    .into_iter()
-                    .collect();
-                if command == "CMD_TIMEBAR_CTRL" {
-                    self.over_seek_bar = true;
-                    effects.push(Effect::SeekHover(seek_hover(chrome, node, x, true)));
-                }
-                return effects;
-            }
+            Drag::Slider {
+                element,
+                command,
+                fraction,
+            } => return self.move_slider(chrome, ctx, (element, command, fraction), x, y),
             Drag::Button { element, .. } => {
                 let over = matches!(
                     chrome.hit(x, y),
@@ -888,6 +903,42 @@ impl Pointer {
         }
     }
 
+    /// The pointer moved with a slider held: `held` is its element, its
+    /// command and where it was last.
+    fn move_slider(
+        &mut self,
+        chrome: &mut Chrome,
+        ctx: Context,
+        held: (usize, &'static str, f64),
+        x: i32,
+        y: i32,
+    ) -> Vec<Effect> {
+        let (element, command, fraction) = held;
+        let Some((node, now)) = held_slider(chrome, element, x, y) else {
+            // The slider left the layout: its drag ends where it was last,
+            // and the pointer only hovers again.
+            self.drag = Drag::Idle;
+            chrome.state.pressed = None;
+            let mut effects: Vec<Effect> = (command == "CMD_TIMEBAR_CTRL")
+                .then_some(Effect::SeekRelease(fraction))
+                .into_iter()
+                .collect();
+            effects.extend(self.moved(chrome, ctx, x, y));
+            return effects;
+        };
+        self.drag = Drag::Slider {
+            element,
+            command,
+            fraction: now,
+        };
+        let mut effects = vec![slider_effect(command, now, false)];
+        if command == "CMD_TIMEBAR_CTRL" {
+            self.over_seek_bar = true;
+            effects.push(Effect::SeekHover(seek_hover(chrome, node, x, true)));
+        }
+        effects
+    }
+
     /// X1 or X2 went up: whether the wheel turned while it was held (no
     /// click for it then).
     fn x_wheeled_while_held(&mut self, button: Button) -> bool {
@@ -949,9 +1000,17 @@ impl Pointer {
                     select_on_release,
                     ..
                 } => release_rows(chrome, index, moving, select_on_release, y),
-                Drag::Slider { node, command } => slider_effect(chrome, node, command, x, y, true)
-                    .into_iter()
-                    .collect(),
+                Drag::Slider {
+                    element,
+                    command,
+                    fraction,
+                } => match held_slider(chrome, element, x, y) {
+                    Some((_, now)) => vec![slider_effect(command, now, true)],
+                    // Gone from the layout: the seek bar lets go where it
+                    // was last; the others took their values as they moved.
+                    None if command == "CMD_TIMEBAR_CTRL" => vec![Effect::SeekRelease(fraction)],
+                    None => Vec::new(),
+                },
                 Drag::Press { click: true, .. } => {
                     let action = bindings.mouse(MouseGesture::LeftClick);
                     self.undo = action.filter(|action| action.is_toggle());

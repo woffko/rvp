@@ -29,7 +29,8 @@
 //! folder (`V:\Films\a.mkv` → `/mnt/media/Films/a.mkv`), any other drive
 //! `/mnt/<letter>` (`C:\x.mkv` → `/mnt/c/x.mkv`), and a network path its
 //! mount point (`\\nas\Media\a.mkv` → `/mnt/nas/Media/a.mkv`).
-//! URLs stay as they are.
+//! URLs stay as they are; paths then take mpv's form, as every entry's
+//! (`crate::playlist::local_path`: no `.` or `..` parts, one separator).
 //!
 //! A playlist is text from outside: an entry is a file or a network
 //! address ([`crate::playlist::admitted`]); what else a file names is
@@ -39,7 +40,7 @@ use std::collections::BTreeMap;
 use std::io;
 use std::path::Path;
 
-use crate::playlist::{Album, Entry, Refused, admitted};
+use crate::playlist::{Album, Entry, Refused, admitted, local_path};
 
 /// How Windows paths become Linux paths (see the module comment). The
 /// default maps nothing: Windows keeps its paths.
@@ -160,7 +161,8 @@ pub fn parse(name: &str, text: &str, map: &DriveMap) -> Imported {
         let Some(file) = raw.file else {
             continue;
         };
-        let Some(path) = admitted(&map.map(&file)) else {
+        // In mpv's form, as every entry's path ([`Entry::new`]).
+        let Some(path) = admitted(&map.map(&file)).map(|path| local_path(&path)) else {
             refused.add(&file);
             continue;
         };
@@ -308,6 +310,36 @@ mod tests {
                 ("https://example.org/live.ts".to_owned(), 61.0)
             ]
         );
+    }
+
+    #[test]
+    fn paths_take_the_form_of_every_entry() {
+        let text = "\u{feff}DAUMPLAYLIST\r\nplayname=V:\\F\\.\\sub\\..\\one.mkv\r\n\
+                    playtime=5000\r\n\
+                    1*file*V:\\F\\.\\sub\\..\\one.mkv\r\n\
+                    2*file*/films//two.mkv\r\n\
+                    3*file*https://example.org/a/../b.ts\r\n";
+        let imported = parse("Forms", text, &map());
+        let paths: Vec<&str> = imported
+            .album
+            .entries
+            .iter()
+            .map(|entry| entry.path.as_str())
+            .collect();
+        let one = Entry::new("/mnt/media/F/one.mkv").path;
+        assert_eq!(
+            paths,
+            [
+                one.as_str(),
+                Entry::new("/films/two.mkv").path.as_str(),
+                "https://example.org/a/../b.ts"
+            ]
+        );
+        assert_eq!(imported.positions, vec![(one, 5.0)]);
+        // As a playlist file opens them.
+        for entry in &imported.album.entries {
+            assert_eq!(entry.path, Entry::new(&entry.path).path);
+        }
     }
 
     #[test]

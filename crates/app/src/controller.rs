@@ -230,7 +230,7 @@ pub fn engine_options(
                 .iter()
                 .map(|script| script.to_string_lossy().into_owned())
                 .collect();
-            push("scripts", paths.join(if cfg!(windows) { ";" } else { ":" }));
+            push("scripts", crate::playback::mpv_path_list(&paths));
             let opts = script_opts(folder);
             if !opts.is_empty() {
                 push("script-opts", key_value_list(&opts));

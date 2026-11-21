@@ -973,6 +973,13 @@ smoothing for users without SVP, after a study of the engines.
   go through them, and albums keep such entries. A new door calls the gate
   and shows `App::refusal` (one notice however many were left out); a new
   address of RVP's own joins `own_address`.
+- A folder `App::open`, Open Folder or Add Folder gets is read on a thread
+  of its own (`crate::folders`: each entry's own type, a linked folder
+  only when its real path was not walked, 8 levels, `ENTRIES` and `FILES`
+  per request with one notice), and the request opens from the shell's
+  100 ms `flush_chrome` (`App::folder_tick`), as do requests that come
+  while one waits; one that plays drops those still waiting. Tests pump
+  `folder_tick` after opening a folder.
 
 ## Audio audit (docs/audits/audio.md)
 

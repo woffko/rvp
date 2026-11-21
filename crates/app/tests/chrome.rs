@@ -435,6 +435,128 @@ fn sliders_follow_the_pointer() {
     );
 }
 
+/// A button before the seek bar shows by a state of its own, and the bar
+/// by another; the bar's width follows the window's.
+const DRAG_SKIN: &str = "<Skin Version='1.0'>
+<MainSkinArea Image='atlas.png'>
+<Control>
+\t<Static Align='Client'>
+\t\t<Button CmdID='CMD_MEDIA_STOP' State='TEST_EXTRA' Left='0' Top='0' Width='8' Height='8' ImageLeft='0' ImageTop='10' />
+\t\t<Slider CmdID='CMD_TIMEBAR_CTRL' State='TEST_BAR' Left='10' Top='20' Width='-60' Height='4' ImageWidth='10' ImageHeight='2' ImageLeft='0' ImageTop='32' BackImageLeft='0' BackImageTop='30' ThumbWidth='2' ThumbHeight='4' ThumbImageLeft='12' ThumbImageTop='30' />
+\t</Static>
+</Control>
+</MainSkinArea>
+</Skin>
+";
+
+fn drag_chrome(width: i32) -> Chrome {
+    let archive = SkinArchive::from_files(
+        "Drag",
+        [
+            ("VideoSkin.xml", DRAG_SKIN.as_bytes().to_vec()),
+            ("atlas.png", atlas()),
+        ],
+    );
+    let skin = Skin::load(archive, "VideoSkin.xml").expect("load the skin");
+    let mut chrome = Chrome::new(Box::leak(Box::new(skin)));
+    chrome.state.flags.insert("TEST_BAR".to_owned());
+    chrome.resize(Mode::Window, width, 60).expect("layout");
+    chrome
+}
+
+fn seek_bar(chrome: &Chrome) -> Option<(usize, Rect)> {
+    let placed = chrome.layout()?;
+    let node = placed
+        .nodes
+        .iter()
+        .position(|node| node.command() == Some("CMD_TIMEBAR_CTRL"))?;
+    Some((node, placed.nodes[node].rect))
+}
+
+#[test]
+fn a_held_slider_follows_its_element_through_a_new_layout() {
+    let mut chrome = drag_chrome(200);
+    let ctx = Context {
+        width: 200,
+        height: 60,
+        ..window()
+    };
+    let mut pointer = Pointer::default();
+    let (before, rect) = seek_bar(&chrome).expect("seek bar");
+    assert_eq!(rect.w, 130);
+    let y = rect.y + 1;
+    assert_eq!(
+        pointer.press(&mut chrome, ctx, rect.x, y, Button::Left),
+        vec![Effect::SeekFraction(0.0)]
+    );
+    // Under the drag a control before the bar shows: the bar's node is
+    // numbered anew, and the drag goes on along the bar.
+    chrome.state.flags.insert("TEST_EXTRA".to_owned());
+    chrome.refresh();
+    let (after, moved) = seek_bar(&chrome).expect("seek bar");
+    assert_ne!(before, after);
+    assert_eq!(moved, rect);
+    let effects = pointer.moved(&mut chrome, ctx, rect.x + 43, y);
+    assert!(
+        matches!(effects.as_slice(), [Effect::SeekFraction(f), Effect::SeekHover(Some(_))] if (f - 1.0 / 3.0).abs() < 1e-9),
+        "{effects:?}"
+    );
+    // The bar leaves the layout: the drag ends where it was last, and the
+    // release does nothing more.
+    chrome.state.flags.remove("TEST_BAR");
+    chrome.refresh();
+    assert!(seek_bar(&chrome).is_none());
+    let effects = pointer.moved(&mut chrome, ctx, rect.x + 100, y);
+    assert!(
+        matches!(effects.as_slice(), [Effect::SeekRelease(f), Effect::SeekHover(None)] if (f - 1.0 / 3.0).abs() < 1e-9),
+        "{effects:?}"
+    );
+    assert_eq!(chrome.state.pressed, None);
+    assert!(
+        pointer
+            .release(
+                &mut chrome,
+                &Bindings::potplayer_defaults(),
+                ctx,
+                rect.x + 100,
+                y,
+                Button::Left
+            )
+            .is_empty()
+    );
+}
+
+#[test]
+fn a_held_seek_bar_left_with_no_room_keeps_its_left_end() {
+    let mut chrome = drag_chrome(200);
+    let ctx = Context {
+        width: 200,
+        height: 60,
+        ..window()
+    };
+    let mut pointer = Pointer::default();
+    let (_, rect) = seek_bar(&chrome).expect("seek bar");
+    let y = rect.y + 1;
+    pointer.press(&mut chrome, ctx, rect.x + 10, y, Button::Left);
+    // The window narrows under the drag until the bar has no width.
+    chrome.resize(Mode::Window, 70, 60).expect("layout");
+    let (_, narrow) = seek_bar(&chrome).expect("seek bar");
+    assert_eq!(narrow.w, 0);
+    let effects = pointer.moved(&mut chrome, ctx, narrow.x + 5, y);
+    assert_eq!(
+        effects,
+        vec![
+            Effect::SeekFraction(0.0),
+            Effect::SeekHover(Some(SeekHover {
+                fraction: 0.0,
+                x: narrow.x,
+                top: narrow.y,
+                held: true
+            }))
+        ]
+    );
+}
+
 #[test]
 fn a_drag_on_360_video_turns_the_view() {
     let mut chrome = chrome();

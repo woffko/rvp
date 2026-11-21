@@ -673,8 +673,10 @@ impl Default for VapourSynth {
     }
 }
 
-/// A Python string literal for a path.
-fn python_string(text: &str) -> String {
+/// A Python string literal for a path (also the smoothing scripts'): a
+/// line break or another control character in a folder's name is written
+/// as an escape, so the literal stays on its line.
+pub(crate) fn python_string(text: &str) -> String {
     let mut out = String::with_capacity(text.len() + 2);
     out.push('\'');
     for c in text.chars() {
@@ -683,6 +685,9 @@ fn python_string(text: &str) -> String {
             '\'' => out.push_str("\\'"),
             '\n' => out.push_str("\\n"),
             '\r' => out.push_str("\\r"),
+            c if c.is_control() => {
+                let _ = write!(out, "\\x{:02x}", u32::from(c));
+            }
             c => out.push(c),
         }
     }
@@ -1178,6 +1183,14 @@ mod tests {
             "open('C:\\\\Program Files\\\\DAUM\\\\PotPlayer\\\\x\\'s.vpy', encoding='utf-8-sig')"
         ));
         assert!(text.contains("exec(compile(source.read()"));
+    }
+
+    #[test]
+    fn python_strings_keep_control_characters_escaped() {
+        assert_eq!(
+            python_string("a'b\\c\nd\re\tf\0g\u{85}h é"),
+            "'a\\'b\\\\c\\nd\\re\\x09f\\x00g\\x85h é'"
+        );
     }
 
     #[test]

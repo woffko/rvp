@@ -28,6 +28,7 @@ pub mod decoders;
 pub mod disc;
 pub mod dpl;
 pub mod equalizer;
+pub mod folders;
 pub mod general;
 pub mod gpu_power;
 pub mod hlsl;

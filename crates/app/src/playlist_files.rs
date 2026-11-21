@@ -3,7 +3,10 @@
 //! M3U8 (`#EXTINF:<seconds>,<title>` before each path) and PLS
 //! (`File1=`, `Title1=`, `Length1=`). Relative paths in a file are taken
 //! from its folder; RVP writes absolute paths, UTF-8, with `.dpl` in
-//! PotPlayer's form (a byte order mark and CRLF lines).
+//! PotPlayer's form (a byte order mark and CRLF lines), each path and
+//! title on its line: a title's control characters as spaces, a local
+//! path that holds one as its `file://` URL, and an address that holds
+//! one left out.
 //!
 //! A playlist file is text from outside: its entries are files and network
 //! addresses ([`crate::playlist::admitted`]), and what else it names is
@@ -82,7 +85,7 @@ pub fn read(path: &Path, drives: &crate::dpl::DriveMap) -> Result<(Vec<Entry>, R
                 .entries
                 .into_iter()
                 .map(|entry| Entry {
-                    path: resolve(&entry.path, folder),
+                    path: crate::playlist::local_path(&resolve(&entry.path, folder)),
                     ..entry
                 })
                 .collect();
@@ -170,19 +173,44 @@ fn read_pls(text: &str, folder: &Path) -> (Vec<Entry>, Refused) {
     (entries, refused)
 }
 
-/// The text of a playlist file for `entries`.
+/// An entry's path as one line: a local path with a line break (or another
+/// control character) as its `file://` URL, which reads back as the path;
+/// `None` for an address with one, which no line holds.
+fn line_path(path: &str) -> Option<String> {
+    if !path.chars().any(char::is_control) {
+        return Some(path.to_owned());
+    }
+    (!is_url(path))
+        .then(|| crate::media::file_url(path))
+        .filter(|url| !url.chars().any(char::is_control))
+}
+
+/// A title as one line: control characters become spaces.
+fn line_text(text: &str) -> String {
+    text.chars()
+        .map(|c| if c.is_control() { ' ' } else { c })
+        .collect()
+}
+
+/// The text of a playlist file for `entries`. Every entry's path and title
+/// stay on their lines ([`line_path`], [`line_text`]); an entry whose
+/// address cannot is left out.
 #[must_use]
 pub fn write(format: Format, entries: &[Entry]) -> String {
+    let lines: Vec<(&Entry, String)> = entries
+        .iter()
+        .filter_map(|entry| Some((entry, line_path(&entry.path)?)))
+        .collect();
     let mut out = String::new();
     match format {
         Format::Dpl => {
             out.push('\u{feff}');
             out.push_str("DAUMPLAYLIST\r\n");
-            for (index, entry) in entries.iter().enumerate() {
+            for (index, (entry, path)) in lines.iter().enumerate() {
                 let number = index + 1;
-                let _ = write!(out, "{number}*file*{}\r\n", entry.path);
+                let _ = write!(out, "{number}*file*{path}\r\n");
                 if let Some(title) = &entry.title {
-                    let _ = write!(out, "{number}*title*{title}\r\n");
+                    let _ = write!(out, "{number}*title*{}\r\n", line_text(title));
                 }
                 if let Some(duration) = entry.duration {
                     // Milliseconds of a duration are far inside i64.
@@ -197,25 +225,25 @@ pub fn write(format: Format, entries: &[Entry]) -> String {
         }
         Format::M3u => {
             out.push_str("#EXTM3U\n");
-            for entry in entries {
+            for (entry, path) in &lines {
                 let _ = writeln!(
                     out,
                     "#EXTINF:{},{}",
                     whole_seconds(entry.duration),
-                    entry.label()
+                    line_text(entry.label())
                 );
-                let _ = writeln!(out, "{}", entry.path);
+                let _ = writeln!(out, "{path}");
             }
         }
         Format::Pls => {
             out.push_str("[playlist]\n");
-            for (index, entry) in entries.iter().enumerate() {
+            for (index, (entry, path)) in lines.iter().enumerate() {
                 let number = index + 1;
-                let _ = writeln!(out, "File{number}={}", entry.path);
-                let _ = writeln!(out, "Title{number}={}", entry.label());
+                let _ = writeln!(out, "File{number}={path}");
+                let _ = writeln!(out, "Title{number}={}", line_text(entry.label()));
                 let _ = writeln!(out, "Length{number}={}", whole_seconds(entry.duration));
             }
-            let _ = writeln!(out, "NumberOfEntries={}", entries.len());
+            let _ = writeln!(out, "NumberOfEntries={}", lines.len());
             out.push_str("Version=2\n");
         }
     }
@@ -262,6 +290,53 @@ mod tests {
             let duration = back[0].duration.expect("duration");
             assert!((duration - 90.0).abs() <= 0.5, "{name}: {duration}");
             assert_eq!(back[1].path, "https://example.com/b.mp4", "{name}");
+        }
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn line_breaks_never_make_lines_of_their_own() {
+        let dir = std::env::temp_dir().join(format!("rvp-breaks-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).expect("dir");
+        // A title and a file name with line breaks, and an address with one.
+        let odd = format!("{}\nsecond line.mkv", FILM.trim_end_matches(".mkv"));
+        let mut titled = Entry::new(FILM);
+        titled.title = Some("Title\r\nhttps://example.org/extra\tend".to_owned());
+        let named = Entry::new(&odd);
+        let address = Entry::new("https://example.org/a\nb");
+        let after = Entry::new("https://example.org/after");
+        let entries = [titled, named, address, after];
+        for (name, format) in [
+            ("list.dpl", Format::Dpl),
+            ("list.m3u8", Format::M3u),
+            ("list.pls", Format::Pls),
+        ] {
+            let text = write(format, &entries);
+            assert!(
+                !text.contains("\nhttps://example.org/extra"),
+                "{name}: {text}"
+            );
+            assert!(!text.contains("\nsecond line"), "{name}: {text}");
+            let path = dir.join(name);
+            std::fs::write(&path, text).expect("write");
+            let (back, refused) = read(&path, &crate::dpl::DriveMap::default()).expect("read");
+            assert_eq!(refused.count(), 0, "{name}");
+            let paths: Vec<&str> = back.iter().map(|entry| entry.path.as_str()).collect();
+            assert_eq!(
+                paths,
+                [
+                    entries[0].path.as_str(),
+                    entries[1].path.as_str(),
+                    "https://example.org/after"
+                ],
+                "{name}"
+            );
+            assert_eq!(
+                back[0].title.as_deref(),
+                Some("Title  https://example.org/extra end"),
+                "{name}"
+            );
         }
         let _ = std::fs::remove_dir_all(&dir);
     }

@@ -106,3 +106,32 @@ fn saving_writes_the_chosen_format_and_clears_the_dirty_flag() {
     let vtt = String::from_utf8(editor.save_bytes(Format::WebVtt)).expect("utf-8");
     assert!(vtt.contains("00:00:05.000 --> 00:00:07.000\nSaved\n"));
 }
+
+#[test]
+fn times_at_the_far_end_of_the_clock_saturate() {
+    let mut document = Document::new(Format::Srt);
+    document.cues = vec![
+        Cue::new(1000, 2000, "Early"),
+        Cue::new(i64::MAX - 5, i64::MAX, "Last"),
+    ];
+    let mut editor = Editor::new(document);
+    assert!(editor.shift(&[0, 1], 100));
+    assert_eq!(
+        (editor.cues()[1].start_ms, editor.cues()[1].end_ms),
+        (i64::MAX, i64::MAX)
+    );
+    assert_eq!(
+        (editor.cues()[0].start_ms, editor.cues()[0].end_ms),
+        (1100, 2100)
+    );
+    assert!(editor.shift(&[0], i64::MIN));
+    assert_eq!(
+        (editor.cues()[0].start_ms, editor.cues()[0].end_ms),
+        (0, 1000)
+    );
+    let at = editor.insert_after(Some(1), 1500);
+    assert_eq!(
+        (editor.cues()[at].start_ms, editor.cues()[at].end_ms),
+        (i64::MAX, i64::MAX)
+    );
+}

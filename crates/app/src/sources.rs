@@ -368,16 +368,29 @@ pub struct DvdTitle {
     pub angles: u8,
 }
 
+/// The most of `VIDEO_TS.IFO` read: its title table lies in the first
+/// sectors (sector 1 on the discs seen), and the whole file is some
+/// hundred kilobytes at most.
+const IFO_LIMIT: u64 = 4 << 20;
+
+/// The most titles a DVD has.
+const DVD_TITLES: usize = 99;
+
 /// The titles of a DVD (a drive or folder holding `VIDEO_TS`): the title
 /// search pointer table of `VIDEO_TS.IFO` (its sector at 0xC4; a count,
-/// then 12 bytes a title: angles at 1, chapters at 2). libmpv 0.37 and
+/// then 12 bytes a title: angles at 1, chapters at 2), from the file's
+/// first [`IFO_LIMIT`] bytes, at most [`DVD_TITLES`]. libmpv 0.37 and
 /// later give no title list.
 #[must_use]
 pub fn dvd_titles(device: &Path) -> Vec<DvdTitle> {
+    use std::io::Read as _;
     let ifo = device.join("VIDEO_TS").join("VIDEO_TS.IFO");
-    let Ok(bytes) = std::fs::read(&ifo) else {
+    let mut bytes = Vec::new();
+    let read =
+        std::fs::File::open(&ifo).and_then(|file| file.take(IFO_LIMIT).read_to_end(&mut bytes));
+    if read.is_err() {
         return Vec::new();
-    };
+    }
     let read_u16 = |at: usize| {
         bytes
             .get(at..at + 2)
@@ -394,9 +407,11 @@ pub fn dvd_titles(device: &Path) -> Vec<DvdTitle> {
     let Some(base) = read_u32(0xC4).and_then(|sector| usize::try_from(sector).ok()) else {
         return Vec::new();
     };
-    let base = base * 2048;
+    let Some(base) = base.checked_mul(2048) else {
+        return Vec::new();
+    };
     let count = read_u16(base).unwrap_or(0);
-    (0..usize::from(count))
+    (0..usize::from(count).min(DVD_TITLES))
         .map_while(|index| {
             let entry = base + 8 + 12 * index;
             Some(DvdTitle {
@@ -853,11 +868,9 @@ impl App {
     /// Opens a favorite or a recent item (the Album/Favorites menu).
     pub fn open_item(&mut self, engine: &Engine, path: &str, folder: bool) -> Option<UiRequest> {
         if folder {
-            return match self.open_folder(engine, Path::new(path)) {
-                Ok(0) => Some(UiRequest::Osd("No media files there".to_owned())),
-                Ok(_) => None,
-                Err(error) => Some(UiRequest::Message(format!("Cannot open: {error}"))),
-            };
+            // Its files open once they are found ([`App::folder_tick`]).
+            self.open_folder(Path::new(path));
+            return None;
         }
         self.open_now(engine, &[path.to_owned()])
     }
@@ -1342,6 +1355,40 @@ mod tests {
             Some((true, PathBuf::from("D:/")))
         );
         assert_eq!(disc_device("/films/a.mkv"), None);
+    }
+
+    #[test]
+    fn a_title_table_is_read_within_its_limits() {
+        let dir = std::env::temp_dir().join(format!("rvp-ifo-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(dir.join("VIDEO_TS")).expect("dir");
+        // A title table at `sector` that counts 200 titles of 3 chapters.
+        let ifo = |sector: u32| {
+            let base = usize::try_from(sector).expect("small") * 2048;
+            let mut bytes = vec![0_u8; base + 8 + 12 * 200];
+            bytes[..12].copy_from_slice(b"DVDVIDEO-VMG");
+            bytes[0xC4..0xC8].copy_from_slice(&sector.to_be_bytes());
+            bytes[base..base + 2].copy_from_slice(&200_u16.to_be_bytes());
+            for index in 0..200 {
+                let entry = base + 8 + 12 * index;
+                bytes[entry + 1] = 1;
+                bytes[entry + 2..entry + 4].copy_from_slice(&3_u16.to_be_bytes());
+            }
+            std::fs::write(dir.join("VIDEO_TS").join("VIDEO_TS.IFO"), bytes).expect("write");
+        };
+        ifo(1);
+        let titles = dvd_titles(&dir);
+        assert_eq!(titles.len(), DVD_TITLES);
+        assert!(
+            titles
+                .iter()
+                .all(|title| title.chapters == 3 && title.angles == 1)
+        );
+        // A table past the part of the file that is read: no titles.
+        let past = u32::try_from(IFO_LIMIT / 2048).expect("small") + 1;
+        ifo(past);
+        assert!(dvd_titles(&dir).is_empty());
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]

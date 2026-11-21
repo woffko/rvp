@@ -1271,7 +1271,7 @@ impl qobject::Player {
         crate::metrics::mark("skin_loaded_ms");
 
         crate::ffi::bridge::rvp_set_c_numeric_locale();
-        app.prepare_svp(VSSCRIPT.get().cloned().flatten());
+        messages.extend(app.prepare_svp(VSSCRIPT.get().cloned().flatten()));
         let options = engine_options(&mut app, &cli, &mut messages);
         app.second_mpv_options = extra_mpv_options(&cli);
         let Some(drain_queued) = self.as_mut().start_engine(&options, &mut app) else {
@@ -1563,6 +1563,7 @@ impl qobject::Player {
     /// [`CHROME_INTERVAL`] is shown.
     pub(crate) fn flush_chrome(mut self: Pin<&mut Self>) {
         self.as_mut().disc_tick();
+        self.as_mut().folder_tick();
         self.as_mut().sync_window_mask();
         let Some(core) = self.as_mut().core_mut() else {
             return;
@@ -3093,17 +3094,9 @@ impl qobject::Player {
         let Some(core) = self.as_mut().core_mut() else {
             return;
         };
-        let folder = PathBuf::from(path.to_string());
+        // Its files open once they are found (`folder_tick`).
         core.request_fit();
-        match core.app.open_folder(core.engine, &folder) {
-            Ok(0) => {
-                let text = format!("No media files in {}", folder.display());
-                self.as_mut().show_message(&text);
-            }
-            Ok(_) => {}
-            Err(error) => self.as_mut().show_message(&format!("cannot open: {error}")),
-        }
-        self.sync_chrome();
+        core.app.open_folder(Path::new(&path.to_string()));
     }
 
     pub(crate) fn load_subtitle(mut self: Pin<&mut Self>, path: &QString) {
@@ -3169,11 +3162,23 @@ impl qobject::Player {
         let Some(core) = self.as_mut().core_mut() else {
             return;
         };
-        let folder = PathBuf::from(path.to_string());
-        let count = core.app.add_folder(&folder);
-        if count == 0 {
-            let text = format!("No media files in {}", folder.display());
-            self.as_mut().show_message(&text);
+        core.app.add_folder(Path::new(&path.to_string()));
+    }
+
+    /// About ten times a second: opened folders whose files were found
+    /// open them.
+    fn folder_tick(mut self: Pin<&mut Self>) {
+        let Some(core) = self.as_mut().core_mut() else {
+            return;
+        };
+        if !core.app.walking_folders() {
+            return;
+        }
+        let Some(requests) = core.app.folder_tick(core.engine) else {
+            return;
+        };
+        for request in requests {
+            self.as_mut().handle_request(request);
         }
         self.sync_chrome();
     }

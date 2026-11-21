@@ -149,10 +149,11 @@ impl Settings {
         notes
     }
 
-    /// A font family name: one line of printable text.
+    /// A font family name: one line of printable text with no comma, which
+    /// would end its item of mpv's style list (`sub-ass-style-overrides`).
     fn validate_subtitle_font(&mut self, notes: &mut Vec<String>) {
         let trimmed = self.subtitle_font.trim();
-        if trimmed.len() > 100 || trimmed.chars().any(char::is_control) {
+        if trimmed.len() > 100 || trimmed.chars().any(|c| c.is_control() || c == ',') {
             notes.push(format!(
                 "subtitle-font {:?} is not a font family: mpv's default used",
                 self.subtitle_font
@@ -510,16 +511,10 @@ impl App {
         let mut endpoint_changed = None;
         if crate::svp::configured_endpoint(&old) != crate::svp::configured_endpoint(&new) {
             // Another process may hold the endpoint (see crate::svp).
-            let endpoint = crate::svp::choose_endpoint(
-                crate::svp::configured_endpoint(&new),
-                std::process::id(),
-                crate::svp::endpoint_in_use,
-            );
-            if let Some(endpoint) = &endpoint {
-                crate::svp::prepare_endpoint(endpoint);
-            }
+            let (endpoint, notice) =
+                crate::svp::pick_endpoint(crate::svp::configured_endpoint(&new));
             set("input-ipc-server", endpoint.as_deref().unwrap_or(""));
-            endpoint_changed = Some(endpoint);
+            endpoint_changed = Some((endpoint, notice));
         }
         if (old.volume_max - new.volume_max).abs() > f64::EPSILON {
             set("volume-max", &crate::volume::mpv_volume_max(new.volume_max));
@@ -569,7 +564,8 @@ impl App {
             // The window gets the new state with the next update.
             self.session.on_top = None;
         }
-        if let Some(endpoint) = endpoint_changed {
+        if let Some((endpoint, notice)) = endpoint_changed {
+            applied.notes.extend(notice);
             self.svp.endpoint_changed(endpoint);
             if self.model.media_loaded() {
                 self.svp.file_started(

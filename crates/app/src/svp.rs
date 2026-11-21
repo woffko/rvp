@@ -100,6 +100,28 @@ pub fn choose_endpoint(
     }
 }
 
+/// The endpoint SVP mode opens for `configured` ([`choose_endpoint`]), its
+/// `mpvSockets` folder readied ([`prepare_endpoint`]); with a folder RVP
+/// may not use, the configured one, and the notice that says so.
+#[must_use]
+pub fn pick_endpoint(configured: &str) -> (Option<String>, Option<String>) {
+    let configured = configured.trim();
+    let endpoint = choose_endpoint(configured, std::process::id(), endpoint_in_use);
+    match endpoint {
+        Some(chosen) if !prepare_endpoint(&chosen) => {
+            let folder = Path::new(&chosen)
+                .parent()
+                .map(|folder| folder.display().to_string())
+                .unwrap_or_default();
+            let notice = format!(
+                "SVP: {folder} is not a folder RVP may put its socket in: {configured} is used"
+            );
+            (Some(configured.to_owned()), Some(notice))
+        }
+        endpoint => (endpoint, None),
+    }
+}
+
 /// Whether `endpoint` is taken: a process serves it now, or (Unix) mpv
 /// could not take its place. On Windows it is a named pipe
 /// (`\\.\pipe\<name>`, as mpv names it); a pipe that exists but is busy
@@ -153,25 +175,62 @@ pub fn endpoint_in_use(endpoint: &str) -> bool {
     }
 }
 
-/// Creates the folder of an `mpvSockets` socket (mpv does not), sticky and
-/// open to every user as `/tmp` is: another user's RVP makes its own
-/// socket there too (one made 0755 kept them out).
-pub fn prepare_endpoint(endpoint: &str) {
-    if cfg!(unix)
-        && let Some(parent) = Path::new(endpoint).parent()
-        && endpoint.contains("/mpvSockets/")
-        && !parent.exists()
-        && std::fs::create_dir_all(parent).is_ok()
+/// Readies the folder of an `mpvSockets` socket; false when the socket may
+/// not go there. A missing folder is made (mpv does not), sticky and open
+/// to every user as `/tmp` is: another user's RVP makes its own socket
+/// there too (one made 0755 kept them out). One that exists is taken only
+/// when [`socket_folder_usable`] says so.
+#[must_use]
+pub fn prepare_endpoint(endpoint: &str) -> bool {
+    #[cfg(unix)]
     {
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::PermissionsExt as _;
-            drop(std::fs::set_permissions(
-                parent,
-                std::fs::Permissions::from_mode(0o1777),
-            ));
+        use std::os::unix::fs::PermissionsExt as _;
+        let Some(parent) = Path::new(endpoint)
+            .parent()
+            .filter(|_| endpoint.contains("/mpvSockets/"))
+        else {
+            return true;
+        };
+        match std::fs::symlink_metadata(parent) {
+            Ok(meta) => socket_folder_usable(&meta, own_uid()),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                if std::fs::create_dir_all(parent).is_err() {
+                    return false;
+                }
+                drop(std::fs::set_permissions(
+                    parent,
+                    std::fs::Permissions::from_mode(0o1777),
+                ));
+                true
+            }
+            Err(_) => false,
         }
     }
+    #[cfg(not(unix))]
+    {
+        let _ = endpoint;
+        true
+    }
+}
+
+/// The user this process runs as.
+#[cfg(unix)]
+fn own_uid() -> Option<u32> {
+    use std::os::unix::fs::MetadataExt as _;
+    std::fs::metadata("/proc/self").map(|meta| meta.uid()).ok()
+}
+
+/// Whether an existing `mpvSockets` folder (its own entry, not what a link
+/// names) may hold RVP's socket: a real folder that is sticky (as RVP
+/// makes it, so the users who share it cannot remove each other's
+/// sockets), or the user's own with no one else allowed to write in it.
+#[cfg(unix)]
+#[must_use]
+pub fn socket_folder_usable(meta: &std::fs::Metadata, own: Option<u32>) -> bool {
+    use std::os::unix::fs::MetadataExt as _;
+    let sticky = meta.mode() & 0o1000 != 0;
+    let shared = meta.mode() & 0o022 != 0;
+    meta.file_type().is_dir() && (sticky || (Some(meta.uid()) == own && !shared))
 }
 
 /// The copy-back variant of an `hwdec` value: decoded frames come back to
@@ -562,20 +621,16 @@ impl App {
     /// Before libmpv starts: picks the IPC endpoint for SVP mode (the
     /// configured one, or the `mpvSockets` name while another process
     /// holds it), which [`App::engine_options`] then uses, and records the
-    /// VapourSynth runtime the process points mpv at.
-    pub fn prepare_svp(&mut self, vapoursynth: Option<PathBuf>) {
-        let endpoint = choose_endpoint(
-            configured_endpoint(&self.settings),
-            std::process::id(),
-            endpoint_in_use,
-        );
-        if let Some(endpoint) = &endpoint {
-            prepare_endpoint(endpoint);
-        }
+    /// VapourSynth runtime the process points mpv at. An `mpvSockets`
+    /// folder RVP may not use leaves the configured endpoint, with the
+    /// notice returned.
+    pub fn prepare_svp(&mut self, vapoursynth: Option<PathBuf>) -> Option<String> {
+        let (endpoint, notice) = pick_endpoint(configured_endpoint(&self.settings));
         self.svp.endpoint = endpoint;
         self.smoothing.runtime = crate::smoothing::Runtime::probe(vapoursynth.as_deref());
         self.load_tensorrt();
         self.svp.vapoursynth = vapoursynth;
+        notice
     }
 }
 
@@ -598,6 +653,49 @@ mod tests {
         drop(listener);
         assert!(socket.exists());
         assert!(!endpoint_in_use(&path), "stale and the user's");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn an_mpvsockets_folder_is_taken_only_when_it_is_safe() {
+        use std::os::unix::fs::PermissionsExt as _;
+        let dir = std::env::temp_dir().join(format!("rvp-svp-folder-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).expect("dir");
+        let endpoint = |name: &str| format!("{}/{name}/mpvSockets/123", dir.display());
+        let folder = |name: &str| dir.join(name).join("mpvSockets");
+        let chmod = |name: &str, mode: u32| {
+            std::fs::set_permissions(folder(name), std::fs::Permissions::from_mode(mode))
+                .expect("mode");
+        };
+        // Missing: made, sticky and open to every user.
+        assert!(prepare_endpoint(&endpoint("new")));
+        let made = std::fs::symlink_metadata(folder("new")).expect("made");
+        assert_eq!(made.permissions().mode() & 0o7777, 0o1777);
+        // The user's own: kept to the user, or sticky.
+        std::fs::create_dir_all(folder("own")).expect("dir");
+        chmod("own", 0o700);
+        assert!(prepare_endpoint(&endpoint("own")));
+        chmod("own", 0o777);
+        assert!(!prepare_endpoint(&endpoint("own")), "others may write");
+        chmod("own", 0o1777);
+        assert!(prepare_endpoint(&endpoint("own")));
+        // Another user's: only sticky.
+        let meta = |name: &str| std::fs::symlink_metadata(folder(name)).expect("meta");
+        let other = own_uid().map(|uid| uid + 1);
+        assert!(socket_folder_usable(&meta("own"), other));
+        chmod("own", 0o755);
+        assert!(!socket_folder_usable(&meta("own"), other));
+        // A link to a folder, or a file: never.
+        std::fs::create_dir_all(dir.join("linked")).expect("dir");
+        std::os::unix::fs::symlink(folder("own"), folder("linked")).expect("link");
+        assert!(!prepare_endpoint(&endpoint("linked")));
+        std::fs::create_dir_all(dir.join("file")).expect("dir");
+        std::fs::write(folder("file"), b"").expect("file");
+        assert!(!prepare_endpoint(&endpoint("file")));
+        // Not an `mpvSockets` endpoint: nothing to check.
+        assert!(prepare_endpoint("/tmp/mpvsocket"));
         let _ = std::fs::remove_dir_all(&dir);
     }
 

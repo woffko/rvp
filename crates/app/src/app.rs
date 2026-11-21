@@ -299,13 +299,6 @@ enum Tracking {
     On,
 }
 
-/// File extensions "Add folder" picks up.
-const MEDIA_EXTENSIONS: &[&str] = &[
-    "3gp", "aac", "ac3", "aiff", "ape", "asf", "avi", "avs", "dts", "flac", "flv", "m2ts", "m4a",
-    "m4v", "mka", "mkv", "mov", "mp3", "mp4", "mpeg", "mpg", "mts", "ogg", "ogm", "ogv", "opus",
-    "rm", "rmvb", "ts", "vob", "wav", "webm", "wma", "wmv", "wv",
-];
-
 /// The application core.
 // Independent flags of the playback state (the end handled, the next entry
 // to play, filters waiting near the end, the first start), not a mode.
@@ -389,6 +382,8 @@ pub struct App {
     pub(crate) power: crate::power::Power,
     /// File moves and copies under way.
     pub(crate) file_jobs: crate::albums::FileJobs,
+    /// Opened folders being read.
+    pub(crate) folders: crate::folders::Walks,
     /// A yt-dlp resolution under way.
     pub(crate) resolver: crate::ytdl::Resolver,
     /// The picture's state for this run (M12).
@@ -563,6 +558,7 @@ impl App {
             thumbs: crate::thumbs::Thumbs::default(),
             power: crate::power::Power::default(),
             file_jobs: crate::albums::FileJobs::default(),
+            folders: crate::folders::Walks::default(),
             resolver: crate::ytdl::Resolver::default(),
             picture: crate::picture::PictureState::default(),
             stereo: crate::stereo::StereoState::default(),
@@ -820,7 +816,10 @@ impl App {
     /// plays, or with `append` they are only added. The addresses are
     /// RVP's own (a disc, a capture device, a folder's files) or ones a
     /// door admitted: text from outside goes through
-    /// [`App::open_outside`].
+    /// [`App::open_outside`]. A folder brings its media files (and its
+    /// subfolders'), found on a thread of their own (`crate::folders`):
+    /// then the request opens with [`App::folder_tick`], and so does one
+    /// that comes while another waits for its folders.
     ///
     /// # Errors
     /// Fails when libmpv rejects a command.
@@ -830,26 +829,40 @@ impl App {
         files: &[String],
         append: bool,
     ) -> Result<(), EngineError> {
-        let shown = self.library.lists().shown;
-        // A folder brings its media files (and its subfolders').
-        let files: Vec<String> = files
+        use crate::folders::{Item, Then};
+        // What plays now drops the folders still to open.
+        if !append {
+            self.folders.drop_all();
+        }
+        let items: Vec<Item> = files
             .iter()
-            .flat_map(|file| {
-                let path = Path::new(file);
-                if !crate::playlist::is_url(file) && path.is_dir() {
-                    let mut found = Vec::new();
-                    collect_media(path, 0, &mut found);
-                    found.sort();
-                    found
+            .map(|file| {
+                if !crate::playlist::is_url(file) && Path::new(file).is_dir() {
+                    Item::Folder(PathBuf::from(file))
                 } else {
-                    vec![file.clone()]
+                    Item::File(file.clone())
                 }
             })
             .collect();
+        if self.folders.walking() || items.iter().any(|item| matches!(item, Item::Folder(_))) {
+            self.walk_folders(&items, Then::Open { append });
+            return Ok(());
+        }
+        self.open_files(engine, files, append)
+    }
+
+    /// [`App::open`] once its folders were walked.
+    pub(crate) fn open_files(
+        &mut self,
+        engine: &Engine,
+        files: &[String],
+        append: bool,
+    ) -> Result<(), EngineError> {
+        let shown = self.library.lists().shown;
         let (files, play) = if append {
-            (files, 0)
+            (files.to_vec(), 0)
         } else {
-            self.expand_opened(&files)
+            self.expand_opened(files)
         };
         if !append && !self.settings.playlist.append_on_open {
             self.library.clear(shown);
@@ -1467,33 +1480,6 @@ impl App {
         } else {
             self.library.add_album(name);
         }
-    }
-
-    /// Adds the media files in `folder` and its subfolders to the shown
-    /// album, sorted by path.
-    pub fn add_folder(&mut self, folder: &Path) -> usize {
-        let mut files = Vec::new();
-        collect_media(folder, 0, &mut files);
-        files.sort();
-        let shown = self.library.lists().shown;
-        self.library.insert(shown, None, &files);
-        files.len()
-    }
-
-    /// Opens the media files in `folder` and its subfolders (PotPlayer's
-    /// "Open Folder"): they join the shown album and the first one plays.
-    /// Returns how many there were.
-    ///
-    /// # Errors
-    /// Fails when libmpv rejects a command.
-    pub fn open_folder(&mut self, engine: &Engine, folder: &Path) -> Result<usize, EngineError> {
-        let mut files = Vec::new();
-        collect_media(folder, 0, &mut files);
-        files.sort();
-        if !files.is_empty() {
-            self.open(engine, &files, false)?;
-        }
-        Ok(files.len())
     }
 
     /// Loads a subtitle file for the playing video and shows it.
@@ -2472,27 +2458,6 @@ impl App {
         .chain(copies)
         {
             let _ = std::fs::remove_file(file);
-        }
-    }
-}
-
-/// Media files under `folder`, at most eight levels deep.
-fn collect_media(folder: &Path, depth: usize, files: &mut Vec<String>) {
-    let Ok(entries) = std::fs::read_dir(folder) else {
-        return;
-    };
-    for entry in entries.filter_map(Result::ok) {
-        let path = entry.path();
-        if path.is_dir() {
-            if depth < 8 {
-                collect_media(&path, depth + 1, files);
-            }
-        } else if path.extension().is_some_and(|ext| {
-            MEDIA_EXTENSIONS
-                .iter()
-                .any(|known| ext.eq_ignore_ascii_case(known))
-        }) {
-            files.push(path.to_string_lossy().into_owned());
         }
     }
 }

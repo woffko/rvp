@@ -443,7 +443,9 @@ fn glob_types(globs: &str, extension: &str) -> Vec<String> {
 /// holds a reserved character. The string's escape comes before the
 /// quoting's (the Desktop Entry specification), so a quoted `"`, `` ` ``
 /// or `$` takes two backslashes and a backslash four; a `%` is doubled, or
-/// it would start a field code (the Linux audit's L10).
+/// it would start a field code (the Linux audit's L10). A line break, a
+/// carriage return and a tab are the string's escapes (`\n`, `\r`, `\t`),
+/// so the entry keeps the path on its own line.
 #[must_use]
 pub fn desktop_exec(exe: &str) -> String {
     if exe
@@ -458,6 +460,18 @@ pub fn desktop_exec(exe: &str) -> String {
             '"' | '`' | '$' => quoted.push_str(r"\\"),
             '\\' => quoted.push_str(r"\\\"),
             '%' => quoted.push('%'),
+            '\n' => {
+                quoted.push_str(r"\n");
+                continue;
+            }
+            '\r' => {
+                quoted.push_str(r"\r");
+                continue;
+            }
+            '\t' => {
+                quoted.push_str(r"\t");
+                continue;
+            }
             _ => {}
         }
         quoted.push(c);
@@ -511,6 +525,25 @@ mod tests {
             r#""/opt/RVP%%20Player/a \\"b\\"\\`c\\`""#
         );
         assert_eq!(desktop_exec("/usr/bin/rvp"), "/usr/bin/rvp");
+    }
+
+    #[test]
+    fn a_line_break_in_the_program_path_stays_on_the_exec_line() {
+        assert_eq!(
+            desktop_exec("/home/a\nb/c\rd\te/rvp"),
+            r#""/home/a\nb/c\rd\te/rvp""#
+        );
+        let entry = desktop_entry(
+            &AssociationSettings::default(),
+            "/home/a\nOther=1\n/rvp",
+            "",
+        );
+        assert!(!entry.lines().any(|line| line == "Other=1"), "{entry}");
+        let exec: Vec<&str> = entry
+            .lines()
+            .filter(|line| line.starts_with("Exec="))
+            .collect();
+        assert_eq!(exec, [r#"Exec="/home/a\nOther=1\n/rvp" -- %F"#]);
     }
 
     #[test]

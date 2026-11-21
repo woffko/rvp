@@ -157,21 +157,39 @@ pub struct Facts {
 }
 
 /// `name` against a pattern with `*` and `?`, ignoring case.
+///
+/// One pass with the last star remembered: when the text after it stops
+/// matching, that star takes one more character and the match goes on from
+/// there. Earlier stars never need another try, so the time is at most the
+/// pattern's length times the name's, however many stars the rule has.
 fn wildcard(pattern: &str, name: &str) -> bool {
-    fn matches(pattern: &[char], name: &[char]) -> bool {
-        match (pattern.first(), name.first()) {
-            (None, None) => true,
-            (Some('*'), _) => {
-                matches(&pattern[1..], name) || (!name.is_empty() && matches(pattern, &name[1..]))
-            }
-            (Some('?'), Some(_)) => matches(&pattern[1..], &name[1..]),
-            (Some(p), Some(n)) if p == n => matches(&pattern[1..], &name[1..]),
-            _ => false,
-        }
-    }
     let pattern: Vec<char> = pattern.to_lowercase().chars().collect();
     let name: Vec<char> = name.to_lowercase().chars().collect();
-    matches(&pattern, &name)
+    let (mut p, mut n) = (0, 0);
+    // The last star's place in the pattern and the name's place after the
+    // characters it took so far.
+    let mut star: Option<(usize, usize)> = None;
+    while n < name.len() {
+        match pattern.get(p) {
+            Some('*') => {
+                star = Some((p, n));
+                p += 1;
+            }
+            Some(&c) if c == '?' || c == name[n] => {
+                p += 1;
+                n += 1;
+            }
+            _ => match star {
+                Some((at, taken)) => {
+                    star = Some((at, taken + 1));
+                    p = at + 1;
+                    n = taken + 1;
+                }
+                None => return false,
+            },
+        }
+    }
+    pattern[p..].iter().all(|&c| c == '*')
 }
 
 impl Conditions {
@@ -710,6 +728,29 @@ mod tests {
         assert!(wildcard("ep??.mp4", "ep12.mp4"));
         assert!(!wildcard("ep??.mp4", "ep1.mp4"));
         assert!(wildcard("*", ""));
+        assert!(wildcard("**", ""));
+        assert!(!wildcard("?", ""));
+        assert!(!wildcard("", "a"));
+        assert!(wildcard("*s01*", "Show S01E02.mkv"));
+        assert!(wildcard("a*b*c", "aXbYbZc"));
+        assert!(!wildcard("a*b*c", "aXbYbZ"));
+        assert!(wildcard("*ab", "aab"));
+        assert!(!wildcard("*.mkv", "film.mkv.part"));
+        assert!(wildcard("Ü*", "über.mkv"));
+    }
+
+    #[test]
+    fn many_stars_match_in_linear_time() {
+        // A rule of twelve stars against a name of 255 characters that keeps
+        // matching the text between them and fails only at its end: trying
+        // every split of the name between the stars would never finish.
+        let pattern = format!("{}*b", "*a".repeat(11));
+        assert_eq!(pattern.matches('*').count(), 12);
+        let name = "a".repeat(255);
+        let started = std::time::Instant::now();
+        assert!(!wildcard(&pattern, &name));
+        assert!(wildcard(&pattern, &format!("{name}b")));
+        assert!(started.elapsed() < std::time::Duration::from_secs(1));
     }
 
     #[test]

@@ -216,6 +216,53 @@ fn style_and_placement_settings_become_mpvs_options() {
 }
 
 #[test]
+fn subtitle_folders_reach_mpv_as_one_path_list() {
+    let mut h = Harness::new("folders", |_| {});
+    let separator = if cfg!(windows) { ';' } else { ':' };
+    // A folder whose name holds the list's separator, one that ends with a
+    // backslash (on Windows its own separator) and one after it.
+    let odd = format!("odd{separator}name");
+    let mut settings = h.app.settings.clone();
+    settings.subtitles.folders = vec![
+        "subs".to_owned(),
+        odd.clone(),
+        "a,b".to_owned(),
+        "ends\\".to_owned(),
+        "last".to_owned(),
+    ];
+    let applied = h.app.apply_settings(&h.engine, settings);
+    assert!(applied.notes.is_empty(), "{:?}", applied.notes);
+    // mpv looks in each folder (it prints the list in a form that differs
+    // between versions): the video's subtitles in two of them load.
+    for folder in [odd.as_str(), "last"] {
+        let folder = h.dir.join(folder);
+        std::fs::create_dir_all(&folder).expect("folder");
+        std::fs::write(folder.join("clip.srt"), SRT).expect("write the subtitles");
+    }
+    h.engine.set_text("sub-auto", "exact").expect("sub-auto");
+    h.engine
+        .command("rescan-external-files", &[])
+        .expect("rescan");
+    let found = |engine: &Engine| -> Vec<String> {
+        let mut files: Vec<String> = engine
+            .get_json("track-list")
+            .and_then(|list| list.as_array().cloned())
+            .unwrap_or_default()
+            .iter()
+            .filter_map(|track| track["external-filename"].as_str().map(str::to_owned))
+            .collect();
+        files.sort();
+        files
+    };
+    h.wait("the subtitles of both folders", |_, engine| {
+        found(engine).len() == 2
+    });
+    let files = found(&h.engine);
+    assert!(files[0].contains("last"), "{files:?}");
+    assert!(files[1].contains(&odd), "{files:?}");
+}
+
+#[test]
 fn edits_show_at_once_and_save_writes_the_sync_into_the_file() {
     let mut h = Harness::new("edit", |_| {});
     let file = h.add_subtitle("clip.srt", SRT);
