@@ -62,8 +62,10 @@ time.
   original is `woffko/rvp-private`. Kit runs set `RVP_KIT_LABEL`
   (`ubuntu-boot`, `ubuntu-vm`) for their reports' names.
 - The first alpha, v0.1.0-alpha.1 (792c29f), is a pre-release on the
-  repository's Releases page: the Windows installer and portable ZIP
-  built in WSL, the Linux AppImage and .deb from CI, and SHA256SUMS.txt.
+  repository's Releases page: the Linux AppImage and .deb from CI, and
+  SHA256SUMS.txt. Its Windows installer and portable ZIP (built in WSL)
+  were withdrawn on 2026-11-21: they were packaged with an older libmpv
+  build than the one a release takes.
   The AviSynth+ headers' licence file is missing from the Linux
   packages' notices (no licence file at the top of their repository).
 - Wayland: a second `rvp` cannot hand the window its activation token
