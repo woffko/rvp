@@ -13,7 +13,7 @@ export QMAKE=$DEPS/bin/qmake-msvc-cross
 export MPV_LIB_DIR=$DEPS/win/mpv-lib
 
 cd "$SPIKES"
-cargo xwin build --release --target "$TARGET" -p s1-svp-attach -p s2-vapoursynth -p s3-qt-shell -p host-session
+cargo xwin build --release --locked --target "$TARGET" -p s1-svp-attach -p s2-vapoursynth -p s3-qt-shell -p host-session
 out=$SPIKES/target/$TARGET/release
 win=$DEPS/win
 

@@ -1,7 +1,8 @@
 //! Build automation for the RVP workspace.
 //!
 //! `cargo xtask ci` runs the same checks as the GitHub Actions workflow:
-//! formatting, clippy with warnings denied, the test suite and `cargo deny`.
+//! formatting, clippy with warnings denied, the test suite and `cargo deny`
+//! (on this workspace and on the spikes' own).
 //! `cargo xtask look DIR` writes the files built from RVP's own art (the
 //! icons, the logo images and the default skin) to `DIR`.
 //!
@@ -118,6 +119,13 @@ fn ci() -> Result<(), String> {
     )?;
     run("cargo", &["test", "--workspace", "--locked"])?;
     run("cargo", &["deny", "--locked", "check"])?;
+    // The spikes are a workspace of their own (outside this one's
+    // members), checked by their own lock file as CI's deny job does.
+    let spikes = concat!(env!("CARGO_MANIFEST_DIR"), "/../spikes/Cargo.toml");
+    run(
+        "cargo",
+        &["deny", "--manifest-path", spikes, "--locked", "check"],
+    )?;
     println!("xtask ci: all checks passed");
     Ok(())
 }

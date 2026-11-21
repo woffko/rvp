@@ -727,7 +727,7 @@ step_build() {
         QMAKE=$(qt_dir)/bin/qmake
         export MPV_LIB_DIR
         MPV_LIB_DIR=$(mpv_lib_dir)
-        cargo build --release -p s1-svp-attach -p s2-vapoursynth -p s3-qt-shell
+        cargo build --release --locked -p s1-svp-attach -p s2-vapoursynth -p s3-qt-shell
     ) > "$log" 2>&1
     if [ -x "$REPO/spikes/target/release/s3-qt-shell" ]; then
         record build PASS "spikes built"
