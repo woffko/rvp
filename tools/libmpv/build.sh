@@ -96,6 +96,8 @@ ls -l "$BUILD"/mpv-dev-*.7z
 ARCHIVE=$(ls -t "$BUILD"/mpv-dev-*.7z | head -1)
 for source in "$WORK"/src_packages/*/; do
     [ -d "$source/.git" ] || continue
+    # A checkout an earlier build left: this one builds without it.
+    [ "$(basename "$source")" = libdvdcss ] && continue
     base=$(git -C "$source" merge-base HEAD '@{upstream}' 2> /dev/null || git -C "$source" rev-parse HEAD)
     printf '%s %s\n' "$(basename "$source")" "$base"
 done > "${ARCHIVE%.7z}-sources.txt"

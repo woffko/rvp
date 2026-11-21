@@ -52,7 +52,8 @@ smoothing for users without SVP, after a study of the engines.
   `Cargo.toml` (a new version also changes `Cargo.lock` and
   `spikes/Cargo.lock`, which name the workspace's crates: run `cargo
   metadata` in both, or `--locked` fails). Nothing else is published (no
-  AUR upload, no stores).
+  AUR upload, no stores) but the libmpv archive CI's Windows jobs build
+  with (D22, the release `libmpv-<date>`).
 - Nothing about the owner's machines goes into the repository: their
   addresses, accounts, folders and hardware are in `AGENTS.local.md`
   (see "Test environments"), and commits use GitHub's no-reply address
@@ -241,7 +242,7 @@ smoothing for users without SVP, after a study of the engines.
   the current position. While a file loads, the old file's end is ignored
   (`Tracking::Loading`), or the album moves on twice.
 - FFmpeg differs between Linux (6.1 in CI and the sysroot) and Windows
-  (shinchiro's, newer): use options every version has. `afir` normalizes
+  (RVP's own build, newer): use options every version has. `afir` normalizes
   its response itself (6.1 has no `irnorm`), so Freeverb's response is
   written at a level every version leaves alone (`audio/dsp.rs`);
   `headphone` lowers its output by 3 dB per input channel. mpv refuses
@@ -519,6 +520,13 @@ smoothing for users without SVP, after a study of the engines.
   THIRD-PARTY.txt and the licence files of what it bundles
   (`package.py --licences`: `tools/libmpv/licences.sh`'s folder on
   Windows, the kit's libmpv `share/licenses` on Linux).
+- Programs and libraries carry the paths they were built at (the Rust
+  registry's, Qt's headers, the libmpv build's sources), which on the
+  owner's machine name the account: `package.py` gives the builder's home
+  folder a neutral name of the same length in every file of the Windows
+  bundle and in the libmpv archive (`scrub_builder_paths`; a PE file's
+  checksum is set again) and fails when one is left. Check a file that
+  goes out some other way the same way (`strings FILE | grep /home/`).
 - The registered types are `packaging/associations.tsv` (the installer,
   the `.desktop` file, MPRIS). RVP only registers itself as a handler and
   never makes itself the default (owner, 2026-10-16). The installer is per
@@ -820,10 +828,10 @@ smoothing for users without SVP, after a study of the engines.
   `tools/libmpv/build.sh` fail on DVDCSS strings; `package.py --discs`
   refuses such files, and `package.py` refuses a package with a library
   that holds libdvdcss's `DVDCSS_` strings, `without_libdvdcss`); a user
-  may put their own beside `rvp.exe`. A release's Windows packages take
-  the newest libmpv `tools/libmpv/build.sh` made, never an older build
-  and never CI's: CI's packages are test artifacts made with shinchiro's
-  libmpv, which has libdvdcss inside, and pass `--test-libmpv` to say so.
+  may put their own beside `rvp.exe`. A release's Windows packages and
+  CI's Windows jobs take the same libmpv, never an older build: the
+  archive of the repository's release `libmpv-<date>` (D22,
+  `tools/libmpv/README.md`, "The published archive").
   libdvdread is built with `-mno-ms-bitfields` like libdvdnav (MinGW's
   default layout broke the button rectangles).
 - A disc's menu sizes and places come unchecked: the Blu-ray plane

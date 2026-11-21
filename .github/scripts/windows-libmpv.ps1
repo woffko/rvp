@@ -1,17 +1,24 @@
-# Fetches libmpv for the Windows CI job (the shinchiro build used since goal B)
-# and makes an MSVC import library from the DLL's exports. Sets MPV_LIB_DIR
-# for the linker and adds the DLL's folder to PATH for the tests.
+# Fetches libmpv for the Windows CI job and makes an MSVC import library
+# from the DLL's exports. Sets MPV_LIB_DIR for the linker and adds the DLL's
+# folder to PATH for the tests.
+#
+# The libmpv is RVP's own build (tools/libmpv/build.sh: no libdvdcss, with
+# FFmpeg's Vulkan filters), the one the releases' Windows packages carry,
+# so CI tests what is shipped and its packages hold nothing a release may
+# not. It is a file of this repository's release `libmpv-<date>`
+# (tools/libmpv/README.md, "The published archive"; D22). Until 2026-11-21
+# CI took shinchiro's build, which has libdvdcss inside.
 $ErrorActionPreference = 'Stop'
-$tag = '20261010'
-$asset = 'mpv-dev-x86_64-20261010-git-b2c255c13e.7z'
-# The archive's SHA-256 (GitHub's digest of the release asset): checked
-# after a download and on a cache hit alike.
-$sha256 = '394490ed6354c2294b87c63dfa3663b23524b5551aace9cbe35c4085682b14fa'
+$tag = 'libmpv-20261029'
+$asset = 'rvp-mpv-dev-x86_64-20261029-git-6ee40e64d3.7z'
+# The archive's SHA-256 (`package.py libmpv` prints it): checked after a
+# download and on a cache hit alike.
+$sha256 = '23a407f24c4e3072af86e1fffb6c9e65b0363bbc15229dbfe772e84ee0dba6cb'
 $dir = Join-Path $env:RUNNER_TEMP 'libmpv'
 New-Item -ItemType Directory -Force $dir | Out-Null
 $archive = Join-Path $dir $asset
 if (-not (Test-Path $archive)) {
-    gh release download $tag -R shinchiro/mpv-winbuild-cmake -p $asset -D $dir --clobber
+    gh release download $tag -R woffko/rvp -p $asset -D $dir --clobber
 }
 $found = (Get-FileHash -Algorithm SHA256 $archive).Hash.ToLowerInvariant()
 if ($found -ne $sha256) {

@@ -30,7 +30,8 @@ The recipe takes every other package at its newest commit, so a later
 build may need another pin like these.
 
 Nothing built here is committed: the result is a `mpv-dev-x86_64-*.7z` in
-the work folder, which takes the place of shinchiro's for the packages.
+the work folder, which takes the place of shinchiro's for the packages
+and, since 2026-11-21, for CI (see "The published archive").
 
 ## Build host
 
@@ -58,7 +59,30 @@ checksums) into `~/rvp-deps/mpv-root`, enters it as root of a user
 namespace that maps only the caller's user, installs the packages and
 meson there, and runs `build.sh` inside with the work folder and the
 checkout (read-only) mounted at their own paths. The system's packages
-stay as they are. RVP's libmpv of 2026-10-19 was built this way.
+stay as they are. RVP's libmpv of 2026-10-19 and of 2026-10-29 were built
+this way.
+
+## The published archive
+
+CI and the releases' Windows packages take the same libmpv: the newest
+archive `build.sh` made, as `package.py libmpv` prepares it:
+
+    python3 tools/packaging/package.py libmpv \
+        --archive WORK/build64/mpv-dev-x86_64-DATE-git-HASH.7z --out OUT --sevenzip 7z
+
+It refuses an archive with libdvdcss inside, gives the build host's paths
+inside `libmpv-2.dll` a neutral name of the same length (they name the
+builder's account; nothing else in the file changes but its checksum),
+packs the archive again as `rvp-mpv-dev-...7z` and prints its SHA-256.
+That file, the commits of its sources (`build.sh`'s `...-sources.txt`)
+and the licence files of what it holds (`licences.sh`'s folder, packed)
+are the files of the repository's release `libmpv-DATE`: a pre-release
+that is a build input, not a download for users (D22).
+`.github/scripts/windows-libmpv.ps1` names the release, the file and its
+SHA-256. After a new build, publish the new archive first, change those
+three there and the caches' key in `.github/workflows/ci.yml`, and build
+the packages with the DLL of the published archive, so CI tests the
+library a release carries.
 
 ## Size and time
 

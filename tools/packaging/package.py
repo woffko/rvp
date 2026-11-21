@@ -32,9 +32,11 @@ usage:
       [--objdump PATH]
   package.py linux --exe rvp --qt QT --mpv DIR --look DIR --out DIR
       --runtime APPIMAGE_RUNTIME [--whisper DIR] [--vapoursynth DIR] [--mksquashfs PATH]
+  package.py libmpv --archive mpv-dev-*.7z --out DIR [--sevenzip PATH]
 """
 
 import argparse
+import array
 import time
 import hashlib
 import json
@@ -166,20 +168,145 @@ def pe_imports(objdump: str, path: Path) -> list[str]:
     return [line.split(":", 1)[1].strip() for line in output.splitlines() if "DLL Name:" in line]
 
 
-def without_libdvdcss(root: Path, pattern: str, excused: frozenset[str] = frozenset()) -> None:
+def without_libdvdcss(root: Path, pattern: str) -> None:
     """RVP never ships libdvdcss (goal R's decision): no library of a
     package may hold its code, which the names of its settings show
     (`DVDCSS_METHOD`...; tools/libmpv/build.sh and tools/discs/build.sh
     look for the same in what they build). A libdvdread that only loads
-    the user's own libdvdcss has none of them. `excused` is CI's test
-    libmpv, by its file name (--test-libmpv)."""
+    the user's own libdvdcss has none of them. CI's packages are checked
+    like a release's: CI takes RVP's own libmpv too (D22)."""
     for library in sorted(root.rglob(pattern)):
-        if library.is_file() and not library.is_symlink() and library.name not in excused:
+        if library.is_file() and not library.is_symlink():
             if b"DVDCSS_" in library.read_bytes():
                 raise SystemExit(
                     f"{library} contains libdvdcss, which RVP never ships: "
                     "a package takes RVP's own libmpv (tools/libmpv/build.sh)"
                 )
+
+
+# Files whose bytes cannot be changed in place: an archive keeps a
+# checksum of each member.
+ARCHIVES = (".jar", ".zip", ".7z", ".whl", ".gz", ".xz", ".bz2", ".cab")
+
+
+def neutral_paths(home: str) -> list[tuple[bytes, bytes]]:
+    """The builder's home folder in the forms a program may hold it (with
+    either separator, as UTF-8 and as UTF-16), each with what takes its
+    place: the same path with the account's name written as so many
+    letters of `rvp`, so that every string keeps its length and its place
+    in the file (`/home/NAME/.cargo/...` is `/home/rvp.../.cargo/...`)."""
+    pairs = []
+    for form in dict.fromkeys((home, home.replace("\\", "/"), home.replace("/", "\\"))):
+        cut = max(form.rfind("/"), form.rfind("\\")) + 1
+        name = form[cut:]
+        other = form[:cut] + ("rvp" * len(name))[: len(name)]
+        if name and other != form:
+            for encoding in ("utf-8", "utf-16-le"):
+                pairs.append((form.encode(encoding), other.encode(encoding)))
+    return pairs
+
+
+def pe_checksum_offset(data: bytes) -> int | None:
+    """Where a Windows program or library keeps its checksum (the optional
+    header's CheckSum), or None for another kind of file."""
+    if len(data) < 0x40 or data[:2] != b"MZ":
+        return None
+    pe = int.from_bytes(data[0x3C:0x40], "little")
+    if pe % 2 or pe + 24 + 68 > len(data) or data[pe : pe + 4] != b"PE\0\0":
+        return None
+    return pe + 24 + 64
+
+
+def pe_checksum(data: bytes, at: int) -> int:
+    """The checksum Windows' own tools compute (CheckSumMappedFile): the
+    file's 16-bit words added with their carries, the field itself left
+    out, plus the file's length."""
+    words = array.array("H")
+    words.frombytes(data[: len(data) & ~1])
+    if sys.byteorder != "little":
+        words.byteswap()
+    total = sum(words) - words[at // 2] - words[at // 2 + 1]
+    if len(data) & 1:
+        total += data[-1]
+    while total >> 16:
+        total = (total & 0xFFFF) + (total >> 16)
+    return (total + len(data)) & 0xFFFFFFFF
+
+
+def with_pe_checksum(before: bytes, after: bytes) -> bytes:
+    """`after` with its checksum set again when `before` had a right one
+    (MinGW's linker writes it, lld-link leaves zero): a changed file with a
+    stale checksum looks tampered with."""
+    at = pe_checksum_offset(before)
+    if at is None:
+        return after
+    stored = int.from_bytes(before[at : at + 4], "little")
+    if stored == 0 or stored != pe_checksum(before, at):
+        return after
+    return after[:at] + pe_checksum(after, at).to_bytes(4, "little") + after[at + 4 :]
+
+
+def scrub_builder_paths(root: Path, home: str) -> None:
+    """Programs and libraries carry the paths they were built at, in the
+    texts of their assertions and panics: the Rust registry and toolchain,
+    Qt's headers, the sources of the libmpv, disc and whisper builds, all
+    under the builder's home folder, whose last part is an account's name.
+    Nothing about the builder's machine goes out with RVP (D21), so each
+    such path gets a neutral name of the same length (`neutral_paths`) in
+    every file under `root`, and none may be left. The paths only show in
+    messages: nothing looks a file up by them on another machine."""
+    pairs = neutral_paths(home)
+    places = files = 0
+    for path in sorted(root.rglob("*")):
+        if not path.is_file() or path.is_symlink():
+            continue
+        data = path.read_bytes()
+        found = sum(data.count(old) for old, _ in pairs)
+        if not found:
+            continue
+        if path.suffix.lower() in ARCHIVES:
+            raise SystemExit(f"{path} holds the builder's folder {home}: an archive cannot be changed in place")
+        changed = data
+        for old, other in pairs:
+            changed = changed.replace(old, other)
+        times = path.stat()
+        path.write_bytes(with_pe_checksum(data, changed))
+        # The file's time stays: the same input gives the same archive.
+        os.utime(path, ns=(times.st_atime_ns, times.st_mtime_ns))
+        places += found
+        files += 1
+    for path in sorted(root.rglob("*")):
+        if path.is_file() and not path.is_symlink():
+            data = path.read_bytes()
+            if any(old in data for old, _ in pairs):
+                raise SystemExit(f"{path} still holds the builder's folder {home}")
+    if places:
+        print(f"paths: the builder's folder made neutral in {places} places of {files} files")
+
+
+def libmpv_archive(args) -> None:
+    """RVP's libmpv for Windows as CI and the packages take it: the
+    archive tools/libmpv/build.sh made, refused with libdvdcss inside,
+    its builder's paths made neutral, packed again under RVP's name. The
+    result goes onto the repository's release `libmpv-<date>`, where
+    .github/scripts/windows-libmpv.ps1 fetches it and checks its SHA-256,
+    which this prints."""
+    source = Path(args.archive).resolve()
+    out = Path(args.out)
+    out.mkdir(parents=True, exist_ok=True)
+    target = (out / f"rvp-{source.name}").resolve()
+    with tempfile.TemporaryDirectory() as work:
+        folder = Path(work) / "libmpv"
+        folder.mkdir()
+        subprocess.run([args.sevenzip, "x", "-y", "-bso0", f"-o{folder}", str(source)], check=True)
+        if not (folder / "libmpv-2.dll").is_file():
+            raise SystemExit(f"{source} has no libmpv-2.dll")
+        without_libdvdcss(folder, "*.dll")
+        scrub_builder_paths(folder, str(Path.home()))
+        target.unlink(missing_ok=True)
+        names = sorted(entry.name for entry in folder.iterdir())
+        subprocess.run([args.sevenzip, "a", "-t7z", "-mx=9", "-bso0", str(target), *names], cwd=folder, check=True)
+    print(f"{hashlib.sha256(target.read_bytes()).hexdigest()}  {target.name}")
 
 
 def windows_bundle(args, bundle: Path) -> None:
@@ -249,13 +376,8 @@ def windows_bundle(args, bundle: Path) -> None:
     remote_folder(Path(args.look), bundle)
     shutil.copy2(ROOT / "LICENSE", bundle / "LICENSE.txt")
     third_party(args, bundle, "licenses", "LICENSE.txt", "x86_64-pc-windows-msvc")
-    # CI builds and tests with shinchiro's libmpv, which has libdvdcss
-    # inside: its packages are test artifacts and say so; a release never
-    # passes --test-libmpv, so a wrong libmpv stops it here.
-    excused = frozenset({Path(args.mpv).name}) if args.test_libmpv else frozenset()
-    without_libdvdcss(bundle, "*.dll", excused)
-    if args.test_libmpv:
-        print(f"bundle: a TEST package, with {Path(args.mpv).name} as given (not for a release)")
+    without_libdvdcss(bundle, "*.dll")
+    scrub_builder_paths(bundle, str(Path.home()))
     print(f"bundle: {len(copied)} Qt libraries in {bundle}")
 
 
@@ -908,11 +1030,6 @@ def main() -> int:
     win.add_argument("--exe", required=True)
     win.add_argument("--qt", required=True)
     win.add_argument("--mpv", required=True)
-    win.add_argument(
-        "--test-libmpv",
-        action="store_true",
-        help="CI's test packages only: take a libmpv that contains libdvdcss as it is (never a release)",
-    )
     win.add_argument("--runtime", required=True)
     win.add_argument("--vapoursynth", help="RVP's VapourSynth runtime (tools/packaging/vapoursynth.py)")
     win.add_argument("--whisper", help="whisper.cpp's CPU and Vulkan engine (tools/whisper/build.sh)")
@@ -934,6 +1051,10 @@ def main() -> int:
     lin.add_argument("--vapoursynth", help="RVP's VapourSynth runtime (tools/vapoursynth/build-linux.sh)")
     lin.add_argument("--mksquashfs", default="mksquashfs")
     lin.add_argument("--licences", help="libmpv's components' licence files (the kit's libmpv)")
+    mpv = kinds.add_parser("libmpv", help="RVP's libmpv archive for the release CI fetches it from")
+    mpv.add_argument("--archive", required=True, help="tools/libmpv/build.sh's mpv-dev-*.7z")
+    mpv.add_argument("--out", required=True)
+    mpv.add_argument("--sevenzip", default="7z")
     kinds.add_parser("version")
     kinds.add_parser("mime-types", help="the desktop entry's MimeType value")
     args = parser.parse_args()
@@ -941,6 +1062,8 @@ def main() -> int:
         windows(args)
     elif args.kind == "linux":
         linux(args)
+    elif args.kind == "libmpv":
+        libmpv_archive(args)
     elif args.kind == "mime-types":
         print(";".join(mime_types()) + ";")
     else:
