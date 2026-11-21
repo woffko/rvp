@@ -1,6 +1,7 @@
 // The current user's registry (M14's Association page): RVP's types, verbs
 // and AutoPlay handlers under HKEY_CURRENT_USER, as rvp_app::registration
-// lists them, and the shell told when they change. Nothing elsewhere.
+// lists them, and the shell told when they change; and a file's short path
+// for the screen saver setting. Nothing elsewhere.
 
 #include "shell.h"
 
@@ -82,6 +83,26 @@ bool rvp_registry_has_key(rust::Str key)
     (void)key;
     return false;
 #endif
+}
+
+rust::String rvp_short_path(rust::Str path)
+{
+#ifdef Q_OS_WIN
+    // Windows reads SCRNSAVE.EXE as one path without quotes: the short
+    // form has no spaces where the volume keeps short names.
+    const std::wstring wide_path = wide(path);
+    const DWORD size = GetShortPathNameW(wide_path.c_str(), nullptr, 0);
+    if (size > 0) {
+        std::wstring buffer(size, L'\0');
+        const DWORD length = GetShortPathNameW(wide_path.c_str(), buffer.data(), size);
+        if (length > 0 && length < size) {
+            buffer.resize(length);
+            const QByteArray text = QString::fromStdWString(buffer).toUtf8();
+            return rust::String(text.constData(), static_cast<std::size_t>(text.size()));
+        }
+    }
+#endif
+    return rust::String(path.data(), path.size());
 }
 
 bool Tools::registry_has_value(const QString &key, const QString &name) const

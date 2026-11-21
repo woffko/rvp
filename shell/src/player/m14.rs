@@ -1183,9 +1183,11 @@ impl qobject::Player {
         })
     }
 
+    /// Screen Saver > Set up; with `settings` Windows' screen saver
+    /// settings open after it (the registry self-test opens none).
     // A QML invokable, so a method even though it asks the system only.
     #[allow(clippy::unused_self)]
-    pub(crate) fn use_as_screensaver(&self) -> QString {
+    pub(crate) fn use_as_screensaver(&self, settings: bool) -> QString {
         if !cfg!(windows) {
             return QString::from("RVP is a screen saver on Windows only.");
         }
@@ -1197,13 +1199,18 @@ impl qobject::Player {
             return QString::from("rvp.scr is missing beside rvp.exe.");
         };
         let desktop = r"Control Panel\Desktop";
-        let saver = saver.display().to_string();
+        // Windows reads the value as one path without quotes, so a folder
+        // with a space (a profile's) goes in by its short name.
+        let saver = crate::ffi::bridge::rvp_short_path(&saver.display().to_string());
         if !(crate::ffi::bridge::rvp_registry_set(desktop, "SCRNSAVE.EXE", &saver)
             && crate::ffi::bridge::rvp_registry_set(desktop, "ScreenSaveActive", "1"))
         {
             return QString::from("Windows' screen saver setting could not be changed.");
         }
-        let opened = std::process::Command::new("control.exe")
+        if !settings {
+            return QString::from("RVP is the screen saver.");
+        }
+        let opened = std::process::Command::new(system_program("control.exe"))
             .arg("desk.cpl,,@screensaver")
             .spawn()
             .is_ok();
@@ -1220,11 +1227,7 @@ impl qobject::Player {
         if !cfg!(windows) {
             return false;
         }
-        let system = std::env::var_os("SystemRoot").map_or_else(
-            || std::path::PathBuf::from(r"C:\Windows"),
-            std::path::PathBuf::from,
-        );
-        let mut command = std::process::Command::new(system.join("System32").join("ie4uinit.exe"));
+        let mut command = std::process::Command::new(system_program("ie4uinit.exe"));
         command.arg("-show");
         #[cfg(windows)]
         {
@@ -1364,6 +1367,18 @@ impl qobject::Player {
             self.as_mut().set_panel_opacity(panel);
         }
     }
+}
+
+/// One of Windows' own programs by its full path in System32: a program
+/// of that name in RVP's folder or on the PATH is never started instead.
+fn system_program(name: &str) -> std::path::PathBuf {
+    std::env::var_os("SystemRoot")
+        .map_or_else(
+            || std::path::PathBuf::from(r"C:\Windows"),
+            std::path::PathBuf::from,
+        )
+        .join("System32")
+        .join(name)
 }
 
 /// The battery's charge for the misc info: Windows' power status, or

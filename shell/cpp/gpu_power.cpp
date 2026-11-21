@@ -124,11 +124,14 @@ void *openNvml()
     // System32 only: never a DLL of that name found on the PATH.
     HMODULE module = LoadLibraryExW(L"nvml.dll", nullptr, LOAD_LIBRARY_SEARCH_SYSTEM32);
     if (module == nullptr) {
+        // Older drivers' NVSMI folder, by its full path; the libraries it
+        // needs come from that folder and System32 alone.
         wchar_t path[MAX_PATH];
         const DWORD length = ExpandEnvironmentStringsW(
             L"%ProgramW6432%\\NVIDIA Corporation\\NVSMI\\nvml.dll", path, MAX_PATH);
-        if (length > 0 && length <= MAX_PATH)
-            module = LoadLibraryExW(path, nullptr, LOAD_WITH_ALTERED_SEARCH_PATH);
+        if (length > 0 && length <= MAX_PATH && path[0] != L'%')
+            module = LoadLibraryExW(path, nullptr,
+                                    LOAD_LIBRARY_SEARCH_DLL_LOAD_DIR | LOAD_LIBRARY_SEARCH_SYSTEM32);
     }
     return module;
 #else

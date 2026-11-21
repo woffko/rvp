@@ -8,7 +8,14 @@
 # then BlackSpace) and writes crash logs (a panic, and a native crash with a
 # minidump). The uninstaller then removes all of it:
 # every registry key the installer touched reads as it did before, and the
-# folder is gone. Then the installer installs and uninstalls in each of
+# folder is gone. A second installation, in a folder with a space,
+# registers all RVP registers itself from its settings (`--selftest=registry
+# --registry-check`: the Run value, the folders' and the types' verbs, the
+# AutoPlay handlers, a type of the user's, the screen saver by its short
+# path), and its uninstaller removes all of it. Where Unified Remote is
+# installed, the installer leaves an RVP folder there alone that it did not
+# make, and a junction in its place, and the uninstaller removes nothing
+# through a junction. Then the installer installs and uninstalls in each of
 # its languages (`/LANG=LANGID`, kept for the uninstaller). Last, the
 # portable ZIP runs its self-test with its settings next to rvp.exe.
 #
@@ -163,6 +170,152 @@ Check 'defaults_still_unchanged' ((Defaults) -eq $defaults)
 Check 'other_programs_kept' ((Test-Path 'HKCU:\Software\Classes\.m4b') -and
     ((Get-Item 'HKCU:\Software\Classes\.mka\OpenWithProgids').Property -contains 'OtherPlayer.mka'))
 Remove-Item -Recurse -Force 'HKCU:\Software\Classes\.m4b', 'HKCU:\Software\Classes\.mka' -ErrorAction SilentlyContinue
+
+# Runs the uninstaller of the installation in `$Folder` and waits until
+# its copy in %TEMP% removed the folder.
+function Uninstall([string]$Folder) {
+    Start-Process -Wait -FilePath "$Folder\uninstall.exe" -ArgumentList '/S'
+    $deadline = (Get-Date).AddSeconds(120)
+    while ((Test-Path $Folder) -and (Get-Date) -lt $deadline) { Start-Sleep -Milliseconds 500 }
+}
+
+Write-Host '== what RVP registers itself, installed in a folder with a space'
+$handlers = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\AutoplayHandlers'
+# rvp_app::registration::AUTOPLAY's events.
+$events = @('PlayVideoFilesOnArrival', 'PlayMusicFilesOnArrival', 'PlayCDAudioOnArrival', 'PlayVideoCDMovieOnArrival',
+    'PlaySuperVideoCDMovieOnArrival', 'PlayDVDMovieOnArrival', 'PlayBluRayOnArrival')
+$desktop = 'HKCU:\Control Panel\Desktop'
+# RVP's own entries that are there now, a line each.
+function OwnRegistration {
+    $lines = @()
+    $run = (Get-ItemProperty 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run' -ErrorAction SilentlyContinue).RVP
+    if ($run) { $lines += "Run RVP = $run" }
+    $saver = (Get-ItemProperty $desktop -ErrorAction SilentlyContinue).'SCRNSAVE.EXE'
+    if ($saver -like '*rvp.scr') { $lines += "SCRNSAVE.EXE = $saver" }
+    $keys = @('HKCU:\Software\Classes\Directory\shell\RVP.play', 'HKCU:\Software\Classes\RVP.AutoPlay',
+        'HKCU:\Software\Classes\RVP.rvptest')
+    foreach ($event in $events) { $keys += "$handlers\Handlers\RVP$event" }
+    foreach ($type in ($types + 'rvptest')) { $keys += "HKCU:\Software\Classes\SystemFileAssociations\.$type\shell\RVP.play" }
+    foreach ($key in $keys) { if (Test-Path $key) { $lines += $key } }
+    foreach ($event in $events) {
+        $value = (Get-ItemProperty "$handlers\EventHandlers\$event" -ErrorAction SilentlyContinue)."RVP$event"
+        if ($null -ne $value) { $lines += "EventHandlers\$event RVP$event" }
+    }
+    $progids = (Get-Item 'HKCU:\Software\Classes\.rvptest\OpenWithProgids' -ErrorAction SilentlyContinue).Property
+    if ($progids -contains 'RVP.rvptest') { $lines += '.rvptest OpenWithProgids RVP.rvptest' }
+    return $lines
+}
+# The keys around RVP's entries that RVP makes when they are missing: the
+# ones the VM did not have go again after the check.
+$containers = @('HKCU:\Software\Classes\Directory', 'HKCU:\Software\Classes\.rvptest', "$handlers\Handlers",
+    "$handlers\EventHandlers") + ($events | ForEach-Object { "$handlers\EventHandlers\$_" }) +
+    (($types + 'rvptest') | ForEach-Object { "HKCU:\Software\Classes\SystemFileAssociations\.$_" })
+$newContainers = @($containers | Where-Object { -not (Test-Path $_) })
+$saverBefore = (Get-ItemProperty $desktop -ErrorAction SilentlyContinue).'SCRNSAVE.EXE'
+$activeBefore = (Get-ItemProperty $desktop -ErrorAction SilentlyContinue).ScreenSaveActive
+$ownBefore = @(OwnRegistration)
+$snapshotBefore = Snapshot
+$spaced = "$m8\R V P"
+Remove-Item -Recurse -Force $spaced -ErrorAction SilentlyContinue
+# One string: NSIS takes /D= last and unquoted, spaces and all.
+Start-Process -Wait -FilePath $setup.FullName -ArgumentList "/S /D=$spaced"
+Check 'spaced_installed' (Test-Path "$spaced\rvp.scr") $spaced
+$registryHome = "$m8\home-registry"
+$registryOut = "$m8\out-registry"
+Remove-Item -Recurse -Force $registryHome, $registryOut -ErrorAction SilentlyContinue
+New-Item -ItemType Directory -Force "$registryHome\config", $registryOut | Out-Null
+Set-Content -Path "$registryHome\config\settings.json" -Value '{ "ipc-server": "" }' -Encoding ascii
+$output = RunRvp "$spaced\rvp.exe" @('--selftest=registry', '--registry-check', "--out=$registryOut",
+    '--mpv-options=ao=null') $registryHome
+$output | Select-String '^check |^failures=' | ForEach-Object { Write-Host "  $($_.Line)" }
+$result = ($output | Select-String '^failures=(\d+)' | Select-Object -Last 1)
+Check 'registry_selftest' ($null -ne $result -and $result.Matches[0].Groups[1].Value -eq '0') "$result"
+$own = @(OwnRegistration)
+$expected = 2 + 3 + $events.Count + $types.Count + 1 + $events.Count + 1
+Check 'own_registration_written' ($ownBefore.Count -eq 0 -and $own.Count -eq $expected) "$($own.Count) of $expected entries"
+# Windows reads SCRNSAVE.EXE as one unquoted path.
+$saver = (Get-ItemProperty $desktop -ErrorAction SilentlyContinue).'SCRNSAVE.EXE'
+$short = (New-Object -ComObject Scripting.FileSystemObject).GetFile("$spaced\rvp.scr").ShortPath
+if ($short -match ' ') {
+    Write-Host "check screen_saver_short_path=PASS SKIPPED this volume keeps no short names: $saver"
+} else {
+    Check 'screen_saver_short_path' ($saver -eq $short) "$saver (short $short)"
+}
+Uninstall $spaced
+Check 'spaced_folder_removed' (-not (Test-Path $spaced)) $spaced
+$left = @(OwnRegistration)
+Check 'own_registration_removed' ($left.Count -eq 0) ($left -join '; ')
+$snapshotAfter = Snapshot
+Check 'spaced_registry_as_before' ($snapshotAfter -eq $snapshotBefore) 'every key the installer touched'
+if ($snapshotAfter -ne $snapshotBefore) {
+    Compare-Object ($snapshotBefore -split "`n") ($snapshotAfter -split "`n") | ForEach-Object { Write-Host "  $($_.SideIndicator) $($_.InputObject)" }
+}
+# The VM as it was: its own screen saver, and none of the keys RVP made.
+if ($null -ne $saverBefore) { Set-ItemProperty $desktop -Name 'SCRNSAVE.EXE' -Value $saverBefore }
+else { Remove-ItemProperty $desktop -Name 'SCRNSAVE.EXE' -ErrorAction SilentlyContinue }
+if ($null -ne $activeBefore) { Set-ItemProperty $desktop -Name ScreenSaveActive -Value $activeBefore }
+else { Remove-ItemProperty $desktop -Name ScreenSaveActive -ErrorAction SilentlyContinue }
+Remove-ItemProperty 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run' -Name RVP -ErrorAction SilentlyContinue
+foreach ($key in $newContainers) { Remove-Item -Recurse -Force $key -ErrorAction SilentlyContinue }
+Remove-Item -Recurse -Force $registryHome, $registryOut -ErrorAction SilentlyContinue
+
+# Unified Remote's custom remotes are shared by the computer's users: the
+# installer copies the remote only into an RVP folder it makes itself or
+# one its earlier installation noted, never through a junction, and the
+# uninstaller removes nothing through one.
+$remotes = 'C:\ProgramData\Unified Remote\Remotes'
+if (-not (Test-Path $remotes)) {
+    Write-Host 'check remote_folder_checks=PASS SKIPPED Unified Remote is not installed'
+} else {
+    Write-Host '== the remote''s folder: another one there, or a junction in its place'
+    $custom = "$remotes\Custom"
+    $remoteDir = "$custom\RVP"
+    $target = "$m8\junction-target"
+    $aside = "$custom\RVP-aside"
+    # A junction goes by rmdir: a recursive Remove-Item would empty its target.
+    function RemoveRemoteDir([string]$Path) {
+        if (-not (Test-Path $Path)) { return }
+        if ((Get-Item $Path -Force).Attributes -band [IO.FileAttributes]::ReparsePoint) { cmd /c rmdir "$Path" | Out-Null }
+        else { Remove-Item -Recurse -Force $Path }
+    }
+    function Noted { (Get-ItemProperty 'HKCU:\Software\RVP' -Name UnifiedRemote -ErrorAction SilentlyContinue).UnifiedRemote }
+    RemoveRemoteDir $remoteDir
+    RemoveRemoteDir $aside
+    Remove-Item -Recurse -Force $target -ErrorAction SilentlyContinue
+    New-Item -ItemType Directory -Force $target | Out-Null
+
+    # An RVP folder no installation of this user made.
+    New-Item -ItemType Directory -Force $remoteDir | Out-Null
+    Set-Content -Path "$remoteDir\other.txt" -Value 'not RVP''s' -Encoding ascii
+    Remove-Item -Recurse -Force $dir -ErrorAction SilentlyContinue
+    Start-Process -Wait -FilePath $setup.FullName -ArgumentList '/S'
+    $names = @(Get-ChildItem $remoteDir -Force | ForEach-Object { $_.Name })
+    Check 'remote_foreign_folder_skipped' (($names -join ',') -eq 'other.txt' -and -not (Noted)) "$($names -join ',') noted $(Noted)"
+    Uninstall $dir
+    Check 'remote_foreign_folder_kept' (Test-Path "$remoteDir\other.txt")
+    RemoveRemoteDir $remoteDir
+
+    # A junction in the folder's place before the installation.
+    cmd /c mklink /J "$remoteDir" "$target" | Out-Null
+    Start-Process -Wait -FilePath $setup.FullName -ArgumentList '/S'
+    $names = @(Get-ChildItem $target -Force | ForEach-Object { $_.Name })
+    Check 'remote_junction_skipped' ($names.Count -eq 0 -and -not (Noted)) "$($names -join ',') noted $(Noted)"
+    Uninstall $dir
+    RemoveRemoteDir $remoteDir
+
+    # A junction put in place of the installed remote: the uninstaller
+    # deletes nothing through it.
+    Start-Process -Wait -FilePath $setup.FullName -ArgumentList '/S'
+    Check 'remote_copied_into_its_own_folder' ((Test-Path "$remoteDir\remote.lua") -and (Noted) -eq $remoteDir) "noted $(Noted)"
+    Rename-Item $remoteDir $aside
+    Set-Content -Path "$target\remote.lua" -Value '-- not RVP''s' -Encoding ascii
+    cmd /c mklink /J "$remoteDir" "$target" | Out-Null
+    Uninstall $dir
+    Check 'remote_uninstall_skips_junction' (Test-Path "$target\remote.lua") $target
+    RemoveRemoteDir $remoteDir
+    RemoveRemoteDir $aside
+    Remove-Item -Recurse -Force $target -ErrorAction SilentlyContinue
+}
 
 # The installer in each of its languages (M19): Windows' language here is
 # English, so the LANGID comes from the command line; the installer keeps

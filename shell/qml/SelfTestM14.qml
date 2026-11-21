@@ -4,7 +4,11 @@
 // in a translation (--language=CODE, default the first built in; with
 // --selftest=language these steps alone), and the settings window's
 // search and Reset Page. Input goes
-// through Player's handlers, as in the functional check.
+// through Player's handlers, as in the functional check. On Windows with
+// --registry-check it writes the Run value and the file types to the
+// current user's registry and removes them; --selftest=registry
+// --registry-check writes all RVP registers itself and leaves it, for the
+// uninstaller's check (the test VM's m8-all.ps1).
 //
 // Files: testdata/media/fixture-60s.mkv, then fixture-tone.ogg (no video:
 // the audio skin when the skin has one). With --skin=BlackSpace_en.dsf the
@@ -51,9 +55,12 @@ Item {
         const s = t.status()
         switch (t.step) {
         case 0:
-            // --selftest=language: the language steps alone.
+            // --selftest=language: the language steps alone;
+            // --selftest=registry: the registration left in place.
             if (t.mode === "language")
                 t.step = 30
+            else if (t.mode === "registry")
+                t.step = 40
             else
                 t.next()
             break
@@ -623,6 +630,31 @@ Item {
         case 39:
             t.finish()
             break
+        case 40: {
+            // --selftest=registry --registry-check (m8-all.ps1 on the test
+            // VM only): everything RVP registers itself from its settings,
+            // left in place for the uninstaller to remove: the Run value,
+            // the folders' and the types' verbs, every AutoPlay handler, a
+            // type of the user's and the screen saver.
+            if (Qt.platform.os !== "windows" || !player.has_option("registry-check")) {
+                t.check("registry_left", true, "SKIPPED: Windows with --registry-check only")
+                t.finish()
+                break
+            }
+            setSetting("general.run-at-startup", true)
+            setSetting("associations.folder-menu", true)
+            setSetting("associations.add-menu", true)
+            setSetting("associations.play-menu", true)
+            setSetting("associations.autoplay", ["video", "audio", "cd", "vcd", "svcd", "dvd", "bluray"])
+            setSetting("associations.extra", { "rvptest": "video" })
+            const applied = player.apply_associations()
+            const saver = player.use_as_screensaver(false)
+            const run = Tools.registry_has_value("Software\\Microsoft\\Windows\\CurrentVersion\\Run", "RVP")
+            t.check("registry_left", run && applied.indexOf("Applied:") === 0 && saver === "RVP is the screen saver.",
+                    "run " + run + ", " + applied + " " + saver)
+            t.finish()
+            break
+        }
         }
     }
 }

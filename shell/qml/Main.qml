@@ -1834,6 +1834,11 @@ Window {
     //                         --language=CODE (default: the first
     //                         translation built in) loads, and every text
     //                         of the settings window fits its control
+    //   --selftest=registry   with --registry-check (the test VM only):
+    //                         M14's registration of everything RVP
+    //                         registers itself (SelfTestM14.qml), left in
+    //                         place for the uninstaller's check
+    //                         (tools/windows-vm/m8-all.ps1)
     //   --selftest=tour       the README's screenshots (SelfTestTour.qml,
     //                         tools/screenshots/tour.sh): the player with
     //                         its playlist, the menu, settings pages, the
@@ -1989,7 +1994,7 @@ Window {
             return vlcTick()
         if (selftest.mode === "tour")
             return tourTick()
-        if (selftest.mode === "language")
+        if (selftest.mode === "language" || selftest.mode === "registry")
             return m14Tick()
         functionalTick()
     }

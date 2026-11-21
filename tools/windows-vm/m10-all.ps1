@@ -16,7 +16,8 @@
 #    lists the request under SYSTEM only (a probe asking for both from
 #    PowerShell showed the same); DISPLAY is printed for the record.
 # 3. The recording's file: a RIFF WAVE whose sizes match its length (the
-#    VM has no device, so it may hold no samples).
+#    VM has no device, so it may hold no samples); a recording Windows
+#    refused leaves no file.
 # 4. The audio chain's level tests and the speakers' mix on Windows' own
 #    FFmpeg (the bundle's libmpv-2.dll).
 param([string]$Exe = 'C:\rvp-test\rvp-bundle\rvp.exe')
@@ -70,7 +71,11 @@ Write-Host "check awake_request_released=$(if ($after.Count -eq 0) { 'PASS' } el
 
 Write-Host '== recording file'
 $wav = "$out\recording.wav"
-if (Test-Path $wav) {
+$refused = Select-String -Path "$out\stdout.txt", "$out\stderr.txt" -Pattern '^check recording_starts=SKIPPED' `
+    -Quiet -ErrorAction SilentlyContinue
+if ($refused) {
+    Write-Host "check recording_refused_leaves_no_file=$(if (Test-Path $wav) { 'FAIL' } else { 'PASS' })"
+} elseif (Test-Path $wav) {
     $bytes = [System.IO.File]::ReadAllBytes($wav)
     $riff = [System.Text.Encoding]::ASCII.GetString($bytes, 0, 4)
     $wave = [System.Text.Encoding]::ASCII.GetString($bytes, 8, 4)

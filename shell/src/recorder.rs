@@ -137,6 +137,21 @@ impl WavWriter {
         Ok(())
     }
 
+    /// Ends a take that ran with `result`: a take without a frame leaves
+    /// no file behind, one with frames keeps them with its sizes even
+    /// when the capture failed. Returns the frames, or the failure.
+    fn end(self, path: &Path, result: Result<(), String>) -> Result<u64, String> {
+        if self.frames == 0 && result.is_err() {
+            drop(self);
+            drop(std::fs::remove_file(path));
+            return result.map(|()| 0);
+        }
+        let finished = self
+            .finish()
+            .map_err(|error| format!("Audio recording: {error}"));
+        result.and(finished)
+    }
+
     /// Writes the sizes (a RIFF file ends at 4 GiB).
     fn finish(mut self) -> std::io::Result<u64> {
         use std::io::{Seek as _, SeekFrom, Write as _};
@@ -231,10 +246,7 @@ fn capture(
             break;
         }
     }
-    let frames = wav
-        .finish()
-        .map_err(|error| format!("Audio recording: {error}"))?;
-    failure.map_or(Ok(frames), Err)
+    wav.end(path, failure.map_or(Ok(()), Err))
 }
 
 #[cfg(windows)]
@@ -470,8 +482,8 @@ fn windows_capture(
             CoUninitialize();
         }
     }
-    result?;
-    writer.finish().map_err(|e| format!("Audio recording: {e}"))
+    // A failed start (no loopback, no audio engine) leaves no empty file.
+    writer.end(path, result)
 }
 
 #[cfg(test)]
@@ -496,6 +508,35 @@ mod tests {
         assert_eq!(u32::from_le_bytes(bytes[40..44].try_into().expect("4")), 40);
         assert_eq!(u32::from_le_bytes(bytes[4..8].try_into().expect("4")), 76);
         assert_eq!(bytes[44..48], 0.5f32.to_le_bytes());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_take_without_frames_leaves_no_file() {
+        let dir = std::env::temp_dir().join(format!("rvp-recorder-end-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let path = dir.join("take.wav");
+        // A start that failed: no file, the failure.
+        let writer = WavWriter::create(&path).expect("create");
+        assert_eq!(
+            writer.end(&path, Err("no loopback".to_owned())),
+            Err("no loopback".to_owned())
+        );
+        assert!(!path.exists());
+        // A take that stopped without a frame is still a file.
+        let writer = WavWriter::create(&path).expect("create");
+        assert_eq!(writer.end(&path, Ok(())), Ok(0));
+        assert_eq!(std::fs::metadata(&path).expect("file").len(), 44);
+        // One that failed later keeps its frames with their sizes.
+        let mut writer = WavWriter::create(&path).expect("create");
+        writer.silence(2).expect("silence");
+        assert_eq!(
+            writer.end(&path, Err("device lost".to_owned())),
+            Err("device lost".to_owned())
+        );
+        let bytes = std::fs::read(&path).expect("read");
+        assert_eq!(bytes.len(), 44 + 2 * 8);
+        assert_eq!(u32::from_le_bytes(bytes[40..44].try_into().expect("4")), 16);
         let _ = std::fs::remove_dir_all(&dir);
     }
 

@@ -3260,7 +3260,7 @@ ApplicationWindow {
                         RowLayout {
                             Button {
                                 text: qsTr("Set up…")
-                                onClicked: screenSaverResult.text = win.player.use_as_screensaver()
+                                onClicked: screenSaverResult.text = win.player.use_as_screensaver(true)
                             }
                             Button { text: qsTr("Preview"); onClicked: Tools.run_self(["--screensaver"]) }
                         }

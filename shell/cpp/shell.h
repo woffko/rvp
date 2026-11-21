@@ -201,6 +201,7 @@ bool rvp_registry_set(rust::Str key, rust::Str name, rust::Str value);
 bool rvp_registry_delete_value(rust::Str key, rust::Str name);
 bool rvp_registry_delete_key(rust::Str key);
 bool rvp_registry_has_key(rust::Str key);
+rust::String rvp_short_path(rust::Str path);
 void rvp_associations_changed();
 rust::String rvp_tts_voices();
 // Tools::interface_languages for Rust (the Interface Language menu).

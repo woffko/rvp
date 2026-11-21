@@ -449,10 +449,10 @@ pub mod qobject {
         fn touch_swipe(self: Pin<&mut Self>, dx: f64, dy: f64);
 
         /// Screen Saver > Set up: RVP's `rvp.scr` as the current user's
-        /// screen saver and Windows' settings opened (Windows); the outcome
-        /// as text.
+        /// screen saver and, with `settings`, Windows' settings opened
+        /// (Windows); the outcome as text.
         #[qinvokable]
-        fn use_as_screensaver(self: &Self) -> QString;
+        fn use_as_screensaver(self: &Self, settings: bool) -> QString;
 
         /// Loads a subtitle file for the playing video.
         #[qinvokable]

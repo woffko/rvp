@@ -99,6 +99,9 @@ pub mod bridge {
         fn rvp_registry_delete_key(key: &str) -> bool;
         fn rvp_registry_has_key(key: &str) -> bool;
         fn rvp_associations_changed();
+        /// A file's short (8.3) path on Windows; the path as it is when
+        /// the volume keeps no short names, and outside Windows.
+        fn rvp_short_path(path: &str) -> String;
         /// Windows' speech (`cpp/tts.cpp`, M14's Accessibility page): the
         /// voices' and outputs' names (JSON lists, empty elsewhere), and
         /// a text read aloud in place of the one being read (`rate` -10

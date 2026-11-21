@@ -190,8 +190,12 @@ void rvp_taskbar_start(bool enabled)
         for (int i = 0; i < 4; ++i)
             state.icons[i] = drawIcon(i);
         if (FAILED(CoCreateInstance(CLSID_TaskbarList, nullptr, CLSCTX_INPROC_SERVER,
-                                    IID_PPV_ARGS(&state.list)))
-            || FAILED(state.list->HrInit())) {
+                                    IID_PPV_ARGS(&state.list)))) {
+            state.list = nullptr;
+            return;
+        }
+        if (FAILED(state.list->HrInit())) {
+            state.list->Release();
             state.list = nullptr;
             return;
         }
@@ -237,12 +241,13 @@ void rvp_taskbar_state(std::int32_t state, double progress)
         bar.playing = playing;
         updateButtons();
     }
-    if (state == 0 || progress < 0.0) {
+    // Below 0 or not a number: no progress.
+    if (state == 0 || !(progress >= 0.0)) {
         bar.list->SetProgressState(window, TBPF_NOPROGRESS);
         return;
     }
     bar.list->SetProgressState(window, state == 2 ? TBPF_PAUSED : TBPF_NORMAL);
-    const double clamped = progress < 0.0 ? 0.0 : progress > 1.0 ? 1.0 : progress;
+    const double clamped = progress > 1.0 ? 1.0 : progress;
     bar.list->SetProgressValue(window, static_cast<ULONGLONG>(clamped * 10000.0), 10000);
 #else
     (void)state;

@@ -103,8 +103,9 @@ void apply(HWND window)
             CombineRgn(region, region, cut, RGN_DIFF);
             DeleteObject(cut);
         }
-        // The window owns the region from here.
-        SetWindowRgn(window, region, FALSE);
+        // The window owns the region from here, unless Windows refused it.
+        if (SetWindowRgn(window, region, FALSE) == 0)
+            DeleteObject(region);
     }
     SetWindowPos(window, HWND_TOP, place.rect.left, place.rect.top, std::max(1, width), std::max(1, height),
                  SWP_NOACTIVATE | SWP_NOOWNERZORDER | (shown ? SWP_SHOWWINDOW : SWP_HIDEWINDOW));
