@@ -200,11 +200,22 @@ fn client_messages_without_arguments_or_utf8_arrive_safely() {
         .engine
         .command("script-message", &[])
         .expect("a message without arguments");
-    // `osd-ass-cc/0` is mpv's OSD escape, the single byte 0xFD.
+    // A binding's command is input.conf text, where `\xNN` is one byte:
+    // 0xFD alone is no UTF-8 in any mpv (the OSD escape `${osd-ass-cc/0}`
+    // was that byte only before mpv 0.39). The key is handled in mpv's own
+    // time, so the test waits for its message before it sends the last.
     player
         .engine
-        .command("expand-properties", &["script-message", "${osd-ass-cc/0}"])
+        .command("keybind", &["F12", r#"script-message "\xFD""#])
+        .expect("a binding");
+    player
+        .engine
+        .command("keypress", &["F12"])
         .expect("a message that is not UTF-8");
+    let invalid = EngineEvent::Error("InvalidUtf8".to_owned());
+    player.wait("the message that is not UTF-8", |_, events| {
+        events.contains(&invalid)
+    });
     player
         .engine
         .command("script-message", &["after"])
@@ -218,11 +229,7 @@ fn client_messages_without_arguments_or_utf8_arrive_safely() {
         .collect();
     assert_eq!(
         messages,
-        [
-            &EngineEvent::ClientMessage(Vec::new()),
-            &EngineEvent::Error("InvalidUtf8".to_owned()),
-            &after
-        ]
+        [&EngineEvent::ClientMessage(Vec::new()), &invalid, &after]
     );
 }
 
