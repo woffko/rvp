@@ -169,7 +169,9 @@ impl qobject::Player {
     }
 
     /// The Remote page's view: `enabled`, `listening`, `address`, the
-    /// `error` that stops it and the `commands` carried out.
+    /// `error` that stops it and the `commands` carried out; for the
+    /// self-test, the server's requests by how they showed the token
+    /// (`bearer`, `signed`) and those it `refused`.
     pub(crate) fn control_info(&self) -> QString {
         let Some(core) = self.core() else {
             return QString::from("{}");
@@ -179,6 +181,11 @@ impl qobject::Player {
             .server
             .as_ref()
             .map(|server| format!("http://{}/", server.address()));
+        let counts = remote
+            .server
+            .as_ref()
+            .map(Server::counts)
+            .unwrap_or_default();
         QString::from(
             &json!({
                 "enabled": core.app.settings.remote.enabled,
@@ -186,6 +193,9 @@ impl qobject::Player {
                 "address": address,
                 "error": remote.error,
                 "commands": remote.commands,
+                "bearer": counts.bearer,
+                "signed": counts.signed,
+                "refused": counts.refused,
             })
             .to_string(),
         )

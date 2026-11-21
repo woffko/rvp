@@ -19,9 +19,12 @@
 #    /client/request; its manager's /system/remote/run does not run
 #    actions in 3.13) while RVP's M15 self-test serves
 #    the control API (--remote-serve, before its own calls): the actions
-#    reach RVP with the token the remote reads where an installed RVP keeps
-#    it (%APPDATA%\RVP\remote-token: the run's state folder is there). The
-#    self-test's own checks follow, and the token must not be in its log.
+#    reach RVP signed with the token the remote reads where an installed
+#    RVP keeps it (%APPDATA%\RVP\remote-token: the run's state folder is
+#    there), and no request from outside carries the token itself
+#    (m15_outside_signed, m15_outside_no_token: this script waits for the
+#    API through GET /api/nonce, which needs none). The self-test's own
+#    checks follow, and the token must not be in its log.
 # 3. RVP's uninstaller removes the remote's files, and only those.
 # 4. The headless tests: the control API (control.exe) and the remote's
 #    files (remote.exe).
@@ -110,17 +113,19 @@ $rvp = Start-Process -FilePath $Exe -WorkingDirectory $bundle -PassThru -NoNewWi
         "--out=$out", '--mpv-options=ao=null', "`"$bundle\fixture-60s.mkv`"")
 # Read now, or the exit code is lost.
 $null = $rvp.Handle
-# The self-test serves first: wait until the API answers with the token
-# (the redirected log cannot be read while RVP writes it).
+# The self-test serves first: wait until the token file is there and the
+# API hands out a nonce, without the token, so that every request from
+# outside during the serve is the remote's (the redirected log cannot be
+# read while RVP writes it).
 $tokenFile = "$appState\remote-token"
 $deadline = (Get-Date).AddSeconds(60)
 $up = $false
 while (-not $up -and (Get-Date) -lt $deadline -and -not $rvp.HasExited) {
     Start-Sleep -Milliseconds 500
     if (-not (Test-Path $tokenFile)) { continue }
-    $headers = @{ Authorization = 'Bearer ' + (Get-Content $tokenFile -Raw).Trim() }
     try {
-        $up = (Invoke-WebRequest -UseBasicParsing 'http://127.0.0.1:48931/api/status' -Headers $headers -TimeoutSec 5).StatusCode -eq 200
+        $nonce = (Invoke-WebRequest -UseBasicParsing 'http://127.0.0.1:48931/api/nonce' -TimeoutSec 5).Content | ConvertFrom-Json
+        $up = $nonce.nonce -match '^[0-9a-f]{32}$'
     } catch {
         $up = $false
     }

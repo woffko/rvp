@@ -1,6 +1,10 @@
 -- RVP's remote for Unified Remote (M15). It controls RVP through RVP's
 -- control API on this computer (http://127.0.0.1:PORT, which RVP's Remote
--- Control settings page turns on), with RVP's token on every request.
+-- Control settings page turns on). The token never leaves this computer's
+-- remote: each request asks RVP for a nonce and carries a signature over
+-- it, made with the token (the protocol is in RVP's
+-- crates/app/src/control/mod.rs), so a program that took the port while RVP
+-- was off learns nothing it could use against RVP.
 --
 -- Settings (settings.prop, editable in Unified Remote's manager): port,
 -- RVP's port (48931 unless the page changed it), and token. With an empty
@@ -18,14 +22,170 @@ local server = libs.server
 local timer = libs.timer
 local fs = libs.fs
 
--- RVP's last status, the status timer while the remote shows, and what the
--- Albums page lists: the albums (album = nil) or one album's entries.
+-- RVP's last status, the status timer while the remote shows and the
+-- number of its chain, and what the Albums page lists: the albums
+-- (album = nil) or one album's entries.
 local status = nil
 local poll = nil
+local chain = 0
 local album = nil
 local listed = {}
 
 local update
+
+-- SHA-256 (FIPS 180-4) and HMAC (RFC 2104) in plain Lua, written for RVP:
+-- no bit library and no integer operators, so that the same arithmetic
+-- runs on Lua 5.1 to 5.4. A word is a number from 0 to 2^32 - 1; XOR goes
+-- through a table of bytes, AND follows from it (a + b = (a XOR b) +
+-- 2 (a AND b)), and shifts are products and quotients of powers of two.
+-- crates/app/tests/remote.rs runs it against the standard test vectors and
+-- RVP's own signatures.
+
+local WORD = 4294967296
+
+-- XOR of two bytes a and b: XOR8[a * 256 + b + 1]; each from the one of
+-- their upper seven bits, which comes earlier in the loop.
+local XOR8 = { 0 }
+for a = 0, 255 do
+	for b = 0, 255 do
+		if a + b > 0 then
+			local high = XOR8[(a - a % 2) / 2 * 256 + (b - b % 2) / 2 + 1]
+			XOR8[a * 256 + b + 1] = high * 2 + (a + b) % 2
+		end
+	end
+end
+
+local function bxor(a, b)
+	local out, place = 0, 1
+	for _ = 1, 4 do
+		local x, y = a % 256, b % 256
+		out = out + XOR8[x * 256 + y + 1] * place
+		a, b, place = (a - x) / 256, (b - y) / 256, place * 256
+	end
+	return out
+end
+
+local function band(a, b)
+	return (a + b - bxor(a, b)) / 2
+end
+
+-- Rotates right by n bits.
+local function rotr(x, n)
+	local low = x % 2 ^ n
+	return low * 2 ^ (32 - n) + (x - low) / 2 ^ n
+end
+
+local function shr(x, n)
+	return (x - x % 2 ^ n) / 2 ^ n
+end
+
+local K = {
+	0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1, 0x923f82a4, 0xab1c5ed5,
+	0xd807aa98, 0x12835b01, 0x243185be, 0x550c7dc3, 0x72be5d74, 0x80deb1fe, 0x9bdc06a7, 0xc19bf174,
+	0xe49b69c1, 0xefbe4786, 0x0fc19dc6, 0x240ca1cc, 0x2de92c6f, 0x4a7484aa, 0x5cb0a9dc, 0x76f988da,
+	0x983e5152, 0xa831c66d, 0xb00327c8, 0xbf597fc7, 0xc6e00bf3, 0xd5a79147, 0x06ca6351, 0x14292967,
+	0x27b70a85, 0x2e1b2138, 0x4d2c6dfc, 0x53380d13, 0x650a7354, 0x766a0abb, 0x81c2c92e, 0x92722c85,
+	0xa2bfe8a1, 0xa81a664b, 0xc24b8b70, 0xc76c51a3, 0xd192e819, 0xd6990624, 0xf40e3585, 0x106aa070,
+	0x19a4c116, 0x1e376c08, 0x2748774c, 0x34b0bcb5, 0x391c0cb3, 0x4ed8aa4a, 0x5b9cca4f, 0x682e6ff3,
+	0x748f82ee, 0x78a5636f, 0x84c87814, 0x8cc70208, 0x90befffa, 0xa4506ceb, 0xbef9a3f7, 0xc67178f2
+}
+
+-- The four bytes of a word, most significant first.
+local function word_bytes(w)
+	local b4 = w % 256
+	w = (w - b4) / 256
+	local b3 = w % 256
+	w = (w - b3) / 256
+	local b2 = w % 256
+	return string.char((w - b2) / 256, b2, b3, b4)
+end
+
+-- One 64-byte block of `message` from `at` into the state h.
+local function compress(h, message, at)
+	local w = {}
+	for i = 1, 16 do
+		local b1, b2, b3, b4 = string.byte(message, at + i * 4 - 4, at + i * 4 - 1)
+		w[i] = ((b1 * 256 + b2) * 256 + b3) * 256 + b4
+	end
+	for i = 17, 64 do
+		local x, y = w[i - 15], w[i - 2]
+		local s0 = bxor(bxor(rotr(x, 7), rotr(x, 18)), shr(x, 3))
+		local s1 = bxor(bxor(rotr(y, 17), rotr(y, 19)), shr(y, 10))
+		w[i] = (w[i - 16] + s0 + w[i - 7] + s1) % WORD
+	end
+	local a, b, c, d, e, f, g, hh = h[1], h[2], h[3], h[4], h[5], h[6], h[7], h[8]
+	for i = 1, 64 do
+		local s1 = bxor(bxor(rotr(e, 6), rotr(e, 11)), rotr(e, 25))
+		-- Ch(e, f, g) = g XOR (e AND (f XOR g))
+		local ch = bxor(g, band(e, bxor(f, g)))
+		local t1 = (hh + s1 + ch + K[i] + w[i]) % WORD
+		local s0 = bxor(bxor(rotr(a, 2), rotr(a, 13)), rotr(a, 22))
+		-- Maj(a, b, c) = (a AND (b XOR c)) XOR (b AND c)
+		local maj = bxor(band(a, bxor(b, c)), band(b, c))
+		local t2 = (s0 + maj) % WORD
+		hh, g, f, e, d, c, b, a = g, f, e, (d + t1) % WORD, c, b, a, (t1 + t2) % WORD
+	end
+	h[1], h[2], h[3], h[4] = (h[1] + a) % WORD, (h[2] + b) % WORD, (h[3] + c) % WORD, (h[4] + d) % WORD
+	h[5], h[6], h[7], h[8] = (h[5] + e) % WORD, (h[6] + f) % WORD, (h[7] + g) % WORD, (h[8] + hh) % WORD
+end
+
+-- SHA-256 of a string: its 32 bytes.
+local function sha256(message)
+	local bits = #message * 8
+	message = message .. "\128" .. string.rep("\0", (55 - #message) % 64)
+		.. word_bytes((bits - bits % WORD) / WORD) .. word_bytes(bits % WORD)
+	local h = {
+		0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a, 0x510e527f, 0x9b05688c, 0x1f83d9ab, 0x5be0cd19
+	}
+	for at = 1, #message, 64 do
+		compress(h, message, at)
+	end
+	local out = {}
+	for i = 1, 8 do
+		out[i] = word_bytes(h[i])
+	end
+	return table.concat(out)
+end
+
+local function to_hex(bytes)
+	local out = {}
+	for i = 1, #bytes do
+		out[i] = string.format("%02x", string.byte(bytes, i))
+	end
+	return table.concat(out)
+end
+
+-- HMAC-SHA-256 of `message` keyed with `key`: its 32 bytes.
+local function hmac_sha256(key, message)
+	if #key > 64 then
+		key = sha256(key)
+	end
+	key = key .. string.rep("\0", 64 - #key)
+	local inner, outer = {}, {}
+	for i = 1, 64 do
+		local byte = string.byte(key, i)
+		inner[i] = string.char(XOR8[byte * 256 + 0x36 + 1])
+		outer[i] = string.char(XOR8[byte * 256 + 0x5c + 1])
+	end
+	return sha256(table.concat(outer) .. sha256(table.concat(inner) .. message))
+end
+
+-- The Authorization value of a signed request: RVP's scheme, the nonce
+-- and the signature over the port, the nonce, the method, the target and
+-- the body.
+local SCHEME = "RVP-HMAC-SHA256"
+
+local function signed(key, port, nonce, method, target, body)
+	local text = SCHEME .. "\n" .. port .. "\n" .. nonce .. "\n" .. method .. "\n" .. target .. "\n" .. body
+	return SCHEME .. " nonce=" .. nonce .. ", signature=" .. to_hex(hmac_sha256(key, text))
+end
+
+-- crates/app/tests/remote.rs runs the remote with a Lua of its own, which
+-- sets rvp_check to reach these; Unified Remote does not.
+if rvp_check ~= nil then
+	rvp_check.sha256 = function (message) return to_hex(sha256(message)) end
+	rvp_check.hmac = function (key, message) return to_hex(hmac_sha256(key, message)) end
+end
 
 -- Where an installed RVP keeps its state and its settings.
 local function state_folder()
@@ -50,57 +210,102 @@ local function config_folder()
 	return config .. "/rvp"
 end
 
+-- The token: the remote's setting, else the file of an installed RVP
+-- ("" when there is none or it cannot be read).
 local function token()
 	local own = settings.token
 	if own ~= nil and own ~= "" then
-		return own
+		return (string.gsub(own, "%s", ""))
 	end
 	local path = state_folder() .. (OS_WINDOWS and "\\" or "/") .. "remote-token"
 	if fs.exists(path) then
-		return (string.gsub(fs.read(path), "%s", ""))
+		local ok, text = pcall(fs.read, path)
+		if ok and type(text) == "string" then
+			return (string.gsub(text, "%s", ""))
+		end
 	end
 	return ""
 end
 
-local function base()
-	local port = settings.port
-	if port == nil or port == "" then
-		port = "48931"
-	end
-	return "http://127.0.0.1:" .. port
+-- A whole number as text (Lua 5.3 and later write a float's ".0").
+local function whole(n)
+	return string.format("%d", n)
 end
 
--- One request to RVP's control API: its answer, or nil (the title says
--- why).
-local function call(method, path, body)
-	local request = {
-		method = method,
-		url = base() .. path,
-		headers = { Authorization = "Bearer " .. token() }
-	}
-	if body ~= nil then
+-- RVP's port: the setting when it is a whole number from 1 to 65535, else
+-- RVP's default.
+local function port()
+	local n = tonumber(settings.port)
+	if n == nil or n ~= math.floor(n) or n < 1 or n > 65535 then
+		return 48931
+	end
+	return n
+end
+
+-- One exchange with whatever listens on RVP's port: the answer's status
+-- (nil when nothing answered) and its JSON (nil when it is none).
+local function exchange(method, target, content, authorization)
+	local request = { method = method, url = "http://127.0.0.1:" .. whole(port()) .. target }
+	if authorization ~= nil then
+		request.headers = { Authorization = authorization }
+	end
+	if content ~= nil then
 		request.mime = "application/json"
-		request.content = data.tojson(body)
+		request.content = content
 	end
 	local ok, response = pcall(http.request, request)
-	local code = nil
-	if ok and response ~= nil then
-		code = tonumber(response.status)
+	if not ok or response == nil then
+		return nil, nil
 	end
-	if code ~= 200 then
+	local code = tonumber(response.status)
+	if response.content == nil or response.content == "" then
+		return code, {}
+	end
+	local parsed, value = pcall(data.fromjson, response.content)
+	if not parsed then
+		return code, nil
+	end
+	return code, value
+end
+
+-- A nonce of RVP's: 32 hex digits, nothing else.
+local function nonce()
+	local code, answer = exchange("get", "/api/nonce")
+	if code ~= 200 or type(answer) ~= "table" or type(answer.nonce) ~= "string" then
+		return nil, code
+	end
+	if #answer.nonce ~= 32 or string.find(answer.nonce, "[^0-9a-f]") ~= nil then
+		return nil, code
+	end
+	return answer.nonce, code
+end
+
+-- One signed request to RVP's control API: its answer, or nil (the title
+-- says why).
+local function call(method, target, body)
+	local content = nil
+	if body ~= nil then
+		content = data.tojson(body)
+	end
+	local fresh, code = nonce()
+	local value = nil
+	if fresh ~= nil then
+		local authorization = signed(token(), whole(port()), fresh, string.upper(method), target, content or "")
+		code, value = exchange(method, target, content, authorization)
+	elseif code == 200 then
+		code = nil
+	end
+	if code ~= 200 or value == nil then
 		local why = "RVP does not answer: turn on Remote Control in RVP's settings"
 		if code == 401 then
 			why = "RVP refused the token: copy it from RVP's Remote Control page into this remote's settings"
-		elseif code ~= nil then
-			why = "RVP answered " .. code
+		elseif code ~= nil and code ~= 200 then
+			why = "RVP answered " .. whole(code)
 		end
 		server.update({ id = "title", text = why })
 		return nil
 	end
-	if response.content == nil or response.content == "" then
-		return {}
-	end
-	return data.fromjson(response.content)
+	return value
 end
 
 -- Runs one of RVP's actions, as its keys and menus do.
@@ -122,7 +327,7 @@ local function selected(tracks, none)
 	return none
 end
 
-update = function ()
+local function show_status()
 	local now = call("get", "/api/status")
 	if now == nil then
 		return
@@ -154,11 +359,31 @@ update = function ()
 	)
 end
 
+-- Shows RVP's status; an answer the remote cannot show (another program
+-- on the port) says so in the title instead of stopping the caller.
+update = function ()
+	if not pcall(show_status) then
+		pcall(server.update, { id = "title", text = "RVP does not answer: turn on Remote Control in RVP's settings" })
+	end
+end
+
 -- The status once a second while the remote shows; the next request
--- waits for the last one.
-local function tick()
+-- waits for the last one. Each focus starts a chain of its own number and
+-- ends the one before, also when its timer was not cancelled.
+local function tick(mine)
+	if mine ~= chain then
+		return
+	end
 	update()
-	poll = timer.timeout(tick, 1000)
+	poll = timer.timeout(function () tick(mine) end, 1000)
+end
+
+local function stop_polling()
+	chain = chain + 1
+	if poll ~= nil then
+		timer.cancel(poll)
+		poll = nil
+	end
 end
 
 events.detect = function ()
@@ -166,14 +391,12 @@ events.detect = function ()
 end
 
 events.focus = function ()
-	tick()
+	stop_polling()
+	tick(chain)
 end
 
 events.blur = function ()
-	if poll ~= nil then
-		timer.cancel(poll)
-		poll = nil
-	end
+	stop_polling()
 end
 
 local function show_albums()
@@ -196,7 +419,7 @@ local function show_albums()
 end
 
 local function show_album(index)
-	local shown = call("get", "/api/albums/" .. index)
+	local shown = call("get", "/api/albums/" .. whole(index))
 	if shown == nil then
 		return
 	end
@@ -335,7 +558,7 @@ actions.list_tapped = function (index)
 	if album == nil then
 		show_album(target)
 	else
-		call("post", "/api/albums/" .. album .. "/play/" .. target)
+		call("post", "/api/albums/" .. whole(album) .. "/play/" .. whole(target))
 		update()
 	end
 end

@@ -1,6 +1,9 @@
 //! The control API's HTTP/1.1, as little of it as its clients need: one
 //! request per connection (`Connection: close`), a `Content-Length` body
-//! (no chunked bodies), and every part limited ([`super::LIMITS`]).
+//! (no chunked bodies), and every part limited ([`super::LIMITS`]). A
+//! request names its `Host` once, as HTTP/1.1 asks, and its
+//! `Content-Length` at most once: two of either are malformed, so no
+//! reader of the request can take another one than RVP did.
 
 use std::io::{self, Read, Write};
 use std::net::TcpStream;
@@ -12,6 +15,9 @@ use super::Limits;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(super) struct Request {
     pub method: String,
+    /// The request line's target as sent: the path and its query, not
+    /// decoded (signatures cover it).
+    pub target: String,
     /// The path without its query, percent-decoded.
     pub path: String,
     pub query: Vec<(String, String)>,
@@ -94,32 +100,12 @@ pub(super) fn read_request(stream: &mut TcpStream, limits: &Limits) -> Result<Re
         return Err(ReadError::HeadersTooLarge);
     }
     let head = std::str::from_utf8(&buffer[..head_end]).map_err(|_| ReadError::Malformed)?;
-    let mut lines = head.split("\r\n");
-    let mut parts = lines.next().unwrap_or_default().split(' ');
-    let (Some(method), Some(target), Some(version), None) =
-        (parts.next(), parts.next(), parts.next(), parts.next())
-    else {
-        return Err(ReadError::Malformed);
-    };
-    if !version.starts_with("HTTP/1.") || method.is_empty() || !target.starts_with('/') {
-        return Err(ReadError::Malformed);
-    }
-    let mut headers = Vec::new();
-    for line in lines {
-        let (name, value) = line.split_once(':').ok_or(ReadError::Malformed)?;
-        if name.is_empty() || name.contains(char::is_whitespace) {
-            return Err(ReadError::Malformed);
-        }
-        headers.push((name.to_ascii_lowercase(), value.trim().to_owned()));
-    }
-    let has = |name: &str| headers.iter().any(|(key, _)| key == name);
-    if has("transfer-encoding") {
-        return Err(ReadError::Unsupported);
-    }
-    let length = match headers.iter().find(|(key, _)| key == "content-length") {
-        Some((_, value)) => value.parse::<usize>().map_err(|_| ReadError::Malformed)?,
-        None => 0,
-    };
+    let Head {
+        method,
+        target,
+        headers,
+        length,
+    } = parse_head(head)?;
     if length > limits.body_bytes {
         return Err(ReadError::BodyTooLarge);
     }
@@ -142,6 +128,7 @@ pub(super) fn read_request(stream: &mut TcpStream, limits: &Limits) -> Result<Re
     let (path, query) = target.split_once('?').unwrap_or((target, ""));
     Ok(Request {
         method: method.to_owned(),
+        target: target.to_owned(),
         path: decode(path).ok_or(ReadError::Malformed)?,
         query: query
             .split('&')
@@ -154,6 +141,56 @@ pub(super) fn read_request(stream: &mut TcpStream, limits: &Limits) -> Result<Re
             .ok_or(ReadError::Malformed)?,
         headers,
         body,
+    })
+}
+
+/// A request's line and headers.
+#[derive(Debug, PartialEq, Eq)]
+struct Head<'a> {
+    method: &'a str,
+    target: &'a str,
+    headers: Vec<(String, String)>,
+    /// The body's `Content-Length` (0 without one).
+    length: usize,
+}
+
+/// The request line and the headers (`head` without its final blank
+/// line).
+fn parse_head(head: &str) -> Result<Head<'_>, ReadError> {
+    let mut lines = head.split("\r\n");
+    let mut parts = lines.next().unwrap_or_default().split(' ');
+    let (Some(method), Some(target), Some(version), None) =
+        (parts.next(), parts.next(), parts.next(), parts.next())
+    else {
+        return Err(ReadError::Malformed);
+    };
+    if !version.starts_with("HTTP/1.") || method.is_empty() || !target.starts_with('/') {
+        return Err(ReadError::Malformed);
+    }
+    let mut headers = Vec::new();
+    for line in lines {
+        let (name, value) = line.split_once(':').ok_or(ReadError::Malformed)?;
+        if name.is_empty() || name.contains(char::is_whitespace) {
+            return Err(ReadError::Malformed);
+        }
+        headers.push((name.to_ascii_lowercase(), value.trim().to_owned()));
+    }
+    let count = |name: &str| headers.iter().filter(|(key, _)| key == name).count();
+    if count("transfer-encoding") > 0 {
+        return Err(ReadError::Unsupported);
+    }
+    if count("host") != 1 || count("content-length") > 1 {
+        return Err(ReadError::Malformed);
+    }
+    let length = match headers.iter().find(|(key, _)| key == "content-length") {
+        Some((_, value)) => value.parse::<usize>().map_err(|_| ReadError::Malformed)?,
+        None => 0,
+    };
+    Ok(Head {
+        method,
+        target,
+        headers,
+        length,
     })
 }
 
@@ -256,5 +293,29 @@ mod tests {
         assert_eq!(decode("%zz"), None);
         assert_eq!(decode("%4"), None);
         assert_eq!(decode("%FF"), None);
+    }
+
+    #[test]
+    fn a_request_names_its_host_once_and_its_length_at_most_once() {
+        let head =
+            parse_head("POST /api/seek?x=1 HTTP/1.1\r\nHost: 127.0.0.1\r\nContent-Length: 9")
+                .expect("a request");
+        assert_eq!(head.method, "POST");
+        assert_eq!(head.target, "/api/seek?x=1");
+        assert_eq!(head.length, 9);
+        assert!(parse_head("GET / HTTP/1.1\r\nHost: localhost").is_ok());
+        for broken in [
+            "GET / HTTP/1.1",
+            "GET / HTTP/1.1\r\nHost: 127.0.0.1\r\nHost: evil.example",
+            "GET / HTTP/1.1\r\nHost: 127.0.0.1\r\nhost: 127.0.0.1",
+            "POST / HTTP/1.1\r\nHost: 127.0.0.1\r\nContent-Length: 2\r\nContent-Length: 2",
+            "POST / HTTP/1.1\r\nHost: 127.0.0.1\r\nContent-Length: two",
+        ] {
+            assert_eq!(parse_head(broken), Err(ReadError::Malformed), "{broken:?}");
+        }
+        assert_eq!(
+            parse_head("POST / HTTP/1.1\r\nHost: 127.0.0.1\r\nTransfer-Encoding: chunked"),
+            Err(ReadError::Unsupported)
+        );
     }
 }

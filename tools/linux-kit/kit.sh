@@ -2162,10 +2162,12 @@ except Exception as error:  # noqa: BLE001 - every failure is the check's
 PY
 }
 
-# Waits until RVP's control API on PORT answers with the token in FILE
-# (read here: never on a command line or in the log). Exit 0 when it does.
+# Waits until RVP's control API on PORT hands out a nonce (no token: the
+# self-test checks that no request from outside carries it) and FILE, where
+# the remote reads the token, holds one. Exit 0 when both are so.
 kit_api_up() {
     python3 -I - "$1" "$2" << 'PY'
+import os
 import sys
 import time
 import urllib.request
@@ -2175,10 +2177,9 @@ deadline = time.time() + 60
 while time.time() < deadline:
     time.sleep(0.5)
     try:
-        token = open(path).read().strip()
-        request = urllib.request.Request(f"http://127.0.0.1:{port}/api/status",
-                                         headers={"Authorization": "Bearer " + token})
-        with urllib.request.urlopen(request, timeout=5) as answer:
+        if os.path.getsize(path) == 0:
+            continue
+        with urllib.request.urlopen(f"http://127.0.0.1:{port}/api/nonce", timeout=5) as answer:
             if answer.status == 200:
                 sys.exit(0)
     except (OSError, ValueError):
@@ -2283,7 +2284,8 @@ step_m15() {
         wait "$rvp"
         echo "kit_exit=$?" >> "$LOG_DIR/m15-selftest.out"
         cat "$LOG_DIR/m15-selftest.out" >> "$log"
-        word=$(kit_judge m15 selftest m15_outside_commands) || bad=$((bad + 1))
+        word=$(kit_judge m15 selftest m15_outside_commands m15_outside_signed m15_outside_no_token) ||
+            bad=$((bad + 1))
         summary="$word unified_remote:on"
         # The token stays out of RVP's log (grep reads it from the file).
         if [ -s "$RVP_STATE_DIR/remote-token" ]; then
@@ -2305,9 +2307,12 @@ step_m15() {
         # Its own process only, by its pidfile.
         [ -s "$pidfile" ] && kill "$(cat "$pidfile")" 2> /dev/null
     fi
-    # The control API and the remote's files, headless.
+    # The control API and the remote's files, headless; with a Lua of the
+    # system's, the remote's signatures too.
     (
         export RVP_TESTDATA=$media RVP_REMOTE_DIR=$REPO/remote/unified-remote/RVP
+        RVP_LUA=${RVP_LUA:-$(command -v lua5.1 lua5.4 lua5.3 luajit lua 2> /dev/null | head -1)}
+        [ -n "$RVP_LUA" ] && export RVP_LUA
         kit_cargo_test "$log" -p rvp-app --test control --test remote -- --test-threads=1
     ) || bad=$((bad + 1))
     kit_result m15 "$bad" "$summary"

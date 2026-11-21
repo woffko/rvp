@@ -47,6 +47,13 @@ jobs:
           python3 -I tools/test-clips/make-m16-bluray.py "$RUNNER_TEMP/m16-bd"
           echo "RVP_DVD_MENU=$RUNNER_TEMP/m16-dvd" >> "$GITHUB_ENV"
           echo "RVP_BD_MENU=$RUNNER_TEMP/m16-bd" >> "$GITHUB_ENV"
+      - name: Lua 5.1 for the remote's signatures (Linux)
+        # tests/remote.rs runs remote.lua's SHA-256, HMAC and signed
+        # requests with it (Unified Remote's Lua is 5.1-style).
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get install -y lua5.1
+          echo "RVP_LUA=$(command -v lua5.1)" >> "$GITHUB_ENV"
       - name: Qt
         uses: jurplel/install-qt-action@v4
         with:

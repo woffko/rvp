@@ -5,6 +5,10 @@
 //! out the commands the server hands it, drains the player and publishes
 //! the status; clients run on threads of their own.
 //!
+//! Without a player: signed requests (nonces and signatures), slow
+//! clients that hold neither the server's threads nor its stop, huge long
+//! polls, and the `Host` and `Content-Length` rules.
+//!
 //! `RVP_TESTDATA` points at `testdata/media` when the test runs elsewhere
 //! (the Windows VM).
 
@@ -17,7 +21,7 @@ use std::sync::mpsc::{self, Receiver};
 use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
 
-use rvp_app::control::{self, Command, Limits, Reply, Server};
+use rvp_app::control::{self, Command, Counts, Limits, Reply, Server, sign};
 use rvp_app::{App, Settings};
 use rvp_engine::{Engine, EngineOptions};
 use serde_json::Value;
@@ -33,6 +37,8 @@ const TEST_LIMITS: Limits = Limits {
     connections: 6,
     long_poll: Duration::from_secs(30),
     command: Duration::from_millis(800),
+    nonce_life: Duration::from_secs(10),
+    nonces: 64,
 };
 
 fn media(name: &str) -> String {
@@ -71,12 +77,24 @@ fn request(
     body: Option<&str>,
     token: Option<&str>,
 ) -> Vec<u8> {
+    let authorization = token.map(|token| format!("Bearer {token}"));
+    request_with(address, method, path, body, authorization.as_deref())
+}
+
+/// A request with this `Authorization` (none for `None`).
+fn request_with(
+    address: SocketAddr,
+    method: &str,
+    path: &str,
+    body: Option<&str>,
+    authorization: Option<&str>,
+) -> Vec<u8> {
     let mut raw = format!(
         "{method} {path} HTTP/1.1\r\nHost: 127.0.0.1:{}\r\n",
         address.port()
     );
-    if let Some(token) = token {
-        let _ = write!(raw, "Authorization: Bearer {token}\r\n");
+    if let Some(authorization) = authorization {
+        let _ = write!(raw, "Authorization: {authorization}\r\n");
     }
     let body = body.unwrap_or("");
     if method == "POST" {
@@ -544,4 +562,389 @@ fn window_thread(h: &mut Harness) {
         "longest publish {:?}, longest command {:?}",
         h.longest_publish, h.longest_command
     );
+}
+
+/// A server without a player: its dispatch answers every command at once.
+fn bare_server(limits: Limits) -> Server {
+    let dispatch: control::Dispatch = Arc::new(|_command, reply: Reply| {
+        let _ = reply.send(Ok(serde_json::json!({})));
+    });
+    Server::start_with(0, TOKEN.to_owned(), dispatch, limits).expect("server")
+}
+
+/// A nonce from `GET /api/nonce`, asked without a token.
+fn nonce(address: SocketAddr) -> String {
+    let (status, value) = exchange(address, &request(address, "GET", "/api/nonce", None, None));
+    assert_eq!(status, 200, "{value}");
+    let nonce = value["nonce"].as_str().expect("a nonce").to_owned();
+    assert!(
+        nonce.len() == 32
+            && nonce
+                .bytes()
+                .all(|b| matches!(b, b'0'..=b'9' | b'a'..=b'f')),
+        "{nonce}"
+    );
+    nonce
+}
+
+/// A request signed with `token` for `signed` (method, target, body, port)
+/// that sends `sent` (method, target, body).
+fn signed_request(
+    address: SocketAddr,
+    nonce: &str,
+    token: &str,
+    signed: (&str, &str, &str, u16),
+    sent: (&str, &str, &str),
+) -> Vec<u8> {
+    let (method, target, body, port) = signed;
+    let authorization = sign::authorization(token, port, nonce, method, target, body.as_bytes());
+    let (method, target, body) = sent;
+    let body = (method == "POST").then_some(body);
+    request_with(address, method, target, body, Some(&authorization))
+}
+
+/// `GET /api/status` signed with `token` over `nonce`.
+fn status_signed(address: SocketAddr, nonce: &str, token: &str) -> Vec<u8> {
+    let (method, target, port) = ("GET", "/api/status", address.port());
+    signed_request(
+        address,
+        nonce,
+        token,
+        (method, target, "", port),
+        (method, target, ""),
+    )
+}
+
+/// Signed requests: the token never travels, each part of the request is
+/// covered, and a nonce serves one request within its life; `Bearer`
+/// still serves scripts.
+#[test]
+fn signed_requests_carry_no_token() {
+    let limits = Limits {
+        nonce_life: Duration::from_millis(600),
+        nonces: 4,
+        ..TEST_LIMITS
+    };
+    let server = bare_server(limits);
+    let address = server.address();
+    signatures_pass_once(address);
+    signatures_cover_every_part(address);
+    nonces_are_young_and_few(address, &limits);
+
+    // The nonces are for this computer's programs, not for web pages; the
+    // token still serves scripts.
+    let mut raw = request(address, "GET", "/api/nonce", None, None);
+    raw.splice(
+        raw.len() - 2..raw.len() - 2,
+        b"Origin: http://evil.example\r\n".iter().copied(),
+    );
+    assert_eq!(exchange(address, &raw).0, 403);
+    let raw = request(address, "POST", "/api/nonce", Some(""), Some(TOKEN));
+    assert_eq!(exchange(address, &raw).0, 405);
+    let raw = request(address, "GET", "/api/status", None, Some(TOKEN));
+    assert_eq!(exchange(address, &raw).0, 200);
+    assert_eq!(
+        server.counts(),
+        Counts {
+            bearer: 2,
+            signed: 4 + limits.nonces as u64,
+            // A spent nonce, four parts, another token, a nonce RVP did
+            // not give, no signature, an old nonce and a dropped one.
+            refused: 10,
+        }
+    );
+}
+
+/// A signed GET and POST pass; a nonce serves once.
+fn signatures_pass_once(address: SocketAddr) {
+    let raw = status_signed(address, &nonce(address), TOKEN);
+    let (status, value) = exchange(address, &raw);
+    assert_eq!(status, 200, "{value}");
+    assert_eq!(value["state"], "", "{value}");
+    let (status, value) = exchange(address, &raw);
+    assert_eq!(status, 401, "a spent nonce: {value}");
+    assert!(
+        value["error"].as_str().is_some_and(|e| e.contains("nonce")),
+        "{value}"
+    );
+    let port = address.port();
+    for (method, target, body) in [
+        ("POST", "/api/seek", r#"{"to":12}"#),
+        ("POST", "/api/action/play-pause", ""),
+        ("GET", "/api/status?since=0&wait=0", ""),
+    ] {
+        let raw = signed_request(
+            address,
+            &nonce(address),
+            TOKEN,
+            (method, target, body, port),
+            (method, target, body),
+        );
+        assert_eq!(exchange(address, &raw).0, 200, "{method} {target}");
+    }
+}
+
+/// Each part counts: what was signed is not what was sent.
+fn signatures_cover_every_part(address: SocketAddr) {
+    let port = address.port();
+    for (signed, sent, what) in [
+        (
+            ("POST", "/api/seek", r#"{"to":12}"#, port),
+            ("POST", "/api/seek", r#"{"to":13}"#),
+            "another body",
+        ),
+        (
+            ("GET", "/api/status", "", port),
+            ("GET", "/api/status?since=1", ""),
+            "another query",
+        ),
+        (
+            ("GET", "/api/action/play-pause", "", port),
+            ("POST", "/api/action/play-pause", ""),
+            "another method",
+        ),
+        (
+            ("GET", "/api/status", "", port.wrapping_add(1)),
+            ("GET", "/api/status", ""),
+            "another port",
+        ),
+    ] {
+        let raw = signed_request(address, &nonce(address), TOKEN, signed, sent);
+        let (status, value) = exchange(address, &raw);
+        assert_eq!(status, 401, "{what}: {value}");
+        assert!(
+            value["error"]
+                .as_str()
+                .is_some_and(|e| e.contains("signature")),
+            "{what}: {value}"
+        );
+    }
+    let raw = status_signed(address, &nonce(address), &TOKEN.replace('0', "1"));
+    assert_eq!(exchange(address, &raw).0, 401, "another token");
+    let raw = status_signed(address, "00112233445566778899aabbccddeeff", TOKEN);
+    assert_eq!(exchange(address, &raw).0, 401, "a nonce RVP did not give");
+    let malformed = format!("{} nonce={}", sign::SCHEME, nonce(address));
+    let raw = request_with(address, "GET", "/api/status", None, Some(&malformed));
+    assert_eq!(exchange(address, &raw).0, 401, "no signature");
+}
+
+/// A nonce lives `nonce_life`, and at most `nonces` are kept: one more
+/// drops the oldest.
+fn nonces_are_young_and_few(address: SocketAddr, limits: &Limits) {
+    let old = nonce(address);
+    std::thread::sleep(limits.nonce_life + Duration::from_millis(100));
+    let raw = status_signed(address, &old, TOKEN);
+    assert_eq!(exchange(address, &raw).0, 401, "an old nonce");
+    let kept: Vec<String> = (0..=limits.nonces).map(|_| nonce(address)).collect();
+    for (at, nonce) in kept.iter().enumerate() {
+        let expected = if at == 0 { 401 } else { 200 };
+        let raw = status_signed(address, nonce, TOKEN);
+        assert_eq!(exchange(address, &raw).0, expected, "nonce {at}");
+    }
+}
+
+/// Connects, sends `raw`, reads the answer to its end (the server shuts
+/// its side after answering), then sends a byte every `every` until a
+/// write fails: how long after the answer the server closed (`None`: not
+/// within 10 s).
+fn trickle_after_answer(address: SocketAddr, raw: &[u8], every: Duration) -> Option<Duration> {
+    let mut stream = TcpStream::connect(address).expect("connect");
+    stream
+        .set_read_timeout(Some(Duration::from_secs(20)))
+        .expect("timeout");
+    stream.write_all(raw).expect("send");
+    let mut answer = Vec::new();
+    stream.read_to_end(&mut answer).expect("answer");
+    assert!(answer.starts_with(b"HTTP/1.1 "), "{answer:?}");
+    let answered = Instant::now();
+    while answered.elapsed() < Duration::from_secs(10) {
+        std::thread::sleep(every);
+        if stream.write_all(b"x").is_err() {
+            return Some(answered.elapsed());
+        }
+    }
+    None
+}
+
+/// Slow clients hold nothing for long: a client that trickles bytes after
+/// its refusal frees its worker within the linger's deadline; one over
+/// the connection limit does not hold the accepting thread; and stopping
+/// the server takes under a second with such clients connected.
+#[test]
+fn slow_clients_hold_neither_the_workers_nor_the_server() {
+    let limits = Limits {
+        request: Duration::from_secs(5),
+        connections: 3,
+        ..TEST_LIMITS
+    };
+    let server = bare_server(limits);
+    let address = server.address();
+
+    // Clients without the token, a byte every 100 ms after their 401.
+    let tricklers: Vec<JoinHandle<Option<Duration>>> = (0..limits.connections)
+        .map(|_| {
+            let raw = request(address, "GET", "/api/status", None, None);
+            std::thread::spawn(move || {
+                trickle_after_answer(address, &raw, Duration::from_millis(100))
+            })
+        })
+        .collect();
+    for trickler in tricklers {
+        let closed = trickler.join().expect("trickler");
+        assert!(
+            closed.is_some_and(|after| after < Duration::from_secs(2)),
+            "closed {closed:?} after the answer"
+        );
+    }
+    // Their workers are free again.
+    let raw = request(address, "GET", "/api/status", None, Some(TOKEN));
+    assert_eq!(exchange(address, &raw).0, 200);
+
+    // Every worker waits for a request (5 s at most); a client over the
+    // limit trickles a byte every 20 ms after its 503, and the next one is
+    // still answered at once.
+    let idle: Vec<TcpStream> = (0..limits.connections)
+        .map(|_| TcpStream::connect(address).expect("idle connection"))
+        .collect();
+    std::thread::sleep(Duration::from_millis(100));
+    let over = {
+        let raw = request(address, "GET", "/api/status", None, Some(TOKEN));
+        std::thread::spawn(move || trickle_after_answer(address, &raw, Duration::from_millis(20)))
+    };
+    std::thread::sleep(Duration::from_millis(100));
+    let started = Instant::now();
+    let raw = request(address, "GET", "/api/status", None, Some(TOKEN));
+    assert_eq!(exchange(address, &raw).0, 503, "one connection too many");
+    assert!(
+        started.elapsed() < Duration::from_millis(500),
+        "the next client waited {:?}",
+        started.elapsed()
+    );
+    let closed = over.join().expect("trickler");
+    assert!(
+        closed.is_some_and(|after| after < Duration::from_secs(1)),
+        "the refused client closed {closed:?} after its answer"
+    );
+
+    // Stopping, with the workers held and clients over the limit
+    // trickling, takes under a second.
+    let over: Vec<JoinHandle<Option<Duration>>> = (0..2)
+        .map(|_| {
+            let raw = request(address, "GET", "/api/status", None, Some(TOKEN));
+            std::thread::spawn(move || {
+                trickle_after_answer(address, &raw, Duration::from_millis(20))
+            })
+        })
+        .collect();
+    std::thread::sleep(Duration::from_millis(100));
+    let (stopped, stop) = mpsc::channel();
+    let started = Instant::now();
+    std::thread::spawn(move || {
+        drop(server);
+        let _ = stopped.send(());
+    });
+    assert!(
+        stop.recv_timeout(Duration::from_secs(1)).is_ok(),
+        "drop(server) took over a second"
+    );
+    eprintln!("the server stopped in {:?}", started.elapsed());
+    drop(idle);
+    for trickler in over {
+        let _ = trickler.join();
+    }
+    // The port is free at once.
+    assert!(
+        TcpStream::connect_timeout(&address, Duration::from_millis(200)).is_err(),
+        "nothing listens"
+    );
+}
+
+/// A long poll's wait is clamped before it is used: a huge one answers,
+/// and no worker's place is lost.
+#[test]
+fn huge_waits_answer_and_keep_every_worker() {
+    let server = bare_server(TEST_LIMITS);
+    let address = server.address();
+    for wait in ["1e300", "1e20", "inf", "NaN", "-5"] {
+        for _ in 0..=TEST_LIMITS.connections {
+            let path = format!("/api/status?wait={wait}");
+            let (status, value) =
+                exchange(address, &request(address, "GET", &path, None, Some(TOKEN)));
+            assert_eq!(status, 200, "wait={wait}: {value}");
+        }
+    }
+    // A wait for a change past the longest poll ends with the poll.
+    let raw = request(
+        address,
+        "GET",
+        "/api/status?since=0&wait=1e300",
+        None,
+        Some(TOKEN),
+    );
+    let client = std::thread::spawn(move || exchange(address, &raw));
+    std::thread::sleep(Duration::from_millis(200));
+    assert!(!client.is_finished(), "a long poll waits");
+    drop(server);
+    assert_eq!(client.join().expect("client").0, 200, "stopping ends it");
+}
+
+/// One `Host`, a loopback name with a port that is a number, and one
+/// `Content-Length` at most.
+#[test]
+fn a_request_names_its_host_and_length_once() {
+    let server = bare_server(TEST_LIMITS);
+    let address = server.address();
+    let port = address.port();
+    let auth = format!("Authorization: Bearer {TOKEN}\r\n");
+    for (raw, expected, what) in [
+        (
+            format!("GET /api/status HTTP/1.1\r\n{auth}\r\n"),
+            400,
+            "no Host",
+        ),
+        (
+            format!("GET /api/status HTTP/1.1\r\nHost: localhost:\r\n{auth}\r\n"),
+            400,
+            "an empty port",
+        ),
+        (
+            format!("GET /api/status HTTP/1.1\r\nHost: \r\n{auth}\r\n"),
+            400,
+            "an empty Host",
+        ),
+        (
+            format!(
+                "GET /api/status HTTP/1.1\r\nHost: 127.0.0.1:{port}\r\nHost: evil.example\r\n{auth}\r\n"
+            ),
+            400,
+            "two Host headers",
+        ),
+        (
+            format!(
+                "POST /api/seek HTTP/1.1\r\nHost: 127.0.0.1:{port}\r\n{auth}Content-Length: 9\r\nContent-Length: 9\r\n\r\n{{\"to\":12}}"
+            ),
+            400,
+            "two Content-Length headers",
+        ),
+        (
+            format!("GET /api/status HTTP/1.1\r\nHost: evil.example:{port}\r\n{auth}\r\n"),
+            403,
+            "another host",
+        ),
+        (
+            format!("GET /api/status HTTP/1.1\r\nHost: localhost:{port}\r\n{auth}\r\n"),
+            200,
+            "localhost with its port",
+        ),
+        (
+            format!(
+                "POST /api/seek HTTP/1.1\r\nHost: 127.0.0.1\r\n{auth}Content-Length: 9\r\n\r\n{{\"to\":12}}"
+            ),
+            200,
+            "one of each",
+        ),
+    ] {
+        let (status, value) = exchange(address, raw.as_bytes());
+        assert_eq!(status, expected, "{what}: {value}");
+    }
 }

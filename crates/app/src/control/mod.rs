@@ -6,20 +6,83 @@
 //!   chooses its port (`remote.port`). It listens on 127.0.0.1 only: other
 //!   devices reach RVP through a program on this computer, such as Unified
 //!   Remote's server.
-//! * Every request carries the installation's token
-//!   (`Authorization: Bearer TOKEN`, [`token`]). Requests with a browser's
-//!   `Origin` header, or whose `Host` is not a loopback name, are refused,
-//!   so that web pages cannot reach RVP. Headers, bodies, the time a
-//!   request may take, connections and long polls are limited
-//!   ([`LIMITS`]).
+//! * Every request but `GET /api/nonce` shows that its client knows the
+//!   installation's token ([`token`]), in one of two ways:
+//!   `Authorization: Bearer TOKEN`, the token itself, for the user's own
+//!   scripts and RVP's self-test, which know that they talk to RVP; or a
+//!   signature (below), with which the token never travels, for RVP's
+//!   remote, which cannot know that: while RVP does not listen, any
+//!   account of the computer may take the remote's port.
+//! * Requests with a browser's `Origin` header, or whose `Host` is not a
+//!   loopback name, are refused, so that web pages cannot reach RVP; a
+//!   request without `Host`, with `Host` or `Content-Length` twice, or
+//!   with an empty port after the name, is malformed (400). Headers,
+//!   bodies, the time a request may take, connections, long polls and
+//!   nonces are limited ([`LIMITS`]). After an early answer the server
+//!   reads what the client still sends for a moment, by one deadline and
+//!   a byte cap. A connection over [`Limits::connections`] gets its 503
+//!   from a short-lived thread of its own (as many of those at once as
+//!   connections; past that it is closed unanswered), so a slow client
+//!   holds neither the thread that accepts nor, when the server stops,
+//!   the window's thread ([`Server`]'s `drop` returns within a second).
 //! * The server's threads never call mpv and never touch [`App`]: commands
 //!   go to the window's thread through the [`Dispatch`] the shell gives
 //!   (as MPRIS's and Windows' media controls' commands do) and wait there
 //!   for an answer; the status is a snapshot the window's thread publishes
 //!   ([`Server::publish`]) as the chrome updates.
 //!
+//! # Signed requests
+//!
+//! 1. `GET /api/nonce`, with no token, answers `{"nonce": N}`: 32
+//!    lower-case hex digits of 16 random bytes from the system.
+//! 2. The client sends its request with
+//!    `Authorization: RVP-HMAC-SHA256 nonce=N, signature=S`, where S is
+//!    the HMAC-SHA-256 (RFC 2104 over FIPS 180-4's SHA-256) in 64
+//!    lower-case hex digits, keyed with the token's text (its 64 hex
+//!    digits as ASCII bytes), of the lines
+//!    `RVP-HMAC-SHA256`, PORT, N, METHOD and TARGET, each ended by `\n`,
+//!    followed by the body's bytes: PORT is the port the client connects
+//!    to, in decimal; METHOD the request line's method (upper case);
+//!    TARGET the request line's target as sent, the path with its query
+//!    before any percent-decoding; the body is empty for a GET. No part
+//!    before the body holds a line break, so two different requests never
+//!    sign the same text.
+//! 3. RVP makes the same text from its own port and the request as it
+//!    arrived, and compares the signatures in a time that does not depend
+//!    on where they differ ([`sign`]).
+//!
+//! * A nonce serves one request: the first request that names it spends
+//!   it, whether its signature holds or not, so a request cannot be played
+//!   again. It lives [`Limits::nonce_life`] (10 s) from being handed out;
+//!   the check is made when the request arrives, so a long poll that then
+//!   waits [`Limits::long_poll`] is not affected. Each signed request
+//!   therefore asks for its nonce first: the remote polls the status once
+//!   a second, two exchanges on this computer instead of one, and in
+//!   return the client needs no clock and no counter of its own.
+//! * RVP keeps at most [`Limits::nonces`] (64); one more drops the oldest,
+//!   so `GET /api/nonce` cannot grow RVP's memory. A program that asks for
+//!   nonces without end makes other clients' nonces unknown, as holding
+//!   every connection denies them service: it gains no access.
+//! * A failed check answers 401 `{"error": ...}`, with one message for a
+//!   nonce that is unknown, spent or too old and another for a signature
+//!   that does not match: neither tells more about the token than that the
+//!   check failed.
+//! * A listener that is not RVP chooses the nonces and sees the remote's
+//!   signatures over them. That is no oracle for the token: HMAC-SHA-256
+//!   with a 256-bit random key is a pseudorandom function, so signatures
+//!   over texts of someone's choosing give neither the key nor the
+//!   signature of any other text. And none of them is accepted by RVP
+//!   later: RVP takes only nonces it handed out itself (128 random bits
+//!   each, which no one can have had signed in advance) and only for its
+//!   own port, so a listener on the remote's port that hands the remote
+//!   nonces it took from RVP on another port gets signatures RVP refuses.
+//!   The remote takes only a nonce of 32 hex digits, so no line break
+//!   reaches the signed text. RVP's answers are not signed: such a
+//!   listener can show the remote a false title, no more.
+//!
 //! | Request | Body or query | Answer |
 //! |---|---|---|
+//! | `GET /api/nonce` | (no token) | `{"nonce": N}` for one signed request |
 //! | `GET /api/status` | `?since=V&wait=S`: waits up to S seconds (at most [`Limits::long_poll`]) for a version other than V | [`Status`] |
 //! | `GET /api/actions` | | every action of `ACTIONS`: `name`, `label` |
 //! | `POST /api/action/NAME` | | runs the action as keys and menus do |
@@ -36,13 +99,14 @@
 //! Remote's JSON reader documents no `null`).
 
 mod http;
+pub mod sign;
 pub mod token;
 pub mod unified;
 
 use std::io::Write as _;
 use std::net::{Ipv4Addr, SocketAddr, TcpListener, TcpStream};
-use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
-use std::sync::mpsc::{self, SyncSender};
+use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
+use std::sync::mpsc::{self, Receiver, SyncSender};
 use std::sync::{Arc, Condvar, Mutex, MutexGuard, PoisonError};
 use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
@@ -75,6 +139,10 @@ pub struct Limits {
     pub long_poll: Duration,
     /// The longest wait for the window's thread to carry out a command.
     pub command: Duration,
+    /// How long a nonce of `GET /api/nonce` waits for its request.
+    pub nonce_life: Duration,
+    /// The nonces kept at once (one more drops the oldest).
+    pub nonces: usize,
 }
 
 /// The limits RVP serves with.
@@ -86,10 +154,28 @@ pub const LIMITS: Limits = Limits {
     connections: 8,
     long_poll: Duration::from_secs(30),
     command: Duration::from_secs(5),
+    // A client asks for its nonce just before its request: seconds are
+    // plenty, also on a loaded machine.
+    nonce_life: Duration::from_secs(10),
+    // Each client holds one nonce at a time, for a moment.
+    nonces: 64,
 };
 
 /// The longest path `POST /api/open` takes.
 const MAX_PATH: usize = 4096;
+
+/// How long the server reads what a client still sends after an early
+/// answer (a refusal or an error), in all, and how much of it at most.
+const LINGER: Duration = Duration::from_millis(200);
+const LINGER_BYTES: usize = 64 * 1024;
+
+/// The same for a connection over [`Limits::connections`], whose 503 is
+/// written by a thread of its own, and that thread's write timeout.
+const REFUSAL_LINGER: Duration = Duration::from_millis(50);
+const REFUSAL_WRITE: Duration = Duration::from_millis(200);
+
+/// How long [`Server`]'s `drop` waits for the accepting thread to end.
+const STOP_WAIT: Duration = Duration::from_millis(800);
 
 /// The lowest port the Remote page offers (below it ports need rights).
 pub const MIN_PORT: u16 = 1024;
@@ -225,12 +311,32 @@ struct Published {
     state: State,
 }
 
+/// The requests a server let in, by how they showed the token, and those
+/// it refused for want of it (the self-test counts the remote's).
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct Counts {
+    /// `Authorization: Bearer`.
+    pub bearer: u64,
+    /// A signature over a nonce.
+    pub signed: u64,
+    /// Answered 401.
+    pub refused: u64,
+}
+
 struct Shared {
     published: Mutex<Published>,
     changed: Condvar,
     stop: AtomicBool,
+    /// Connections served, and connections over the limit being refused.
     connections: AtomicUsize,
+    refusals: AtomicUsize,
     token: String,
+    /// The port this server listens on: signatures cover it.
+    port: u16,
+    nonces: sign::Nonces,
+    bearer: AtomicU64,
+    signed: AtomicU64,
+    refused: AtomicU64,
     dispatch: Dispatch,
     limits: Limits,
     /// `GET /api/actions`'s answer, made once.
@@ -242,6 +348,44 @@ pub struct Server {
     shared: Arc<Shared>,
     address: SocketAddr,
     accept: Option<JoinHandle<()>>,
+    /// Disconnected once the accepting thread let the port go.
+    accept_ended: Receiver<()>,
+}
+
+/// A connection's place among those counted by `count` ([`Shared`]'s
+/// `connections` or `refusals`), given back when its thread ends, also
+/// by a panic, and when the thread does not start.
+struct Slot {
+    shared: Arc<Shared>,
+    count: fn(&Shared) -> &AtomicUsize,
+}
+
+impl Slot {
+    /// A place, unless `most` are taken.
+    fn take(shared: &Arc<Shared>, count: fn(&Shared) -> &AtomicUsize, most: usize) -> Option<Self> {
+        if count(shared).fetch_add(1, Ordering::AcqRel) >= most {
+            count(shared).fetch_sub(1, Ordering::AcqRel);
+            return None;
+        }
+        Some(Self {
+            shared: Arc::clone(shared),
+            count,
+        })
+    }
+}
+
+impl Drop for Slot {
+    fn drop(&mut self) {
+        (self.count)(&self.shared).fetch_sub(1, Ordering::AcqRel);
+    }
+}
+
+fn connections(shared: &Shared) -> &AtomicUsize {
+    &shared.connections
+}
+
+fn refusals(shared: &Shared) -> &AtomicUsize {
+    &shared.refusals
 }
 
 fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
@@ -282,27 +426,52 @@ impl Server {
             changed: Condvar::new(),
             stop: AtomicBool::new(false),
             connections: AtomicUsize::new(0),
+            refusals: AtomicUsize::new(0),
             token,
+            port: address.port(),
+            nonces: sign::Nonces::new(limits.nonce_life, limits.nonces),
+            bearer: AtomicU64::new(0),
+            signed: AtomicU64::new(0),
+            refused: AtomicU64::new(0),
             dispatch,
             limits,
             actions: Value::from(actions).to_string(),
         });
+        let (ended, accept_ended) = mpsc::channel::<()>();
         let accept = {
             let shared = Arc::clone(&shared);
             std::thread::Builder::new()
                 .name("rvp-control".to_owned())
-                .spawn(move || accept_loop(&listener, &shared))?
+                .spawn(move || {
+                    accept_loop(&listener, &shared);
+                    // The port goes before `drop` hears of the end, so that
+                    // a new server can take it at once.
+                    drop(listener);
+                    drop(ended);
+                })?
         };
         Ok(Self {
             shared,
             address,
             accept: Some(accept),
+            accept_ended,
         })
     }
 
     #[must_use]
     pub fn address(&self) -> SocketAddr {
         self.address
+    }
+
+    /// The requests let in and refused so far.
+    #[must_use]
+    pub fn counts(&self) -> Counts {
+        let count = |counter: &AtomicU64| counter.load(Ordering::Acquire);
+        Counts {
+            bearer: count(&self.shared.bearer),
+            signed: count(&self.shared.signed),
+            refused: count(&self.shared.refused),
+        }
     }
 
     /// The window's thread shows its state: a change other than the
@@ -321,6 +490,10 @@ impl Server {
 }
 
 impl Drop for Server {
+    /// Stops the service on the window's thread: within a second whatever
+    /// the clients do. The accepting thread waits for nothing but the next
+    /// connection, which the connection made here brings; the threads that
+    /// serve clients end on their own within their limits.
     fn drop(&mut self) {
         self.shared.stop.store(true, Ordering::Release);
         self.shared.changed.notify_all();
@@ -329,12 +502,20 @@ impl Drop for Server {
             &self.address,
             Duration::from_millis(200),
         ));
-        if let Some(accept) = self.accept.take() {
+        let Some(accept) = self.accept.take() else {
+            return;
+        };
+        // Disconnected when the thread let the port go; should it not end
+        // in time, it is left to end on its own.
+        if let Err(mpsc::RecvTimeoutError::Disconnected) = self.accept_ended.recv_timeout(STOP_WAIT)
+        {
             let _ = accept.join();
         }
     }
 }
 
+/// Takes connections and hands each to a thread of its own; it never
+/// reads or writes a connection itself, so no client can hold it.
 fn accept_loop(listener: &TcpListener, shared: &Arc<Shared>) {
     for stream in listener.incoming() {
         if shared.stop.load(Ordering::Acquire) {
@@ -343,25 +524,36 @@ fn accept_loop(listener: &TcpListener, shared: &Arc<Shared>) {
         let Ok(mut stream) = stream else {
             continue;
         };
-        if shared.connections.fetch_add(1, Ordering::AcqRel) >= shared.limits.connections {
-            shared.connections.fetch_sub(1, Ordering::AcqRel);
-            let _ = stream.set_write_timeout(Some(Duration::from_millis(500)));
-            let _ = http::respond(&mut stream, 503, &error("too many connections"));
-            // Briefly: this thread accepts the others.
-            linger(&mut stream, Duration::from_millis(50));
-            continue;
-        }
-        let worker = Arc::clone(shared);
-        let spawned = std::thread::Builder::new()
+        let most = shared.limits.connections;
+        let (slot, refusal) = match Slot::take(shared, connections, most) {
+            Some(slot) => (slot, false),
+            // As many refusals at once as connections; past that the
+            // connection closes without an answer.
+            None => match Slot::take(shared, refusals, most) {
+                Some(slot) => (slot, true),
+                None => continue,
+            },
+        };
+        // A thread that does not start drops its closure, and the slot
+        // with it.
+        let _ = std::thread::Builder::new()
             .name("rvp-control-client".to_owned())
             .spawn(move || {
-                serve(&mut stream, &worker);
-                worker.connections.fetch_sub(1, Ordering::AcqRel);
+                if refusal {
+                    refuse(&mut stream);
+                } else {
+                    serve(&mut stream, &slot.shared);
+                }
+                drop(slot);
             });
-        if spawned.is_err() {
-            shared.connections.fetch_sub(1, Ordering::AcqRel);
-        }
     }
+}
+
+/// Answers a connection over [`Limits::connections`] with 503, briefly.
+fn refuse(stream: &mut TcpStream) {
+    let _ = stream.set_write_timeout(Some(REFUSAL_WRITE));
+    let _ = http::respond(stream, 503, &error("too many connections"));
+    linger(stream, REFUSAL_LINGER);
 }
 
 fn serve(stream: &mut TcpStream, shared: &Shared) {
@@ -376,19 +568,30 @@ fn serve(stream: &mut TcpStream, shared: &Shared) {
     let _ = http::respond(stream, status, &body);
     let _ = stream.flush();
     if status >= 400 {
-        linger(stream, Duration::from_millis(200));
+        linger(stream, LINGER);
     }
 }
 
-/// After an early answer, reads what the client still sends for a moment
-/// before closing: closing with unread data resets the connection, and the
-/// client could lose the answer.
+/// After an early answer, reads what the client still sends before
+/// closing: closing with unread data resets the connection, and the client
+/// could lose the answer. One deadline for the whole of it, and at most
+/// [`LINGER_BYTES`]: a client that sends a byte now and then cannot
+/// stretch it.
 fn linger(stream: &mut TcpStream, wait: Duration) {
     let _ = stream.shutdown(std::net::Shutdown::Write);
-    let _ = stream.set_read_timeout(Some(wait));
+    let deadline = Instant::now() + wait;
     let mut rest = [0u8; 4096];
     let mut drained = 0;
-    while drained < 256 * 1024 {
+    while drained < LINGER_BYTES {
+        let Some(left) = deadline
+            .checked_duration_since(Instant::now())
+            .filter(|left| !left.is_zero())
+        else {
+            break;
+        };
+        if stream.set_read_timeout(Some(left)).is_err() {
+            break;
+        }
         match std::io::Read::read(stream, &mut rest) {
             Ok(0) | Err(_) => break,
             Ok(read) => drained += read,
@@ -410,31 +613,70 @@ fn error(message: &str) -> String {
     json!({ "error": message }).to_string()
 }
 
-/// A loopback name in a `Host` header (with or without its port).
-fn loopback_host(host: &str) -> bool {
+/// The name of a `Host` header without its port; `None` when the header
+/// is malformed: an empty name, or an empty port or one that is not a
+/// number after the colon.
+fn host_name(host: &str) -> Option<&str> {
     let name = match host.rsplit_once(':') {
-        Some((name, port)) if port.bytes().all(|b| b.is_ascii_digit()) => name,
-        _ => host,
+        Some((name, port)) => {
+            (!port.is_empty() && port.bytes().all(|b| b.is_ascii_digit())).then_some(name)?
+        }
+        None => host,
     };
+    (!name.is_empty()).then_some(name)
+}
+
+/// A loopback name.
+fn loopback_name(name: &str) -> bool {
     name.eq_ignore_ascii_case("localhost") || name == "127.0.0.1"
+}
+
+/// Shows whether the request knows the token: the token itself
+/// (`Bearer`) or a signature over a nonce RVP handed out (the module
+/// comment); counts it.
+fn authorize(shared: &Shared, request: &Request) -> Result<(), &'static str> {
+    const NEEDED: &str = "a valid token or signature is needed";
+    let value = request.header("authorization").ok_or(NEEDED)?;
+    if let Some(presented) = value.strip_prefix("Bearer ") {
+        if !token::matches(presented.trim(), &shared.token) {
+            return Err(NEEDED);
+        }
+        shared.bearer.fetch_add(1, Ordering::AcqRel);
+        return Ok(());
+    }
+    let credentials = value
+        .strip_prefix(sign::SCHEME)
+        .and_then(|rest| rest.strip_prefix(' '))
+        .ok_or(NEEDED)?;
+    let (nonce, presented) =
+        sign::credentials(credentials).ok_or("the signature's credentials are malformed")?;
+    if !shared.nonces.spend(nonce, Instant::now()) {
+        return Err("the nonce is unknown, spent or too old: ask GET /api/nonce for another");
+    }
+    let expected = sign::signature(
+        &shared.token,
+        shared.port,
+        nonce,
+        &request.method,
+        &request.target,
+        &request.body,
+    );
+    if !token::matches(presented, &expected) {
+        return Err("the signature does not match RVP's token");
+    }
+    shared.signed.fetch_add(1, Ordering::AcqRel);
+    Ok(())
 }
 
 fn route(shared: &Shared, request: &Request) -> (u16, String) {
     if request.header("origin").is_some() {
         return (403, error("requests from web pages are refused"));
     }
-    if request
-        .header("host")
-        .is_some_and(|host| !loopback_host(host))
-    {
-        return (403, error("this service answers only on 127.0.0.1"));
-    }
-    let presented = request
-        .header("authorization")
-        .and_then(|value| value.strip_prefix("Bearer "))
-        .map(str::trim);
-    if !presented.is_some_and(|presented| token::matches(presented, &shared.token)) {
-        return (401, error("a valid token is needed"));
+    // `read_request` lets no request without one `Host` through.
+    match request.header("host").and_then(host_name) {
+        Some(name) if loopback_name(name) => {}
+        Some(_) => return (403, error("this service answers only on 127.0.0.1")),
+        None => return (400, error("malformed Host header")),
     }
     let segments: Vec<&str> = request
         .path
@@ -444,6 +686,16 @@ fn route(shared: &Shared, request: &Request) -> (u16, String) {
         .collect();
     let get = request.method == "GET";
     let post = request.method == "POST";
+    if get && segments == ["api", "nonce"] {
+        return match shared.nonces.issue(Instant::now()) {
+            Some(nonce) => (200, json!({ "nonce": nonce }).to_string()),
+            None => (503, error("the system gave no random bytes")),
+        };
+    }
+    if let Err(why) = authorize(shared, request) {
+        shared.refused.fetch_add(1, Ordering::AcqRel);
+        return (401, error(why));
+    }
     match segments.as_slice() {
         ["api", "status"] if get => status(shared, request),
         ["api", "actions"] if get => (200, shared.actions.clone()),
@@ -474,7 +726,7 @@ fn route(shared: &Shared, request: &Request) -> (u16, String) {
         },
         [
             "api",
-            "status" | "actions" | "albums" | "action" | "seek" | "volume" | "open",
+            "status" | "actions" | "albums" | "action" | "seek" | "volume" | "open" | "nonce",
             ..,
         ] => (405, error("method not allowed")),
         _ => (404, error("not found")),
@@ -484,12 +736,13 @@ fn route(shared: &Shared, request: &Request) -> (u16, String) {
 /// The status now, or after the next change (a long poll).
 fn status(shared: &Shared, request: &Request) -> (u16, String) {
     let since = request.query("since").and_then(|v| v.parse::<u64>().ok());
+    // Clamped while it is a number: a `Duration` of a huge one panics.
     let wait = request
         .query("wait")
         .and_then(|v| v.parse::<f64>().ok())
         .filter(|v| v.is_finite() && *v > 0.0)
         .map_or(Duration::ZERO, |v| {
-            Duration::from_secs_f64(v).min(shared.limits.long_poll)
+            Duration::from_secs_f64(v.min(shared.limits.long_poll.as_secs_f64()))
         });
     let deadline = Instant::now() + wait;
     let mut published = lock(&shared.published);
@@ -814,12 +1067,34 @@ mod tests {
 
     #[test]
     fn hosts_are_loopback_names_only() {
-        assert!(loopback_host("127.0.0.1:48931"));
-        assert!(loopback_host("localhost"));
-        assert!(loopback_host("LOCALHOST:80"));
-        assert!(!loopback_host("evil.example:48931"));
-        assert!(!loopback_host("127.0.0.1.evil.example"));
-        assert!(!loopback_host("192.168.1.2:48931"));
+        let loopback = |host| host_name(host).is_some_and(loopback_name);
+        assert!(loopback("127.0.0.1:48931"));
+        assert!(loopback("localhost"));
+        assert!(loopback("LOCALHOST:80"));
+        assert!(!loopback("evil.example:48931"));
+        assert!(!loopback("127.0.0.1.evil.example"));
+        assert!(!loopback("192.168.1.2:48931"));
+        // Malformed.
+        for host in ["localhost:", "", ":48931", "localhost:80a", "[::1]"] {
+            assert_eq!(host_name(host), None, "{host:?}");
+        }
+    }
+
+    /// A worker's place comes back when its thread panics.
+    #[test]
+    fn a_place_comes_back_after_a_panic() {
+        let dispatch: Dispatch = Arc::new(|_, _| {});
+        let server = Server::start_with(0, String::new(), dispatch, LIMITS).expect("server");
+        let shared = &server.shared;
+        let slot = Slot::take(shared, connections, 1).expect("a place");
+        assert!(Slot::take(shared, connections, 1).is_none(), "one place");
+        let worker = std::thread::spawn(move || {
+            let _slot = slot;
+            panic!("a worker fails");
+        });
+        assert!(worker.join().is_err());
+        assert_eq!(shared.connections.load(Ordering::Acquire), 0);
+        assert!(Slot::take(shared, connections, 1).is_some());
     }
 
     #[test]
