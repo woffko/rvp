@@ -61,11 +61,23 @@ time.
   Ubuntu boot, the kit's copies) must be cloned again; the private
   original is `woffko/rvp-private`. Kit runs set `RVP_KIT_LABEL`
   (`ubuntu-boot`, `ubuntu-vm`) for their reports' names.
-- The first alpha, v0.1.0-alpha.1 (792c29f), is a pre-release on the
-  repository's Releases page: the Linux AppImage and .deb from CI, and
-  SHA256SUMS.txt. Its Windows installer and portable ZIP (built in WSL)
-  were withdrawn on 2026-11-21: they were packaged with an older libmpv
-  build than the one a release takes.
+- The second alpha, v0.1.0-alpha.2 (45ae990, 2026-11-21), is the newest
+  pre-release on the repository's Releases page: the Windows installer
+  and portable ZIP built in WSL with the libmpv of the release
+  `libmpv-20261029` (which CI's Windows jobs build and test with too),
+  the Linux AppImage and .deb from CI at that commit, and
+  SHA256SUMS.txt. Before it went out: `cargo xtask ci`, GitHub's CI, the
+  Windows VM's checks (the installer's `m8-all.ps1` on the release's own
+  file) and the kit's `m18` on the Ubuntu VM.
+- The first alpha, v0.1.0-alpha.1 (792c29f), keeps its Linux AppImage
+  and .deb. Its Windows installer and portable ZIP were withdrawn on
+  2026-11-21: they were packaged with an older libmpv build than the one
+  a release takes.
+- Motion smoothing and seeks (2026-11-21): mpv's `vapoursynth` filter
+  counts its frames, so `hr-seek-framedrop` stays off beside it and the
+  frames before a seek's target pass as the original (AGENTS.md, "Shell
+  notes", M18). The fast path was checked with MVTools on both VMs; with
+  RIFE and RIFE (TensorRT) it is unchecked on a GPU.
   The AviSynth+ headers' licence file is missing from the Linux
   packages' notices (no licence file at the top of their repository).
 - Wayland: a second `rvp` cannot hand the window its activation token
