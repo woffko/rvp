@@ -26,10 +26,16 @@ https://github.com/vapoursynth/vapoursynth.git
 https://github.com/dubhater/vapoursynth-mvtools.git
 "
 
-# kit_clone URL DIR REF: a working tree of URL at REF (a tag, branch or
-# commit) in DIR, from the source cache when it has the repository.
+# kit_clone URL DIR COMMIT: a working tree of URL at COMMIT in DIR, from
+# the source cache when it has the repository. COMMIT is a full commit
+# hash (a tag or a branch can move; the callers name the tag beside it),
+# and the clone fails unless DIR's HEAD is that commit.
 kit_clone() {
-    local url=$1 dir=$2 ref=$3 cache mirror
+    local url=$1 dir=$2 commit=$3 cache mirror
+    if ! [[ $commit =~ ^[0-9a-f]{40}$ ]]; then
+        echo "kit_clone: $url: $commit is not a full commit hash" >&2
+        return 1
+    fi
     cache=${RVP_KIT_SOURCES:-}/$(basename "$url" .git).git
     if [ -n "${RVP_KIT_SOURCES:-}" ] && [ -d "$cache" ]; then
         git clone -q --no-checkout "$cache" "$dir" || return 1
@@ -42,7 +48,11 @@ kit_clone() {
         rm -rf "$dir"
         git clone -q --filter=blob:none --no-checkout "$mirror" "$dir" || return 1
     fi
-    git -C "$dir" -c advice.detachedHead=false checkout -q "$ref"
+    git -C "$dir" -c advice.detachedHead=false checkout -q "$commit" || return 1
+    if [ "$(git -C "$dir" rev-parse HEAD)" != "$commit" ]; then
+        echo "kit_clone: $url: $dir is not at $commit" >&2
+        return 1
+    fi
 }
 
 # The mirror of a repository whose host may not answer: VideoLAN's

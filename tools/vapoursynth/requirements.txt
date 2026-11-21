@@ -1,0 +1,94 @@
+# The Python tools tools/vapoursynth/build-linux.sh builds RVP's Linux
+# VapourSynth runtime with, in a virtual environment of their own on the
+# runtime's Python 3.12: Cython, meson and ninja (VapourSynth's build) and
+# py7zr (vs-mlrt's model archive), with what they need, each at one
+# version and installed with --require-hashes. The hashes are those of the
+# files a Linux x86_64 CPython 3.12 or later installs (source archives,
+# pure wheels, manylinux x86_64 wheels). Made from cython==3.1.4, meson,
+# ninja and py7zr==1.1.4 with
+#   uv pip compile --universal --python-version 3.12 --generate-hashes
+#     --exclude-newer 2026-11-18T19:00:00Z
+# (the versions the first alpha was built with), the other systems'
+# wheels and PyPy's packages left out.
+backports-zstd==1.8.0 ; python_full_version < '3.14' \
+    --hash=sha256:b58cd328afcb538f3ca5dc2ac47f8dfb68635d5b906d5efcb59054bc86219214 \
+    --hash=sha256:9c7fe40a58dbe1fd358e0ceb5b6b3f50a9b328f8fff42dcb3bdaeb9a022c2506 \
+    --hash=sha256:f9e9aa28a44db1897fb637f037175566f3b75890d4bae6cae7ba34f1df1e0804 \
+    --hash=sha256:44a9004f9e809ea56910d326d21946650369db59eb86edc0c76840f21530704c \
+    --hash=sha256:9dae4f4c481716e3db473d667457b4f508ff7459c0931b567a5c9677fb3db316
+brotli==1.2.1 ; platform_python_implementation == 'CPython' \
+    --hash=sha256:bfb2d71edaaa0c6e0e51c52328154c635aec3ee6ea6a29271fbac1a8bc157c12 \
+    --hash=sha256:1f5d8c6e68555b82692f8180ee646cd1752aa9ab98daf68769a7c56a6e8d7af7 \
+    --hash=sha256:f760d9a9c441bfc87eee720ddb0946d3e19995b20983ae14038e033f1664efcb \
+    --hash=sha256:6b3c3d5794212a54434b4856f808f7bdf7ad48eacadaadb5b2346fc9a639365a \
+    --hash=sha256:4b9dd0173ca5e01d1eb307d3c184fe8c09bdc168ede560889b1018d216d38c61 \
+    --hash=sha256:264fd5b200f6f6170cb551a4b9fcaabf8aa846ddaefe72db4d5f49f9d3743df9 \
+    --hash=sha256:a998857af4fcd19920bdf5f30f0f1a23f38472a703d33e49168cd4fd32438377 \
+    --hash=sha256:f00ff4b56caf151365c77988eb85a4a71eb26fe63047d4084d5614e06d65e3cf \
+    --hash=sha256:ea396d0ab0c9e082e009a16d7bda6849784b411b884d86e287a1b0a36eb278fb \
+    --hash=sha256:d9ff3dcfaf60de01805e0268a29947205a71742e02797ef07ca46a58ab2a3390 \
+    --hash=sha256:4acd709bfe362c2ed80da311d195654467110bc747de1484c731304810fd20e5 \
+    --hash=sha256:ddc832886517c5009863209a4a292c4353967cd304ba55822d533e0d59eb6a60 \
+    --hash=sha256:02b2f7b5a83485efe448a44ddf7983def05c3bb1dcf917d4f7154070260e13de
+cython==3.1.4 \
+    --hash=sha256:6f06b037f7c244dda9fc38091e87a68498c85c7c27ddc19aa84b08cf42a8a84a \
+    --hash=sha256:a928bd7d446247855f54f359057ab4a32c465219c8c1e299906a483393a59a9e \
+    --hash=sha256:9def7c41f4dc339003b1e6875f84edf059989b9c7f5e9a245d3ce12c190742d9 \
+    --hash=sha256:c3f3bb603f28b3c1df66baaa5cdbf6029578552b458f1d321bae23b87f6c3199 \
+    --hash=sha256:ff4d1f159edee6af38572318681388fbd6448b0d08b9a47494aaf0b698e93394 \
+    --hash=sha256:e10357ea1acc27b42d83aaeb14cd94587b515806a41227a0100028d45140d753 \
+    --hash=sha256:33da3c03797f7b7fde371a05f9e0d63eca679875c1c75e01066893eff2ec2f12 \
+    --hash=sha256:d194d95e4fa029a3f6c7d46bdd16d973808c7ea4797586911fdb67cb98b1a2c6 \
+    --hash=sha256:9aefefe831331e2d66ab31799814eae4d0f8a2d246cbaaaa14d1be29ef777683
+inflate64==1.0.4 \
+    --hash=sha256:cb93159cb60aee8cab62541aa70e4c460f13359660a27a1a486518bba0153535 \
+    --hash=sha256:ec40c0383cbd84d845dcb785a48ae76eef43246c923f84fda380fdd5ea653d3c \
+    --hash=sha256:62d1aac3aba094ae42e27ce7581b414c90f218248be0953b6aeb11a127225e5d \
+    --hash=sha256:f62a13d0327631778fa2a47c308ae2b07b2659b7bb8564783259ac65949f8c0c \
+    --hash=sha256:6f0993214dea0738c557fa56c13cd9083aef0097a201d726c21984ad7f577514 \
+    --hash=sha256:61f51f80fa6f367288343c1a2cd20a42af454883087064e9274fd2a8c3a5a200 \
+    --hash=sha256:2a55295f493a40d7e68929f0ba54e489ab9b623b6aa968dc5d1389ba77a63eff \
+    --hash=sha256:b398c686960c029777afc0ed281a86f66adb956cfc3fbf6667cc6453f7b407ce
+meson==1.12.1 \
+    --hash=sha256:930bc7542cbd9f57009e182fd014eba48cf1a0180a7b9006d2d32d8f168d8b02 \
+    --hash=sha256:ab0a6ca09f8ef70c564c8241fb5a23957886a0b53fb58412b5e07eaf07dba743
+multivolumefile==0.2.3 \
+    --hash=sha256:237f4353b60af1703087cf7725755a1f6fcaeeea48421e1896940cd1c920d678 \
+    --hash=sha256:a0648d0aafbc96e59198d5c17e9acad7eb531abea51035d08ce8060dcad709d6
+ninja==1.13.2 \
+    --hash=sha256:65a24341b5ac09fcadcc37082660be40a94174e51a937fabf6e2cae26225fa2c \
+    --hash=sha256:525bfa3fc88aa30a4467df270fd5be6f9fcae8061d54d4df74ea1dc5abd5a975
+psutil==7.2.2 ; sys_platform != 'cygwin' \
+    --hash=sha256:1a571f2330c966c62aeda00dd24620425d4b0cc86881c89861fbc04549e5dc63 \
+    --hash=sha256:1fa4ecf83bcdf6e6c8f4449aff98eefb5d0604bf88cb883d7da3d8d2d909546a \
+    --hash=sha256:076a2d2f923fd4821644f5ba89f059523da90dc9014e85f8e45a5774ca5bc6f9 \
+    --hash=sha256:0746f5f8d406af344fd547f1c8daa5f5c33dbc293bb8d6a16d80b4bb88f59372
+py7zr==1.1.4 \
+    --hash=sha256:f6f868a457a6bd485b78d26e619045718bcd0b7720a6bf97d5fe86a1523423e8 \
+    --hash=sha256:7674697559bd06b697bf6e8249985cee6dc704a4b07b8e11f24d0b1695707c3e
+pybcj==1.0.8 \
+    --hash=sha256:b68d66941fca641865b579b516a4599a346a2aad860dcd411cb5179808d88b3f \
+    --hash=sha256:0de1f6c90178f5947e4b578821aa2f1f87a78a761ae603aa33a8ad3d8b9b9cac \
+    --hash=sha256:a50b58f9b9d9978c55e3219b6816a1021a778b028a810b36aa754407591cb5ae \
+    --hash=sha256:e5e67ec32176985bbf941185319a3fe385527b6826d457a8ec67dd43b5f0b5fa \
+    --hash=sha256:f23a36e978f4620db473b08239ab56dc57a479c83fd5d3808bc95e5bdbc1a703 \
+    --hash=sha256:3817997e73d60ccbc731a47e007fe02213eee816cfe6070eb8347c6286aa3cc2 \
+    --hash=sha256:6818270692912d47e81ccd777b7d0ed2ad3a19ef7aaead3735b38048c80bf368
+pycryptodomex==3.24.2 \
+    --hash=sha256:1a6afbdfea89f796fa6de5627f2578e12fb5fe536af9a5557687dc395f396483 \
+    --hash=sha256:b6f81da21c47cac2f19d4f077804ce394566a26be2a60ba089cb22e7495db36e \
+    --hash=sha256:1f63e86c2e9e81aaaf3d4dbd9342058f8b7269dce18d9671817a7cb6d1a764b1 \
+    --hash=sha256:fca1303bc8e9ad6a2e61e8e528161f1988776d12b7f523ec2b02e0e2e991424a \
+    --hash=sha256:e340408a601003f235b50117cd16f87b2a5b4760765aafe93340eeaadeb0414d \
+    --hash=sha256:e4dbc29e2575365d15e272f769329106277649aea081e2119cf43d66950f8f8f
+pyppmd==1.3.1 \
+    --hash=sha256:9de2cdcc3932e7c23a54beb48dfe1b5ab7b4aedd5ffaae1e4871bd213d630cb3 \
+    --hash=sha256:89730cf026416ae2546c92738966ecf117c8176d52c229ad621a61c34643818b \
+    --hash=sha256:1bd6d179ad39b6191ca0cbe62fb9592f33f49277b4384ad7bc5eb0e6ca27ebee \
+    --hash=sha256:bd00522ddfcc292304577386b6c217758c0c10e1fb9ce7877ad7d3b7b821a808 \
+    --hash=sha256:385e92c97c42e8a6f0bfc0e4acfc6c074cb1ba3a2f650f292696dd9f19e2e603 \
+    --hash=sha256:d1683e6d1ba09e377e0ae02de3a518191a3d63ccdb0b6037c74e6ddf577b5644 \
+    --hash=sha256:ced527f08ade4408c1bfc5264e9f97ffac8d221c9d13eca4f35ec1ec0c7b6b2e
+texttable==1.7.3 \
+    --hash=sha256:b8eaebd6d32565ce85b79b17e2aa52815889249b37bb6dd0894d3eca67c329f8 \
+    --hash=sha256:ff99aa7562c6cbcd0982cb6fae9145126b19878182496cdc46b8d6816721c5da

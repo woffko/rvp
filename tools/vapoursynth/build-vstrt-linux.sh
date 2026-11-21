@@ -23,13 +23,17 @@ set -euo pipefail
 
 WORK=${1:?usage: build-vstrt-linux.sh WORK OUT}
 OUT=${2:?usage: build-vstrt-linux.sh WORK OUT}
-# Not TensorRT 10.16: its engines computed RIFE wrongly on an RTX 50-series card
-# (crates/app/src/tensorrt.rs).
+# Each source at a full commit, checked after the checkout (a tag can
+# move), with its tag beside it. Not TensorRT 10.16: its engines computed
+# RIFE wrongly on an RTX 50-series card (crates/app/src/tensorrt.rs).
 VSMLRT_TAG=v15.15
+VSMLRT_COMMIT=112fcbaf6e5d648b9c15ba7b55b54c896a884b61
 TRT_OSS_TAG=v10.15
+TRT_OSS_COMMIT=9973b2f4ab5c0d0055e9d36cd94a5692f8f8da1f
 # vstrt is a plugin of VapourSynth's API 3 (VapourSynth.h), whose headers
 # vs-mlrt builds with; RVP's R73 runtime loads such plugins.
 VS_TAG=R57
+VS_COMMIT=325756ed04588b31840fdb74479537cddcba4bf7
 REPO=https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2204/x86_64
 # NVIDIA's packages: file and SHA-256 (the repository's Packages index).
 DEBS=(
@@ -75,24 +79,31 @@ echo 'void rvp_tensorrt_stub(void) {}' > "$TRT_HOME/stub.c"
 cc -shared -fPIC -Wl,-soname,libnvinfer.so.10 -o "$TRT_HOME/lib/libnvinfer.so.10" "$TRT_HOME/stub.c"
 ln -s libnvinfer.so.10 "$TRT_HOME/lib/libnvinfer.so"
 
-# VapourSynth's headers, checked by their SHA-256 at VS_TAG like every other
-# download (they were not; the Linux audit's L25).
+# VapourSynth's headers at VS_COMMIT, checked by their SHA-256 like every
+# other download (they were not; the Linux audit's L25).
 VS_INCLUDE=$WORK/vs-include
 mkdir -p "$VS_INCLUDE"
 for header in VapourSynth.h:0983c937cd369b7e1766913edd3c859ea1f93a79671579729f24eb90a91ce910 \
     VSHelper.h:11e2c4977127632aa0fb84c67d5d7eb7244764c52a94500797d4a3cac013e382; do
     curl -fsSL --retry 3 -o "$VS_INCLUDE/${header%%:*}" \
-        "https://raw.githubusercontent.com/vapoursynth/vapoursynth/$VS_TAG/include/${header%%:*}"
+        "https://raw.githubusercontent.com/vapoursynth/vapoursynth/$VS_COMMIT/include/${header%%:*}"
     echo "${header#*:}  $VS_INCLUDE/${header%%:*}" | sha256sum -c --quiet -
 done
 
 # The kit's clone (RVP_KIT_SOURCES, its source cache), once.
 . "$(cd "$(dirname "$0")" && pwd)/../linux-kit/sources.sh"
-# One clone per tag: a new tag never builds an older checkout.
+# One clone per tag: a new tag never builds an older checkout, and a
+# clone at another commit is made again.
 VSMLRT=$WORK/vs-mlrt-$VSMLRT_TAG
 TRT_OSS=$WORK/tensorrt-oss-$TRT_OSS_TAG
-[ -d "$VSMLRT/.git" ] || kit_clone https://github.com/AmusementClub/vs-mlrt.git "$VSMLRT" "$VSMLRT_TAG"
-[ -d "$TRT_OSS/.git" ] || kit_clone https://github.com/NVIDIA/TensorRT.git "$TRT_OSS" "$TRT_OSS_TAG"
+if [ "$(git -C "$VSMLRT" rev-parse HEAD 2> /dev/null)" != "$VSMLRT_COMMIT" ]; then
+    rm -rf "$VSMLRT"
+    kit_clone https://github.com/AmusementClub/vs-mlrt.git "$VSMLRT" "$VSMLRT_COMMIT"
+fi
+if [ "$(git -C "$TRT_OSS" rev-parse HEAD 2> /dev/null)" != "$TRT_OSS_COMMIT" ]; then
+    rm -rf "$TRT_OSS"
+    kit_clone https://github.com/NVIDIA/TensorRT.git "$TRT_OSS" "$TRT_OSS_COMMIT"
+fi
 
 # vstrt: CUDA's static runtime, NVIDIA's libnvinfer.so.10 from
 # vsmlrt-cuda/ next to it. Each build starts from an empty folder

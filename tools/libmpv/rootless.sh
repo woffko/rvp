@@ -23,7 +23,10 @@ PACKAGES="build-essential bison flex gettext git mercurial subversion ninja-buil
     libgmp-dev libmpfr-dev libmpc-dev libgcrypt20-dev gperf ragel texinfo autopoint re2c asciidoc
     python3-pip python3-venv docbook2x unzip p7zip-full curl ccache ca-certificates xz-utils bzip2
     patch file wget"
-PIP="meson==1.12.1 mako jsonschema rst2pdf jinja2"
+# meson, mako, jsonschema, rst2pdf and jinja2 by the versions and hashes
+# of requirements.txt (read inside the root, where the checkout is mounted
+# at its own path).
+REQUIREMENTS=$HERE/requirements.txt
 
 # Runs a command as root of the build root.
 inroot() {
@@ -59,7 +62,8 @@ if [ ! -x "$ROOT/opt/venv/bin/meson" ]; then
     printf 'APT::Sandbox::User "root";\n' > "$ROOT/etc/apt/apt.conf.d/99rootless"
     # shellcheck disable=SC2086 # the lists are meant to split
     inroot /bin/bash -c "apt-get update -q && DEBIAN_FRONTEND=noninteractive apt-get install -y -q \
-        --no-install-recommends $(echo $PACKAGES) && python3 -m venv /opt/venv && /opt/venv/bin/pip install -q $PIP"
+        --no-install-recommends $(echo $PACKAGES) && python3 -m venv /opt/venv &&
+        /opt/venv/bin/pip install -q --require-hashes -r '$REQUIREMENTS'"
 fi
 # The recipe applies its patches with `git am`, which needs a committer:
 # a name for the build root's own commits (they stay in its sources).

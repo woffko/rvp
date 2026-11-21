@@ -527,6 +527,26 @@ def nsis_languages(nsisdir: Path, includes: Path) -> None:
     (includes / "languages.nsh").write_text("\n".join(lines) + "\n", encoding="utf-8-sig")
 
 
+# The oldest NSIS the installer is made with: an older installer started
+# as SYSTEM keeps its plug-ins in a folder every user can write to.
+NSIS_OLDEST = (3, 11)
+
+
+def check_makensis(makensis: str, env: dict) -> None:
+    """Stops the build when `makensis -VERSION` is older than NSIS_OLDEST
+    (it prints v3.11, or v3.11-1 for Debian's)."""
+    result = subprocess.run([makensis, "-VERSION"], capture_output=True, text=True, env=env, check=False)
+    found = re.match(r"v(\d+)\.(\d+)", result.stdout.strip())
+    if result.returncode != 0 or not found:
+        raise SystemExit(f"{makensis} -VERSION: {(result.stdout + result.stderr).strip()}")
+    if (int(found.group(1)), int(found.group(2))) < NSIS_OLDEST:
+        raise SystemExit(
+            f"{makensis} is NSIS {result.stdout.strip()}: the installer needs NSIS "
+            f"{NSIS_OLDEST[0]}.{NSIS_OLDEST[1]} or later"
+        )
+    print(f"makensis {result.stdout.strip()}")
+
+
 def windows(args) -> None:
     # Absolute: makensis reads the paths it gets from the script's folder.
     out = Path(args.out).resolve()
@@ -545,6 +565,7 @@ def windows(args) -> None:
         env = dict(os.environ)
         if args.nsisdir:
             env["NSISDIR"] = args.nsisdir
+        check_makensis(args.makensis, env)
         run(
             args.makensis, "-V2",
             f"-DVERSION={version()}", f"-DNUMERIC={numeric}",

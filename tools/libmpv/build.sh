@@ -37,17 +37,21 @@ cd "$WORK"
 cd mpv-winbuild-cmake
 git fetch -q origin
 git checkout -q --force "$COMMIT"
+[ "$(git rev-parse HEAD)" = "$COMMIT" ]
 git apply "$HERE/curl-release.patch"
 git apply "$HERE/curl-no-libssh.patch"
 git apply "$HERE/ffmpeg-no-opengl.patch"
 git apply "$HERE/no-libdvdcss.patch"
 
-# glslang for the build host (see above), installed in the work folder.
+# glslang for the build host (see above), installed in the work folder:
+# the release's tag, checked out at its commit and checked.
 GLSLANG=16.6.0
+GLSLANG_COMMIT=e1b562a8bed273a02f30b59b66a5d499793cede5
 HOST=$WORK/host-tools
 if [ ! -x "$HOST/bin/glslang" ]; then
     rm -rf "$WORK/host-glslang"
     git -c advice.detachedHead=false clone -q --depth 1 --branch "$GLSLANG" https://github.com/KhronosGroup/glslang.git "$WORK/host-glslang"
+    [ "$(git -C "$WORK/host-glslang" rev-parse HEAD)" = "$GLSLANG_COMMIT" ]
     cmake -Wno-dev -G Ninja -S "$WORK/host-glslang" -B "$WORK/host-glslang/build" \
         -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX="$HOST" \
         -DENABLE_OPT=OFF -DGLSLANG_TESTS=OFF -DBUILD_TESTING=OFF
@@ -85,6 +89,16 @@ ninja -C "$BUILD" mpv-packaging
 # THIRD-PARTY.txt (tools/packaging/package.py windows --licences).
 "$(dirname "$0")/licences.sh" "$WORK" "$WORK/licences"
 ls -l "$BUILD"/mpv-dev-*.7z
+# The recipe takes its packages at their newest: the upstream commit of
+# each git source this build took (under the recipe's own patches, which
+# `git am` adds as local commits), beside the archive
+# (mpv-dev-...-sources.txt).
+ARCHIVE=$(ls -t "$BUILD"/mpv-dev-*.7z | head -1)
+for source in "$WORK"/src_packages/*/; do
+    [ -d "$source/.git" ] || continue
+    base=$(git -C "$source" merge-base HEAD '@{upstream}' 2> /dev/null || git -C "$source" rev-parse HEAD)
+    printf '%s %s\n' "$(basename "$source")" "$base"
+done > "${ARCHIVE%.7z}-sources.txt"
 DLL=$(ls -t "$BUILD"/mpv-dev-*/libmpv-2.dll | head -1)
 if strings "$DLL" | grep -q 'DVDCSS_'; then
     echo "$DLL contains libdvdcss" >&2

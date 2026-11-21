@@ -8,17 +8,33 @@
 set -euo pipefail
 
 DEPS=${RVP_DEPS:-$HOME/rvp-deps}
+REPO=$(cd "$(dirname "$0")/../.." && pwd)
 QT_VERSION=6.10.3
 MPV_RELEASE=20261010
 MPV_ARCHIVE=mpv-dev-x86_64-20261010-git-b2c255c13e.7z
 VS_TAG=R73
 PYTHON_VERSION=3.12.9
 MVTOOLS_TAG=v24
+# Each download's SHA-256 (the Windows CI's libmpv and
+# tools/packaging/vapoursynth.py check the same files).
+SEVENZIP_SHA256=4ca3b7c6f2f67866b92622818b58233dc70367be2f36b498eb0bdeaaa44b53f4
+MPV_SHA256=394490ed6354c2294b87c63dfa3663b23524b5551aace9cbe35c4085682b14fa
+VS_SHA256=3326f10d0fdcdec45649a474cbc9810795ab3da422634d0f134bca6089afbb91
+PYTHON_SHA256=615861fb801e8b04c847598db4e1e46e4b046295017caa37cb5486dde72b5865
+MVTOOLS_SHA256=b9883003eed100d4ffd44344b658554076b89da6d45041b378e675720426bc95
 mkdir -p "$DEPS/bin" "$DEPS/win"
 cd "$DEPS"
 
-# Python tools: aqtinstall downloads Qt for both platforms.
-[ -x venv/bin/aqt ] || { python3 -m venv venv && venv/bin/pip install -q aqtinstall; }
+# checked FILE SHA256: fails unless FILE has that SHA-256.
+checked() {
+    echo "$2  $1" | sha256sum -c --quiet - || { echo "$1: unexpected SHA-256" >&2; exit 1; }
+}
+
+# Python tools: aqtinstall downloads Qt for both platforms (by the
+# versions and hashes of the Linux kit's requirements).
+[ -x venv/bin/aqt ] || {
+    python3 -m venv venv && venv/bin/pip install -q --require-hashes -r "$REPO/tools/linux-kit/requirements.txt"
+}
 [ -x "qt/$QT_VERSION/gcc_64/bin/qmake" ] ||
     venv/bin/aqt install-qt linux desktop "$QT_VERSION" linux_gcc_64 --outputdir "$DEPS/qt"
 [ -e "qt/$QT_VERSION/msvc2022_64/lib/Qt6Core.lib" ] ||
@@ -27,6 +43,7 @@ cd "$DEPS"
 # 7-Zip: mpv and mvtools archives use the BCJ2 filter.
 if [ ! -x bin/7zz ]; then
     curl -fsSLo 7z-linux.tar.xz https://www.7-zip.org/a/7z2501-linux-x64.tar.xz
+    checked 7z-linux.tar.xz "$SEVENZIP_SHA256"
     mkdir -p 7z && tar -xf 7z-linux.tar.xz -C 7z && cp 7z/7zz bin/
 fi
 
@@ -87,6 +104,7 @@ cd "$DEPS/win"
 # and an MSVC import library generated from its exports.
 if [ ! -e mpv-dev/libmpv-2.dll ]; then
     gh release download "$MPV_RELEASE" -R shinchiro/mpv-winbuild-cmake -p "$MPV_ARCHIVE" --clobber
+    checked "$MPV_ARCHIVE" "$MPV_SHA256"
     "$DEPS/bin/7zz" x -y -ompv-dev "$MPV_ARCHIVE" > /dev/null
 fi
 mkdir -p mpv-lib
@@ -101,12 +119,15 @@ mkdir -p mpv-lib
 # plus mvtools for PotPlayer's motion interpolation script.
 [ -e "VapourSynth64-Portable-$VS_TAG.zip" ] ||
     gh release download "$VS_TAG" -R vapoursynth/vapoursynth -p "VapourSynth64-Portable-$VS_TAG.zip" --clobber
+checked "VapourSynth64-Portable-$VS_TAG.zip" "$VS_SHA256"
 [ -e "python-$PYTHON_VERSION-embed-amd64.zip" ] ||
     curl -fsSLo "python-$PYTHON_VERSION-embed-amd64.zip" \
         "https://www.python.org/ftp/python/$PYTHON_VERSION/python-$PYTHON_VERSION-embed-amd64.zip"
+checked "python-$PYTHON_VERSION-embed-amd64.zip" "$PYTHON_SHA256"
 if [ ! -e mvtools/libmvtools.dll ]; then
     gh release download "$MVTOOLS_TAG" -R dubhater/vapoursynth-mvtools \
         -p "vapoursynth-mvtools-$MVTOOLS_TAG-win64.7z" --clobber
+    checked "vapoursynth-mvtools-$MVTOOLS_TAG-win64.7z" "$MVTOOLS_SHA256"
     "$DEPS/bin/7zz" x -y -omvtools "vapoursynth-mvtools-$MVTOOLS_TAG-win64.7z" > /dev/null
 fi
 rm -rf vs-runtime && mkdir vs-runtime

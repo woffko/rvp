@@ -498,9 +498,12 @@ smoothing for users without SVP, after a study of the engines.
   from `tools/packaging/vapoursynth.py`: R73, Python 3.12, MVTools, RIFE
   and its model, each download checked by its SHA-256; the portable ZIP
   with `rvp.portable`, the NSIS installer of `packaging/windows/rvp.nsi`) and `linux` (AppDir, AppImage,
-  .deb, on Ubuntu 22.04: kit steps `m8package` and `m8`). In WSL, makensis
-  is Ubuntu's nsis package unpacked into `~/rvp-deps/nsis` (`--makensis
-  ~/rvp-deps/nsis/usr/bin/makensis --nsisdir ~/rvp-deps/nsis/usr/share/nsis`)
+  .deb, on Ubuntu 22.04: kit steps `m8package` and `m8`). The installer
+  needs NSIS 3.11 or later (`package.py` refuses an older makensis; CI
+  installs 3.11.0). In WSL, makensis is Debian 13's nsis and nsis-common
+  3.11-1 unpacked into `~/rvp-deps/nsis-3.11` (`--makensis
+  ~/rvp-deps/nsis-3.11/usr/bin/makensis --nsisdir
+  ~/rvp-deps/nsis-3.11/usr/share/nsis`; Ubuntu 24.04's is 3.09)
   and the C++ runtime is `~/rvp-deps/win/msvc-runtime`. CI builds both as
   artifacts and keeps only the newest run's (`prune-artifacts`: the
   account's artifact storage is small, so push commits in batches);
@@ -944,7 +947,14 @@ smoothing for users without SVP, after a study of the engines.
   headers, glslang for FFmpeg's shaders, shaderc for libplacebo's, dav1d,
   AviSynth+'s headers); the step fails a non-free FFmpeg, a missing part
   and an undefined symbol (`ldd -r`). Bump `MPV_BUILD` with any change of
-  its options. On a machine whose network to GitHub stalls, clone through
+  its options, and of libass's, mpv-build's or the SDK's commit (neither
+  its stamp nor CI's cache key names them). Every source the kit and the
+  release builds clone is checked out at a full commit and checked
+  (`kit_clone`; a tag's commit is written beside it; the Windows
+  recipe's own packages come at their newest, and `tools/libmpv/build.sh`
+  writes their commits beside its archive), and pip installs by
+  `--require-hashes` from the `requirements.txt` beside each script.
+  On a machine whose network to GitHub stalls, clone through
   the source cache (`RVP_KIT_SOURCES`, `tools/linux-kit/sources.sh`).
 - The Linux packages carry whisper.cpp's CPU and Vulkan engine
   (`tools/whisper/build-linux.sh`, `bin/whisper/`) and RVP's own

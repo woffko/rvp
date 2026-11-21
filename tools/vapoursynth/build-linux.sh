@@ -37,11 +37,12 @@ WORK=${2:?usage: build-linux.sh MVTOOLS_SO WORK OUT}
 OUT=${3:?usage: build-linux.sh MVTOOLS_SO WORK OUT}
 JOBS=$(nproc)
 
+# Each source at a full commit, checked after the checkout (a tag can
+# move), with its tag beside it.
 VS_TAG=R73
+VS_COMMIT=76762f6a07d5169c21903972f67827fc108020ba
 ZIMG_TAG=release-3.0.6
-CYTHON=3.1.4
-# Unpacks vs-mlrt's 7z model archive at build time only.
-PY7ZR=1.1.4
+ZIMG_COMMIT=f819b14e8f39d1282400b0d9543e8ef73c1b2bbd
 VSMLRT_TAG=v15.15
 RIFE_ONNX_URL=https://github.com/AmusementClub/vs-mlrt/releases/download/model-20220923/rife_v8.7z
 RIFE_ONNX_SHA256=1a18614e72164c61d60861199fc8be6b0003110f747646b3dafb9acd632f6ef7
@@ -82,22 +83,23 @@ PY=$OUT/python/bin/python3
 # name this one, so meson links VSScript with its libpython.
 sed -i "s|^prefix=.*|prefix=$OUT/python|" "$OUT"/python/lib/pkgconfig/python-3*.pc
 
-# Cython for the build only: in a virtual environment of its own.
-if [ ! -x "$WORK/build-venv/bin/cython" ]; then
+# Cython, meson and ninja for the build and py7zr for vs-mlrt's 7z model
+# archive, in a virtual environment of their own: the versions and hashes
+# of requirements.txt, made anew when that file changes.
+if ! cmp -s "$HERE/requirements.txt" "$WORK/build-venv/requirements.txt"; then
+    rm -rf "$WORK/build-venv"
     "$PY" -m venv "$WORK/build-venv"
-    "$WORK/build-venv/bin/pip" install -q "cython==$CYTHON" meson ninja
+    "$WORK/build-venv/bin/pip" install -q --require-hashes -r "$HERE/requirements.txt"
+    cp "$HERE/requirements.txt" "$WORK/build-venv/requirements.txt"
 fi
 export PATH=$WORK/build-venv/bin:$PATH
-if [ ! -x "$WORK/build-venv/bin/py7zr" ]; then
-    "$WORK/build-venv/bin/pip" install -q "py7zr==$PY7ZR"
-fi
 
 # zimg, static, for VapourSynth's core.
 ZIMG=$WORK/zimg-prefix
 if [ "$(cat "$ZIMG/.tag" 2> /dev/null)" != "$ZIMG_TAG" ]; then
     rm -rf "$WORK/zimg" "$ZIMG"
     # Its one submodule is its tests' googletest.
-    kit_clone https://github.com/sekrit-twc/zimg.git "$WORK/zimg" "$ZIMG_TAG"
+    kit_clone https://github.com/sekrit-twc/zimg.git "$WORK/zimg" "$ZIMG_COMMIT"
     (cd "$WORK/zimg" && ./autogen.sh && ./configure --prefix="$ZIMG" --enable-static --disable-shared --with-pic &&
         make -j "$JOBS" && make install) > "$WORK/zimg.log" 2>&1
     echo "$ZIMG_TAG" > "$ZIMG/.tag"
@@ -106,7 +108,7 @@ fi
 # VapourSynth, its Python module installed into the runtime's Python.
 SRC=$WORK/vapoursynth
 rm -rf "$SRC" "$WORK/vs-build"
-kit_clone https://github.com/vapoursynth/vapoursynth.git "$SRC" "$VS_TAG"
+kit_clone https://github.com/vapoursynth/vapoursynth.git "$SRC" "$VS_COMMIT"
 git -C "$SRC" apply "$HERE/vsscript-own-python.patch"
 # The core's own plugin folder, which it scans at every start, is a path
 # that can exist nowhere (under /dev/null, no folder): RVP's scripts load

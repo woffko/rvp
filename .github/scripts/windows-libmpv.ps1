@@ -4,11 +4,19 @@
 $ErrorActionPreference = 'Stop'
 $tag = '20261010'
 $asset = 'mpv-dev-x86_64-20261010-git-b2c255c13e.7z'
+# The archive's SHA-256 (GitHub's digest of the release asset): checked
+# after a download and on a cache hit alike.
+$sha256 = '394490ed6354c2294b87c63dfa3663b23524b5551aace9cbe35c4085682b14fa'
 $dir = Join-Path $env:RUNNER_TEMP 'libmpv'
 New-Item -ItemType Directory -Force $dir | Out-Null
 $archive = Join-Path $dir $asset
 if (-not (Test-Path $archive)) {
     gh release download $tag -R shinchiro/mpv-winbuild-cmake -p $asset -D $dir --clobber
+}
+$found = (Get-FileHash -Algorithm SHA256 $archive).Hash.ToLowerInvariant()
+if ($found -ne $sha256) {
+    Remove-Item -Force $archive
+    throw "$asset has SHA-256 $found, expected $sha256"
 }
 7z x -y "-o$dir" $archive | Out-Null
 $dll = Join-Path $dir 'libmpv-2.dll'

@@ -15,7 +15,9 @@ libmpv at (never SVP's runtime):
   from NVIDIA only when the user asks (crates/app/src/tensorrt.rs; NVIDIA's
   licence lets RVP's packages carry none of it).
 
-Every download is checked by its SHA-256 and kept in --cache. The output
+Every download is checked by its SHA-256 and kept in --cache, and an
+archive is unpacked there into a folder named by its SHA-256 (a changed
+archive gets a folder of its own), made whole before it is used. The output
 folder is made anew; NOTICE.txt there names each part and its licence.
 
 usage: vapoursynth.py --out DIR --vcomp vcomp140.dll [--cache DIR] [--sevenzip 7z]
@@ -26,6 +28,7 @@ import hashlib
 import shutil
 import subprocess
 import sys
+import tempfile
 import urllib.request
 import zipfile
 from pathlib import Path
@@ -67,6 +70,11 @@ DOWNLOADS = {
         f"{MODEL}-flownet.param",
         f"{RIFE_RAW}/models/{MODEL}/flownet.param",
         "ae9b08af43fba97e27aa2c40c04c35b1a75f637b2d2b01a941fa94361ab25cbd",
+    ),
+    "rife-licence": (
+        f"rife-LICENSE-{RIFE_TAG}",
+        f"{RIFE_RAW}/LICENSE",
+        "d37437f9a9276c5b5f966a4a314c8b08128b06d3fa5b7b5716b8db489dc4136a",
     ),
     "vstrt": (
         f"VSTRT-Windows-x64.{VSMLRT_TAG}.7z",
@@ -133,6 +141,36 @@ def fetch(cache: Path, key: str) -> Path:
     return target
 
 
+def unpack(cache: Path, key: str, sevenzip: str, *members: str) -> Path:
+    """The archive DOWNLOADS[key] unpacked with 7-Zip (only `members`, when
+    named) into `cache/unpacked/<its SHA-256>`: another archive under the
+    same key never finds this one's files. It is unpacked into a temporary
+    folder beside that one and renamed when whole, so a run that stopped
+    halfway leaves no folder that looks done."""
+    name = DOWNLOADS[key][2]
+    if members:
+        name += "-" + hashlib.sha256("\n".join(members).encode()).hexdigest()[:16]
+    folder = cache / "unpacked" / name
+    if folder.is_dir():
+        return folder
+    archive = fetch(cache, key)
+    folder.parent.mkdir(parents=True, exist_ok=True)
+    temporary = Path(tempfile.mkdtemp(prefix=f".{name}-", dir=folder.parent))
+    try:
+        subprocess.run([sevenzip, "x", "-y", f"-o{temporary}", str(archive), *members],
+                       check=True, stdout=subprocess.DEVNULL)
+        try:
+            temporary.rename(folder)
+        except OSError:
+            # Another run unpacked the same archive meanwhile.
+            if not folder.is_dir():
+                raise
+    finally:
+        if temporary.exists():
+            shutil.rmtree(temporary)
+    return folder
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     parser.add_argument("--out", required=True)
@@ -167,10 +205,7 @@ def main() -> None:
         elif path.exists():
             path.unlink()
 
-    mvtools = cache / "mvtools"
-    if not (mvtools / "libmvtools.dll").exists():
-        subprocess.run([args.sevenzip, "x", "-y", f"-o{mvtools}", str(fetch(cache, "mvtools"))],
-                       check=True, stdout=subprocess.DEVNULL)
+    mvtools = unpack(cache, "mvtools", args.sevenzip)
     (out / "vs-plugins").mkdir(exist_ok=True)
     shutil.copy2(mvtools / "libmvtools.dll", out / "vs-plugins" / "libmvtools.dll")
 
@@ -184,26 +219,18 @@ def main() -> None:
     # The plugin's other runtime library, next to it as well: Windows looks
     # for a plugin's libraries in the plugin's folder.
     shutil.copy2(out / "msvcp140_atomic_wait.dll", rife / "msvcp140_atomic_wait.dll")
-    licence = urllib.request.urlopen(
-        urllib.request.Request(f"{RIFE_RAW}/LICENSE", headers={"User-Agent": "rvp-packaging"}), timeout=60
-    ).read()
-    (rife / "LICENSE").write_bytes(licence)
+    shutil.copy2(fetch(cache, "rife-licence"), rife / "LICENSE")
 
     # vs-mlrt: the plugin and trtexec, vsmlrt.py, and RIFE v4.6's model only.
     vsmlrt = out / "vs-mlrt"
     (vsmlrt / "models" / "rife").mkdir(parents=True)
-    unpacked = cache / f"vs-mlrt-{VSMLRT_TAG}"
-    if not (unpacked / "vstrt.dll").exists():
-        subprocess.run([args.sevenzip, "x", "-y", f"-o{unpacked}", str(fetch(cache, "vstrt"))],
-                       check=True, stdout=subprocess.DEVNULL)
-        subprocess.run([args.sevenzip, "x", "-y", f"-o{unpacked}", str(fetch(cache, "vsmlrt-scripts"))],
-                       check=True, stdout=subprocess.DEVNULL)
-        subprocess.run([args.sevenzip, "x", "-y", f"-o{unpacked}", str(fetch(cache, "rife-onnx")),
-                        "rife/rife_v4.6.onnx"], check=True, stdout=subprocess.DEVNULL)
-    shutil.copy2(unpacked / "vstrt.dll", vsmlrt / "vstrt.dll")
-    shutil.copy2(unpacked / "vsmlrt-cuda" / "trtexec.exe", vsmlrt / "trtexec.exe")
-    shutil.copy2(unpacked / "vsmlrt.py", vsmlrt / "vsmlrt.py")
-    shutil.copy2(unpacked / "rife" / "rife_v4.6.onnx", vsmlrt / "models" / "rife" / "rife_v4.6.onnx")
+    vstrt = unpack(cache, "vstrt", args.sevenzip)
+    scripts = unpack(cache, "vsmlrt-scripts", args.sevenzip)
+    onnx = unpack(cache, "rife-onnx", args.sevenzip, "rife/rife_v4.6.onnx")
+    shutil.copy2(vstrt / "vstrt.dll", vsmlrt / "vstrt.dll")
+    shutil.copy2(vstrt / "vsmlrt-cuda" / "trtexec.exe", vsmlrt / "trtexec.exe")
+    shutil.copy2(scripts / "vsmlrt.py", vsmlrt / "vsmlrt.py")
+    shutil.copy2(onnx / "rife" / "rife_v4.6.onnx", vsmlrt / "models" / "rife" / "rife_v4.6.onnx")
     shutil.copy2(fetch(cache, "vsmlrt-licence"), vsmlrt / "LICENSE")
     (out / "NOTICE.txt").write_text(NOTICE, encoding="utf-8", newline="\r\n")
 

@@ -6,6 +6,11 @@ on:
   pull_request:
   workflow_dispatch:
 
+# The jobs read the repository only; prune-artifacts alone has more (its
+# own permissions). Every action is at a commit, its tag in the comment.
+permissions:
+  contents: read
+
 env:
   CARGO_TERM_COLOR: always
   RUST_BACKTRACE: 1
@@ -25,12 +30,12 @@ jobs:
         run: |
           sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
           df -h /
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
       - name: Toolchain
         run: |
           rustup toolchain install
           rustup show active-toolchain
-      - uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
       - name: libmpv and Qt's system libraries (Linux)
         if: runner.os == 'Linux'
         run: |
@@ -55,7 +60,7 @@ jobs:
           sudo apt-get install -y lua5.1
           echo "RVP_LUA=$(command -v lua5.1)" >> "$GITHUB_ENV"
       - name: Qt
-        uses: jurplel/install-qt-action@v4
+        uses: jurplel/install-qt-action@b344308e4483fc892e0d27b3cd1b173ebdd95f06 # v4.5.0
         with:
           version: '6.10.3'
           cache: true
@@ -64,7 +69,7 @@ jobs:
         run: echo "LD_LIBRARY_PATH=$QT_ROOT_DIR/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" >> "$GITHUB_ENV"
       - name: libmpv cache (Windows)
         if: runner.os == 'Windows'
-        uses: actions/cache@v4
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
           path: ${{ runner.temp }}/libmpv/*.7z
           key: libmpv-shinchiro-20261010
@@ -86,8 +91,8 @@ jobs:
   deny:
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v5
-      - uses: EmbarkStudios/cargo-deny-action@v2
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - uses: EmbarkStudios/cargo-deny-action@70f81531115945ba6eb6b941ec9d39d063438eb9 # v2.1.2
         with:
           command: check advisories licenses bans sources
 
@@ -105,12 +110,12 @@ jobs:
         run: |
           sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
           df -h /
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
       - name: Toolchain
         run: |
           rustup toolchain install
           rustup show active-toolchain
-      - uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
           key: package
       - name: The kit's build packages
@@ -124,7 +129,7 @@ jobs:
           echo "key=$(grep -E '^(QT_VERSION|MPV_COMMIT|MPV_BUILD|FFMPEG_COMMIT|LIBPLACEBO_COMMIT)=' tools/linux-kit/kit.sh | tr '\n' '-')" >> "$GITHUB_OUTPUT"
           echo "parts=$(grep -E '^(MVTOOLS_TAG|VS_TAG|VULKAN_HEADERS_TAG|GLSLANG_TAG|SHADERC_COMMIT)=' tools/linux-kit/kit.sh | tr '\n' '-')" >> "$GITHUB_OUTPUT"
       - name: Qt and libmpv cache
-        uses: actions/cache@v4
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
           path: |
             ${{ env.RVP_KIT_DIR }}/qt
@@ -138,14 +143,14 @@ jobs:
       # versions, then cached (m8package fails without them).
       - name: The packages' parts cache
         id: parts
-        uses: actions/cache@v4
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
           path: |
             ${{ env.RVP_KIT_DIR }}/mvtools/build/libmvtools.so
             ${{ env.RVP_KIT_DIR }}/mvtools/.kit-mvtools
             ${{ env.RVP_KIT_DIR }}/whisper/whisper-out
             ${{ env.RVP_KIT_DIR }}/vs-runtime
-          key: parts-ubuntu-22.04-${{ steps.kit.outputs.parts }}${{ hashFiles('tools/whisper/build-linux.sh', 'tools/whisper/version.cmake', 'tools/vapoursynth/build-linux.sh', 'tools/vapoursynth/build-vstrt-linux.sh', 'tools/vapoursynth/*.patch', 'tools/linux-kit/sources.sh') }}
+          key: parts-ubuntu-22.04-${{ steps.kit.outputs.parts }}${{ hashFiles('tools/whisper/build-linux.sh', 'tools/whisper/version.cmake', 'tools/vapoursynth/build-linux.sh', 'tools/vapoursynth/build-vstrt-linux.sh', 'tools/vapoursynth/*.patch', 'tools/vapoursynth/requirements.txt', 'tools/linux-kit/sources.sh') }}
       - name: whisper.cpp, MVTools and RVP's VapourSynth runtime
         if: steps.parts.outputs.cache-hit != 'true'
         run: tools/linux-kit/kit.sh mvtools whisper vapoursynth
@@ -165,7 +170,7 @@ jobs:
       - name: Logs of a failed step
         if: failure()
         run: tail -n 60 "$RVP_KIT_DIR"/logs/*.log
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: rvp-linux
           path: |
@@ -177,21 +182,21 @@ jobs:
     if: github.event_name != 'pull_request'
     runs-on: windows-2025
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
       - name: Toolchain
         run: |
           rustup toolchain install
           rustup show active-toolchain
-      - uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
           key: package
       - name: Qt
-        uses: jurplel/install-qt-action@v4
+        uses: jurplel/install-qt-action@b344308e4483fc892e0d27b3cd1b173ebdd95f06 # v4.5.0
         with:
           version: '6.10.3'
           cache: true
       - name: libmpv cache
-        uses: actions/cache@v4
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
           path: ${{ runner.temp }}/libmpv/*.7z
           key: libmpv-shinchiro-20261010
@@ -201,26 +206,36 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: ./.github/scripts/windows-libmpv.ps1
       - name: NSIS cache
-        uses: actions/cache@v4
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
           path: ${{ runner.temp }}/nsis
-          key: nsis-chocolatey-1
+          key: nsis-chocolatey-3.11.0
       - name: NSIS
         shell: pwsh
         run: |
+          # NSIS 3.11, as for the installer built in WSL (package.py refuses
+          # an older makensis); Chocolatey checks its package's download.
+          $version = '3.11.0'
+          # makensis /VERSION prints v3.11.
+          $want = '^v3\.11($|[^0-9])'
           $cached = Join-Path $env:RUNNER_TEMP 'nsis\makensis.exe'
           if (-not (Test-Path $cached)) {
-            # The runner image may lack NSIS, and Chocolatey's feed fails now
-            # and then: retry, and keep a copy (NSIS runs from any folder)
-            # for later runs, which then need no Chocolatey.
+            # The runner image may lack NSIS or have another version, and
+            # Chocolatey's feed fails now and then: retry, and keep a copy
+            # (NSIS runs from any folder) for later runs, which then need no
+            # Chocolatey.
             $nsis = "${env:ProgramFiles(x86)}\NSIS\makensis.exe"
-            for ($attempt = 1; -not (Test-Path $nsis) -and $attempt -le 3; $attempt++) {
-              choco install nsis -y --no-progress
-              if (-not (Test-Path $nsis)) { Start-Sleep -Seconds 20 }
+            $ready = { (Test-Path $nsis) -and ((& $nsis /VERSION) -match $want) }
+            for ($attempt = 1; -not (& $ready) -and $attempt -le 3; $attempt++) {
+              choco upgrade nsis "--version=$version" -y --no-progress --allow-downgrade
+              if (-not (& $ready)) { Start-Sleep -Seconds 20 }
             }
-            if (-not (Test-Path $nsis)) { throw "NSIS is not installed: $nsis" }
+            if (-not (& $ready)) { throw "NSIS $version is not installed: $nsis" }
             Copy-Item -Recurse (Split-Path $nsis) (Join-Path $env:RUNNER_TEMP 'nsis')
           }
+          $found = & $cached /VERSION
+          if ($found -notmatch $want) { throw "makensis is $found, expected NSIS $version" }
+          "makensis $found"
           "MAKENSIS=$cached" | Out-File -Append -Encoding utf8 $env:GITHUB_ENV
       - name: Packages
         shell: pwsh
@@ -250,7 +265,7 @@ jobs:
           Copy-Item testdata\media\fixture-60s.mkv, tools\windows-vm\m8-smtc.ps1 $base
           $env:QT_OPENGL = 'software'
           & "$base\m8-smtc.ps1"
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: rvp-windows
           path: |

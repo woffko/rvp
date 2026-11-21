@@ -32,11 +32,12 @@ export PATH="$WORK/clang_root/bin:$PATH"
 export LTO=0
 export CCACHE_DIR=${CCACHE_DIR:-$WORK/ccache}
 
-# name repository tag commit
+# name repository tag commit: each release by its tag, checked out at the
+# tag's commit and checked (a tag can move)
 LIBRARIES="
-libdvdread https://code.videolan.org/videolan/libdvdread.git 7.1.1
-libdvdnav https://code.videolan.org/videolan/libdvdnav.git 7.0.0
-libbluray https://code.videolan.org/videolan/libbluray.git 1.5.1
+libdvdread https://code.videolan.org/videolan/libdvdread.git 7.1.1 8e43bfea6cc731f48902ce55e41c540b497b6a84
+libdvdnav https://code.videolan.org/videolan/libdvdnav.git 7.0.0 38238caf599dc9405eddf1531c858c725015f776
+libbluray https://code.videolan.org/videolan/libbluray.git 1.5.1 a24f4fad4d62893de647abc8671397747b2359dd
 "
 
 if ! command -v ant > /dev/null || ! command -v javac > /dev/null; then
@@ -51,14 +52,18 @@ rm -rf "$PREFIX" "$OUT"
 export PKG_CONFIG_PATH=$PREFIX/lib/pkgconfig
 export PKG_CONFIG_LIBDIR=$SYSROOT/lib/pkgconfig
 
-# name repository tag kind [meson options]
+# name repository tag commit kind [meson options]
 build() {
-    local name=$1 url=$2 tag=$3 kind=$4
-    shift 4
+    local name=$1 url=$2 tag=$3 commit=$4 kind=$5
+    shift 5
     if [ ! -d "$SRC/$name" ]; then
         git -c advice.detachedHead=false clone -q --depth 1 --branch "$tag" "$url" "$SRC/$name"
     fi
-    git -C "$SRC/$name" checkout -q --force "$tag"
+    git -C "$SRC/$name" -c advice.detachedHead=false checkout -q --force "$commit"
+    if [ "$(git -C "$SRC/$name" rev-parse HEAD)" != "$commit" ]; then
+        echo "$name: $SRC/$name is not at $commit ($tag)" >&2
+        exit 1
+    fi
     # The toolchain has no libssp, which libbluray asks for with MinGW
     # (the recipe drops the same line).
     [ "$name" != libbluray ] || sed -i "/find_library('ssp')/d" "$SRC/$name/meson.build"
@@ -75,16 +80,16 @@ build() {
     ninja -C "$build" install
 }
 
-while read -r name url tag; do
+while read -r name url tag commit; do
     [ -n "$name" ] || continue
     case $name in
         # Static: libdvdnav takes it in (this prefix comes before the
         # recipe's own libdvdread.a). With libdvdnav's GCC layout of bit
         # fields (libdvdnav asks for it, libdvdread does not): MinGW's
         # default gave libdvdnav garbage button rectangles.
-        libdvdread) build "$name" "$url" "$tag" static -Dlibdvdcss=disabled -Dc_args=-mno-ms-bitfields ;;
-        libdvdnav) build "$name" "$url" "$tag" shared ;;
-        libbluray) build "$name" "$url" "$tag" shared -Denable_tools=false -Dbdj_jar=enabled \
+        libdvdread) build "$name" "$url" "$tag" "$commit" static -Dlibdvdcss=disabled -Dc_args=-mno-ms-bitfields ;;
+        libdvdnav) build "$name" "$url" "$tag" "$commit" shared ;;
+        libbluray) build "$name" "$url" "$tag" "$commit" shared -Denable_tools=false -Dbdj_jar=enabled \
             -Dfreetype=enabled -Dlibxml2=enabled -Dfontconfig=disabled ;;
     esac
 done <<< "$LIBRARIES"

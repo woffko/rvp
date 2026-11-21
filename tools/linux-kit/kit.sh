@@ -191,13 +191,26 @@ QT_VERSION=6.10.3
 # Vulkan shaders with it while it builds), dav1d and AviSynth+'s headers
 # are built in the kit at the Windows build's versions: Ubuntu 22.04's are
 # too old for FFmpeg's master.
+# Every source is checked out at a full commit and checked after the
+# checkout (a tag or a branch can move); a tag's commit is named beside
+# it, and the two change together (the stamps and CI's cache keys name
+# the tags). MPV_COMMIT's short form names the built libmpv (.kit-mpv)
+# and CI's cache; MPV_COMMIT_FULL is the commit itself.
 MPV_COMMIT=b2c255c13e
+MPV_COMMIT_FULL=b2c255c13e8e37952dbac6c34da56a690560378b
 FFMPEG_COMMIT=37515cfd87561e07c5766ea04de5b1ca6f6c0a98
 LIBPLACEBO_COMMIT=a83aaeb4e60fdd7ed01619885f4f42bb0ef34eaa
+# libass's master and mpv-build's of the day the first alpha was built
+# (mpv-build would take libass's master and update itself).
+LIBASS_COMMIT=a6613d2554daff9e1b5ddf2dbfb3fc31b61b9448
+MPV_BUILD_COMMIT=9443097290e82008f26f1597590926c63e7ae053
 VULKAN_HEADERS_TAG=v1.4.366
+VULKAN_HEADERS_COMMIT=73814d006638aa00bd553215b054f0f02e457e22
 GLSLANG_TAG=16.6.0
+GLSLANG_COMMIT=e1b562a8bed273a02f30b59b66a5d499793cede5
 SHADERC_COMMIT=4f0683ab2419ecbb9e18c9edfd4ffd70c2ba8cc6
 DAV1D_TAG=1.5.4
+DAV1D_COMMIT=54706fc6bc0cdecab7e9593974a4039cc038fca7
 AVISYNTH_COMMIT=21fdc997f9724b994896ba5520ddf64d677976b3
 # The libmpv build's own revision, bumped when its options change (so that a
 # built or cached libmpv of the same commit is built again): 2 added
@@ -208,11 +221,22 @@ AVISYNTH_COMMIT=21fdc997f9724b994896ba5520ddf64d677976b3
 # with the kit's shaderc; 5 the encoders of Record Video and the
 # captures (x264, x265, vpx, aom, opus, lame, vorbis, webp); 6 the
 # licence files of what the kit builds into it (share/licenses, for the
-# packages' THIRD-PARTY.txt); 7 the SDK's too.
+# packages' THIRD-PARTY.txt); 7 the SDK's too. A new LIBASS_COMMIT,
+# MPV_BUILD_COMMIT or SDK version needs a new revision as well: neither
+# the stamp nor CI's cache key names them.
 MPV_BUILD=7
 VS_TAG=R73
+VS_COMMIT=76762f6a07d5169c21903972f67827fc108020ba
+# VapourSynth's headers at VS_COMMIT, each with its SHA-256.
+VS_HEADERS="VapourSynth4.h:a73a23aa9ea8395f475644344cf7b60fbc9de29a571b9af131361265c09c8530
+VSScript4.h:2c9497111c23784f9a2c3cf94007a1ee9abbfba47a1bb33a3e26eaf38c689b36
+VSHelper4.h:a648bc2123e17365548be83070a6f1363994ccef54433d3848aa84f15c419892
+VSConstants4.h:b1c4602c4022894c02609373ef30dd72a4f137fe40cffecf3ba7b9fe06388c53
+VapourSynth.h:0983c937cd369b7e1766913edd3c859ea1f93a79671579729f24eb90a91ce910
+VSHelper.h:11e2c4977127632aa0fb84c67d5d7eb7244764c52a94500797d4a3cac013e382"
 # The version in the Windows bundle (spikes/tools/windows-deps.sh).
 MVTOOLS_TAG=v24
+MVTOOLS_COMMIT=d9270bec9a39bc27cde78f3070cc93b2330d62d1
 JOBS=$(nproc)
 # A clone or fetch whose transfer stalls (the shared VM's network to GitHub
 # hung for half an hour) gives up after a minute below 1 KB/s.
@@ -342,8 +366,9 @@ step_deps() {
     local log=$LOG_DIR/deps.log
     {
         [ -x "$KIT_DIR/venv/bin/python" ] || python3 -m venv "$KIT_DIR/venv"
-        "$KIT_DIR/venv/bin/pip" install -q --upgrade pip
-        "$KIT_DIR/venv/bin/pip" install -q 'meson>=1.6' aqtinstall jinja2
+        # pip, meson, aqtinstall and jinja2 at the versions and by the
+        # hashes of requirements.txt.
+        "$KIT_DIR/venv/bin/pip" install -q --require-hashes -r "$REPO/tools/linux-kit/requirements.txt"
         if [ ! -x "$(qt_dir)/bin/qmake" ]; then
             # aqt writes aqtinstall.log into the current directory.
             (cd "$KIT_DIR" && "$KIT_DIR/venv/bin/aqt" install-qt linux desktop "$QT_VERSION" linux_gcc_64 \
@@ -360,23 +385,36 @@ step_deps() {
 }
 
 # VapourSynth headers only: libmpv loads libvapoursynth-script at run time.
-# vs_header NAME: VapourSynth's header NAME at VS_TAG into the kit's
-# vs-sdk, from the source cache when it has VapourSynth.
+# vs_header NAME: VapourSynth's header NAME at VS_COMMIT into the kit's
+# vs-sdk, from the source cache when it has VapourSynth, checked by its
+# SHA-256 in VS_HEADERS (a copy that differs is fetched again).
 vs_header() {
-    local target=$KIT_DIR/vs-sdk/include/vapoursynth/$1
-    [ -s "$target" ] && return 0
-    if [ -d "${RVP_KIT_SOURCES:-/nonexistent}/vapoursynth.git" ]; then
-        git --git-dir="$RVP_KIT_SOURCES/vapoursynth.git" show "$VS_TAG:include/$1" > "$target"
-    else
-        curl -fsSL "https://raw.githubusercontent.com/vapoursynth/vapoursynth/$VS_TAG/include/$1" -o "$target"
+    local target=$KIT_DIR/vs-sdk/include/vapoursynth/$1 entry sha256=""
+    for entry in $VS_HEADERS; do
+        [ "${entry%%:*}" = "$1" ] && sha256=${entry#*:}
+    done
+    [ -n "$sha256" ] || { echo "vs_header: no SHA-256 for $1" >&2; return 1; }
+    if [ -s "$target" ] && echo "$sha256  $target" | sha256sum -c --quiet - > /dev/null 2>&1; then
+        return 0
     fi
+    if [ -d "${RVP_KIT_SOURCES:-/nonexistent}/vapoursynth.git" ]; then
+        git --git-dir="$RVP_KIT_SOURCES/vapoursynth.git" show "$VS_COMMIT:include/$1" > "$target.part"
+    else
+        curl -fsSL "https://raw.githubusercontent.com/vapoursynth/vapoursynth/$VS_COMMIT/include/$1" -o "$target.part"
+    fi
+    if ! echo "$sha256  $target.part" | sha256sum -c --quiet - > /dev/null 2>&1; then
+        echo "vs_header: $1 at $VS_COMMIT: unexpected SHA-256" >&2
+        rm -f "$target.part"
+        return 1
+    fi
+    mv "$target.part" "$target"
 }
 
 vs_headers() {
     local dir=$KIT_DIR/vs-sdk
     mkdir -p "$dir/include/vapoursynth" "$dir/lib/pkgconfig"
     for header in VapourSynth4.h VSScript4.h VSHelper4.h VSConstants4.h; do
-        vs_header "$header"
+        vs_header "$header" || return 1
     done
     cat > "$dir/lib/pkgconfig/vapoursynth-script.pc" << EOF
 prefix=$dir
@@ -401,7 +439,7 @@ kit_sdk() {
         rm -rf "$sdk" "$src"
         mkdir -p "$src" "$sdk/lib/pkgconfig" "$sdk/include" "$sdk/bin"
         {
-            kit_clone https://github.com/KhronosGroup/Vulkan-Headers.git "$src/vulkan" "$VULKAN_HEADERS_TAG" &&
+            kit_clone https://github.com/KhronosGroup/Vulkan-Headers.git "$src/vulkan" "$VULKAN_HEADERS_COMMIT" &&
                 cmake -Wno-dev -G Ninja -S "$src/vulkan" -B "$src/vulkan/build" -DCMAKE_INSTALL_PREFIX="$sdk" \
                     -DVULKAN_HEADERS_ENABLE_TESTS=OFF -DVULKAN_HEADERS_ENABLE_MODULE=OFF &&
                 cmake --install "$src/vulkan/build" &&
@@ -411,7 +449,7 @@ kit_sdk() {
                     > "$sdk/lib/pkgconfig/vulkan.pc"
         } >&2 || return 1
         {
-            kit_clone https://github.com/KhronosGroup/glslang.git "$src/glslang" "$GLSLANG_TAG" &&
+            kit_clone https://github.com/KhronosGroup/glslang.git "$src/glslang" "$GLSLANG_COMMIT" &&
                 cmake -Wno-dev -G Ninja -S "$src/glslang" -B "$src/glslang/build" -DCMAKE_BUILD_TYPE=Release \
                     -DCMAKE_INSTALL_PREFIX="$sdk" -DENABLE_OPT=OFF -DGLSLANG_TESTS=OFF -DBUILD_TESTING=OFF \
                     -DBUILD_SHARED_LIBS=OFF &&
@@ -439,7 +477,7 @@ kit_sdk() {
                     > "$sdk/lib/pkgconfig/shaderc.pc"
         } >&2 || return 1
         {
-            kit_clone https://code.videolan.org/videolan/dav1d.git "$src/dav1d" "$DAV1D_TAG" &&
+            kit_clone https://code.videolan.org/videolan/dav1d.git "$src/dav1d" "$DAV1D_COMMIT" &&
                 meson setup "$src/dav1d/build" "$src/dav1d" --prefix="$sdk" --libdir=lib --buildtype=release \
                     --default-library=static -Denable_tools=false -Denable_tests=false &&
                 ninja -C "$src/dav1d/build" install
@@ -533,12 +571,23 @@ step_mpv() {
         export GIT_TERMINAL_PROMPT=0
         sdk=$(kit_sdk) || exit 1
         export PATH=$sdk/bin:$PATH
-        PKG_CONFIG_PATH=$sdk/lib/pkgconfig:$(vs_headers):${PKG_CONFIG_PATH:-}
+        vs=$(vs_headers) || exit 1
+        PKG_CONFIG_PATH=$sdk/lib/pkgconfig:$vs:${PKG_CONFIG_PATH:-}
         export PKG_CONFIG_PATH
+        if [ "${MPV_COMMIT_FULL:0:${#MPV_COMMIT}}" != "$MPV_COMMIT" ]; then
+            echo "MPV_COMMIT_FULL is not MPV_COMMIT"
+            exit 1
+        fi
         # libplacebo compiles its shaders with the kit's shaderc: with glslang
         # it took some libraries from Ubuntu's glslang 11.8 and libmpv
         # failed at its first shader (an undefined GetDefaultResources).
-        [ -d "$build" ] || git clone --depth 1 https://github.com/mpv-player/mpv-build "$build"
+        # mpv-build at its commit; its `update` runs with --skip-selfupdate
+        # below, or it would pull its own master.
+        [ -d "$build/.git" ] || git clone -q --filter=blob:none https://github.com/mpv-player/mpv-build "$build"
+        git -C "$build" cat-file -e "$MPV_BUILD_COMMIT^{commit}" 2> /dev/null ||
+            git -C "$build" fetch -q origin "$MPV_BUILD_COMMIT"
+        git -C "$build" -c advice.detachedHead=false checkout -q "$MPV_BUILD_COMMIT" || exit 1
+        [ "$(git -C "$build" rev-parse HEAD)" = "$MPV_BUILD_COMMIT" ] || exit 1
         cd "$build" || exit 1
         # Partial clones: much smaller, and a plain clone of libass fails
         # with git 2.34 on Ubuntu 22.04. mpv-build keeps existing checkouts.
@@ -548,9 +597,11 @@ step_mpv() {
             mpv=https://github.com/mpv-player/mpv.git; do
             [ -d "${repo%%=*}/.git" ] || git clone --filter=blob:none "${repo#*=}" "${repo%%=*}"
         done
+        # Each part at its commit (mpv-build reads them from config/).
         ./use-ffmpeg-custom "$FFMPEG_COMMIT"
+        ./use-libass-custom "$LIBASS_COMMIT"
         ./use-libplacebo-custom "$LIBPLACEBO_COMMIT"
-        ./use-mpv-custom "$MPV_COMMIT"
+        ./use-mpv-custom "$MPV_COMMIT_FULL"
         printf '%s\n' -Dlibmpv=true -Dcplayer=false -Dvapoursynth=enabled -Drubberband=enabled \
             -Dlua=luajit -Djavascript=disabled -Ddvdnav=enabled -Dlibbluray=enabled -Dcdda=enabled \
             -Duchardet=enabled -Dlibarchive=enabled -Dlcms2=enabled -Dvulkan=enabled \
@@ -569,8 +620,18 @@ step_mpv() {
             > ffmpeg_options
         printf '%s\n' -Dvulkan=enabled "-Dvulkan-registry=$sdk/share/vulkan/registry/vk.xml" \
             -Dglslang=disabled -Dshaderc=enabled > libplacebo_options
+        # mpv-build's `rebuild` without its `update`, which would pull
+        # mpv-build itself: update, the parts' commits checked, clean, build.
         # A failed rebuild left the last libmpv in place, which passed.
-        ./update && ./rebuild "-j$JOBS" && ./install
+        ./update --skip-selfupdate || exit 1
+        for part in ffmpeg="$FFMPEG_COMMIT" libass="$LIBASS_COMMIT" libplacebo="$LIBPLACEBO_COMMIT" \
+            mpv="$MPV_COMMIT_FULL"; do
+            if [ "$(git -C "${part%%=*}" rev-parse HEAD)" != "${part#*=}" ]; then
+                echo "${part%%=*} is not at ${part#*=}"
+                exit 1
+            fi
+        done
+        ./clean && ./build "-j$JOBS" && ./install
     ) > "$log" 2>&1
     local built=$?
     if [ "$built" -ne 0 ]; then
@@ -611,10 +672,9 @@ step_mvtools() {
     {
         export PATH=$KIT_DIR/venv/bin:$PATH
         export GIT_TERMINAL_PROMPT=0
-        vs_headers > /dev/null
-        for header in VapourSynth.h VSHelper.h; do
-            vs_header "$header"
-        done
+        # No build without the checked headers and source (the check below
+        # looks for the library).
+        rm -rf "$dir/build"
         mkdir -p "$dir/pkgconfig"
         cat > "$dir/pkgconfig/vapoursynth.pc" << EOF
 prefix=$KIT_DIR/vs-sdk
@@ -624,10 +684,13 @@ Description: VapourSynth headers for building plugins ($VS_TAG)
 Version: ${VS_TAG#R}
 Cflags: -I\${includedir}
 EOF
-        [ -d "$dir/src/.git" ] ||
-            kit_clone https://github.com/dubhater/vapoursynth-mvtools.git "$dir/src" "$MVTOOLS_TAG"
-        rm -rf "$dir/build"
-        PKG_CONFIG_PATH=$dir/pkgconfig meson setup "$dir/build" "$dir/src" --buildtype=release &&
+        # A source tree at another commit is cloned again.
+        if [ "$(git -C "$dir/src" rev-parse HEAD 2> /dev/null)" != "$MVTOOLS_COMMIT" ]; then
+            rm -rf "$dir/src"
+            kit_clone https://github.com/dubhater/vapoursynth-mvtools.git "$dir/src" "$MVTOOLS_COMMIT"
+        fi &&
+            vs_headers > /dev/null && vs_header VapourSynth.h && vs_header VSHelper.h &&
+            PKG_CONFIG_PATH=$dir/pkgconfig meson setup "$dir/build" "$dir/src" --buildtype=release &&
             ninja -C "$dir/build"
     } > "$log" 2>&1
     if [ -s "$(mvtools_lib)" ]; then
@@ -902,7 +965,7 @@ step_m2build() {
         export QMAKE MPV_LIB_DIR
         QMAKE=$(qt_dir)/bin/qmake
         MPV_LIB_DIR=$(mpv_lib_dir)
-        cargo build --release -p rvp-shell
+        cargo build --release --locked -p rvp-shell
     ) > "$log" 2>&1
     built=$?
     # A failed build leaves the last binary behind: cargo's own result counts.
@@ -1332,7 +1395,7 @@ step_m8package() {
         # LD_LIBRARY_PATH (DT_RPATH, which libmpv's own dependencies use).
         CARGO_TARGET_DIR=$REPO/target/package
         RUSTFLAGS='-C link-arg=-Wl,-rpath,$ORIGIN/../lib -C link-arg=-Wl,--disable-new-dtags'
-        cargo build --release -p rvp-shell
+        cargo build --release --locked -p rvp-shell
         rm -rf "$out"
         mkdir -p "$out"
         cargo xtask look "$out/look" > /dev/null
@@ -1805,7 +1868,7 @@ kit_cargo_test() {
         export QMAKE MPV_LIB_DIR
         QMAKE=$(qt_dir)/bin/qmake
         MPV_LIB_DIR=$(mpv_lib_dir)
-        cargo test --release "$@"
+        cargo test --release --locked "$@"
     ) >> "$log" 2>&1
 }
 
