@@ -818,7 +818,12 @@ smoothing for users without SVP, after a study of the engines.
   0x1100+ and 0x1200+).
 - RVP never ships libdvdcss, libaacs or keys (`tools/discs/build.sh` and
   `tools/libmpv/build.sh` fail on DVDCSS strings; `package.py --discs`
-  refuses such files); a user may put their own beside `rvp.exe`.
+  refuses such files, and `package.py` refuses a package with a library
+  that holds libdvdcss's `DVDCSS_` strings, `without_libdvdcss`); a user
+  may put their own beside `rvp.exe`. A release's Windows packages take
+  the newest libmpv `tools/libmpv/build.sh` made, never an older build
+  and never CI's: CI's packages are test artifacts made with shinchiro's
+  libmpv, which has libdvdcss inside, and pass `--test-libmpv` to say so.
   libdvdread is built with `-mno-ms-bitfields` like libdvdnav (MinGW's
   default layout broke the button rectangles).
 - A disc's menu sizes and places come unchecked: the Blu-ray plane

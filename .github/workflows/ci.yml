@@ -264,8 +264,11 @@ jobs:
           $vapoursynth = Join-Path $env:RUNNER_TEMP 'vapoursynth'
           python tools/packaging/vapoursynth.py --out $vapoursynth --vcomp "$runtime\vcomp140.dll" `
             --cache (Join-Path $env:RUNNER_TEMP 'vapoursynth-cache') --sevenzip 7z
+          # CI's libmpv is shinchiro's, which has libdvdcss inside: these
+          # are test packages and say so (--test-libmpv); a release's are
+          # built with RVP's own libmpv, which package.py checks.
           python tools/packaging/package.py windows --exe target/release/rvp.exe --qt $env:QT_ROOT_DIR `
-            --mpv "$env:MPV_LIB_DIR\libmpv-2.dll" --runtime $runtime --vapoursynth $vapoursynth --look look --out packages `
+            --mpv "$env:MPV_LIB_DIR\libmpv-2.dll" --test-libmpv --runtime $runtime --vapoursynth $vapoursynth --look look --out packages `
             --makensis $env:MAKENSIS --objdump 'C:\Program Files\LLVM\bin\llvm-objdump.exe'
       - name: Windows' media controls
         shell: powershell

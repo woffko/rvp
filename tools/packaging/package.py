@@ -166,6 +166,22 @@ def pe_imports(objdump: str, path: Path) -> list[str]:
     return [line.split(":", 1)[1].strip() for line in output.splitlines() if "DLL Name:" in line]
 
 
+def without_libdvdcss(root: Path, pattern: str, excused: frozenset[str] = frozenset()) -> None:
+    """RVP never ships libdvdcss (goal R's decision): no library of a
+    package may hold its code, which the names of its settings show
+    (`DVDCSS_METHOD`...; tools/libmpv/build.sh and tools/discs/build.sh
+    look for the same in what they build). A libdvdread that only loads
+    the user's own libdvdcss has none of them. `excused` is CI's test
+    libmpv, by its file name (--test-libmpv)."""
+    for library in sorted(root.rglob(pattern)):
+        if library.is_file() and not library.is_symlink() and library.name not in excused:
+            if b"DVDCSS_" in library.read_bytes():
+                raise SystemExit(
+                    f"{library} contains libdvdcss, which RVP never ships: "
+                    "a package takes RVP's own libmpv (tools/libmpv/build.sh)"
+                )
+
+
 def windows_bundle(args, bundle: Path) -> None:
     """rvp.exe with Qt (QML and plugins whole, the DLLs it reaches), libmpv
     and the C++ runtime, as windeployqt would lay them out."""
@@ -233,6 +249,13 @@ def windows_bundle(args, bundle: Path) -> None:
     remote_folder(Path(args.look), bundle)
     shutil.copy2(ROOT / "LICENSE", bundle / "LICENSE.txt")
     third_party(args, bundle, "licenses", "LICENSE.txt", "x86_64-pc-windows-msvc")
+    # CI builds and tests with shinchiro's libmpv, which has libdvdcss
+    # inside: its packages are test artifacts and say so; a release never
+    # passes --test-libmpv, so a wrong libmpv stops it here.
+    excused = frozenset({Path(args.mpv).name}) if args.test_libmpv else frozenset()
+    without_libdvdcss(bundle, "*.dll", excused)
+    if args.test_libmpv:
+        print(f"bundle: a TEST package, with {Path(args.mpv).name} as given (not for a release)")
     print(f"bundle: {len(copied)} Qt libraries in {bundle}")
 
 
@@ -871,6 +894,7 @@ def linux(args) -> None:
     epoch = commit_time()
     appdir = out / "AppDir"
     relied = linux_appdir(args, appdir)
+    without_libdvdcss(appdir, "*.so*")
     touch_all(appdir, epoch)
     deb(appdir, relied, out / f"rvp_{debian_version()}_amd64.deb", epoch)
     appimage(args, appdir, out / f"RVP-{version()}-x86_64.AppImage", epoch)
@@ -884,6 +908,11 @@ def main() -> int:
     win.add_argument("--exe", required=True)
     win.add_argument("--qt", required=True)
     win.add_argument("--mpv", required=True)
+    win.add_argument(
+        "--test-libmpv",
+        action="store_true",
+        help="CI's test packages only: take a libmpv that contains libdvdcss as it is (never a release)",
+    )
     win.add_argument("--runtime", required=True)
     win.add_argument("--vapoursynth", help="RVP's VapourSynth runtime (tools/packaging/vapoursynth.py)")
     win.add_argument("--whisper", help="whisper.cpp's CPU and Vulkan engine (tools/whisper/build.sh)")
