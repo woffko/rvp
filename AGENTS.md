@@ -78,6 +78,11 @@ smoothing for users without SVP, after a study of the engines.
   observable (use `BTreeMap`/`BTreeSet`).
 - `cargo xtask ci` must pass before every commit: fmt, clippy with warnings
   denied, all tests, `cargo deny check`.
+  It runs this system's tests only: what a test expects of paths
+  (`playlist::local_path` gives Windows its separators) or of mpv (Windows'
+  libmpv is newer than Linux's 0.37: `${osd-ass-cc/0}` is valid UTF-8
+  there) shows first in GitHub's Windows job, so read that job after a
+  push.
 
 ## Skin engine notes
 

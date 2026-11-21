@@ -89,10 +89,21 @@ Check 'm15_installed_remote_is_the_bundles' $sameLua
 Write-Host '== 2. Unified Remote runs the remote''s actions'
 if (-not (Get-Process RemoteServerWin -ErrorAction SilentlyContinue)) {
     Start-Process $server | Out-Null
-    Start-Sleep -Seconds 8
 }
-$status = Manager 'system/status'
-Check 'm15_unified_remote_runs' ($status -match '"running"\s*:\s*true') ($status -split "`n" | Select-String 'version"' | Select-Object -First 1)
+# The server's start takes its time on a busy VM (8 s were not enough
+# once): ask until it says it runs, for a minute at most.
+$status = ''
+foreach ($try in 1..30) {
+    $status = Manager 'system/status'
+    if ($status -match '"running"\s*:\s*true') { break }
+    Start-Sleep -Seconds 2
+}
+$said = $status -split "`n" | Select-String 'version"' | Select-Object -First 1
+if ($null -eq $said) {
+    $said = $status -replace '\s+', ' '
+    $said = $said.Substring(0, [Math]::Min(200, $said.Length))
+}
+Check 'm15_unified_remote_runs' ($status -match '"running"\s*:\s*true') "$said"
 Manager 'system/reload' | Out-Null
 Start-Sleep -Seconds 3
 
