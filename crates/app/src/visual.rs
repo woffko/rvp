@@ -208,6 +208,24 @@ pub fn pictures(folder: &Path) -> Vec<PathBuf> {
     files
 }
 
+/// The slideshow's pictures for the window: each one's `file://` URL, with
+/// the bytes a URL reserves (`#`, `?`, `%`, spaces) escaped, and its file
+/// name to show.
+fn slides(files: &[PathBuf]) -> Vec<Value> {
+    files
+        .iter()
+        .map(|path| {
+            json!({
+                "url": crate::media::file_url(&path.to_string_lossy()),
+                "name": path
+                    .file_name()
+                    .map(|name| name.to_string_lossy().into_owned())
+                    .unwrap_or_default(),
+            })
+        })
+        .collect()
+}
+
 /// This run's visualization state.
 #[derive(Debug, Clone, Default, PartialEq)]
 pub(crate) struct VisualState {
@@ -384,13 +402,9 @@ impl App {
                 files.extend(pictures(folder));
             }
         }
-        let files: Vec<Value> = files
-            .iter()
-            .map(|path| Value::String(path.to_string_lossy().into_owned()))
-            .collect();
         json!({
             "shown": self.visual.slideshow,
-            "files": files,
+            "files": slides(&files),
             "seconds": visual.slide_seconds,
             "fade": visual.fade_seconds,
             "fill": visual.fill,
@@ -413,5 +427,44 @@ mod tests {
         let scope = graph(VisualMode::Scope, [1280, 720], 25).unwrap_or_default();
         assert!(scope.contains("avectorscope=s=720x720:r=25"), "{scope}");
         assert_eq!(graph(VisualMode::Slideshow, [1280, 720], 30), None);
+    }
+
+    #[test]
+    fn slides_are_urls_that_keep_every_name_whole() {
+        let folder = if cfg!(windows) {
+            r"C:\Pictures\Album #1"
+        } else {
+            "/home/u/Album #1"
+        };
+        let files: Vec<PathBuf> = ["a%41.jpg", "what?.png", "100%.jpg"]
+            .iter()
+            .map(|name| Path::new(folder).join(name))
+            .collect();
+        let shown = slides(&files);
+        let field = |i: usize, key: &str| shown[i][key].as_str().unwrap_or_default().to_owned();
+        let start = if cfg!(windows) {
+            "file:///C:/Pictures/Album%20%231/"
+        } else {
+            "file:///home/u/Album%20%231/"
+        };
+        // A raw `#` ended the path at the folder, `?` began a query and
+        // `%41` read as `A`.
+        assert_eq!(field(0, "url"), format!("{start}a%2541.jpg"));
+        assert_eq!(field(1, "url"), format!("{start}what%3F.png"));
+        assert_eq!(field(2, "url"), format!("{start}100%25.jpg"));
+        for (i, path) in files.iter().enumerate() {
+            assert_eq!(
+                crate::media::file_path(&field(i, "url")),
+                path.to_string_lossy().replace('\\', "/")
+            );
+        }
+        // The window shows the file's name as it is.
+        assert_eq!(field(0, "name"), "a%41.jpg");
+        assert_eq!(field(1, "name"), "what?.png");
+        if cfg!(windows) {
+            // A network folder's pictures keep their server.
+            let shared = slides(&[PathBuf::from(r"\\server\share\a b.jpg")]);
+            assert_eq!(shared[0]["url"], "file:////server/share/a%20b.jpg");
+        }
     }
 }

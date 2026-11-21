@@ -1,7 +1,8 @@
 // The slideshow for audio files (M12's Visualization > Slideshow): the
-// pictures Player.slideshow lists (JSON, `App::slideshow_json`), one after
-// another with a cross-fade, over the video area. Jump to previous/next
-// slide moves it (`move`).
+// pictures Player.slideshow lists (JSON, `App::slideshow_json`: each one's
+// file URL, escaped there, and its name), one after another with a
+// cross-fade, over the video area. Jump to previous/next slide moves it
+// (`move`).
 import QtQuick
 import Rvp
 
@@ -46,15 +47,12 @@ Item {
         showSlide()
         timer.restart()
     }
-    function url(path) {
-        return "file:///" + path.replace(/\\/g, "/").replace(/^\/+/, "")
-    }
     function showSlide() {
-        const path = data.files[order[index]]
+        const slide = data.files[order[index]]
         const next = firstShows ? second : first
-        next.source = url(path)
+        next.source = slide.url
         firstShows = !firstShows
-        name.text = path.split(/[\\/]/).pop()
+        name.text = slide.name
     }
     function fillMode() {
         if (data.fill === "fill")

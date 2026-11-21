@@ -422,6 +422,15 @@ fn power_actions_count_down_and_the_timer_can_be_cancelled() {
         h.app.power_tick(now + Duration::from_secs(2)),
         [UiRequest::Exit]
     );
+    // A timer fires a second from now at the soonest and at its limit at
+    // the latest (so far ahead an `Instant` would not exist).
+    let deadline = |app: &App| app.power().timer.as_ref().map(|timer| timer.deadline);
+    h.app.set_power_timer(PowerTimer::In, 0, false, "0:00", now);
+    assert_eq!(deadline(&h.app), Some(now + Duration::from_secs(1)));
+    h.app
+        .set_power_timer(PowerTimer::In, u64::MAX, false, "far", now);
+    let limit = Duration::from_secs(u64::from(rvp_app::power::TIMER_LIMIT));
+    assert_eq!(deadline(&h.app), Some(now + limit));
 }
 
 #[test]

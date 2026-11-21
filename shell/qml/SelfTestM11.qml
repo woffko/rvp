@@ -245,28 +245,74 @@ Item {
                           () => "entries " + s.shown_entries)) {
                 // The power notice through the dry-run hook: a timer of a
                 // second starts the countdown, which is cancelled first.
+                // The timer comes from its dialog (Misc > Shutdown in).
                 setSetting("playback.finished.countdown", 5)
                 m11.dryRunBefore = s.power_dry_run
-                player.set_power_timer(1, 1, false, "1 s")
+                player.run_action("shutdown-in")
             }
             break
-        case 29:
+        case 29: {
+            const dialogs = host.playbackDialogs()
+            if (t.waitFor("timer_dialog_opens", () => dialogs !== null && dialogs.current !== null
+                              && dialogs.current.objectName === "timerDialog" && dialogs.current.opened,
+                          5000)) {
+                // What the dialog takes, and what is no time: negative
+                // parts, minutes or seconds past 59, no time at all, an
+                // "At" time no day has, an "In" time past the limit.
+                const wrong = []
+                const refused = [["-5", false], ["0", false], ["", false], ["0:00", false], ["1:60", false],
+                                 ["1:-5", false], ["1:30:60", false], ["1.5", false], ["abc", false],
+                                 ["14401", false], ["99:99", true], ["24:00", true], ["12:60", true],
+                                 ["-1:00", true], ["1:02:03", true], ["", true]]
+                for (const [text, at] of refused)
+                    if (dialogs.timerAnswer(text, at) !== null)
+                        wrong.push((at ? "at " : "in ") + JSON.stringify(text))
+                const taken = [["90", false, 5400, "1:30"], ["1:30", false, 5400, "1:30"],
+                               ["0:00:30", false, 30, "0:00:30"], ["14400", false, 864000, "240:00"]]
+                for (const [text, at, seconds, label] of taken) {
+                    const answer = dialogs.timerAnswer(text, at)
+                    if (answer === null || answer.seconds !== seconds || answer.label !== label)
+                        wrong.push("in " + JSON.stringify(text) + " " + JSON.stringify(answer))
+                }
+                const at = dialogs.timerAnswer("23:59", true)
+                if (at === null || !(at.seconds > 0 && at.seconds <= 86400) || at.label !== "23:59")
+                    wrong.push("at \"23:59\" " + JSON.stringify(at))
+                t.check("timer_dialog_reads_times", wrong.length === 0, wrong.join(", "))
+                // A negative "In" time once fired at once.
+                const error = dialogs.typeTimer("-5", false)
+                const after = t.status()
+                t.check("timer_dialog_refuses_negative", error !== "" && after.power_timer === null
+                            && after.power_seconds === 0,
+                        "error " + JSON.stringify(error) + " timer " + after.power_timer)
+            }
+            break
+        }
+        case 30: {
+            const dialogs = host.playbackDialogs()
+            if (t.waitFor("timer_dialog_stays_open", () => dialogs.current.opened, 3000)) {
+                dialogs.typeTimer("0:00:01", false)
+                t.check("timer_dialog_sets_timer", t.status().power_timer === "0:00:01",
+                        "timer " + t.status().power_timer)
+            }
+            break
+        }
+        case 31:
             if (t.waitFor("power_countdown_starts", () => s.power_seconds > 0, 5000,
                           () => "seconds " + s.power_seconds))
                 player.cancel_countdown()
             break
-        case 30:
+        case 32:
             if (t.waitFor("power_countdown_cancelled", () => s.power_seconds === 0
                               && s.power_dry_run === m11.dryRunBefore, 3000,
                           () => "seconds " + s.power_seconds + " dry run " + s.power_dry_run))
                 player.set_power_timer(1, 1, false, "1 s")
             break
-        case 31:
+        case 33:
             t.waitFor("power_action_dry_run", () => s.power_dry_run.indexOf("shut down") >= 0
                           && s.power_seconds === 0, 12000,
                       () => "seconds " + s.power_seconds + " dry run " + s.power_dry_run)
             break
-        case 32: {
+        case 34: {
             // The Recycle Bin: a file of the test's own.
             m11.recycleFile = Tools.write_file(t.outDir + "/recycle-me.mkv", "RVP")
             player.open_files(m11.recycleFile, true)
@@ -275,7 +321,7 @@ Item {
             t.next()
             break
         }
-        case 33: {
+        case 35: {
             const dialogs = host.playbackDialogs()
             if (t.waitFor("recycle_asks_first", () => dialogs !== null && dialogs.data.kind === "recycle"
                               && dialogs.current !== null && dialogs.current.visible, 5000)) {
@@ -293,7 +339,7 @@ Item {
             }
             break
         }
-        case 34:
+        case 36:
             // A libmpv without libdvdnav (Ubuntu's in the WSL sysroot has
             // it; some distributions' do not): RVP refuses the disc, and the
             // audio joins a file that plays.
@@ -319,19 +365,19 @@ Item {
                 player.load_external_audio(player.option("audio"))
             }
             break
-        case 35:
+        case 37:
             if (t.waitFor("external_audio", () => s.audio_tracks === m11.audioTracks + 1, 8000,
                           () => "tracks " + s.audio_tracks)) {
                 Tools.set_clipboard_text(player.option("clip"))
                 player.run_action("open-clipboard")
             }
             break
-        case 36:
+        case 38:
             if (t.waitFor("open_from_clipboard", () => endsWith(s.path, "fixture-60s.mkv"), 10000,
                           () => "path " + s.path))
                 player.run_action("favorite-item")
             break
-        case 37:
+        case 39:
             // The files of the command line and the DVD (unless skipped).
             if (t.waitFor("favorites_and_recent", () => s.favorites === 1
                               && s.recent >= (m11.dvdSkipped ? 3 : 4), 3000,
@@ -340,11 +386,11 @@ Item {
                 player.open_files("https://127.0.0.1:9/watch?v=m11", false)
             }
             break
-        case 38:
+        case 40:
             t.waitFor("ytdl_falls_back", () => String(s.osd).indexOf("yt-dlp:") === 0, 10000,
                       () => "osd " + s.osd)
             break
-        case 39: {
+        case 41: {
             let devices = null
             try { devices = JSON.parse(player.devices_json()) } catch (error) { devices = null }
             t.check("capture_devices_listed", Array.isArray(devices),

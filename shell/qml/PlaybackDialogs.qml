@@ -311,6 +311,53 @@ Item {
         }
     }
 
+    // The shutdown timer's text as the seconds until it fires and the
+    // menu's label, or null when it is no time. "At" is a time of the day,
+    // hh or hh:mm (hours 0 to 23); "In" is minutes, h:mm or h:mm:ss, from
+    // a second to the timer's limit (`rvp_app::power::TIMER_LIMIT`, ten
+    // days). Parts are whole numbers; minutes and seconds after an hour
+    // are 0 to 59.
+    readonly property int timerLimit: 10 * 24 * 60 * 60
+    function timerAnswer(text, at) {
+        const parts = text.trim().split(":")
+        if (parts.length > (at ? 2 : 3) || !parts.every(part => /^[0-9]{1,7}$/.test(part)))
+            return null
+        const numbers = parts.map(Number)
+        if (numbers.slice(1).some(n => n > 59))
+            return null
+        if (at) {
+            if (numbers[0] > 23)
+                return null
+            const target = new Date()
+            target.setHours(numbers[0], numbers.length > 1 ? numbers[1] : 0, 0, 0)
+            if (target.getTime() <= Date.now())
+                target.setDate(target.getDate() + 1)
+            return { seconds: (target.getTime() - Date.now()) / 1000, label: Qt.formatTime(target, "hh:mm") }
+        }
+        let seconds = 0
+        for (const n of numbers)
+            seconds = seconds * 60 + n
+        // "1:30" is an hour and a half; "45" is minutes.
+        seconds *= numbers.length === 3 ? 1 : 60
+        if (seconds < 1 || seconds > timerLimit)
+            return null
+        // The menu names the time h:mm (h:mm:ss), the forms its
+        // translations have, however it was written ("90" too).
+        const pad = n => String(n).padStart(2, "0")
+        return { seconds: seconds, label: Math.floor(seconds / 3600) + ":" + pad(Math.floor(seconds % 3600 / 60))
+                                          + (seconds % 60 ? ":" + pad(seconds % 60) : "") }
+    }
+
+    // Types `text` into the open timer dialog as an "At" or "In" time and
+    // presses OK (self-test); returns the error the dialog shows.
+    function typeTimer(text, at) {
+        timerAt.checked = at
+        timerIn.checked = !at
+        timerField.text = text
+        timerDialog.accept()
+        return timerError.text
+    }
+
     // The shutdown timer (Misc > Shutdown at/in, Add a task to turn off PC
     // or exit RVP). The local time is QML's.
     Dialog {
@@ -322,34 +369,16 @@ Item {
         anchors.centerIn: parent
         standardButtons: Dialog.Ok | Dialog.Cancel
         onAccepted: {
-            const parts = timerField.text.trim().split(":").map(Number)
-            if (parts.length < 1 || parts.length > 3 || parts.some(isNaN)) {
+            const answer = holder.timerAnswer(timerField.text, timerAt.checked)
+            if (answer === null) {
                 timerError.text = qsTr("Write the time as hh:mm")
-                open()
+                // Open again once OK has closed the dialog (it closes after
+                // this handler), with the error shown.
+                Qt.callLater(() => timerDialog.open())
                 return
             }
-            let seconds = 0
-            let label = ""
-            if (timerAt.checked) {
-                const target = new Date()
-                target.setHours(parts[0], parts.length > 1 ? parts[1] : 0, 0, 0)
-                if (target.getTime() <= Date.now())
-                    target.setDate(target.getDate() + 1)
-                seconds = (target.getTime() - Date.now()) / 1000
-                label = Qt.formatTime(target, "hh:mm")
-            } else {
-                for (const part of parts)
-                    seconds = seconds * 60 + part
-                // "1:30" is an hour and a half; "45" is minutes.
-                seconds *= parts.length === 3 ? 1 : 60
-                // The menu names the time h:mm (h:mm:ss), the forms its
-                // translations have, however it was written ("90" too).
-                const whole = Math.round(seconds)
-                const pad = n => String(n).padStart(2, "0")
-                label = Math.floor(whole / 3600) + ":" + pad(Math.floor(whole % 3600 / 60))
-                        + (whole % 60 ? ":" + pad(whole % 60) : "")
-            }
-            holder.player.set_power_timer(timerAt.checked ? 0 : 1, seconds, timerExit.checked, label)
+            holder.player.set_power_timer(timerAt.checked ? 0 : 1, answer.seconds, timerExit.checked,
+                                          answer.label)
         }
         contentItem: ColumnLayout {
             RowLayout {

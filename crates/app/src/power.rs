@@ -9,8 +9,10 @@
 //! tests never power a machine off.
 //!
 //! The timer takes the seconds until it fires (the window's dialog turns
-//! a time of day into them, as it knows the local time) and a label for
-//! the menu ("at 23:30", "in 1:30:00").
+//! a time of day into them, as it knows the local time, and refuses what
+//! is no time) and a label for the menu ("at 23:30", "in 1:30:00"). It
+//! fires a second from now at the soonest and [`TIMER_LIMIT`] at the
+//! latest.
 
 use std::io::{self, Write as _};
 use std::path::Path;
@@ -18,6 +20,10 @@ use std::time::{Duration, Instant};
 
 use crate::action::{PowerAction, PowerTimer};
 use crate::app::{App, UiRequest};
+
+/// The latest a timer fires: ten days from now (an "At" time is within a
+/// day; the dialog refuses an "In" time above this).
+pub const TIMER_LIMIT: u32 = 10 * 24 * 60 * 60;
 
 /// What a countdown or the timer ends with.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -158,8 +164,8 @@ impl App {
         UiRequest::PowerTimerDialog(kind)
     }
 
-    /// The timer's dialog's answer: fire in `seconds` with `ending`;
-    /// `label` names it in the menu.
+    /// The timer's dialog's answer: fire in `seconds` (from 1 to
+    /// [`TIMER_LIMIT`]) with `ending`; `label` names it in the menu.
     pub fn set_power_timer(
         &mut self,
         kind: PowerTimer,
@@ -181,7 +187,7 @@ impl App {
         self.power.timer = Some(Timer {
             kind,
             ending,
-            deadline: now + Duration::from_secs(seconds.max(1)),
+            deadline: now + Duration::from_secs(seconds.clamp(1, u64::from(TIMER_LIMIT))),
             label: label.to_owned(),
         });
         UiRequest::Osd(format!("{}: {label}", ending_text(ending)))

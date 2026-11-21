@@ -47,7 +47,8 @@ pub struct ExtraWindow<'a> {
     /// size of "any": the screen bounds it).
     pub min: (i32, i32),
     pub max: (i32, i32),
-    /// Sizes go in these steps (a classic playlist's 25 by 29 pixels).
+    /// Sizes go in these steps (a classic playlist's 25 by 29 pixels),
+    /// both above 0.
     pub step: Option<(i32, i32)>,
     /// The window's shape: polygons in its pixels (empty: rectangular).
     pub region: Vec<Vec<(i32, i32)>>,
@@ -326,10 +327,15 @@ impl Skin {
             .into_iter()
             .map(|area| {
                 let attrs = &area.attrs;
-                let step = attrs.get("RvpResizeStep").and_then(|step| {
-                    let (w, h) = step.split_once(',')?;
-                    Some((w.trim().parse().ok()?, h.trim().parse().ok()?))
-                });
+                // The window divides its size by them: a step of 0 or below
+                // is none.
+                let step = attrs
+                    .get("RvpResizeStep")
+                    .and_then(|step| {
+                        let (w, h) = step.split_once(',')?;
+                        Some((w.trim().parse().ok()?, h.trim().parse().ok()?))
+                    })
+                    .filter(|&(w, h): &(i32, i32)| w > 0 && h > 0);
                 let region = attrs
                     .get("RvpRegion")
                     .map(|text| {
@@ -692,6 +698,26 @@ mod tests {
         assert!(limit(load(&window(0, 50_000, 50_000))).contains("50000x50000"));
         assert!(limit(load(&window(0, limits::WINDOW_SIDE + 1, 1))).contains("W0"));
         assert!(limit(load(&window(0, 3000, 3000))).contains("W0"));
+    }
+
+    #[test]
+    fn a_skin_windows_resize_steps_are_positive() {
+        let steps = |step: &str| {
+            let markup = format!(
+                "<Skin><W RvpWindow='1' Width='275' Height='116' RvpResizeStep='{step}'>\
+                 <Control/></W></Skin>"
+            );
+            Skin::load(archive(&markup, &[]), "VideoSkin.xml")
+                .unwrap()
+                .extra_windows()[0]
+                .step
+        };
+        assert_eq!(steps("25,29"), Some((25, 29)));
+        assert_eq!(steps(" 25 , 29 "), Some((25, 29)));
+        // The window divides its size by a step: 0 gave it no size at all.
+        for wrong in ["0,0", "25,0", "0,29", "-25,29", "25,-29", "25", "a,b"] {
+            assert_eq!(steps(wrong), None, "{wrong}");
+        }
     }
 
     #[test]

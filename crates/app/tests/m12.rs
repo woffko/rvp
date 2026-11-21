@@ -651,9 +651,10 @@ fn audio_files_show_ffmpegs_visualizations_and_the_slideshow() {
         serde_json::from_str(&h.app.slideshow_json()).expect("the slideshow's JSON");
     let files = show["files"].as_array().cloned().unwrap_or_default();
     assert!(
-        files.iter().any(|file| file
-            .as_str()
-            .is_some_and(|f| f.ends_with("fixture-marker.png"))),
+        files.iter().any(|file| file["name"] == "fixture-marker.png"
+            && file["url"].as_str().is_some_and(
+                |url| url.starts_with("file:///") && url.ends_with("/fixture-marker.png")
+            )),
         "{show}"
     );
     assert_eq!(

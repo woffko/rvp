@@ -18,8 +18,9 @@ Item {
     // The main window (Window Size Control places it).
     required property var window
     property var data: ({})
-    // The open dialog (self-test).
+    // The open dialog, and the consecutive images' interval (self-test).
     property var current: null
+    property alias consecutiveInterval: intervalSlider
 
     function show(json) {
         data = JSON.parse(json)
@@ -33,7 +34,7 @@ Item {
             inputField.forceActiveFocus()
             break
         case "consecutive":
-            intervalField.text = String(data.interval)
+            intervalSlider.pick(data.interval)
             countBox.value = data.count
             open(consecutiveDialog)
             break
@@ -110,7 +111,8 @@ Item {
     }
 
     // Capture Consecutive Images: every so many seconds of playback, a
-    // number of images.
+    // number of images. The interval is a slider (no decimal to type in
+    // the locale's way) over the stops of the Capture page's.
     Dialog {
         popupType: Tools.native_video ? Popup.Window : Popup.Item
         id: consecutiveDialog
@@ -119,15 +121,38 @@ Item {
         modal: true
         anchors.centerIn: parent
         standardButtons: Dialog.Ok | Dialog.Cancel
-        onAccepted: holder.answer(JSON.stringify({ interval: parseFloat(intervalField.text),
+        onAccepted: holder.answer(JSON.stringify({ interval: intervalSlider.seconds,
                                                     count: countBox.value }))
         GridLayout {
             columns: 2
             Label { text: qsTr("Every (seconds)") }
-            TextField {
-                id: intervalField
-                Layout.preferredWidth: 120
-                validator: DoubleValidator { bottom: 0.1; top: 3600; decimals: 2 }
+            RowLayout {
+                Slider {
+                    id: intervalSlider
+                    objectName: "intervalSlider"
+                    // Settings.qml's capture.interval stops.
+                    readonly property var values: [0.1, 0.2, 0.5, 1, 2, 3, 5, 10, 15, 30, 60, 120, 300,
+                                                   600, 1800, 3600]
+                    readonly property real seconds: values[Math.round(value)]
+                    Layout.preferredWidth: 200
+                    from: 0
+                    to: values.length - 1
+                    stepSize: 1
+                    snapMode: Slider.SnapAlways
+                    // The stop nearest `v` (the dialog's start, self-test).
+                    function pick(v) {
+                        let best = 0
+                        for (let i = 1; i < values.length; ++i)
+                            if (Math.abs(values[i] - v) < Math.abs(values[best] - v))
+                                best = i
+                        value = best
+                    }
+                }
+                Label {
+                    textFormat: Text.PlainText
+                    text: String(intervalSlider.seconds)
+                    Layout.minimumWidth: 40
+                }
             }
             Label { text: qsTr("Images") }
             SpinBox { id: countBox; from: 1; to: 10000; editable: true }

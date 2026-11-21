@@ -19,6 +19,8 @@ Item {
     property string images: ""
     property string lastSaved: ""
     property int filesBefore: 0
+    // Capture Consecutive Images' dialog was answered (case 19).
+    property bool consecutiveAnswered: false
     // --selftest=shaders: the HLSL shaders and where mpv's log was read to.
     property var hlsl: []
     property int shaderIndex: 0
@@ -453,16 +455,40 @@ Item {
                 t.check("capture_clipboard", info.width === s.video_width && info.height > 0,
                         JSON.stringify(info))
                 filesBefore = files().length
-                setSetting("capture.interval", 0.2)
+                setSetting("capture.interval", 0.5)
                 setSetting("capture.count", 3)
-                player.run_action("consecutive-toggle")
+                player.run_action("consecutive-images")
             }
             break
-        case 19:
+        case 19: {
+            // Capture Consecutive Images through its dialog: the slider
+            // starts at the setting, and the stop picked is the interval
+            // (a typed "0,5" once became 0 s, then 0.1 s).
+            const d = dialogs()
+            if (!consecutiveAnswered) {
+                const opened = d !== null && d.current !== null
+                    && d.current.objectName === "consecutiveDialog" && d.current.opened
+                if (!opened && Date.now() - t.stepStarted < 5000)
+                    break
+                consecutiveAnswered = true
+                t.check("consecutive_dialog_interval", opened && d.consecutiveInterval.seconds === 0.5,
+                        opened ? "slider " + d.consecutiveInterval.seconds : "no dialog")
+                if (opened) {
+                    d.consecutiveInterval.pick(0.2)
+                    d.current.accept()
+                } else {
+                    setSetting("capture.interval", 0.2)
+                    player.run_action("consecutive-toggle")
+                }
+                break
+            }
             // The images, not the notice: a later one may replace it.
-            t.waitFor("capture_consecutive", () => files().length === filesBefore + 3, 8000,
-                      () => (files().length - filesBefore) + " images, osd " + s.osd)
+            t.waitFor("capture_consecutive", () => files().length === filesBefore + 3
+                          && JSON.parse(player.settings_view(false)).settings.capture.interval === 0.2, 8000,
+                      () => (files().length - filesBefore) + " images, interval "
+                          + JSON.parse(player.settings_view(false)).settings.capture.interval + ", osd " + s.osd)
             break
+        }
         case 20:
             player.run_action("thumbnail-image")
             t.next()

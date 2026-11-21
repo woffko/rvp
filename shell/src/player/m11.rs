@@ -443,9 +443,15 @@ impl qobject::Player {
         } else {
             PowerTimer::In
         };
-        // Whole seconds of a timer are far inside u64.
+        // The dialog gives a time it read; anything else sets no timer.
+        if !seconds.is_finite() {
+            return;
+        }
+        // Within 1 and the timer's limit: whole seconds far inside u64.
         #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
-        let seconds = seconds.max(1.0).round() as u64;
+        let seconds = seconds
+            .clamp(1.0, f64::from(rvp_app::power::TIMER_LIMIT))
+            .round() as u64;
         let request =
             core.app
                 .set_power_timer(kind, seconds, exit, &label.to_string(), Instant::now());
@@ -682,6 +688,10 @@ pub(super) fn status(player: &qobject::Player, core: &Core) -> Vec<(&'static str
             ),
         ),
         ("power_seconds", player.power_seconds().to_string()),
+        (
+            "power_timer",
+            Value::from(app.power().timer.as_ref().map(|timer| timer.label.clone())).to_string(),
+        ),
         ("power_dry_run", Value::from(dry_run).to_string()),
         ("disc_titles", count(app.disc_titles().len())),
         (
