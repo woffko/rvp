@@ -3,8 +3,12 @@
 The kit builds libmpv, Qt, mvtools, the goal B spikes and the RVP player in
 user space and records the results in `docs/test-runs/`: S1 (SVP attaches),
 S2 (VapourSynth interpolation), S3 (Qt shell) and, for milestone M2, the
-player's own checks (section 5). It never uses `sudo`: steps that need root
-are listed here and printed by `kit.sh check`.
+player's own checks (section 5). Steps that need root are listed here and
+printed by `kit.sh check`. The kit uses `sudo` itself in two places only,
+always as `sudo -n` (never asking for a password): `m8` installs and
+removes the .deb where sudo needs no password (elsewhere it names the
+command), and `attach-session.sh` (section 10) sets and removes ACL
+entries in another user's session.
 
 Everything the kit downloads or builds goes to `~/.cache/rvp-kit`.
 Nothing is installed system-wide by the kit.
@@ -62,10 +66,16 @@ Nothing is installed system-wide by the kit.
         `sudo systemctl --global disable ydotool.service` once, and do not
         add yourself to `input`.
       - For the check, run in a separate terminal and leave it running:
-        `sudo ydotoold --socket-path=/tmp/.ydotool_socket --socket-perm=0666`.
-        The path is explicit because under `sudo` the daemon and the client
-        would otherwise look in different places; the kit points ydotool at
+        `sudo ydotoold --socket-path=/tmp/.ydotool_socket --socket-own="$(id -u):$(id -g)"`.
+        The socket is yours alone (mode 0600, owned by the user who runs
+        the kit; the input steps skip with any other socket). The path is
+        explicit because under `sudo` the daemon and the client would
+        otherwise look in different places; the kit points ydotool at
         `/tmp/.ydotool_socket` (`YDOTOOL_SOCKET` overrides it).
+        `--socket-own` came with ydotool 1.0.4: build that release on
+        Ubuntu 22.04. With 1.0.0 to 1.0.3, leave it out and, once the
+        daemon prints `READY`, give the socket to yourself from another
+        terminal: `sudo chown "$(id -u):$(id -g)" /tmp/.ydotool_socket`.
       - The kit switches GNOME's pointer acceleration to *Flat* for the
         check and restores the previous profile afterwards. If the check is
         interrupted, restore it in Settings → Mouse & Touchpad.

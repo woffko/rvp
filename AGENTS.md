@@ -969,7 +969,10 @@ smoothing for users without SVP, after a study of the engines.
   says the packages are meant without them, and `check-deb.sh` checks
   them.
 - On the shared Ubuntu VM the kit runs as the kit's user in the owner's GNOME session
-  through `tools/linux-kit/attach-session.sh` (ACL entries it takes back).
+  through `tools/linux-kit/attach-session.sh` (ACL entries it takes back,
+  only on the session's own folder, socket and authority files, never
+  through a link; its exports quoted for `eval`): CI runs
+  `tools/linux-kit/tests/attach-session.sh` on it with a fake `sudo`.
 
 ## Playback, playlist and opening (M11)
 

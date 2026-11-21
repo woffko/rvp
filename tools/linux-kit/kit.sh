@@ -882,6 +882,14 @@ input_ready() {
         record "$step" SKIPPED "no ydotoold socket at $YDOTOOL_SOCKET (see CHECKLIST.md)"
         return 1
     fi
+    # The kit's user's socket alone (CHECKLIST.md's --socket-own): whoever
+    # can write to it types into the session.
+    local owner mode
+    read -r owner mode < <(stat -c '%u %a' -- "$YDOTOOL_SOCKET")
+    if [ -L "$YDOTOOL_SOCKET" ] || [ "$owner" != "$(id -u)" ] || (( 8#$mode & 8#077 )); then
+        record "$step" SKIPPED "ydotoold's socket $YDOTOOL_SOCKET is not the kit user's alone (see CHECKLIST.md)"
+        return 1
+    fi
     if [ -z "${WAYLAND_DISPLAY:-}" ] && [ -z "${DISPLAY:-}" ]; then
         record "$step" SKIPPED "no graphical session"
         return 1

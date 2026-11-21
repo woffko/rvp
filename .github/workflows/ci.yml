@@ -82,6 +82,9 @@ jobs:
       - name: rustfmt
         if: runner.os == 'Linux'
         run: cargo fmt --all -- --check
+      - name: The kit's attach-session.sh (Linux)
+        if: runner.os == 'Linux'
+        run: tools/linux-kit/tests/attach-session.sh
       - name: clippy
         run: cargo clippy --workspace --all-targets --locked -- -D warnings
       - name: tests
