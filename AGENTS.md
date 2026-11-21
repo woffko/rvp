@@ -49,7 +49,10 @@ smoothing for users without SVP, after a study of the engines.
   on its GitHub page, made only when the owner asks (the first alpha,
   v0.1.0-alpha.1): the Windows packages built in WSL and the Linux
   packages CI built at the tagged commit, the workspace's version in
-  `Cargo.toml`. Nothing else is published (no AUR upload, no stores).
+  `Cargo.toml` (a new version also changes `Cargo.lock` and
+  `spikes/Cargo.lock`, which name the workspace's crates: run `cargo
+  metadata` in both, or `--locked` fails). Nothing else is published (no
+  AUR upload, no stores).
 - Nothing about the owner's machines goes into the repository: their
   addresses, accounts, folders and hardware are in `AGENTS.local.md`
   (see "Test environments"), and commits use GitHub's no-reply address
