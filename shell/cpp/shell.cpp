@@ -684,14 +684,26 @@ namespace {
 // request at once with an error (an empty address), so a text that is
 // taken for HTML somewhere (a title's <img>) still loads nothing.
 // Text from outside RVP is shown as plain text in the first place.
+// The one caller is a self-test's: SelfTestM15.qml asks RVP's own control
+// API on this computer (`/api/...`), which passes while a self-test runs.
+bool selfTestRuns = false;
+
+bool ownApi(const QUrl &url)
+{
+    return url.scheme() == QLatin1String("http") && url.path().startsWith(QLatin1String("/api/"))
+        && QHostAddress(url.host()).isLoopback();
+}
+
 class NoNetworkManager : public QNetworkAccessManager
 {
 public:
     using QNetworkAccessManager::QNetworkAccessManager;
 
 protected:
-    QNetworkReply *createRequest(Operation operation, const QNetworkRequest &, QIODevice *data) override
+    QNetworkReply *createRequest(Operation operation, const QNetworkRequest &request, QIODevice *data) override
     {
+        if (selfTestRuns && ownApi(request.url()))
+            return QNetworkAccessManager::createRequest(operation, request, data);
         return QNetworkAccessManager::createRequest(operation, QNetworkRequest(QUrl()), data);
     }
 };
@@ -711,6 +723,9 @@ void rvp_register_native_types()
 {
     qmlRegisterType<MpvItem>("RvpNative", 1, 0, "MpvItem");
     Tools::instance = new Tools();
+    // Set before any of the engine's threads asks for a manager.
+    for (const QString &argument : QCoreApplication::arguments())
+        selfTestRuns = selfTestRuns || argument.startsWith(QLatin1String("--selftest"));
     // The engine asks for Tools first while Main.qml loads, before any
     // QML could have asked the network for anything: it gets the
     // network guard then.
