@@ -34,8 +34,18 @@ runtime=$root/run/user/$uid
 auth_pattern='^/run/user/[0-9]+/\.mutter-Xwaylandauth\.[A-Za-z0-9]+$'
 
 # kind PATH: its type and owner without following a link ("socket:1000").
+# From the mode's first hex digit: stat's %F is the system's language's
+# word (a Russian session's folder was refused as "каталог").
 kind() {
-    sudo -n stat -c '%F:%u' -- "$1" 2> /dev/null || echo missing
+    local raw
+    raw=$(sudo -n stat -c '%f:%u' -- "$1" 2> /dev/null) || raw=missing
+    case ${raw%%:*} in
+        4???) echo "directory:${raw#*:}" ;;
+        c???) echo "socket:${raw#*:}" ;;
+        8???) echo "file:${raw#*:}" ;;
+        a???) echo "link:${raw#*:}" ;;
+        *) echo missing ;;
+    esac
 }
 
 # The session's authority files: regular files of the session's user,
