@@ -296,7 +296,8 @@ mod tests {
         let album = &imported.album;
         assert_eq!(album.name, "Films");
         assert_eq!(album.entries.len(), 4);
-        assert_eq!(album.entries[0].path, "/mnt/media/F/one.mkv");
+        // As every entry's path: with Windows' separators there.
+        assert_eq!(album.entries[0].path, local_path("/mnt/media/F/one.mkv"));
         assert_eq!(album.entries[0].duration, Some(5400.0));
         assert!(album.entries[0].played);
         assert!(!album.entries[2].playable);
@@ -306,7 +307,7 @@ mod tests {
         assert_eq!(
             imported.positions,
             vec![
-                ("/mnt/media/F/two.mkv".to_owned(), 125.5),
+                (local_path("/mnt/media/F/two.mkv"), 125.5),
                 ("https://example.org/live.ts".to_owned(), 61.0)
             ]
         );
@@ -361,9 +362,9 @@ mod tests {
         assert_eq!(
             paths,
             [
-                "/mnt/media/F/one.mkv",
-                "/mnt/media/F/two.mkv",
-                "mms://example.org/radio"
+                local_path("/mnt/media/F/one.mkv"),
+                local_path("/mnt/media/F/two.mkv"),
+                "mms://example.org/radio".to_owned()
             ]
         );
         // The entry that played is found among those that stayed, and a
@@ -371,7 +372,7 @@ mod tests {
         assert_eq!(imported.album.current, Some(1));
         assert_eq!(
             imported.positions,
-            vec![("/mnt/media/F/two.mkv".to_owned(), 5.0)]
+            vec![(local_path("/mnt/media/F/two.mkv"), 5.0)]
         );
         assert_eq!(imported.refused.count(), 3);
         assert_eq!(
@@ -400,7 +401,10 @@ mod tests {
         let names: Vec<&str> = albums.iter().map(|a| a.album.name.as_str()).collect();
         assert_eq!(names, ["Default", "Every", "series"]);
         assert!(albums[1].album.entries.is_empty());
-        assert_eq!(albums[2].album.entries[0].path, "/mnt/media/s.mkv");
+        assert_eq!(
+            albums[2].album.entries[0].path,
+            local_path("/mnt/media/s.mkv")
+        );
         let _ = std::fs::remove_dir_all(&dir);
     }
 }
