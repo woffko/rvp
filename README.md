@@ -169,12 +169,11 @@ The full plan and the report of each step are in [docs](docs).
 
 ## Getting RVP
 
-RVP is in alpha. The first pre-release, 0.1.0-alpha.1, is on the
+RVP is in alpha. The newest pre-release, 0.1.0-alpha.2, is on the
 [Releases](https://github.com/woffko/rvp/releases) page:
 
 - **Windows** (10 and 11, 64-bit): an installer (for the current user
-  only, no administrator rights) and a portable ZIP. The first alpha's
-  were withdrawn on 2026-11-21; they return with the next alpha.
+  only, no administrator rights) and a portable ZIP.
 - **Linux** (64-bit): a .deb package (Ubuntu 22.04 and newer) and an
   AppImage; the repository also has an Arch Linux (AUR) recipe.
 
