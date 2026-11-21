@@ -582,6 +582,7 @@ fn measure_step(
         files,
         0,
         crate::smoothing::scene_threshold("normal"),
+        None,
     );
     if let Err(error) = crate::storage::write_unflushed(script, text.as_bytes()) {
         fell_short(

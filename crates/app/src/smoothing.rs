@@ -85,6 +85,16 @@ pub const DROP_WINDOWS: &[u32] = &[0, 6, 10, 20, 30, 60];
 /// MVTools or RIFE fill their pipeline, the picture stutters.
 pub const ORIGINAL_FIRST: &[u32] = &[0, 1, 2, 3, 5];
 
+/// How long a script waits for RVP's sign that playback runs before its
+/// engine takes over anyway ([`original_script`]): a sign that got lost
+/// must not leave the original for good.
+pub const SIGN_WAIT: Duration = Duration::from_secs(5);
+
+/// How long after RVP gave mpv its filters again the sign follows
+/// (`App::smoothing_sign_tick`): mpv loads the script with the next frame,
+/// and a sign before that would be the script's own beginning.
+pub const SIGN_AFTER: Duration = Duration::from_millis(500);
+
 /// The Motion Smoothing page's choices for `scene-change`: how a cut
 /// shows (the owner, 2026-11-08: RIFE morphed one scene into the next).
 /// `off` interpolates across it, as the engines do on their own. `normal`
@@ -663,20 +673,65 @@ fn cut_script(text: &mut String, source: (u64, u64), rate: (u64, u64), threshold
     );
 }
 
-/// [`script`]'s part for the original first: its `first` frames are the
-/// source's, repeated at the rate.
-fn original_script(text: &mut String, source: (u64, u64), rate: (u64, u64), first: u64) {
+/// [`script`]'s part for the original first: the source's frames,
+/// repeated at the rate, before the engine's. (The parts share the
+/// script's names, and a function reads them when a frame is asked for:
+/// [`cut_script`]'s `smooth` must stay what it was there, or its frames
+/// ask for themselves and nothing comes.)
+///
+/// Without `sign` they are the script's first `first` frames. With it
+/// (the file RVP writes anew whenever playback restarted,
+/// `App::smoothing_sign`) they last until that file changes and `first`
+/// frames more. An exact seek makes mpv play every frame from the keyframe
+/// on through the filter before its target (the filter counts its frames:
+/// `App::apply_seek_framedrop`), up to ten seconds of film that nobody
+/// sees: as the original they cost a copy each, through the engine they
+/// made a seek take seconds (the owner, 2026-11-10). The script cannot
+/// know where the target is; RVP can tell when mpv got there. A sign that
+/// never comes is taken as given after [`SIGN_WAIT`].
+fn original_script(
+    text: &mut String,
+    source: (u64, u64),
+    rate: (u64, u64),
+    first: u64,
+    sign: Option<&Path>,
+) {
     let _ = write!(
         text,
         "def original(n):\n    \
          return src[min(n * {} // {}, src.num_frames - 1)] * (n + 1)\n\
          shown = core.std.AssumeFPS(core.std.FrameEval(clip, original), \
-         fpsnum={}, fpsden={})\n\
-         clip = shown[:{first}] + clip[{first}:]\n",
+         fpsnum={}, fpsden={})\n",
         rate.1 * source.0,
         rate.0 * source.1,
         rate.0,
         rate.1,
+    );
+    let Some(sign) = sign else {
+        let _ = writeln!(text, "clip = shown[:{first}] + clip[{first}:]");
+        return;
+    };
+    let _ = write!(
+        text,
+        "import time\n\
+         def sign():\n    \
+         try:\n        \
+         with open({path}, 'rb') as file:\n            \
+         return file.read()\n    \
+         except OSError:\n        \
+         return None\n\
+         before, loaded, since, asked = sign(), time.monotonic(), [], [0.0]\n\
+         made = clip\n\
+         def started(n):\n    \
+         now = time.monotonic()\n    \
+         if not since and now - asked[0] > 0.01:\n        \
+         asked[0] = now\n        \
+         if sign() != before or now - loaded > {wait}:\n            \
+         since.append(n)\n    \
+         return made if since and n >= since[0] + {first} else shown\n\
+         clip = core.std.FrameEval(clip, started)\n",
+        path = python_path(sign),
+        wait = SIGN_WAIT.as_secs(),
     );
 }
 
@@ -691,8 +746,12 @@ fn python_path(path: &Path) -> String {
 /// `mvtools` MVTools' plugin where the runtime does not load it itself
 /// (RVP's Linux runtime: its compiled-in plugin folder is the build's).
 /// `original` is [`SmoothingSettings::original_for`] the engine, `scene` the cut
-/// threshold ([`scene_threshold`]).
+/// threshold ([`scene_threshold`]), `sign` the file whose change tells the
+/// script that playback runs ([`original_script`]; none where nothing
+/// writes one: the calibration, or with no original first).
 #[must_use]
+// One value each of what a script is made from.
+#[allow(clippy::too_many_arguments)]
 pub fn script(
     engine: Engine,
     preset: Preset,
@@ -701,6 +760,7 @@ pub fn script(
     files: &Files<'_>,
     original: u32,
     scene: Option<f64>,
+    sign: Option<&Path>,
 ) -> String {
     let (rife, mvtools) = (files.rife, files.mvtools);
     let mut text = format!(
@@ -787,7 +847,7 @@ pub fn script(
     }
     let first = rate.0 * u64::from(original) / rate.1.max(1);
     if first > 0 {
-        original_script(&mut text, source, rate, first);
+        original_script(&mut text, source, rate, first, sign);
     }
     text.push_str(
         "# mpv answers frames asked for while the script loads with black ones;\n\
@@ -954,6 +1014,9 @@ pub(crate) struct Smoothing {
     /// What mpv got last for `hr-seek-framedrop` (`None`: the engine's
     /// "no", `App::apply_seek_framedrop`).
     framedrop: Option<bool>,
+    /// When the sign that playback runs is due after mpv got its filters
+    /// again without a seek (`App::smoothing_sign_tick`).
+    sign_due: std::cell::Cell<Option<Instant>>,
     /// The watch over the filter in force (`App::smoothing_watch`).
     watch: FilterWatch,
     /// The watch over a steady frame a second the output drops
@@ -1391,6 +1454,52 @@ impl App {
             .join(crate::storage::process_file_name("rvp-smooth", "vpy"))
     }
 
+    /// The file whose change tells this process's script that playback
+    /// runs ([`original_script`]).
+    pub(crate) fn smoothing_sign_path(&self) -> PathBuf {
+        self.state_dir()
+            .join("vapoursynth")
+            .join(crate::storage::process_file_name("rvp-smooth", "go"))
+    }
+
+    /// Tells the script that playback runs: after mpv restarted it (a
+    /// start, a seek's target reached) and [`SIGN_AFTER`] after mpv got its
+    /// filters again while a file plays. The file's text is the time, new
+    /// each time; it is written only while a script reads it (a
+    /// VapourSynth engine with the original first).
+    pub(crate) fn smoothing_sign(&self) {
+        self.smoothing.sign_due.set(None);
+        let reads = matches!(
+            self.smoothing.applied,
+            Some(Plan::Filter { engine, .. })
+                if engine != Engine::FrucVulkan && self.settings.smoothing.original_for(engine) > 0
+        );
+        if !reads {
+            return;
+        }
+        let time = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map_or(0, |since| since.as_nanos());
+        let path = self.smoothing_sign_path();
+        if let Err(error) = crate::storage::write_unflushed(&path, time.to_string().as_bytes()) {
+            crate::log::report(
+                crate::log::Level::Warning,
+                &format!("smoothing: {}: {error}", path.display()),
+            );
+        }
+    }
+
+    /// The sign that was put off until mpv had loaded the script again.
+    /// Not while mpv seeks or starts a file: the frames before its target
+    /// are coming then, and the restart gives the sign.
+    pub(crate) fn smoothing_sign_tick(&self, now: Instant) {
+        if self.smoothing.sign_due.get().is_some_and(|due| now >= due)
+            && self.model.flag(PropertyId::Seeking) != Some(true)
+        {
+            self.smoothing_sign();
+        }
+    }
+
     /// RVP's smoothing filter while a motion-compensated engine runs
     /// (`App::video_filters`).
     pub(crate) fn smoothing_filter(&self) -> Option<(String, String)> {
@@ -1440,6 +1549,12 @@ impl App {
         let path = self.smoothing_script_path();
         let smoothing = &self.settings.smoothing;
         let scene = scene_threshold(&smoothing.scene_change);
+        let sign = self.smoothing_sign_path();
+        // mpv loads the script with the next frame; when no seek follows
+        // (a filter changed while a file plays), no restart says so.
+        self.smoothing
+            .sign_due
+            .set(Some(Instant::now() + SIGN_AFTER));
         crate::storage::write_unflushed(
             &path,
             script(
@@ -1450,6 +1565,7 @@ impl App {
                 &files,
                 smoothing.original_for(engine),
                 scene,
+                Some(&sign),
             )
             .as_bytes(),
         )
@@ -2264,6 +2380,59 @@ mod tests {
     }
 
     #[test]
+    fn with_a_sign_the_original_lasts_until_playback_runs() {
+        let sign = Path::new("/state/vapoursynth/rvp-smooth-7.go");
+        let text = script(
+            Engine::MvTools,
+            Preset::Medium,
+            (24, 1),
+            (60000, 1001),
+            &Files::default(),
+            1,
+            None,
+            Some(sign),
+        );
+        // The original as without a sign, but no fixed count of it: it
+        // lasts until RVP's file changed (or the wait is over) and a
+        // second more.
+        assert!(text.contains("shown = core.std.AssumeFPS(core.std.FrameEval(clip, original)"));
+        assert!(!text.contains("shown[:"), "{text}");
+        assert!(text.contains(&format!("with open({}, 'rb') as file:", python_path(sign))));
+        assert!(text.contains("if sign() != before or now - loaded > 5:"));
+        assert!(text.contains("return made if since and n >= since[0] + 59 else shown"));
+        assert!(text.contains("clip = core.std.FrameEval(clip, started)\n# mpv answers"));
+        // With cuts looked for as well, each part keeps its own names.
+        let cuts = script(
+            Engine::MvTools,
+            Preset::Medium,
+            (24, 1),
+            (60000, 1001),
+            &Files::default(),
+            1,
+            Some(0.1),
+            Some(sign),
+        );
+        assert_eq!(cuts.matches("smooth = ").count(), 1, "{cuts}");
+        assert_eq!(cuts.matches("made = ").count(), 1, "{cuts}");
+        // With no original first nothing waits for a sign: the engine's
+        // frames from the first one on (RIFE (TensorRT) by default).
+        let at_once = script(
+            Engine::MvTools,
+            Preset::Medium,
+            (24, 1),
+            (60000, 1001),
+            &Files::default(),
+            0,
+            None,
+            Some(sign),
+        );
+        assert!(!at_once.contains("sign()") && !at_once.contains("FrameEval"));
+        if std::env::var_os("RVP_PRINT_SCRIPT").is_some() {
+            println!("{text}");
+        }
+    }
+
+    #[test]
     fn the_original_frames_come_first_after_each_start() {
         // A second at 60 frames a second of the 24000/1001 source: output
         // frame n shows source frame n * 1 * 24000 / (60 * 1001).
@@ -2274,6 +2443,7 @@ mod tests {
             (60, 1),
             &Files::default(),
             1,
+            None,
             None,
         );
         assert!(first.contains("src = clip\n"));
@@ -2289,6 +2459,7 @@ mod tests {
             (60, 1),
             &Files::default(),
             0,
+            None,
             None,
         );
         assert!(!at_once.contains("FrameEval"));
@@ -2310,6 +2481,7 @@ mod tests {
                     ..Files::default()
                 },
                 original,
+                None,
                 None,
             )
         };
@@ -2483,6 +2655,7 @@ mod tests {
             },
             0,
             None,
+            None,
         );
         let vstrt = format!(
             "core.std.LoadPlugin({})",
@@ -2562,6 +2735,7 @@ mod tests {
             &Files::default(),
             1,
             Some(0.1),
+            None,
         );
         // Each source frame against the next, in mean luma.
         assert!(text.contains("PlaneStats(src, src[1:] + src[-1], plane=0, prop='RvpScene')"));
@@ -2583,6 +2757,7 @@ mod tests {
             &Files::default(),
             1,
             None,
+            None,
         );
         assert!(!off.contains("RvpScene"));
         let mut settings = on(Engine::MvTools);
@@ -2602,6 +2777,7 @@ mod tests {
             (60, 1),
             &Files::default(),
             0,
+            None,
             None,
         );
         assert!(mvtools.contains("AssumeFPS(video_in, fpsnum=24000, fpsden=1001)"));
@@ -2623,6 +2799,7 @@ mod tests {
             },
             0,
             None,
+            None,
         );
         assert!(fast.contains("BlockFPS(clip, sup, bv, fv, num=50, den=1, mode=3"));
         assert!(fast.contains(
@@ -2640,6 +2817,7 @@ mod tests {
                 ..Files::default()
             },
             0,
+            None,
             None,
         );
         assert!(rife.contains(

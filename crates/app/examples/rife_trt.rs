@@ -62,6 +62,7 @@ fn main() {
             &files,
             0,
             None,
+            None,
         ),
     )
     .expect("script");

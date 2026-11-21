@@ -372,7 +372,18 @@ smoothing for users without SVP, after a study of the engines.
   RVP's filter; `App::apply_seek_framedrop`,
   `playback.seek-skip-before-target`, `fixture-square-b.mkv` and
   `tests/smoothing.rs` check it; test clips without non-reference
-  B-frames never show this). The thumbnail
+  B-frames never show this). So that a seek does not wait for the engine
+  to work through up to ten seconds of film nobody sees, a script with
+  the original first shows the source's frames until RVP's sign that
+  playback runs and `original-first` seconds more (`original_script`):
+  the sign is `<state>/vapoursynth/rvp-smooth-<pid>.go`, written anew at
+  each `PlaybackRestart` and half a second after mpv got its filters
+  again while a file plays (`App::smoothing_sign`; not while mpv seeks);
+  a script that gets none goes on after 5 s. With no original first (RIFE
+  (TensorRT) by default) every frame before the target goes through the
+  engine. A script's parts share its names and its functions read them
+  when a frame is asked for: a name defined twice makes a frame ask for
+  itself, and nothing comes. The thumbnail
   core's frame of the target (`Group::Seek`)
   shows over the video at its `osd-dimensions` place until mpv's playback
   restarts (`playback.seek-picture`, `crate::thumbs`; only with filters

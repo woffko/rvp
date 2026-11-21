@@ -3,8 +3,9 @@
 //! or a system install; skipped elsewhere) the smoothed moving square of
 //! `fixture-square.mkv` (twice the frames, the square halfway in the frames
 //! between), the picture after exact seeks in `fixture-square-b.mkv`
-//! (non-reference B-frames), toggles during playback, SVP's `@svp`
-//! untouched and RVP's own script slot taking smoothing's place.
+//! (non-reference B-frames) and the original before a seek's target,
+//! toggles during playback, SVP's `@svp` untouched and RVP's own script
+//! slot taking smoothing's place.
 //!
 //! `RVP_TESTDATA` points at `testdata/media` when the test runs elsewhere
 //! (the Windows VM).
@@ -55,8 +56,20 @@ fn pump(app: &mut App, engine: &Engine, ms: u64) {
     }
 }
 
-/// A headless engine and an app playing `file` with smoothing on.
+/// A headless engine and an app playing `file` with smoothing on: the
+/// filter's frames at once (they are under test; the original shown first
+/// after a start or a seek has its own test and the self-test).
 fn playing(dir: &Path, file: &str, engine_choice: SmoothingEngine) -> (Engine, App) {
+    playing_with(dir, file, engine_choice, 0)
+}
+
+/// [`playing`] with `original_first` seconds of the original first.
+fn playing_with(
+    dir: &Path,
+    file: &str,
+    engine_choice: SmoothingEngine,
+    original_first: u32,
+) -> (Engine, App) {
     let engine = Engine::new(&EngineOptions::headless()).expect("engine");
     let mut settings = Settings {
         reopen_last_file: false,
@@ -71,9 +84,7 @@ fn playing(dir: &Path, file: &str, engine_choice: SmoothingEngine) -> (Engine, A
     settings.smoothing.preset = Preset::Quality;
     // The headless player knows no display: twice the source's rate.
     "2x".clone_into(&mut settings.smoothing.target);
-    // The filter at once: its frames are under test here; the original
-    // shown first after a start or a seek is the self-test's.
-    settings.smoothing.original_first = 0;
+    settings.smoothing.original_first = original_first;
     let mut app = App::new(settings, dir).expect("app");
     app.prepare_svp(vsscript());
     app.start(&engine, &[file.to_owned()]).expect("start");
@@ -227,20 +238,8 @@ fn an_exact_seek_shows_the_picture_of_its_time() {
     // Away from where the square turns (every 1.25 s from 1.208 s on), and
     // back again: every seek starts at the file's one keyframe.
     for target in [4.2, 1.9, 7.9] {
-        engine
-            .command("seek", &[&target.to_string(), "absolute+exact"])
-            .expect("seek");
-        let deadline = Instant::now() + Duration::from_secs(60);
-        let mut settled = 0;
-        while settled < 10 {
-            assert!(Instant::now() < deadline, "the seek to {target} ends");
-            pump(&mut app, &engine, 30);
-            let near = engine
-                .get_double("time-pos")
-                .is_some_and(|time| (time - target).abs() < 0.1);
-            let seeking = engine.get_text("seeking").as_deref() != Some("no");
-            settled = if near && !seeking { settled + 1 } else { 0 };
-        }
+        let took = seek_exact(&engine, &mut app, target);
+        eprintln!("the seek to {target} through the engine took {took:?}");
         let time = engine.get_double("time-pos").expect("time");
         let image = engine.screenshot_raw("video").expect("screenshot");
         // A column of a 320-pixel picture: exact as a float.
@@ -252,6 +251,107 @@ fn an_exact_seek_shows_the_picture_of_its_time() {
              the square's edge at {edge:?}, that time's at {expected:.1}"
         );
     }
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// Seeks exactly to `target` while paused and waits until mpv shows it.
+fn seek_exact(engine: &Engine, app: &mut App, target: f64) -> Duration {
+    let start = Instant::now();
+    engine
+        .command("seek", &[&target.to_string(), "absolute+exact"])
+        .expect("seek");
+    let deadline = start + Duration::from_secs(60);
+    let mut settled = 0;
+    while settled < 10 {
+        assert!(Instant::now() < deadline, "the seek to {target} ends");
+        pump(app, engine, 30);
+        let near = engine
+            .get_double("time-pos")
+            .is_some_and(|time| (time - target).abs() < 0.1);
+        let seeking = engine.get_text("seeking").as_deref() != Some("no");
+        settled = if near && !seeking { settled + 1 } else { 0 };
+    }
+    start.elapsed()
+}
+
+/// The square's left edge in the frame that shows and in the `steps`
+/// output frames after it (paused: one frame step each).
+fn edges(engine: &Engine, app: &mut App, steps: usize) -> Vec<i64> {
+    let mut found = Vec::new();
+    for step in 0..=steps {
+        if step > 0 {
+            let before = engine.get_double("time-pos").unwrap_or(f64::NAN);
+            engine.command("frame-step", &[]).expect("frame-step");
+            let deadline = Instant::now() + Duration::from_secs(15);
+            while engine
+                .get_double("time-pos")
+                .is_none_or(|time| (time - before).abs() < 1e-6)
+            {
+                assert!(Instant::now() < deadline, "a frame step");
+                pump(app, engine, 20);
+            }
+        }
+        let image = engine.screenshot_raw("video").expect("screenshot");
+        let edge = square_edge(&image).and_then(|edge| i64::try_from(edge).ok());
+        found.push(edge.expect("the square is in the frame"));
+    }
+    found
+}
+
+/// With the original first, the frames mpv plays through the filter before
+/// a seek's target are the source's as well (a copy each: through the
+/// engine a seek took seconds), and the engine takes over once playback
+/// runs at the target and the original's second is over.
+#[test]
+fn after_a_seek_the_original_comes_until_playback_runs() {
+    if vsscript().is_none() {
+        eprintln!("skipped: no VapourSynth runtime (set VSSCRIPT_PATH to run this test)");
+        return;
+    }
+    let dir = scratch("sign");
+    let (engine, mut app) = playing_with(
+        &dir,
+        &fixture("fixture-square-b.mkv"),
+        SmoothingEngine::MvTools,
+        1,
+    );
+    assert_eq!(labels(&engine), ["rvpsmooth"]);
+    engine.set_pause(true).expect("pause");
+    let took = seek_exact(&engine, &mut app, 4.2);
+    eprintln!("the seek with the original before its target took {took:?}");
+    // The picture is its time's: a frame of the source, so up to one
+    // output frame (4 pixels) behind where an engine's frame would be.
+    let time = engine.get_double("time-pos").expect("time");
+    let at_target = edges(&engine, &mut app, 4);
+    assert!(
+        (f64::from(i32::try_from(at_target[0]).expect("a column")) - square_at(time)).abs() <= 9.0,
+        "the picture at {time} is that time's: {at_target:?}, that time's at {:.1}",
+        square_at(time)
+    );
+    // Paused at the target, the frames are the source's, each twice.
+    assert!(
+        at_target
+            .windows(2)
+            .all(|pair| [0, 8].contains(&(pair[1] - pair[0]).abs())),
+        "the original's frames at the target: {at_target:?}"
+    );
+    // Playing on, the engine's frames come after the original's second:
+    // the square moves 4 pixels a frame (it turns at 6.208 and 7.458 s).
+    engine.set_pause(false).expect("play");
+    let deadline = Instant::now() + Duration::from_secs(60);
+    while engine.get_double("time-pos").unwrap_or(0.0) < 6.5 {
+        assert!(Instant::now() < deadline, "the fixture plays on");
+        pump(&mut app, &engine, 20);
+    }
+    engine.set_pause(true).expect("pause");
+    pump(&mut app, &engine, 500);
+    let later = edges(&engine, &mut app, 5);
+    assert!(
+        later
+            .windows(2)
+            .all(|pair| ((pair[1] - pair[0]).abs() - 4).abs() <= 1),
+        "the engine's frames once playback runs: {later:?}"
+    );
     let _ = std::fs::remove_dir_all(&dir);
 }
 

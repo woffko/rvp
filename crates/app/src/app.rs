@@ -2104,10 +2104,13 @@ impl App {
                 EngineEvent::Preloaded { hook, video } => {
                     self.smoothing_preloaded(engine, *hook, *video, now);
                 }
-                // The shell's (M9); a seek's picture goes at the restart
+                // mpv shows the first frame of a start or of a seek's
+                // target: the smoothing script's engine may take over.
+                // A seek's picture goes then too
                 // (`App::seek_picture_tick`).
-                EngineEvent::PlaybackRestart
-                | EngineEvent::VideoReconfig
+                EngineEvent::PlaybackRestart => self.smoothing_sign(),
+                // The shell's (M9).
+                EngineEvent::VideoReconfig
                 | EngineEvent::Shutdown
                 | EngineEvent::ClientMessage(_) => {}
             }
@@ -2124,6 +2127,7 @@ impl App {
         let mut requests = Vec::new();
         self.log_events(&events);
         let (mut save_now, failed) = self.handle_events(engine, &events, now, &mut requests);
+        self.smoothing_sign_tick(now);
         requests.extend(self.seek_picture_tick(&events, now));
         if failed {
             // `<Can't open>`, then the next playable entry (or stop).

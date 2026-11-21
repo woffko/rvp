@@ -74,8 +74,9 @@ Item {
             // filter stays in, and the rate rises again. Every frame from
             // the keyframe on goes through the filter, which counts its
             // frames (with mpv's hr-seek-framedrop the picture ran ahead
-            // of the sound after a seek), and the thumbnail core renders
-            // the target for the window meanwhile.
+            // of the sound after a seek): as the original until RVP's
+            // sign that playback runs. The thumbnail core renders the
+            // target for the window meanwhile.
             if (mvtools) {
                 t.check("seeks_keep_every_frame_for_the_filter", diagnostics().hr_seek_framedrop === "no",
                         diagnostics().hr_seek_framedrop)
