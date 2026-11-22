@@ -96,18 +96,31 @@ fn main() {
     }
     let code = app.as_mut().map_or(1, |app| app.exec());
     crash::leaving(crash::CLOSING);
+    process::ending(1, Some(code));
+    if process::HANG_AT_EXIT.load(std::sync::atomic::Ordering::Relaxed) {
+        // `--crash-test=hang`: the watch over the end ends the process.
+        process::watch_the_end();
+        loop {
+            std::thread::sleep(Duration::from_secs(1));
+        }
+    }
     if video::in_window() {
         // mpv's window is a child of RVP's video window: mpv lets it go
         // before the windows close.
         finish();
+        process::ending(2, None);
         ffi::bridge::rvp_video_window_close();
+        process::ending(3, None);
         drop(engine);
     } else {
         // Destroys the window; the video item's renderer frees the render
         // context on the render thread.
+        process::ending(3, None);
         drop(engine);
+        process::ending(1, None);
         finish();
     }
+    process::ending(4, None);
     drop(app);
     process::leave(code);
 }
@@ -115,7 +128,9 @@ fn main() {
 /// Crash logs in RVP's state folder (M8): panics, then fatal signals or
 /// unhandled exceptions. `--crash-test=panic` or `=native` crashes on
 /// purpose once they are in place, `=exit` as the process ends (after the
-/// window closed or a self-test ended), for the package checks (a test
+/// window closed or a self-test ended), and `=hang` stops the window's
+/// thread after its event loop, so that the watch over the end ends the
+/// process (`process::watch_the_end`), for the package checks (a test
 /// hook: with `RVP_TEST_HOOKS=1`).
 fn install_crash_logs(cli: &Cli) {
     if let Ok(dirs) = rvp_app::Dirs::from_env() {
@@ -130,6 +145,7 @@ fn install_crash_logs(cli: &Cli) {
         Some("panic") => panic!("crash test (--crash-test=panic)"),
         Some("native") => ffi::bridge::rvp_crash_test(),
         Some("exit") => process::CRASH_AT_EXIT.store(true, std::sync::atomic::Ordering::Relaxed),
+        Some("hang") => process::HANG_AT_EXIT.store(true, std::sync::atomic::Ordering::Relaxed),
         _ => {}
     }
 }

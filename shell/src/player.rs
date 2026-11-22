@@ -3688,6 +3688,8 @@ impl qobject::Player {
                 &format!("cannot save the playback state: {error}"),
             );
         }
+        // Saved: from now on the process ends in time or is ended.
+        crate::process::watch_the_end();
         // Let mpv unload the file and its filter chain (SVP's included)
         // before the process goes on to shut libmpv down.
         let deadline = Instant::now() + std::time::Duration::from_secs(3);

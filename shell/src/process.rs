@@ -14,8 +14,117 @@
 //!   crash there has been seen. A crash while leaving says so in the crash
 //!   log, with the plugins loaded (`crate::crash`), and the Linux kit's
 //!   `m18exit` closes RVP after RIFE ran to find out.
+//! * Once RVP has saved its state as its window closes, the process ends
+//!   within [`END_WAIT`] or is ended ([`watch_the_end`]): on 2026-11-22 the
+//!   window's thread and mpv's core went on turning after a close, the
+//!   process stayed without a window, two processors busy, until it was
+//!   ended by hand. The log names the step it was in ([`ending`]).
 
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicI32, AtomicU8, Ordering};
+use std::time::Duration;
+
+/// How long the process may take to end once RVP saved its state as its
+/// window closed: mpv's wait for idle (3 s at most), the window's and
+/// mpv's ends (2 s at most for mpv's quit) and the libraries' take a few
+/// seconds at most.
+pub(crate) const END_WAIT: Duration = Duration::from_secs(15);
+
+/// The steps of the end [`watch_the_end`] can name, in their order.
+pub(crate) const ENDING_STEPS: [&str; 6] = [
+    "the window closes",
+    "mpv quits",
+    "the video window closes",
+    "the QML engine goes",
+    "the application goes",
+    "the libraries end",
+];
+
+/// The step of the end the process is in (an index of [`ENDING_STEPS`]).
+static ENDING: AtomicU8 = AtomicU8::new(0);
+/// The code the process ends with (the event loop's, once it returned).
+static EXIT_CODE: AtomicI32 = AtomicI32::new(0);
+/// `--crash-test=hang` (a test hook): the window's thread stops after the
+/// event loop, so that the watch must end the process.
+pub(crate) static HANG_AT_EXIT: AtomicBool = AtomicBool::new(false);
+
+/// The end reached `step` of [`ENDING_STEPS`]; `code` is the process's
+/// exit code from then on.
+pub(crate) fn ending(step: usize, code: Option<i32>) {
+    ENDING.store(u8::try_from(step).unwrap_or(u8::MAX), Ordering::SeqCst);
+    if let Some(code) = code {
+        EXIT_CODE.store(code, Ordering::SeqCst);
+    }
+}
+
+/// Ends the process [`END_WAIT`] from now unless it ended by then, and
+/// says so in the log with the step it was in. Called once RVP saved its
+/// state (`Player::shutdown`); once is enough.
+pub(crate) fn watch_the_end() {
+    static WATCHING: AtomicBool = AtomicBool::new(false);
+    if WATCHING.swap(true, Ordering::SeqCst) {
+        return;
+    }
+    let spawned = std::thread::Builder::new()
+        .name("rvp-end".to_owned())
+        .spawn(|| {
+            std::thread::sleep(END_WAIT);
+            let step = ENDING_STEPS
+                .get(usize::from(ENDING.load(Ordering::SeqCst)))
+                .copied()
+                .unwrap_or("its end");
+            rvp_app::log::report(
+                rvp_app::log::Level::Critical,
+                &format!(
+                    "RVP had not ended {} s after it saved its state as its window closed ({step}): it ends now",
+                    END_WAIT.as_secs()
+                ),
+            );
+            // The log's thread writes the line.
+            std::thread::sleep(Duration::from_millis(500));
+            terminate(EXIT_CODE.load(Ordering::SeqCst));
+        });
+    if let Err(error) = spawned {
+        rvp_app::log::report(
+            rvp_app::log::Level::Warning,
+            &format!("the watch over RVP's end did not start: {error}"),
+        );
+    }
+}
+
+/// Ends the process at once with `code`: no library's exit handlers or
+/// destructors run, nothing more is saved.
+fn terminate(code: i32) -> ! {
+    use std::io::Write as _;
+    drop(std::io::stdout().flush());
+    drop(std::io::stderr().flush());
+    #[cfg(windows)]
+    {
+        use windows::Win32::System::Threading::{GetCurrentProcess, TerminateProcess};
+        let exit = u32::try_from(code).unwrap_or(1);
+        // SAFETY: FFI point. GetCurrentProcess returns a pseudo handle that
+        // needs no closing; TerminateProcess ends this process and does
+        // not return when it succeeds; should it fail, the abort below
+        // ends it.
+        #[allow(unsafe_code)]
+        unsafe {
+            drop(TerminateProcess(GetCurrentProcess(), exit));
+        }
+    }
+    #[cfg(unix)]
+    {
+        // SAFETY: FFI point. _exit takes the code by value, ends the
+        // process at once without running exit handlers, and does not
+        // return.
+        #[allow(unsafe_code)]
+        unsafe {
+            libc::_exit(code)
+        }
+    }
+    #[allow(unreachable_code)]
+    {
+        std::process::abort()
+    }
+}
 
 /// Restricts where libraries are looked for (see the module's
 /// documentation); first thing in `main`, before any library loads.
@@ -75,22 +184,12 @@ pub(crate) fn leave(code: i32) -> ! {
     }
     // A clean exit: the skin marker goes (`rvp_app::skin_marker`).
     crate::player::marker_exit();
+    ending(ENDING_STEPS.len() - 1, Some(code));
+    // Everything RVP keeps was saved before (`Player::shutdown`, the
+    // writer's flush).
     #[cfg(windows)]
     if loaded & crate::crash::RIFE != 0 {
-        use std::io::Write as _;
-        use windows::Win32::System::Threading::{GetCurrentProcess, TerminateProcess};
-        drop(std::io::stdout().flush());
-        drop(std::io::stderr().flush());
-        let exit = u32::try_from(code).unwrap_or(1);
-        // SAFETY: FFI point. GetCurrentProcess returns a pseudo handle that
-        // needs no closing; TerminateProcess ends this process and does
-        // not return when it succeeds. Everything RVP keeps was saved
-        // before (`Player::shutdown`, the writer's flush); should it fail,
-        // the normal exit below follows.
-        #[allow(unsafe_code)]
-        unsafe {
-            drop(TerminateProcess(GetCurrentProcess(), exit));
-        }
+        terminate(code);
     }
     #[cfg(not(windows))]
     let _ = loaded;

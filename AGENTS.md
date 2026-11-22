@@ -591,8 +591,13 @@ smoothing for users without SVP, after a study of the engines.
 - Crash logs go to RVP's state folder: panics (`rvp_app::crash`), fatal
   signals and unhandled exceptions with a minidump (`shell/src/crash.rs`).
   `rvp --crash-test=panic` or `=native` (with `RVP_TEST_HOOKS=1`)
-  crashes on purpose, `=exit` as the process ends; checks run it with a
-  state folder of their own (it writes the crash log there). A crash
+  crashes on purpose, `=exit` as the process ends, `=hang` stops after
+  the event loop; checks run it with a state folder of their own (it
+  writes the crash log there). Once `Player::shutdown` saved the state,
+  `process::watch_the_end` ends a process still there 15 s later and
+  logs the step it was in (`process::ENDING_STEPS`; 2026-11-22 a closed
+  RVP stayed without a window, two threads turning, until ended by
+  hand). A crash
   while RVP leaves says " while closing" or " while exiting" with the
   smoothing plugins loaded (`shell/src/crash.rs`): on Linux `exit()` runs
   RIFE's ncnn exit handlers, which crashed on Windows (`process.rs`), and
