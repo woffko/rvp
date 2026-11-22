@@ -5078,10 +5078,6 @@ in %2 seconds</source>
             <translation>Kapalı.</translation>
         </message>
         <message>
-            <source>Remotes on a phone reach RVP through a program on this computer, such as Unified Remote's server: give its RVP remote the port and the token. RVP's remote for Unified Remote is in the “remote” folder beside rvp.exe; the installer copies it into Unified Remote when that is installed. On the phone, custom remotes such as RVP's need Unified Remote's Full app. Renew makes a new token: remotes with the old one are refused.</source>
-            <translation>Telefondaki kumanda uygulamaları RVP'ye bu bilgisayardaki bir program, örneğin Unified Remote sunucusu üzerinden ulaşır: o programdaki RVP kumandasına portu ve belirteci verin. Unified Remote için RVP kumandası rvp.exe'nin yanındaki “remote” klasöründedir; Unified Remote kuruluysa kurulum programı onu Unified Remote'a kopyalar. Telefonda RVP'ninki gibi özel kumandalar için Unified Remote Full uygulaması gerekir. “Yenile” yeni bir belirteç oluşturur: eski belirteci kullanan kumandalar reddedilir.</translation>
-        </message>
-        <message>
             <source>Remotes on a phone reach RVP through a program on this computer, such as Unified Remote's server: give its RVP remote the port and the token. Add to Unified Remote copies RVP's remote into the server's custom remotes. On the phone, custom remotes such as RVP's need Unified Remote's Full app. Renew makes a new token: remotes with the old one are refused.</source>
             <translation>Telefondaki kumanda uygulamaları RVP'ye bu bilgisayardaki bir program, örneğin Unified Remote sunucusu üzerinden ulaşır: o programdaki RVP kumandasına portu ve belirteci verin. “Unified Remote'a ekle”, RVP kumandasını sunucunun özel kumandalarına kopyalar. Telefonda RVP'ninki gibi özel kumandalar için Unified Remote Full uygulaması gerekir. “Yenile” yeni bir belirteç oluşturur: eski belirteci kullanan kumandalar reddedilir.</translation>
         </message>

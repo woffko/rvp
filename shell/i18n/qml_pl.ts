@@ -5078,10 +5078,6 @@ za %2 s</translation>
             <translation>Wyłączone.</translation>
         </message>
         <message>
-            <source>Remotes on a phone reach RVP through a program on this computer, such as Unified Remote's server: give its RVP remote the port and the token. RVP's remote for Unified Remote is in the “remote” folder beside rvp.exe; the installer copies it into Unified Remote when that is installed. On the phone, custom remotes such as RVP's need Unified Remote's Full app. Renew makes a new token: remotes with the old one are refused.</source>
-            <translation>Piloty na telefonie łączą się z RVP przez program na tym komputerze, np. serwer Unified Remote: podaj jego pilotowi RVP port i token. Pilot RVP dla Unified Remote jest w folderze „remote” obok rvp.exe; instalator kopiuje go do Unified Remote, gdy ten jest zainstalowany. Na telefonie własne piloty, takie jak pilot RVP, wymagają aplikacji Unified Remote w wersji Full. „Odnów” tworzy nowy token: piloty ze starym są odrzucane.</translation>
-        </message>
-        <message>
             <source>Remotes on a phone reach RVP through a program on this computer, such as Unified Remote's server: give its RVP remote the port and the token. Add to Unified Remote copies RVP's remote into the server's custom remotes. On the phone, custom remotes such as RVP's need Unified Remote's Full app. Renew makes a new token: remotes with the old one are refused.</source>
             <translation>Piloty na telefonie łączą się z RVP przez program na tym komputerze, np. serwer Unified Remote: podaj jego pilotowi RVP port i token. „Dodaj do Unified Remote” kopiuje pilot RVP do własnych pilotów serwera. Na telefonie własne piloty, takie jak pilot RVP, wymagają aplikacji Unified Remote w wersji Full. „Odnów” tworzy nowy token: piloty ze starym są odrzucane.</translation>
         </message>

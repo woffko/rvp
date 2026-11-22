@@ -5078,10 +5078,6 @@ in %2 seconds</source>
             <translation>Вимкнено.</translation>
         </message>
         <message>
-            <source>Remotes on a phone reach RVP through a program on this computer, such as Unified Remote's server: give its RVP remote the port and the token. RVP's remote for Unified Remote is in the “remote” folder beside rvp.exe; the installer copies it into Unified Remote when that is installed. On the phone, custom remotes such as RVP's need Unified Remote's Full app. Renew makes a new token: remotes with the old one are refused.</source>
-            <translation>Пульти на телефоні звертаються до RVP через програму на цьому комп’ютері, наприклад сервер Unified Remote: укажіть порт і токен у пульті RVP на цьому сервері. Пульт RVP для Unified Remote лежить у теці «remote» поруч із rvp.exe; інсталятор копіює його в Unified Remote, якщо той встановлено. На телефоні власні пульти, як-от пульт RVP, потребують версії Full програми Unified Remote. «Оновити» створює новий токен: пульти зі старим відхиляються.</translation>
-        </message>
-        <message>
             <source>Remotes on a phone reach RVP through a program on this computer, such as Unified Remote's server: give its RVP remote the port and the token. Add to Unified Remote copies RVP's remote into the server's custom remotes. On the phone, custom remotes such as RVP's need Unified Remote's Full app. Renew makes a new token: remotes with the old one are refused.</source>
             <translation>Пульти на телефоні звертаються до RVP через програму на цьому комп’ютері, наприклад сервер Unified Remote: укажіть порт і токен у пульті RVP на цьому сервері. «Додати до Unified Remote» копіює пульт RVP у власні пульти сервера. На телефоні власні пульти, як-от пульт RVP, потребують версії Full програми Unified Remote. «Оновити» створює новий токен: пульти зі старим відхиляються.</translation>
         </message>

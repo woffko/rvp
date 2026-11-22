@@ -5078,10 +5078,6 @@ dans %2 secondes</translation>
             <translation>Désactivé.</translation>
         </message>
         <message>
-            <source>Remotes on a phone reach RVP through a program on this computer, such as Unified Remote's server: give its RVP remote the port and the token. RVP's remote for Unified Remote is in the “remote” folder beside rvp.exe; the installer copies it into Unified Remote when that is installed. On the phone, custom remotes such as RVP's need Unified Remote's Full app. Renew makes a new token: remotes with the old one are refused.</source>
-            <translation>Les télécommandes d'un téléphone joignent RVP par un programme de cet ordinateur, comme le serveur d'Unified Remote : donnez à sa télécommande RVP le port et le jeton. La télécommande RVP pour Unified Remote se trouve dans le dossier « remote » à côté de rvp.exe ; le programme d'installation la copie dans Unified Remote quand celui-ci est installé. Sur le téléphone, les télécommandes personnalisées comme celle de RVP exigent l'application Full d'Unified Remote. « Renouveler » crée un nouveau jeton : les télécommandes qui ont l'ancien sont refusées.</translation>
-        </message>
-        <message>
             <source>Remotes on a phone reach RVP through a program on this computer, such as Unified Remote's server: give its RVP remote the port and the token. Add to Unified Remote copies RVP's remote into the server's custom remotes. On the phone, custom remotes such as RVP's need Unified Remote's Full app. Renew makes a new token: remotes with the old one are refused.</source>
             <translation>Les télécommandes d'un téléphone joignent RVP par un programme de cet ordinateur, comme le serveur d'Unified Remote : donnez à sa télécommande RVP le port et le jeton. « Ajouter à Unified Remote » copie la télécommande de RVP dans les télécommandes personnalisées du serveur. Sur le téléphone, les télécommandes personnalisées comme celle de RVP exigent l'application Full d'Unified Remote. « Renouveler » crée un nouveau jeton : les télécommandes qui ont l'ancien sont refusées.</translation>
         </message>

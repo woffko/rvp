@@ -209,9 +209,11 @@ impl qobject::Player {
             .map_or_else(QString::default, |token| QString::from(&token))
     }
 
-    /// Linux: copies RVP's remote into Unified Remote Server's custom
-    /// remotes and asks the server to read them again (the Remote Control
-    /// page's button; Windows' installer does this). Returns what to show.
+    /// Copies RVP's remote into Unified Remote Server's custom remotes,
+    /// its settings naming this RVP's port and token file, and asks the
+    /// server to read them again (the Remote Control page's button, on
+    /// both systems; Windows' installer copies it too). Returns what to
+    /// show.
     pub(crate) fn add_unified_remote(&self) -> QString {
         use rvp_app::control::unified;
         let Some(source) = std::env::current_exe()
@@ -220,10 +222,24 @@ impl qobject::Player {
         else {
             return QString::from("RVP's remote folder is missing beside RVP.");
         };
-        let Some(home) = std::env::var_os("HOME") else {
-            return QString::from("The home folder is unknown.");
+        let Some(server) = unified::ServerFolders::of_this_system() else {
+            return QString::from("Unified Remote Server's folder is unknown on this system.");
         };
-        let text = match unified::install(&source, &std::path::Path::new(&home).join(".urserver")) {
+        let Some((port, state_dir)) = self.core().map(|core| {
+            (
+                core.app.settings.remote.port,
+                core.app.state_dir().to_path_buf(),
+            )
+        }) else {
+            return QString::default();
+        };
+        // The token's file is there, with its own access rules, before the
+        // remote looks for it.
+        if let Err(error) = load_token(&state_dir) {
+            return QString::from(&format!("The control API's token cannot be made: {error}"));
+        }
+        let token_file = state_dir.join(control::token::FILE);
+        let text = match unified::install(&source, &server, port, &token_file) {
             Ok(target) => {
                 // The server's answer can take seconds: asked on a thread,
                 // and the OSD says how it went (the Linux audit's L6).

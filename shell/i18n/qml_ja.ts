@@ -5078,10 +5078,6 @@ in %2 seconds</source>
             <translation>オフ。</translation>
         </message>
         <message>
-            <source>Remotes on a phone reach RVP through a program on this computer, such as Unified Remote's server: give its RVP remote the port and the token. RVP's remote for Unified Remote is in the “remote” folder beside rvp.exe; the installer copies it into Unified Remote when that is installed. On the phone, custom remotes such as RVP's need Unified Remote's Full app. Renew makes a new token: remotes with the old one are refused.</source>
-            <translation>スマートフォンのリモコンは、Unified Remote のサーバーなど、このコンピューター上のプログラムを通じて RVP に接続します。そのプログラムの RVP 用リモコンにポートとトークンを設定してください。Unified Remote 用の RVP のリモコンは rvp.exe と同じ場所の「remote」フォルダーにあり、Unified Remote がインストールされていれば、インストーラーが Unified Remote にコピーします。スマートフォンでは、RVP のようなカスタムリモコンに Unified Remote の Full アプリが必要です。「再発行」で新しいトークンを作ると、古いトークンを使うリモコンは拒否されます。</translation>
-        </message>
-        <message>
             <source>Remotes on a phone reach RVP through a program on this computer, such as Unified Remote's server: give its RVP remote the port and the token. Add to Unified Remote copies RVP's remote into the server's custom remotes. On the phone, custom remotes such as RVP's need Unified Remote's Full app. Renew makes a new token: remotes with the old one are refused.</source>
             <translation>スマートフォンのリモコンは、Unified Remote のサーバーなど、このコンピューター上のプログラムを通じて RVP に接続します。そのプログラムの RVP 用リモコンにポートとトークンを設定してください。「Unified Remote に追加」で、RVP のリモコンをサーバーのカスタムリモコンにコピーします。スマートフォンでは、RVP のようなカスタムリモコンに Unified Remote の Full アプリが必要です。「再発行」で新しいトークンを作ると、古いトークンを使うリモコンは拒否されます。</translation>
         </message>

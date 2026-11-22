@@ -354,7 +354,7 @@ pub const ITEMS: &[Item] = &[
         "Unified Remote's remote",
         Key::Part,
         Linux::Same(
-            "Unified Remote Server for Linux; the Remote Control page's Add to Unified Remote copies the packages' remote into `~/.urserver/remotes/custom`",
+            "Unified Remote Server for Linux; the Remote Control page's Add to Unified Remote copies the packages' remote into `~/.urserver/remotes/custom` (on Windows into `%ProgramData%\\Unified Remote\\Remotes\\Custom`)",
         ),
     ),
 ];

@@ -5078,10 +5078,6 @@ in %2 seconds</source>
             <translation>꺼져 있습니다.</translation>
         </message>
         <message>
-            <source>Remotes on a phone reach RVP through a program on this computer, such as Unified Remote's server: give its RVP remote the port and the token. RVP's remote for Unified Remote is in the “remote” folder beside rvp.exe; the installer copies it into Unified Remote when that is installed. On the phone, custom remotes such as RVP's need Unified Remote's Full app. Renew makes a new token: remotes with the old one are refused.</source>
-            <translation>휴대폰의 리모컨은 Unified Remote 서버 같은 이 컴퓨터의 프로그램을 거쳐 RVP에 연결합니다. 그 프로그램의 RVP 리모컨에 포트와 토큰을 입력하십시오. Unified Remote용 RVP 리모컨은 rvp.exe 옆의 “remote” 폴더에 있으며, Unified Remote가 설치되어 있으면 설치 프로그램이 리모컨을 복사해 넣습니다. 휴대폰에서 RVP 리모컨 같은 사용자 지정 리모컨을 쓰려면 Unified Remote의 Full 앱이 필요합니다. “갱신”을 누르면 새 토큰을 만들며, 이전 토큰을 쓰는 리모컨은 거부됩니다.</translation>
-        </message>
-        <message>
             <source>Remotes on a phone reach RVP through a program on this computer, such as Unified Remote's server: give its RVP remote the port and the token. Add to Unified Remote copies RVP's remote into the server's custom remotes. On the phone, custom remotes such as RVP's need Unified Remote's Full app. Renew makes a new token: remotes with the old one are refused.</source>
             <translation>휴대폰의 리모컨은 Unified Remote 서버 같은 이 컴퓨터의 프로그램을 거쳐 RVP에 연결합니다. 그 프로그램의 RVP 리모컨에 포트와 토큰을 입력하십시오. “Unified Remote에 추가”는 RVP 리모컨을 서버의 사용자 지정 리모컨에 복사합니다. 휴대폰에서 RVP 리모컨 같은 사용자 지정 리모컨을 쓰려면 Unified Remote의 Full 앱이 필요합니다. “갱신”을 누르면 새 토큰을 만들며, 이전 토큰을 쓰는 리모컨은 거부됩니다.</translation>
         </message>

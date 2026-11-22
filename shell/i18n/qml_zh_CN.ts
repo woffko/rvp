@@ -5078,10 +5078,6 @@ in %2 seconds</source>
             <translation>已关闭。</translation>
         </message>
         <message>
-            <source>Remotes on a phone reach RVP through a program on this computer, such as Unified Remote's server: give its RVP remote the port and the token. RVP's remote for Unified Remote is in the “remote” folder beside rvp.exe; the installer copies it into Unified Remote when that is installed. On the phone, custom remotes such as RVP's need Unified Remote's Full app. Renew makes a new token: remotes with the old one are refused.</source>
-            <translation>手机上的遥控器通过本机上的程序（例如 Unified Remote 的服务器）访问 RVP：在其 RVP 遥控器中填写端口和令牌。RVP 的 Unified Remote 遥控器位于 rvp.exe 旁边的“remote”文件夹中；如果已安装 Unified Remote，安装程序会将其复制到 Unified Remote 中。在手机上，RVP 等自定义遥控器需要 Unified Remote 的 Full 版应用。“重新生成”会创建新令牌：使用旧令牌的遥控器将被拒绝。</translation>
-        </message>
-        <message>
             <source>Remotes on a phone reach RVP through a program on this computer, such as Unified Remote's server: give its RVP remote the port and the token. Add to Unified Remote copies RVP's remote into the server's custom remotes. On the phone, custom remotes such as RVP's need Unified Remote's Full app. Renew makes a new token: remotes with the old one are refused.</source>
             <translation>手机上的遥控器通过本机上的程序（例如 Unified Remote 的服务器）访问 RVP：在其 RVP 遥控器中填写端口和令牌。“添加到 Unified Remote”会将 RVP 的遥控器复制到服务器的自定义遥控器中。在手机上，RVP 等自定义遥控器需要 Unified Remote 的 Full 版应用。“重新生成”会创建新令牌：使用旧令牌的遥控器将被拒绝。</translation>
         </message>

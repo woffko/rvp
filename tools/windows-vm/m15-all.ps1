@@ -25,7 +25,11 @@
 #    (m15_outside_signed, m15_outside_no_token: this script waits for the
 #    API through GET /api/nonce, which needs none). The self-test's own
 #    checks follow, and the token must not be in its log.
-# 3. RVP's uninstaller removes the remote's files, and only those.
+# 3. RVP's uninstaller removes the remote's files, and only those. Then
+#    the Remote Control page's Add to Unified Remote (the self-test's
+#    --remote-add) copies it again for an RVP whose state is not in
+#    %APPDATA%, as a portable one's: the remote takes the token from the
+#    file its settings name (token_file), and 2's checks pass again.
 # 4. The headless tests: the control API (control.exe) and the remote's
 #    files (remote.exe).
 param([string]$Exe = 'C:\rvp-test\rvp-bundle\rvp.exe')
@@ -69,6 +73,74 @@ function UrConnect {
         Capabilities = @{ Actions = $true; Sync = $true; Grid = $true; Fast = $false; Loading = $true; Encryption2 = $true } }
 }
 
+# RVP's M15 self-test serving the control API (--remote-serve) with its
+# state in $State, while Unified Remote's server runs the remote's actions
+# for a client of its web-client protocol; prints the checks. $Extra: more
+# self-test arguments.
+function Serve([string]$Name, [string]$State, [string[]]$Extra = @()) {
+    $out = "C:\rvp-test\out\$Name"
+    Remove-Item -Recurse -Force C:\rvp-test\config, $out -ErrorAction SilentlyContinue
+    New-Item -ItemType Directory -Force C:\rvp-test\config, $out | Out-Null
+    Set-Content -Path C:\rvp-test\config\settings.json -Value '{ "ipc-server": "" }' -Encoding ascii
+    $env:QT_OPENGL = 'software'
+    $env:RVP_CONFIG_DIR = 'C:\rvp-test\config'
+    $env:RVP_STATE_DIR = $State
+    $log = "$out\rvp.log"
+    $actions = @('play_pause', 'volume_down', 'mute', 'mute', 'play_pause')
+    $rvp = Start-Process -FilePath $Exe -WorkingDirectory $bundle -PassThru -NoNewWindow `
+        -RedirectStandardOutput $log -RedirectStandardError "$out\rvp-err.log" -ArgumentList @(
+            (@('--selftest=m15', '--remote-port=48931', '--remote-serve=90', "--remote-expect=$($actions.Count)",
+            "--out=$out", '--mpv-options=ao=null') + $Extra + @("`"$bundle\fixture-60s.mkv`"")))
+    # Read now, or the exit code is lost.
+    $null = $rvp.Handle
+    # The self-test serves first: wait until the token file is there and the
+    # API hands out a nonce, without the token, so that every request from
+    # outside during the serve is the remote's (the redirected log cannot be
+    # read while RVP writes it).
+    $tokenFile = "$State\remote-token"
+    $deadline = (Get-Date).AddSeconds(60)
+    $up = $false
+    while (-not $up -and (Get-Date) -lt $deadline -and -not $rvp.HasExited) {
+        Start-Sleep -Milliseconds 500
+        if (-not (Test-Path $tokenFile)) { continue }
+        try {
+            $nonce = (Invoke-WebRequest -UseBasicParsing 'http://127.0.0.1:48931/api/nonce' -TimeoutSec 5).Content | ConvertFrom-Json
+            $up = $nonce.nonce -match '^[0-9a-f]{32}$'
+        } catch {
+            $up = $false
+        }
+    }
+    Check 'm15_api_answers_the_script' $up
+    Start-Sleep -Seconds 2
+    $authenticated = UrConnect
+    Check 'm15_unified_remote_client_connects' ($authenticated -match '"Security"\s*:\s*1') (($authenticated -replace '\s+', ' ').Trim())
+    foreach ($action in $actions) {
+        $answer = UrSend @{ ID = 'RVP.Player'; Action = 7; Request = 7; Run = @{ Name = $action } }
+        Write-Host "unified_remote_run $action -> $(($answer -replace '\s+', ' ').Trim())"
+        Start-Sleep -Milliseconds 700
+    }
+    # The remote stops polling RVP.
+    UrSend @{ ID = 'RVP.Player'; Action = 4; Request = 4 } | Out-Null
+    Manager 'client/disconnect' | Out-Null
+    if (-not $rvp.WaitForExit(120000)) {
+        Stop-Process -Id $rvp.Id -Force
+        Write-Host 'check m15_selftest_ends=FAIL killed'
+    }
+    Get-Content $log, "$out\rvp-err.log" -ErrorAction SilentlyContinue | Select-String -NotMatch $filter |
+        Where-Object { $_.Line -match '^check |^failures=|m15_serving' } | ForEach-Object { Write-Host $_.Line }
+    Write-Host "rvp_exit=$($rvp.ExitCode)"
+    if (Test-Path $tokenFile) {
+        $token = (Get-Content $tokenFile -Raw).Trim()
+        $leaked = Select-String -Path $log, "$out\rvp-err.log" -SimpleMatch $token -Quiet -ErrorAction SilentlyContinue
+        Check 'm15_token_not_logged' (-not $leaked)
+    }
+    $urLog = Manager 'system/log/6/6'
+    $urLines = @($urLog -split '"' | Where-Object { $_ -match 'RVP' })
+    $urLines | Select-Object -Last 12 | ForEach-Object { Write-Host "unified_remote_log $_" }
+    $urErrors = @($urLines | Where-Object { $_ -match 'error|fail' })
+    Check 'm15_unified_remote_log_clean' ($urErrors.Count -eq 0) ($urErrors -join ' | ')
+}
+
 if (-not (Test-Path $server)) {
     Write-Host 'check m15_unified_remote=SKIPPED Unified Remote Server is not installed'
     exit 0
@@ -109,67 +181,7 @@ Start-Sleep -Seconds 3
 
 $appState = "$env:APPDATA\RVP"
 $hadState = Test-Path $appState
-$out = 'C:\rvp-test\out\m15'
-Remove-Item -Recurse -Force C:\rvp-test\config, $out -ErrorAction SilentlyContinue
-New-Item -ItemType Directory -Force C:\rvp-test\config, $out | Out-Null
-Set-Content -Path C:\rvp-test\config\settings.json -Value '{ "ipc-server": "" }' -Encoding ascii
-$env:QT_OPENGL = 'software'
-$env:RVP_CONFIG_DIR = 'C:\rvp-test\config'
-$env:RVP_STATE_DIR = $appState
-$log = "$out\rvp.log"
-$actions = @('play_pause', 'volume_down', 'mute', 'mute', 'play_pause')
-$rvp = Start-Process -FilePath $Exe -WorkingDirectory $bundle -PassThru -NoNewWindow `
-    -RedirectStandardOutput $log -RedirectStandardError "$out\rvp-err.log" -ArgumentList @(
-        '--selftest=m15', '--remote-port=48931', '--remote-serve=90', "--remote-expect=$($actions.Count)",
-        "--out=$out", '--mpv-options=ao=null', "`"$bundle\fixture-60s.mkv`"")
-# Read now, or the exit code is lost.
-$null = $rvp.Handle
-# The self-test serves first: wait until the token file is there and the
-# API hands out a nonce, without the token, so that every request from
-# outside during the serve is the remote's (the redirected log cannot be
-# read while RVP writes it).
-$tokenFile = "$appState\remote-token"
-$deadline = (Get-Date).AddSeconds(60)
-$up = $false
-while (-not $up -and (Get-Date) -lt $deadline -and -not $rvp.HasExited) {
-    Start-Sleep -Milliseconds 500
-    if (-not (Test-Path $tokenFile)) { continue }
-    try {
-        $nonce = (Invoke-WebRequest -UseBasicParsing 'http://127.0.0.1:48931/api/nonce' -TimeoutSec 5).Content | ConvertFrom-Json
-        $up = $nonce.nonce -match '^[0-9a-f]{32}$'
-    } catch {
-        $up = $false
-    }
-}
-Check 'm15_api_answers_the_script' $up
-Start-Sleep -Seconds 2
-$authenticated = UrConnect
-Check 'm15_unified_remote_client_connects' ($authenticated -match '"Security"\s*:\s*1') (($authenticated -replace '\s+', ' ').Trim())
-foreach ($action in $actions) {
-    $answer = UrSend @{ ID = 'RVP.Player'; Action = 7; Request = 7; Run = @{ Name = $action } }
-    Write-Host "unified_remote_run $action -> $(($answer -replace '\s+', ' ').Trim())"
-    Start-Sleep -Milliseconds 700
-}
-# The remote stops polling RVP.
-UrSend @{ ID = 'RVP.Player'; Action = 4; Request = 4 } | Out-Null
-Manager 'client/disconnect' | Out-Null
-if (-not $rvp.WaitForExit(120000)) {
-    Stop-Process -Id $rvp.Id -Force
-    Write-Host 'check m15_selftest_ends=FAIL killed'
-}
-Get-Content $log, "$out\rvp-err.log" -ErrorAction SilentlyContinue | Select-String -NotMatch $filter |
-    Where-Object { $_.Line -match '^check |^failures=|m15_serving' } | ForEach-Object { Write-Host $_.Line }
-Write-Host "rvp_exit=$($rvp.ExitCode)"
-if (Test-Path $tokenFile) {
-    $token = (Get-Content $tokenFile -Raw).Trim()
-    $leaked = Select-String -Path $log, "$out\rvp-err.log" -SimpleMatch $token -Quiet -ErrorAction SilentlyContinue
-    Check 'm15_token_not_logged' (-not $leaked)
-}
-$urLog = Manager 'system/log/6/6'
-$urLines = @($urLog -split '"' | Where-Object { $_ -match 'RVP' })
-$urLines | Select-Object -Last 12 | ForEach-Object { Write-Host "unified_remote_log $_" }
-$urErrors = @($urLines | Where-Object { $_ -match 'error|fail' })
-Check 'm15_unified_remote_log_clean' ($urErrors.Count -eq 0) ($urErrors -join ' | ')
+Serve 'm15' $appState
 if (-not $hadState) {
     Remove-Item -Recurse -Force $appState -ErrorAction SilentlyContinue
 }
@@ -180,6 +192,26 @@ Start-Sleep -Seconds 2
 Check 'm15_uninstaller_removes_the_remote' (-not (Test-Path $remoteDir)) "$remoteDir"
 Check 'm15_custom_folder_kept' (Test-Path $custom) "$custom"
 Remove-Item -Recurse -Force $installed -ErrorAction SilentlyContinue
+# The server forgets the remote it had loaded.
+Manager 'system/reload' | Out-Null
+Start-Sleep -Seconds 3
+
+Write-Host '== 3b. the Remote Control page''s Add to Unified Remote'
+# A state folder away from %APPDATA%, as a portable RVP's: the remote can
+# find its token only through the token_file the button writes into its
+# settings. The self-test presses the button (--remote-add), which also
+# asks the server to read its remotes again, then serves as in 2.
+$addState = 'C:\rvp-test\out\m15-add-state'
+Remove-Item -Recurse -Force $addState, $remoteDir -ErrorAction SilentlyContinue
+Serve 'm15-add' $addState @('--remote-add=1')
+$copied = @($remoteFiles | Where-Object { Test-Path "$remoteDir\$_" })
+Check 'm15_button_copies_the_remote' ($copied.Count -eq $remoteFiles.Count) "$($copied.Count) of $($remoteFiles.Count) in $remoteDir"
+$settingsText = Get-Content "$remoteDir\settings.prop" -Raw -ErrorAction SilentlyContinue
+$wanted = "$addState\remote-token" -replace '\\', '/'
+$named = ($settingsText -match "(?m)^token_file: $([regex]::Escape($wanted))\s*$") -and ($settingsText -match '(?m)^token:\s*$')
+Check 'm15_button_names_the_token_file' $named (($settingsText -replace '\s+', ' ').Trim())
+Remove-Item -Recurse -Force $remoteDir, $addState -ErrorAction SilentlyContinue
+Manager 'system/reload' | Out-Null
 
 foreach ($test in @('control', 'remote')) {
     Write-Host "== 4. headless tests: $test"

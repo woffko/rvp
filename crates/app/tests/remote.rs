@@ -298,7 +298,11 @@ fn the_settings_carry_the_default_port_and_no_token() {
         .collect();
     assert_eq!(
         values,
-        [("port", DEFAULT_PORT.to_string().as_str()), ("token", "")]
+        [
+            ("port", DEFAULT_PORT.to_string().as_str()),
+            ("token", ""),
+            ("token_file", "")
+        ]
     );
     let meta = remote("meta.prop");
     assert!(meta.contains("meta.id: RVP.Player"), "{meta}");
@@ -416,6 +420,26 @@ print("failure\t" .. tostring(polled) .. "\t" .. armed_now .. "\t" .. tostring(a
 events.blur()
 answer = nil
 libs.fs.exists = function () return false end
+
+-- No token setting: the file token_file names (a portable RVP's, written
+-- by RVP's Add to Unified Remote), which also makes the remote detected.
+print("detect\tnone\t" .. tostring(events.detect()))
+settings.token_file = "/portable/state/remote-token"
+libs.fs.exists = function (path) return path == settings.token_file end
+libs.fs.read = function (path)
+	if path ~= settings.token_file then error("another file: " .. path) end
+	return "@@TOKEN@@\n"
+end
+print("detect\tfile\t" .. tostring(events.detect()))
+requests = {}
+actions.play_pause()
+for _, request in ipairs(requests) do
+	print("tokenfile\t" .. string.upper(request.method) .. "\t" .. request.url .. "\t"
+		.. ((request.headers or {}).Authorization or ""))
+end
+settings.token_file = nil
+libs.fs.exists = function () return false end
+libs.fs.read = function () return "" end
 
 -- The port setting.
 for _, port in ipairs({ @@PORTS@@ }) do
@@ -586,6 +610,7 @@ fn the_remote_signs_as_rvp_checks() {
     assert_eq!(failure.len(), 1, "{output}");
     assert_eq!(&failure[0][..3], ["true", "1", "true"], "{output}");
     assert!(failure[0][3].starts_with("RVP does not answer"), "{output}");
+    check_token_file(&output, address.port());
 
     check_ports(&output);
 }
@@ -713,6 +738,41 @@ fn check_requests(output: &str, server: &Server, nonces: &[String]) {
     assert_eq!(exchange(address, &sent[0]).0, 401, "a nonce serves once");
     assert_eq!(server.counts().signed, 4);
     assert_eq!(server.counts().bearer, 0);
+}
+
+/// The token taken from the file `token_file` names: the request is
+/// signed with it (over a nonce the driver made up), and the remote counts
+/// as detected once that file is there.
+fn check_token_file(output: &str, port: u16) {
+    assert_eq!(
+        records(output, "detect"),
+        [vec!["none", "false"], vec!["file", "true"]],
+        "{output}"
+    );
+    // The action and the status read after it.
+    let requests = records(output, "tokenfile");
+    assert_eq!(
+        requests.iter().map(|r| r[0]).collect::<Vec<_>>(),
+        ["POST", "GET"],
+        "{output}"
+    );
+    for request in requests {
+        let &[method, url, authorization] = request.as_slice() else {
+            panic!("{request:?}");
+        };
+        let target = url
+            .strip_prefix(&format!("http://127.0.0.1:{port}"))
+            .expect("RVP's address");
+        let nonce = authorization
+            .split_once("nonce=")
+            .and_then(|(_, rest)| rest.split(',').next())
+            .expect("a nonce");
+        assert_eq!(
+            authorization,
+            sign::authorization(TOKEN, port, nonce, method, target, b""),
+            "{output}"
+        );
+    }
 }
 
 /// The port: a whole number from 1 to 65535, else RVP's default.

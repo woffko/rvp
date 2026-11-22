@@ -7,11 +7,12 @@
 -- was off learns nothing it could use against RVP.
 --
 -- Settings (settings.prop, editable in Unified Remote's manager): port,
--- RVP's port (48931 unless the page changed it), and token. With an empty
--- token the remote reads the one an installed RVP keeps in
+-- RVP's port (48931 unless the page changed it), token, and token_file.
+-- With an empty token the remote reads the file token_file names, which
+-- RVP's Add to Unified Remote (its Remote Control page) sets to its own,
+-- a portable RVP's too; with neither, the one an installed RVP keeps in
 -- %APPDATA%\RVP\remote-token (Windows) or $XDG_STATE_HOME/rvp/remote-token
--- (Linux, ~/.local/state/rvp); a portable RVP's token is copied from its
--- Remote Control page.
+-- (Linux, ~/.local/state/rvp).
 --
 -- Every action RVP carries out is named as in RVP's own list of actions
 -- (GET /api/actions); crates/app/tests/remote.rs checks that each exists.
@@ -210,14 +211,24 @@ local function config_folder()
 	return config .. "/rvp"
 end
 
--- The token: the remote's setting, else the file of an installed RVP
--- ("" when there is none or it cannot be read).
+-- The token's file: the one the setting token_file names, else an
+-- installed RVP's.
+local function token_file()
+	local named = settings.token_file
+	if named ~= nil and named ~= "" then
+		return named
+	end
+	return state_folder() .. (OS_WINDOWS and "\\" or "/") .. "remote-token"
+end
+
+-- The token: the remote's setting, else its file ("" when there is none
+-- or it cannot be read).
 local function token()
 	local own = settings.token
 	if own ~= nil and own ~= "" then
 		return (string.gsub(own, "%s", ""))
 	end
-	local path = state_folder() .. (OS_WINDOWS and "\\" or "/") .. "remote-token"
+	local path = token_file()
 	if fs.exists(path) then
 		local ok, text = pcall(fs.read, path)
 		if ok and type(text) == "string" then
@@ -387,7 +398,7 @@ local function stop_polling()
 end
 
 events.detect = function ()
-	return fs.exists(config_folder())
+	return fs.exists(config_folder()) or fs.exists(token_file())
 end
 
 events.focus = function ()

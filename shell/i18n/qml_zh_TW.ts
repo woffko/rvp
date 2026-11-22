@@ -5078,10 +5078,6 @@ in %2 seconds</source>
             <translation>已關閉。</translation>
         </message>
         <message>
-            <source>Remotes on a phone reach RVP through a program on this computer, such as Unified Remote's server: give its RVP remote the port and the token. RVP's remote for Unified Remote is in the “remote” folder beside rvp.exe; the installer copies it into Unified Remote when that is installed. On the phone, custom remotes such as RVP's need Unified Remote's Full app. Renew makes a new token: remotes with the old one are refused.</source>
-            <translation>手機上的遙控器透過此電腦上的程式（例如 Unified Remote 的伺服器）連到 RVP：請在其 RVP 遙控器中填入連接埠與權杖。RVP 的 Unified Remote 遙控器位於 rvp.exe 旁的「remote」資料夾；若已安裝 Unified Remote，安裝程式會將它複製過去。在手機上，RVP 這類自訂遙控器需要 Unified Remote 的完整版（Full）應用程式。「重新產生」會建立新的權杖：使用舊權杖的遙控器會被拒絕。</translation>
-        </message>
-        <message>
             <source>Remotes on a phone reach RVP through a program on this computer, such as Unified Remote's server: give its RVP remote the port and the token. Add to Unified Remote copies RVP's remote into the server's custom remotes. On the phone, custom remotes such as RVP's need Unified Remote's Full app. Renew makes a new token: remotes with the old one are refused.</source>
             <translation>手機上的遙控器透過此電腦上的程式（例如 Unified Remote 的伺服器）連到 RVP：請在其 RVP 遙控器中填入連接埠與權杖。「加入至 Unified Remote」會將 RVP 的遙控器複製到伺服器的自訂遙控器中。在手機上，RVP 這類自訂遙控器需要 Unified Remote 的完整版（Full）應用程式。「重新產生」會建立新的權杖：使用舊權杖的遙控器會被拒絕。</translation>
         </message>

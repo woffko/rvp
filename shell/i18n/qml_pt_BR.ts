@@ -5078,10 +5078,6 @@ em %2 segundos</translation>
             <translation>Desligado.</translation>
         </message>
         <message>
-            <source>Remotes on a phone reach RVP through a program on this computer, such as Unified Remote's server: give its RVP remote the port and the token. RVP's remote for Unified Remote is in the “remote” folder beside rvp.exe; the installer copies it into Unified Remote when that is installed. On the phone, custom remotes such as RVP's need Unified Remote's Full app. Renew makes a new token: remotes with the old one are refused.</source>
-            <translation>Controles remotos em um celular chegam ao RVP por um programa neste computador, como o servidor do Unified Remote: informe a porta e o token ao controle remoto do RVP nesse programa. O controle remoto do RVP para o Unified Remote fica na pasta “remote” ao lado do rvp.exe; o instalador o copia para o Unified Remote quando ele está instalado. No celular, controles remotos personalizados como o do RVP precisam do aplicativo Full do Unified Remote. Renovar cria um novo token: controles remotos com o antigo são recusados.</translation>
-        </message>
-        <message>
             <source>Remotes on a phone reach RVP through a program on this computer, such as Unified Remote's server: give its RVP remote the port and the token. Add to Unified Remote copies RVP's remote into the server's custom remotes. On the phone, custom remotes such as RVP's need Unified Remote's Full app. Renew makes a new token: remotes with the old one are refused.</source>
             <translation>Controles remotos em um celular chegam ao RVP por um programa neste computador, como o servidor do Unified Remote: informe a porta e o token ao controle remoto do RVP nesse programa. Adicionar ao Unified Remote copia o controle remoto do RVP para os controles remotos personalizados do servidor. No celular, controles remotos personalizados como o do RVP precisam do aplicativo Full do Unified Remote. Renovar cria um novo token: controles remotos com o antigo são recusados.</translation>
         </message>

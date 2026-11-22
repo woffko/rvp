@@ -799,7 +799,16 @@ smoothing for users without SVP, after a study of the engines.
   installer's component copies it into
   `%ProgramData%\Unified Remote\Remotes\Custom\RVP` when Unified Remote
   is installed (`HKCU\Software\RVP\UnifiedRemote` notes where) and the
-  uninstaller removes those files.
+  uninstaller removes those files. The Remote Control page's Add to
+  Unified Remote (`control::unified`) copies it on both systems, for any
+  RVP, a portable one too: into `%ProgramData%\Unified Remote\Remotes\Custom`
+  or `~/.urserver/remotes/custom`, with a `settings.prop` that names this
+  RVP's port and its token's file (`token_file`, `/` on Windows too), so
+  the token is copied nowhere; it leaves a folder of another remote and a
+  link or junction on the way alone (`%ProgramData%` is shared), replaces
+  files instead of writing through them, and asks the server to reload.
+  `--selftest=m15 --remote-add=1` presses it (`m15-all.ps1` on the VM
+  only: it writes into the server's folder).
 - Unified Remote Server is installed on the Windows test VM only, never
   on the host without permission. The owner's Ubuntu boot has their own
   (started with the session): a second server for the same user stops

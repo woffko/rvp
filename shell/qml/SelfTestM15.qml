@@ -11,7 +11,10 @@
 // --remote-expect=N commands came from outside (m15-all.ps1's check that
 // Unified Remote's server reaches RVP), and the checks report them: each
 // was signed, and no request from outside carried the token (the remote
-// never sends it). The test's own calls follow.
+// never sends it). The test's own calls follow. With --remote-add=1 as
+// well, the test first presses the Remote Control page's Add to Unified
+// Remote (m15-all.ps1 on the test VM only: it writes into Unified Remote
+// Server's custom remotes).
 //
 // File: testdata/media/fixture-60s.mkv. The token never goes into the log.
 import QtQuick
@@ -101,6 +104,10 @@ Item {
             // Remote's server), before this test's own calls.
             const serve = Number(player.option("remote-serve")) || 0
             if (serve > 0 && serveUntil === 0) {
+                if (player.option("remote-add") !== "") {
+                    const said = player.add_unified_remote()
+                    t.check("m15_added_to_unified_remote", said.indexOf("RVP's remote is in ") === 0, said)
+                }
                 serveUntil = Date.now() + serve * 1000
                 commandsBefore = info.commands
                 signedBefore = info.signed

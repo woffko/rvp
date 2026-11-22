@@ -3546,7 +3546,7 @@ ApplicationWindow {
                         // its token while shown.
                         property var info: ({})
                         property string token: ""
-                        // What Add to Unified Remote did (Linux).
+                        // What Add to Unified Remote did.
                         property string added: ""
                         function refresh() { info = JSON.parse(win.player.control_info()) }
                         Timer {
@@ -3626,15 +3626,9 @@ ApplicationWindow {
                                                               : qsTr("Off.")
                         }
                         Note {
-                            visible: Qt.platform.os === "windows"
-                            text: qsTr("Remotes on a phone reach RVP through a program on this computer, such as Unified Remote's server: give its RVP remote the port and the token. RVP's remote for Unified Remote is in the “remote” folder beside rvp.exe; the installer copies it into Unified Remote when that is installed. On the phone, custom remotes such as RVP's need Unified Remote's Full app. Renew makes a new token: remotes with the old one are refused.")
-                        }
-                        Note {
-                            visible: Qt.platform.os !== "windows"
                             text: qsTr("Remotes on a phone reach RVP through a program on this computer, such as Unified Remote's server: give its RVP remote the port and the token. Add to Unified Remote copies RVP's remote into the server's custom remotes. On the phone, custom remotes such as RVP's need Unified Remote's Full app. Renew makes a new token: remotes with the old one are refused.")
                         }
                         RowLayout {
-                            visible: Qt.platform.os !== "windows"
                             Button {
                                 text: qsTr("Add to Unified Remote")
                                 onClicked: remotePage.added = win.player.add_unified_remote()

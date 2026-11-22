@@ -5078,10 +5078,6 @@ in %2 Sekunden</translation>
             <translation>Aus.</translation>
         </message>
         <message>
-            <source>Remotes on a phone reach RVP through a program on this computer, such as Unified Remote's server: give its RVP remote the port and the token. RVP's remote for Unified Remote is in the “remote” folder beside rvp.exe; the installer copies it into Unified Remote when that is installed. On the phone, custom remotes such as RVP's need Unified Remote's Full app. Renew makes a new token: remotes with the old one are refused.</source>
-            <translation>Fernbedienungen auf einem Smartphone erreichen RVP über ein Programm auf diesem Computer, etwa den Server von Unified Remote: Tragen Sie in dessen RVP-Fernbedienung den Port und das Token ein. Die RVP-Fernbedienung für Unified Remote liegt im Ordner „remote“ neben rvp.exe; das Installationsprogramm kopiert sie in Unified Remote, wenn es installiert ist. Auf dem Smartphone brauchen eigene Fernbedienungen wie die von RVP die Full-App von Unified Remote. „Erneuern“ erstellt ein neues Token: Fernbedienungen mit dem alten werden abgewiesen.</translation>
-        </message>
-        <message>
             <source>Remotes on a phone reach RVP through a program on this computer, such as Unified Remote's server: give its RVP remote the port and the token. Add to Unified Remote copies RVP's remote into the server's custom remotes. On the phone, custom remotes such as RVP's need Unified Remote's Full app. Renew makes a new token: remotes with the old one are refused.</source>
             <translation>Fernbedienungen auf einem Smartphone erreichen RVP über ein Programm auf diesem Computer, etwa den Server von Unified Remote: Tragen Sie in dessen RVP-Fernbedienung den Port und das Token ein. „Zu Unified Remote hinzufügen“ kopiert die RVP-Fernbedienung in die eigenen Fernbedienungen des Servers. Auf dem Smartphone brauchen eigene Fernbedienungen wie die von RVP die Full-App von Unified Remote. „Erneuern“ erstellt ein neues Token: Fernbedienungen mit dem alten werden abgewiesen.</translation>
         </message>
