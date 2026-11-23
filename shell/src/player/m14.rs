@@ -1295,6 +1295,14 @@ impl qobject::Player {
         QString::from(&rvp_app::log::recent())
     }
 
+    // A QML invokable, so a method even though it writes only the log.
+    #[allow(clippy::unused_self)]
+    pub(crate) fn log_debug(&self, text: &QString) {
+        if rvp_app::log::enabled(rvp_app::log::Level::Debug) {
+            rvp_app::log::write(rvp_app::log::Level::Debug, &text.to_string());
+        }
+    }
+
     pub(crate) fn calibration_status(&self) -> QString {
         self.core().map_or_else(QString::default, |core| {
             QString::from(&core.app.calibration_status().to_string())

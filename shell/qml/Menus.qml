@@ -167,6 +167,7 @@ Item {
             property var pending: []
             onAboutToShow: holder.fillPending(submenu)
             onAboutToHide: holder.closedAt = Date.now()
+            onOpened: holder.logSize(submenu)
         }
     }
     // The same menu in the skin's or the dark colours.
@@ -199,6 +200,7 @@ Item {
             property var pending: []
             onAboutToShow: holder.fillPending(styledMenu)
             onAboutToHide: holder.closedAt = Date.now()
+            onOpened: holder.logSize(styledMenu)
         }
     }
     Component {
@@ -243,6 +245,17 @@ Item {
         // window's) counts them all before it shows.
         if (menu.contentItem && typeof menu.contentItem.forceLayout === "function")
             menu.contentItem.forceLayout()
+    }
+    // A menu's size as it opened, in the log at Debug: whether its window
+    // holds all its items.
+    function logSize(menu) {
+        if (holder.player === null)
+            return
+        const list = menu.contentItem
+        holder.player.log_debug("menu \"" + menu.title + "\": " + menu.count + " items, height " + Math.round(menu.height)
+                                + " (implicit " + Math.round(menu.implicitHeight) + "), list "
+                                + (list ? Math.round(list.height) + " of " + Math.round(list.contentHeight) : "none")
+                                + ", screen room " + Math.round(holder.screenRoom))
     }
     function fillPending(menu) {
         if (menu.pending.length === 0)

@@ -353,6 +353,11 @@ pub mod qobject {
         #[qinvokable]
         fn log_recent(self: &Self) -> QString;
 
+        /// Writes `text` to the log at Debug (the menus' sizes as they
+        /// open).
+        #[qinvokable]
+        fn log_debug(self: &Self, text: &QString);
+
         /// Motion smoothing's calibration as JSON (the calibration window
         /// and the Motion Smoothing page): `state`, `date`, `rows`,
         /// `failed`, `done`, `left`, `current`, `playing`.

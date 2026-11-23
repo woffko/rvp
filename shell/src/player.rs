@@ -2903,6 +2903,28 @@ impl qobject::Player {
                 ..MenuItem::default()
             }]
         });
+        if rvp_app::log::enabled(rvp_app::log::Level::Debug) {
+            let count = |kind| {
+                live.tracks
+                    .iter()
+                    .filter(|track| track.kind == kind)
+                    .count()
+            };
+            rvp_app::log::write(
+                rvp_app::log::Level::Debug,
+                &format!(
+                    "menu {kind}: {} items; {} audio and {} subtitle tracks read{}",
+                    items.len(),
+                    count(rvp_engine::TrackKind::Audio),
+                    count(rvp_engine::TrackKind::Subtitle),
+                    if core.app.model.media_loaded() {
+                        ""
+                    } else {
+                        "; no file loaded"
+                    }
+                ),
+            );
+        }
         QString::from(&to_json(&items))
     }
 
