@@ -2930,6 +2930,12 @@ Window {
                     "play " + (play && play.shortcut) + " frame " + (frame && frame.shortcut))
             t.check("context_menu_marks", normalizer !== null && normalizer.checked === (s.normalizer ? 1 : 0),
                     "normalizer " + (normalizer && normalizer.checked))
+            // The file's audio tracks, under PotPlayer's "Select Audio Stream".
+            const streams = root.menuItem(context, ["Audio", "Select Audio Stream"])
+            const audioIds = streams === null ? []
+                : streams.children.filter(item => /^a:[0-9]+$/.test(String(item.id))).map(item => item.id)
+            t.check("context_menu_audio_tracks", audioIds.length > 0,
+                    JSON.stringify(streams === null ? null : streams.children.map(item => item.label + "=" + item.id)))
             const list = JSON.parse(player.menu_json("playlist"))
             const undo = root.menuItem(list, ["Undo"])
             t.check("playlist_menu_keys", list[0].id === "l:play" && undo !== null && undo.shortcut === "Ctrl+Z",

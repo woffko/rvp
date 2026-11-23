@@ -155,6 +155,13 @@ Item {
             implicitHeight: Math.min(Math.max(implicitBackgroundHeight + topInset + bottomInset,
                                               contentHeight + topPadding + bottomPadding),
                                      holder.screenRoom)
+            // No opening animation (PotPlayer's menus have none): Windows'
+            // style grows the menu from a third of its height, and the
+            // list laid out its items for that height, so a menu's last
+            // items stayed below its frame (a file's audio tracks under
+            // "Select Audio Stream", 2026-11-23); the test VM, where the
+            // animation does not run, showed them all.
+            enter: Transition {}
             delegate: SubEntry {}
             // The items still to add (JSON), the first time it opens.
             property var pending: []
@@ -188,6 +195,7 @@ Item {
             implicitHeight: Math.min(Math.max(implicitBackgroundHeight + topInset + bottomInset,
                                               contentHeight + topPadding + bottomPadding),
                                      holder.screenRoom)
+            enter: Transition {}
             property var pending: []
             onAboutToShow: holder.fillPending(styledMenu)
             onAboutToHide: holder.closedAt = Date.now()
@@ -231,6 +239,10 @@ Item {
                 }))
             }
         }
+        // The list lays its new items out now, so the menu's height (its
+        // window's) counts them all before it shows.
+        if (menu.contentItem && typeof menu.contentItem.forceLayout === "function")
+            menu.contentItem.forceLayout()
     }
     function fillPending(menu) {
         if (menu.pending.length === 0)
