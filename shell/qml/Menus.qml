@@ -252,9 +252,15 @@ Item {
         if (holder.player === null)
             return
         const list = menu.contentItem
+        const shown = list ? list.Window.window : null
         holder.player.log_debug("menu \"" + menu.title + "\": " + menu.count + " items, height " + Math.round(menu.height)
                                 + " (implicit " + Math.round(menu.implicitHeight) + "), list "
                                 + (list ? Math.round(list.height) + " of " + Math.round(list.contentHeight) : "none")
+                                + ", insets " + menu.topInset + "/" + menu.bottomInset
+                                + ", window " + (shown ? Math.round(shown.x) + "," + Math.round(shown.y) + " "
+                                                 + Math.round(shown.width) + "x" + Math.round(shown.height) : "none")
+                                + ", menu at " + Math.round(menu.x) + "," + Math.round(menu.y)
+                                + ", main window " + Math.round(holder.Window.height)
                                 + ", screen room " + Math.round(holder.screenRoom))
     }
     function fillPending(menu) {
