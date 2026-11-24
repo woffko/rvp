@@ -155,13 +155,27 @@ Item {
             implicitHeight: Math.min(Math.max(implicitBackgroundHeight + topInset + bottomInset,
                                               contentHeight + topPadding + bottomPadding),
                                      holder.screenRoom)
-            // No opening animation (PotPlayer's menus have none): Windows'
-            // style grows the menu from a third of its height, and the
-            // list laid out its items for that height, so a menu's last
-            // items stayed below its frame (a file's audio tracks under
-            // "Select Audio Stream", 2026-11-23); the test VM, where the
-            // animation does not run, showed them all.
+            // No opening animation: PotPlayer's menus have none.
             enter: Transition {}
+            // The menu's window is the menu itself: no shadow outside it.
+            // Windows' style draws one in negative insets (32 pixels at
+            // each side), and Qt 6.10 makes a submenu's window as tall as
+            // the menu without them while the menu sits 32 pixels down in
+            // it, so a submenu's last items lay below its window: a file's
+            // audio tracks under "Select Audio Stream" (the owner's log of
+            // 2026-11-24: "Select Audio Stream" 214 pixels tall in a window
+            // of 214, the top menu's 907 in one of 971).
+            topInset: 0
+            bottomInset: 0
+            leftInset: 0
+            rightInset: 0
+            background: Rectangle {
+                implicitWidth: 200
+                implicitHeight: 30
+                color: submenu.palette.window
+                border.color: submenu.palette.mid
+                radius: 4
+            }
             delegate: SubEntry {}
             // The items still to add (JSON), the first time it opens.
             property var pending: []
@@ -197,6 +211,11 @@ Item {
                                               contentHeight + topPadding + bottomPadding),
                                      holder.screenRoom)
             enter: Transition {}
+            // As the plain menu's: no shadow insets.
+            topInset: 0
+            bottomInset: 0
+            leftInset: 0
+            rightInset: 0
             property var pending: []
             onAboutToShow: holder.fillPending(styledMenu)
             onAboutToHide: holder.closedAt = Date.now()
