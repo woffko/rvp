@@ -389,6 +389,39 @@ fn playback(h: &mut Harness) {
     h.wait("mute", |s| s["mute"] == true);
     assert_eq!(h.call("POST", "/api/action/toggle-mute", None).0, 200);
     h.wait("mute off", |s| s["mute"] == false);
+    tracks(h);
+}
+
+/// Tracks by their IDs (the shell publishes the status's lists; the
+/// remote's Tracks list).
+fn tracks(h: &mut Harness) {
+    let id = h
+        .engine
+        .tracks()
+        .iter()
+        .find(|track| track.kind == rvp_engine::TrackKind::Audio)
+        .map(|track| track.id)
+        .expect("an audio track");
+    let body = format!(r#"{{"audio": {id}}}"#);
+    assert_eq!(h.call("POST", "/api/track", Some(&body)).0, 200);
+    assert_eq!(
+        h.engine.get_text("aid").as_deref(),
+        Some(id.to_string().as_str())
+    );
+    assert_eq!(
+        h.call("POST", "/api/track", Some(r#"{"audio": 99}"#)).0,
+        404
+    );
+    assert_eq!(
+        h.call("POST", "/api/track", Some(r#"{"subtitle": false}"#))
+            .0,
+        200
+    );
+    assert_eq!(
+        h.call("POST", "/api/track", Some(r#"{"audio": "one"}"#)).0,
+        400
+    );
+    assert_eq!(h.call("GET", "/api/track", None).0, 405);
 }
 
 /// Albums and entries.

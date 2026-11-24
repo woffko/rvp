@@ -89,6 +89,7 @@
 //! | `POST /api/seek` | `{"to": s}`, `{"by": s}` or `{"fraction": f}` | |
 //! | `POST /api/volume` | `{"percent": p}`, `{"mute": b}` or both | |
 //! | `POST /api/open` | `{"path": "..."}`: a file, a folder or a network address ([`crate::playlist::admitted`]; 403 for any other) | |
+//! | `POST /api/track` | `{"audio": id}`, `{"subtitle": id}` or `{"subtitle": false}` (none): a track of [`Status`]'s lists (404 for another) | |
 //! | `GET /api/albums` | | the albums: `index`, `name`, `entries`, `playing`, `current` |
 //! | `GET /api/albums/A` | | album A with its `entries`: `index`, `title`, `duration` |
 //! | `POST /api/albums/A/play/E` | | plays entry E of album A |
@@ -111,7 +112,7 @@ use std::sync::{Arc, Condvar, Mutex, MutexGuard, PoisonError};
 use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
 
-use rvp_engine::{Engine, PropertyId, Seek};
+use rvp_engine::{Engine, PropertyId, Seek, TrackKind};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 
@@ -224,6 +225,8 @@ pub enum Command {
     },
     /// A file, a folder or a network address to open and play.
     Open(String),
+    /// The audio or subtitle track to play (`None`: no subtitles).
+    Track(TrackKind, Option<i64>),
     Albums,
     Album(usize),
     Play {
@@ -715,6 +718,10 @@ fn route(shared: &Shared, request: &Request) -> (u16, String) {
             Ok(path) => ask(shared, Command::Open(path)),
             Err(message) => (400, error(message)),
         },
+        ["api", "track"] if post => match track_body(&request.body) {
+            Ok((kind, id)) => ask(shared, Command::Track(kind, id)),
+            Err(message) => (400, error(message)),
+        },
         ["api", "albums"] if get => ask(shared, Command::Albums),
         ["api", "albums", album] if get => match album.parse() {
             Ok(album) => ask(shared, Command::Album(album)),
@@ -726,7 +733,8 @@ fn route(shared: &Shared, request: &Request) -> (u16, String) {
         },
         [
             "api",
-            "status" | "actions" | "albums" | "action" | "seek" | "volume" | "open" | "nonce",
+            "status" | "actions" | "albums" | "action" | "seek" | "volume" | "open" | "track"
+            | "nonce",
             ..,
         ] => (405, error("method not allowed")),
         _ => (404, error("not found")),
@@ -854,6 +862,26 @@ fn open_body(body: &[u8]) -> Result<String, &'static str> {
     Ok(path.to_owned())
 }
 
+/// `POST /api/track`'s body: one member, `audio` with a track's ID, or
+/// `subtitle` with an ID or `false` for none.
+fn track_body(body: &[u8]) -> Result<(TrackKind, Option<i64>), &'static str> {
+    const EXPECTED: &str = "expected {\"audio\": id}, {\"subtitle\": id} or {\"subtitle\": false}";
+    let Ok(Value::Object(members)) = serde_json::from_slice::<Value>(body) else {
+        return Err(EXPECTED);
+    };
+    let mut members = members.into_iter();
+    let (Some((name, value)), None) = (members.next(), members.next()) else {
+        return Err(EXPECTED);
+    };
+    let id = value.as_i64().filter(|id| *id > 0);
+    match (name.as_str(), id, value) {
+        ("audio", Some(id), _) => Ok((TrackKind::Audio, Some(id))),
+        ("subtitle", Some(id), _) => Ok((TrackKind::Subtitle, Some(id))),
+        ("subtitle", None, Value::Bool(false)) => Ok((TrackKind::Subtitle, None)),
+        _ => Err(EXPECTED),
+    }
+}
+
 impl App {
     /// The control API's status apart from the position (see
     /// [`Server::publish`]); `fullscreen` is the window's, `audio` and
@@ -926,6 +954,25 @@ impl App {
         }
     }
 
+    /// `POST /api/track`: plays the file's track `id` of `kind` (`None`: no
+    /// subtitles), as the Audio and Subtitles menus do.
+    fn control_track(&mut self, engine: &Engine, kind: TrackKind, id: Option<i64>) -> Answer {
+        if !self.model.media_loaded() {
+            return Err((409, "nothing is open".to_owned()));
+        }
+        let known = id.is_none_or(|id| {
+            engine
+                .tracks()
+                .iter()
+                .any(|track| track.kind == kind && track.id == id)
+        });
+        if !known {
+            return Err((404, "no such track".to_owned()));
+        }
+        self.select_track(engine, kind, id);
+        Ok(json!({}))
+    }
+
     /// Carries out a command other than an action (the shell runs those
     /// as keys do): the answer, and what the window should do.
     pub fn control_command(
@@ -963,6 +1010,7 @@ impl App {
                 (done(), request)
             }
             Command::Open(path) => (self.control_open(engine, &path), None),
+            Command::Track(kind, id) => (self.control_track(engine, kind, id), None),
             Command::Albums => {
                 let lists = self.library().lists();
                 let albums: Vec<Value> = lists
@@ -1058,6 +1106,40 @@ pub fn tracks(all: &[rvp_engine::Track]) -> (Vec<Track>, Vec<Track>) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_track_is_named_by_one_member() {
+        assert_eq!(
+            track_body(br#"{"audio": 2}"#),
+            Ok((TrackKind::Audio, Some(2)))
+        );
+        assert_eq!(
+            track_body(br#"{"subtitle": 3}"#),
+            Ok((TrackKind::Subtitle, Some(3)))
+        );
+        assert_eq!(
+            track_body(br#"{"subtitle": false}"#),
+            Ok((TrackKind::Subtitle, None))
+        );
+        for refused in [
+            &br#"{"audio": false}"#[..],
+            br#"{"audio": 0}"#,
+            br#"{"audio": -1}"#,
+            br#"{"audio": 1.5}"#,
+            br#"{"subtitle": true}"#,
+            br#"{"video": 1}"#,
+            br#"{"audio": 1, "subtitle": 2}"#,
+            b"{}",
+            b"[1]",
+            b"",
+        ] {
+            assert!(
+                track_body(refused).is_err(),
+                "{}",
+                String::from_utf8_lossy(refused)
+            );
+        }
+    }
 
     #[test]
     fn answers_leave_out_nulls() {

@@ -31,6 +31,10 @@ local poll = nil
 local chain = 0
 local album = nil
 local listed = {}
+-- What each row of the Tracks page's list chooses (POST /api/track's
+-- body), and the list's text as last sent (sent again when it changes).
+local track_rows = {}
+local tracks_shown = nil
 
 local update
 
@@ -329,13 +333,54 @@ local function span(seconds)
 	return data.sec2span(math.floor(seconds or 0))
 end
 
-local function selected(tracks, none)
-	for _, track in ipairs(tracks or {}) do
-		if track.selected then
-			return track.title
-		end
+-- A row of the Tracks page: the kind, the track's title (with its
+-- language where the title is another), "> " before the one that plays.
+local function track_text(kind, track)
+	local text = track.title or ("Track " .. whole(track.id))
+	if track.language ~= nil and track.language ~= "" and track.language ~= track.title then
+		text = text .. " [" .. track.language .. "]"
 	end
-	return none
+	if track.selected then
+		text = "> " .. text
+	end
+	return kind .. ": " .. text
+end
+
+-- The Tracks page's list: the file's audio tracks, its subtitles and
+-- "Subtitles: off"; a tap plays the row's (actions.track_tapped).
+local function show_tracks(now)
+	local rows, items, texts, shown = {}, {}, {}, false
+	for _, track in ipairs(now.audio_tracks or {}) do
+		table.insert(items, { type = "item", text = track_text("Audio", track) })
+		table.insert(rows, { audio = track.id })
+	end
+	for _, track in ipairs(now.subtitle_tracks or {}) do
+		if track.selected then
+			shown = true
+		end
+		table.insert(items, { type = "item", text = track_text("Subtitles", track) })
+		table.insert(rows, { subtitle = track.id })
+	end
+	if #(now.subtitle_tracks or {}) > 0 then
+		local off = "Subtitles: off"
+		if not shown then
+			off = "> " .. off
+		end
+		table.insert(items, { type = "item", text = off })
+		table.insert(rows, { subtitle = false })
+	end
+	if #items == 0 then
+		table.insert(items, { type = "item", text = "No tracks" })
+	end
+	for _, item in ipairs(items) do
+		table.insert(texts, item.text)
+	end
+	local key = table.concat(texts, "\n")
+	if key ~= tracks_shown then
+		tracks_shown = key
+		track_rows = rows
+		server.update({ id = "tracklist", children = items })
+	end
 end
 
 local function show_status()
@@ -364,10 +409,9 @@ local function show_status()
 		{ id = "volume", progress = volume, progressmax = 100 },
 		{ id = "play", icon = icon },
 		{ id = "speed", text = string.format("%.2fx", now.speed or 1) },
-		{ id = "normalizer", checked = now.normalizer == true },
-		{ id = "tracks", text = "Audio: " .. selected(now.audio_tracks, "none")
-		  .. "\nSubtitles: " .. selected(now.subtitle_tracks, "off") }
+		{ id = "normalizer", checked = now.normalizer == true }
 	)
+	show_tracks(now)
 end
 
 -- Shows RVP's status; an answer the remote cannot show (another program
@@ -572,6 +616,17 @@ actions.list_tapped = function (index)
 		call("post", "/api/albums/" .. whole(album) .. "/play/" .. whole(target))
 		update()
 	end
+end
+
+--@help Play the tapped audio or subtitle track
+--@param index:number the row
+actions.track_tapped = function (index)
+	local row = track_rows[index + 1]
+	if row == nil then
+		return
+	end
+	call("post", "/api/track", row)
+	update()
 end
 
 --@help Back to the albums

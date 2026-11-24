@@ -1,7 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- RVP's remote for Unified Remote (M15): the player's page in the manner
-     of Unified Remote's media remotes, the tracks and speed, and the
-     albums to play an entry from. remote.lua carries out the actions. -->
+     of Unified Remote's media remotes, the file's tracks to choose from and
+     the speed, and the albums to play an entry from. remote.lua carries out
+     the actions. -->
 <layout onvolumeup="volume_up" onvolumedown="volume_down" lightcolor="#2b6cb0" darkcolor="#1f4f85">
 	<tabs onchange="tab_changed">
 		<tab text="Player">
@@ -28,8 +29,10 @@
 			</row>
 		</tab>
 		<tab text="Tracks">
-			<row weight="wrap">
-				<label id="tracks" text="" />
+			<row>
+				<list id="tracklist" ontap="track_tapped">
+					<item text="Loading..." />
+				</list>
 			</row>
 			<row weight="wrap">
 				<button text="Audio" ontap="audio_track" />

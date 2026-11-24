@@ -73,7 +73,7 @@ fn every_action_the_remote_calls_exists() {
     for path in paths {
         assert!(
             [
-                "status", "action/", "seek", "volume", "albums", "albums/", "nonce"
+                "status", "action/", "seek", "volume", "albums", "albums/", "track", "nonce"
             ]
             .contains(&path.as_str()),
             "remote.lua asks for /api/{path}"
@@ -322,6 +322,7 @@ local made = 0
 local urls, requests = {}, {}
 local answer = nil
 local title = nil
+local tracklist = nil
 local JSON = { ["{}"] = {} }
 local armed = {}
 libs = {
@@ -360,6 +361,7 @@ libs = {
 	server = { update = function (...)
 		for _, item in ipairs({ ... }) do
 			if item.id == "title" then title = item.text end
+			if item.id == "tracklist" then tracklist = item.children end
 		end
 	end },
 	timer = {
@@ -440,6 +442,31 @@ end
 settings.token_file = nil
 libs.fs.exists = function () return false end
 libs.fs.read = function () return "" end
+
+-- The Tracks page: a status with tracks fills its list, and a tap plays
+-- the row's track.
+local with_tracks = '{"with":"tracks"}'
+JSON[with_tracks] = { state = "playing",
+	audio_tracks = { { id = 1, title = "en-US", language = "en-US", selected = true },
+		{ id = 2, title = "Dub", language = "ru", selected = false } },
+	subtitle_tracks = { { id = 3, title = "cs", language = "cs", selected = false } } }
+answer = with_tracks
+tracklist = nil
+events.focus()
+for _, item in ipairs(tracklist or {}) do
+	print("tracklist\t" .. item.text)
+end
+requests = {}
+actions.track_tapped(1)
+actions.track_tapped(3)
+actions.track_tapped(9)
+for _, request in ipairs(requests) do
+	if string.find(request.url, "/api/track$") then
+		print("trackpost\t" .. string.upper(request.method) .. "\t" .. (request.content or ""))
+	end
+end
+events.blur()
+answer = nil
 
 -- The port setting.
 for _, port in ipairs({ @@PORTS@@ }) do
@@ -611,6 +638,7 @@ fn the_remote_signs_as_rvp_checks() {
     assert_eq!(&failure[0][..3], ["true", "1", "true"], "{output}");
     assert!(failure[0][3].starts_with("RVP does not answer"), "{output}");
     check_token_file(&output, address.port());
+    check_track_list(&output);
 
     check_ports(&output);
 }
@@ -773,6 +801,30 @@ fn check_token_file(output: &str, port: u16) {
             "{output}"
         );
     }
+}
+
+/// The Tracks page: the file's audio tracks, its subtitles and "off", the
+/// one that plays marked; a tap sends `POST /api/track` with its row's
+/// track, and a row past the list sends nothing.
+fn check_track_list(output: &str) {
+    assert_eq!(
+        records(output, "tracklist"),
+        [
+            vec!["Audio: > en-US"],
+            vec!["Audio: Dub [ru]"],
+            vec!["Subtitles: cs"],
+            vec!["> Subtitles: off"]
+        ],
+        "{output}"
+    );
+    assert_eq!(
+        records(output, "trackpost"),
+        [
+            vec!["POST", r#"{"audio":2}"#],
+            vec!["POST", r#"{"subtitle":false}"#]
+        ],
+        "{output}"
+    );
 }
 
 /// The port: a whole number from 1 to 65535, else RVP's default.
